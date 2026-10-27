@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.sheet_extract_helpers",
+  "source": "PyCode/core/feature_1_6_extract_sheets.py",
+  "source_python_version": "3.12.10",
+  "shared_vectors": "tests/fixtures/sheet_extract_cases.json",
+  "python_baseline": {
+    "status": "保留",
+    "passed": 11,
+    "total": 11
+  },
+  "result": {
+    "range_helpers": [
+      "A1,B2,C3:D4",
+      7,
+      2,
+      0,
+      0,
+      0,
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        2,
+        3,
+        4
+      ],
+      [
+        1,
+        2,
+        3
+      ],
+      []
+    ],
+    "keyword_helpers": [
+      [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "c",
+          "d"
+        ],
+        [
+          "e"
+        ]
+      ],
+      true,
+      false,
+      true,
+      false,
+      true
+    ],
+    "exact_sheet_selection": [
+      "A-B",
+      "A-B detail",
+      "A-B draft"
+    ],
+    "task_sheet_selection": [
+      "A-B detail",
+      "B detail"
+    ],
+    "workbook_matches": [
+      true,
+      false
+    ],
+    "area_parsing": [
+      [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      [
+        [
+          2
+        ],
+        [
+          2
+        ]
+      ],
+      [
+        [],
+        []
+      ],
+      null
+    ],
+    "configured_values": [
+      [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "d",
+          "e",
+          "f"
+        ],
+        [
+          "g",
+          "h",
+          "i"
+        ]
+      ],
+      [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "d",
+          "e"
+        ]
+      ],
+      null,
+      [
+        [
+          "a",
+          "c"
+        ],
+        [
+          "d",
+          "f"
+        ],
+        [
+          null,
+          "i"
+        ]
+      ],
+      [
+        [
+          "a"
+        ],
+        [
+          "d"
+        ],
+        [
+          "c"
+        ],
+        [
+          "f"
+        ],
+        [
+          "i"
+        ]
+      ]
+    ],
+    "stitching": [
+      [
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      [
+        [
+          1,
+          3,
+          4
+        ],
+        [
+          2,
+          null,
+          null
+        ]
+      ],
+      []
+    ],
+    "compaction": [
+      [],
+      [
+        [
+          "x"
+        ],
+        [
+          "y"
+        ]
+      ]
+    ],
+    "sheet_names": {
+      "sanitize": [
+        "A_B______long name",
+        "x x x x x x x x x x x x x x x x"
+      ],
+      "unique": [
+        "A_B",
+        "A_B_2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxx_2"
+      ]
+    },
+    "output_paths": [
+      "out/default.xlsx",
+      "out/child/result.xlsx",
+      "out/result.XLSX",
+      "out/.xlsx.xlsx",
+      "out/name..xlsx"
+    ]
+  },
+  "limitations": [
+    "Covers pure task matching, range selection, multi-area stitching, compaction, and path/name helpers only.",
+    "Does not verify source workbook discovery, full-sheet style copying, output workbook writing/appending, or end-to-end execution."
+  ]
+}

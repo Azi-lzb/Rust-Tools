@@ -1,0 +1,33 @@
+时间：2026-10-26 08:51（Asia/Shanghai）
+执行者：Codex
+修改前提交：b6041b4（pytools-dev；开始时与 origin/pytools-dev 同步）
+修改后提交：待提交
+开始时 WIP：`pytools-core/MIGRATION_INVENTORY.md` 已修改；`HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 转换失败记录和 PT-6-2 时长表头记录未跟踪。本次未改动或暂存这些既有 WIP。
+
+## 目的
+
+补齐 PT-1-3/PT-1-4 非空 BIFF `.xls` 宽表汇总的 Rust CLI 集成回归。已有 Python/Rust 探针覆盖该合成工作簿，但原集成测试仅覆盖空 `.xls` 的安全跳过路径，未在当前 Rust 代码上断言非空 `.xls` 汇总值。
+
+## 修改文件
+
+- `pytools-core/tests/timeline_menu_cli.rs`：新增 `wide_summary_cli_summarizes_nonempty_legacy_xls_elapsed_values`，复用 `wide_summary_elapsed_duration.xls`，分别运行 `wide-summary` 和 `wide-summary-row-suffix`，断言 BIFF 日期序列、time-only 投影、处理计数及源文件字节不变。
+- 本记录：留存验证范围、结果及未覆盖项。
+
+## 验证
+
+- Windows 原生：`cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j1`，19/19 通过。
+- Windows 原生：`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过；`git diff --check` 通过。
+- 现有 PyCode/Rust 对拍探针 `compare_wide_summary_biff_elapsed_duration.py` 用当前 `target/debug/pytools.exe` 重跑，输出报告写入临时目录，没有覆盖仓库报告。Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5、xlrd 2.0.1；无后缀和加后缀两种模式的工作簿投影均精确一致。
+- WSL Ubuntu（glibc 2.39，Rust/Cargo 1.99.1）：当前完整 `timeline_menu_cli` 集成文件 19/19 通过。该验证使用现有 WSL，不新建环境或安装依赖。
+
+## 未执行项与已知限制
+
+- 输入是仓库内合成 BIFF `.xls`，不代表真实业务工作簿验收。
+- 麒麟 V10、统信 UOS V20、glibc 2.28 与离线 deb 未验证。
+- 本次仅增加回归测试，没有改变 PyTools 业务逻辑、Excel 路由或生产 capability；PT-1-3/PT-1-4 的真实样本状态保持未验证。
+- 首轮测试选错了输出坐标的预期类型，检查完整输出投影后修正断言为 Python/Rust 对拍确认的 `datetime_serial` 和 time-only 文本；最终 Windows、WSL 测试及对拍通过。
+
+## 版本与回滚
+
+- 【组件版本】不升级（仅测试覆盖和修改记录）。
+- 回滚：如需撤回本项，可 revert 本记录对应提交；不回退或清理其他既有 WIP。

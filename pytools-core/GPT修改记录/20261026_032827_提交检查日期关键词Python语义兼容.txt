@@ -1,0 +1,34 @@
+时间：2026-10-26 03:28:27（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：003b07caee0e2a0858cb29928e51c873cc48ffa5
+分支：pytools-dev；开始时 HEAD 与 origin/pytools-dev 同步。
+
+【目的】
+修正提交缺失检查读取 Excel 日期关键词时与 PyCode/Pandas 行为不一致的问题。只修改 pytools-core；未修改共享 crate 或原 Python 项目。
+
+【发现与修复】
+- 将日期关键词配置单元格从文本改为 Excel 日期后，PyCode `str(datetime)` 得到 `2026-06-30 01:02:03.123000`。修复前 Rust 把 `datetime_serial` 映射为空字符串，导致日期条件被跳过；合成 CLI 结果把提交规则从 Python 的 2 条误计为 3 条。
+- `submission_check.rs` 现在只在日期关键词列确有日期序列时，调用共享 `excel-reader::read_value_columns_with_iso_dates`，用保留 1900/1904 日期系统的 ISO 投影覆盖日期文本，再按 Python 日期字符串保留秒及六位微秒显示。
+- Python 合成基线和 Rust 对拍夹具新增毫秒日期配置；完整四张输出表投影与统计精确一致：启用规则 4、输入文件 3、已提交 2、缺失 2、未识别 1、多重命中 1。测试明确断言日期字段为 `2026-06-30 01:02:03.123000`。
+
+【修改文件】
+- `pytools-core/src/submission_check.rs`
+- `pytools-core/tests/submission_check_parity.rs`
+- `pytools-core/probe/submission_check_baseline.py`
+- `pytools-core/probe/reports/submission_check_python_baseline.json`
+- `pytools-core/MIGRATION_INVENTORY.md`：仅更新提交检查的合成证据；保留文件中原有未提交 PT-4-2 记录。
+- 本记录。
+
+【验证】
+- 基线由只读 PyCode 的 `run_submission_check_48` 直接运行，使用原项目 NoComPyTools `.venv` 的 Python 3.12.10、Pandas 与 openpyxl；`-B` 禁止写 Python 缓存。
+- 加入日期类型回归、修复前：`cargo test --offline --locked -p pytools-core --test submission_check_parity -j 1` 失败，差异为 submitted Rust=3、Python=2。
+- 修复后同一命令通过，Rust CLI 与 Python 基线四张表投影及统计一致；`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过。
+- 输入配置、源文件均为合成数据；报告仅包含合成值，不含真实业务信息。
+
+【未验证项】
+- 用户真实配置、真实业务目录、其他日期系统和异常日期格式未验收；本次不把提交检查整体标为完成。
+- Linux/glibc 2.28、麒麟 V10/UOS V20 与离线 deb 未验证。
+- 保留既有交接报告、PT-4-2 失败记录及较早 PT-6-2 缺口记录，不纳入本功能。
+
+【回滚提示】
+只回滚本次业务提交可撤销日期关键词兼容；不要覆盖工作树中既有未提交材料。

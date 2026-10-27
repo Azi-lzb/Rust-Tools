@@ -1,0 +1,29 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：ea80e8ad9617b0b332aeed428c1c725dab905c27；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。未修改 `DEVELOPMENT_GOAL.md`、workspace 规则、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock；原 Python 项目只读。
+
+目的：修复 PT-6-2 `summary-comments` 在合并区域非锚点存在原始 OOXML 值时与 PyCode `_gcv` 不一致的问题，并在真实 CLI 和 Python/Rust 对拍中覆盖该边界。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：`cell_at_or_merged` 先查合并范围并返回其左上角，再读取普通单元格值，符合 PyCode 合并区域取值规则。
+- `pytools-core/tests/fixtures/summary_comments/merged_children_source.xlsx`：新增无业务数据的合成工作簿；`A2:C3` 合并区域内的 `B2` 带有合成原始值，用于暴露 reader 残值。
+- `pytools-core/tests/summary_comments_cli.rs`：新增真实 `summary-comments` CLI 回归，验证 Calamine 读到 B2 残值时，输出 D2/E2/D3/E3 仍使用锚点值且输入不变。
+- `pytools-core/probe/compare_summary_tools.py`：把合并子格语义加入现有 PyCode/Rust 汇总对拍。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：记录本轮 PT-6-2 合并子格 Windows CLI 对拍结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录修复、入口、对拍结果和未完成的目标平台验收。
+- 本修改记录。
+
+真实入口与数据流：Windows GNU `pytools.exe summary-comments --template ... --output-dir ... <source.xlsx>` → `excel-reader::read_workbook`（Calamine）→ Rust 批注区域汇总 → `rust_xlsxwriter` 新建 XLSX。PyCode 基线为只读 `PyCode/core/summary_321_322.py::run_summary_by_comment`。
+
+验证结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`（WSL，离线）：通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli`（WSL）：3/3 通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools --target x86_64-pc-windows-gnu`（WSL/MinGW）：通过。
+- Windows Python 3.12 实际启动更新后的 Windows GNU CLI，与 PyCode 对同一合成模板/源簿比较完整工作簿投影：一致，3 行；D2/E2/D3/E3 均为 `merged anchor`。Rust 实际读取/写入引擎为 Calamine/rust_xlsxwriter，CLI 总耗时 23 ms；源夹具前后指纹一致。
+- 修复前的同一 CLI 对拍确认 D2 曾输出 `raw merged child residue`，PyCode 输出 `merged anchor`；修复后差异消失。
+- `git diff --check`：通过。编译输出包含 workspace 中已有的 umya-spreadsheet 弃用和 pytools-core 未使用导入警告，本轮未改动这些无关代码。
+
+未执行项与边界：未重跑包含 PT-6-1 大批量样本的完整总探针；本轮未在麒麟 V10/UOS V20 实机安装，也未做 glibc 2.28/deb 验收。原项目真实 PT-6-2 批注区域模板仍未找到，PT-6-2 整体不能据本轮宣称完成。
+
+回滚：可用 `git revert <本轮提交>` 撤回本轮 PT-6-2 修复、回归夹具和对拍证据。
+【组件版本】：不升级，当前 0.1.0。

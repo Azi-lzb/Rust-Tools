@@ -1,0 +1,25 @@
+时间：2026-10-24 14:44:30 中国标准时间
+执行者：Codex（pytools-dev）
+当前代码 HEAD：15244db（已将本地 main 的 3 个共享能力提交合入 pytools-dev）。复验前工作树干净；本轮仅修改 PyTools 的迁移状态和机器报告。未修改 DEVELOPMENT_GOAL.md、Rules、Audit、根 Cargo.toml 或 Cargo.lock。
+
+目的：安全同步 main 新增的共享 reader comment-author API 与 Excel editor merged-style 能力，并在同步后的当前 HEAD 重建 PT-6-1 Linux musl release，确认真实汇总结果、运行日志和输入保真没有变化。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md：记录 main 同步后的最大真实备份簿 musl 三视图复验及平台边界。
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：追加当前 HEAD `15244db` 的机器结果；不记录工作簿名称或单元格内容。
+- 本修改记录。
+
+入口与数据流：真实 CLI `pytools summary-used-range`；原 PyTools 最大备份 XLSX → Calamine 与 `excel-reader::read_xlsx_worksheet_extents` 读取 → Rust 汇总 → rust_xlsxwriter 新建输出。输出 39,171 行数据（含标题的完整投影为 39,172 行）。user/developer/off 三视图均与只读 PyCode 完整投影一致；user/developer 历史各含 18 条事件，developer stderr 事件流与历史 JSON 一致，off 未写历史。源文件大小与修改时间未变。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test summary_used_range_error --test summary_comments_cli`：Windows 原生 9/9 通过（PT-6-1 5/5，PT-6-2 4/4）。
+- `cargo build --release --offline --locked -p pytools-core --bin pytools --target x86_64-unknown-linux-musl`：WSL 构建成功。
+- 当前 musl release 最大真实备份簿 user/developer/off 三视图 Python/Rust 完整投影对拍：全部精确一致；日志历史断言通过；源文件未变化。
+- glibc 2.28 本轮未重建；麒麟 V10/UOS V20 实机、deb 和离线交付未执行或验收。
+
+未执行项与已知问题：PT-6-1 整体尚未完成最终验收；原 PyTools 含 VBA 真实业务 XLSM 样本仍缺；WSL musl 结果不替代目标发行版实机验收。没有将真实工作簿、输出文件、凭据加入仓库。
+
+删除清单：无。
+回滚：可回滚本轮证据提交；共享代码同步由前序合并提交 `15244db` 单独管理。
+【组件版本】：不升级，本轮只同步共享能力并复验 PT-6-1。

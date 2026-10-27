@@ -1,0 +1,17 @@
+{
+  "status": "passed_synthetic_os_integration",
+  "scope": [
+    "9-1 open config",
+    "9-2 open latest output",
+    "9-3 open output directory"
+  ],
+  "latest_selection": "recursive newest mtime; ignores names beginning with ~$",
+  "empty_output": "returns null and does not invoke opener",
+  "new_output_directory": "created before opener invocation",
+  "system_opener": "fake xdg-open captured arguments; no desktop application was launched",
+  "limitations": [
+    "Linux/WSL command path only; Windows Explorer and macOS open were not tested.",
+    "The old Python implementation uses os.startfile and was not launched on the Windows desktop; the probe verifies the requested path selection and Rust opener arguments.",
+    "Real user output directories and target Linux desktop integration were not tested."
+  ]
+}

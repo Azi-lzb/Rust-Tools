@@ -1,0 +1,22 @@
+时间：2026-10-24 07:50:56（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：a94474a46ba95bed6ef9ffcaf65737994c63f06f；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无未提交用户 WIP。origin/main 为 473c75a，未发现需同步到本功能的更新。
+修改后 commit：本轮提交（提交号见本文件所在 Git commit）。
+
+目的：验证 PT-6-1 glibc 2.28 release CLI 的普通用户、开发者和关闭日志视图，并与真实 PyCode 输出对拍。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：增加 glibc 2.28 release 三视图的真实样本结果。
+- pytools-core/MIGRATION_INVENTORY.md：记录三视图对拍结果与目标平台边界。
+- 本修改记录。
+
+业务入口：复用 x86_64-unknown-linux-gnu.2.28 release 二进制 pytools summary-used-range，处理原 PyTools xlsx/备份/ 中最大工作簿；分别以 user、developer、off 模式运行，并使用只读 PyCode run_summary_by_usedrange 作为基线。
+
+验证结果：三视图各输出 39,171 行，值/类型/样式/维度/公式/合并/定义名称/打印区/页面设置/页边距/居中等完整投影均与 PyCode 一致。三个视图的读取/写入引擎报告均通过检查；user/developer 历史状态为 succeeded，各有 18 条事件；developer 的 18 条 stderr 事件与保存 JSON 逐项一致、序号连续；off 无 run_id、无运行记录目录、无 CLI 进度文本。WSL 启动时会在 stderr 输出主机网络提示，检查时与产品日志分开识别。源工作簿大小 3,800,854 字节，测试前后大小和修改时间未变。developer output_workbook 记录 1,245 ms，仅记录本次样本，不作性能结论。
+
+无 Python/Rust 输出差异。该项只证明 WSL 上 glibc 2.28 ABI release CLI 的真实样本和日志视图行为，不等于麒麟 V10/UOS V20 实机或 deb 验收。生产 Rust 逻辑及默认引擎路由未改变。未修改 DEVELOPMENT_GOAL.md、AGENTS.md、共享 crates、根 Cargo 配置、Cargo.lock 或 Audit。
+
+未执行：麒麟 V10/UOS V20 实机、deb 安装、Windows 原生 Cargo 构建。PT-6-1 未知 #DATA! token 仍按 main 已确认的 reader 边界失败关闭，PT-6-1 最终验收仍未完成。
+删除清单：无仓库文件删除；对拍输出和日志由系统临时目录清理。
+回滚：可使用 git revert <本轮提交> 撤回本轮报告、清单和记录。
+【组件版本】：不升级，当前 0.1.0。

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.file_sort_prefix.real_config_menu_bridge",
+  "date": "2026-10-26",
+  "source_commit": "6b6e1f8ed2020225081c88c5a131a9a3214e2d46",
+  "source_config": "read-only PyCode/config/config.xlsx; only copied configs had output/log paths redirected",
+  "source_config_unchanged": true,
+  "active_sort_rule_count": 3,
+  "content_spec_cell_count": 2,
+  "input_origin": "synthetic files in isolated temporary directories; no real business sample was supplied",
+  "python_version": "3.12.10",
+  "openpyxl_version": "3.1.5",
+  "pandas_version": "2.2.3",
+  "features": [
+    {
+      "action": "PT-4-9",
+      "rust_entry": "pytools menu -> 4 -> 9 -> manual file selection",
+      "python_baseline": "PyCode/core/convert_33_34_35_37.py",
+      "config_rule_count": 3,
+      "selected_synthetic_file_count": 5,
+      "stats_match": true,
+      "workbook_values_types_shape_match": true,
+      "final_names_and_bytes_match": true,
+      "bytes_preserved_by_both": true,
+      "developer_actual_engines": [
+        "Calamine",
+        "RustFilesystem",
+        "rust_xlsxwriter"
+      ],
+      "developer_history_omits_selected_names": true,
+      "status": "passed"
+    },
+    {
+      "action": "PT-4-10",
+      "rust_entry": "pytools menu -> 4 -> 10 -> manual file selection",
+      "python_baseline": "PyCode/core/convert_33_34_35_37.py",
+      "config_rule_count": 3,
+      "selected_synthetic_file_count": 3,
+      "stats_match": true,
+      "workbook_values_types_shape_match": true,
+      "final_names_and_bytes_match": true,
+      "bytes_preserved_by_both": true,
+      "developer_actual_engines": [
+        "Calamine",
+        "Calamine + RustFilesystem",
+        "RustFilesystem",
+        "rust_xlsxwriter"
+      ],
+      "developer_history_omits_selected_names": true,
+      "status": "passed"
+    }
+  ],
+  "limitations": [
+    "This bridge validates real PyCode configuration semantics and real Rust interactive-menu routing with synthetic temporary files.",
+    "It is not acceptance on a real business directory or workbook set.",
+    "Only report sheet names, shape, headers, cell values/types, statistics, final filenames/bytes and developer-log filename redaction were compared; report styling was not part of this comparison.",
+    "Production Excel capability registration and Kylin/UOS offline acceptance remain unverified."
+  ],
+  "status": "passed_synthetic_real_config_bridge"
+}

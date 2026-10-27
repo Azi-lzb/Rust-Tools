@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_tools_python_rust_parity",
+  "date": "2026-10-23",
+  "status": "passed_synthetic_parity",
+  "source_python_file": "PyCode/core/summary_321_322.py",
+  "scenarios": {
+    "6-1_used_range": {
+      "status": "passed",
+      "rows": 12,
+      "features": ["multiple worksheets", "format-defined used-range tail", "date", "boolean", "numeric and text values"]
+    },
+    "6-2_comment_template": {
+      "status": "passed",
+      "rows": 6,
+      "features": ["row-region comments", "column-region comments", "set(name) comment", "duplicate headers", "template-sheet fallback"]
+    }
+  },
+  "comparison": {
+    "worksheet_names": "exact",
+    "cell_values_and_python_types": "exact",
+    "worksheet_dimensions": "exact",
+    "freeze_panes": "exact",
+    "header_bold_flags": "exact"
+  },
+  "limitations": [
+    "Synthetic XLSX only; no real summary template or source workbook was available.",
+    "XLSM, XLS, XLSB, comments from non-VML extensions, Windows native execution, Kylin/UOS, glibc 2.28 and deb packaging were not validated.",
+    "Unrelated OOXML part preservation is not applicable to these new-workbook outputs and was not evaluated."
+  ]
+}

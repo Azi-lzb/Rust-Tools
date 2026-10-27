@@ -1,0 +1,30 @@
+时间：2026-10-25 18:44（Asia/Shanghai）
+执行者：Codex（pytools-dev 审计）
+修改前 commit：34f7bdb7a96b0f09b046ca8bcfb41c5d40365175；worktree C:\Users\AZI\Desktop\VibeCode\pytools-dev，分支 pytools-dev；origin/pytools-dev 同步。
+WIP：审计开始时已有本次 PT-6-1 边界修复、回归探针和机器报告三项未提交修改；HANDOFF_ZCODE_TO_CODEX.md 为用户指定保留的未跟踪文件，不纳入修改或提交。
+
+目的：审计已有配置区间 clamp 时发现空表外区间可能在容量计算中 usize 下溢并 panic；按 PyCode 的越界行自然跳过语义修复。
+
+修改文件：
+- pytools-core/src/rule_engine.rs：clamp 后若行或列区间为空，直接返回空结果；增加边界单测。
+- pytools-core/probe/compare_real_rules_wide.py：新增配置数据区起始行晚于短表末行的两种行头模式对拍。
+- pytools-core/probe/reports/real_rules_wide_parity_20261025.json：记录新增合成边界场景结果。
+- pytools-core/MIGRATION_INVENTORY.md：补记问题、证据和未验收范围。
+- 本记录。
+
+复现与验证：
+- 修复前新增单测失败，定位为 Vec 容量计算处 attempt to subtract with overflow。
+- 修复后对拍探针 EXIT=0，报告 passed_exact；两种行头模式 PyCode 与 Rust 均跳过无数据输出，Rust 无 panic。
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- cargo test --offline --locked -p pytools-core --lib configured_range_boundary_tests -j 1：1/1 通过。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1：13/13 通过。
+- git diff --check：通过。
+- 上述真实规则使用的源数据为合成工作簿；不可据此宣称真实报表验收。
+
+安全与影响：只处理区间 clamp 后为空的情况，不改变有效行列范围处理。未修改共享 Excel-Core、main、audit-dev、原只读 Python 源项目或真实数据。修改仅使用合成数据，不含凭据或业务数据。HANDOFF_ZCODE_TO_CODEX.md 保持未跟踪且未触碰。
+未执行项/已知限制：未运行全量测试；PT-1-3/1-4 真实报表、PT-6-2 真实模板、PT-4-2/4-3 修复后的 sidecar 实际端到端、目标 Linux 实机/deb 离线验收仍未验证。
+删除清单：无。
+回滚提示：本次提交可整体 git revert；仅撤销业务防护时移除 rule_engine.rs 的 post-clamp 空区间检查及其单测。
+【组件版本】：缺陷修复，不升级。
+修改后 commit：本记录创建时待提交，最终 SHA 见提交历史。

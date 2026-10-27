@@ -1,0 +1,19 @@
+时间：2026-10-25 21:12:49（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 HEAD：a8fc0ca；该功能提交将包含本记录。
+WIP：保留既有 `HANDOFF_ZCODE_TO_CODEX.md` 和 PT-4-2 `.xls` 转换失败证据；未将其纳入本功能。
+
+目的：补齐 PT-7-5 地区总分校验 Rust 交互菜单入口与 Python 基线之间的完整工作簿对拍证据。
+
+修改文件：
+- `pytools-core/tests/region_sum_parity.rs`：新增集成测试，运行真实产品入口 `pytools menu` → 7 → 5，通过手工路径输入处理五个合成 XLSX；对比 Python 基线统计、单元格值/类型、公式、工作表维度、样式和列宽，并检查输入文件字节未变。
+- `pytools-core/MIGRATION_INVENTORY.md`：修正 PT-7-5 入口状态，记录合成菜单对拍及仍未验收的平台/真实模板边界。
+- 本文件：按协作规则记录本次修改。
+
+验证：Windows 原生 MSVC Rust 1.99.1。`cargo fmt --manifest-path pytools-core/Cargo.toml --package pytools-core -- --check` 通过；`cargo test --offline --locked -p pytools-core --test region_sum_parity -j 1` 通过（6/6）；`cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli interactive_batch_menu_runs_region_sum_check_through_real_cli -j 1` 通过（1/1）。Python 输出沿用已登记的合成基线 `probe/reports/region_sum_python_baseline.json`；本轮未运行 Python 源函数。
+
+限制/未执行：仅合成 XLSX；未验证真实地区报表、Python COM 路径、Windows 原生文件选择器的人工交互、XLS/XLSM、麒麟/UOS 实机、glibc 2.28 当前 HEAD 重建或离线 deb。现有 `excel-editor` 弃用 API 与 PyTools unused import 警告未处理。
+
+组件版本：不升级（只增测试与迁移记录）。
+删除清单：无。
+回滚：仅回滚本记录、对应 PT-7-5 测试和库存段落；保留工作树中其他 PT-4-2/交接 WIP。

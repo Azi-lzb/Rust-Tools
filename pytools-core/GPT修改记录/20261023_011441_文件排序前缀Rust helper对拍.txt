@@ -1,0 +1,36 @@
+【时间】2026-10-23 01:14:41（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】无；workspace 当前内容为未提交迁移工作树。
+【修改后 commit】无；未执行 commit。
+【WIP 情况】修改前检查了 workspace 状态；既有文件均为未跟踪 WIP。本轮只增量更新文件排序前缀 helper 的对拍材料与迁移清单，没有覆盖或清理既有内容。
+
+【修改目的】
+记录 pytools 文件排序前缀操作中已迁移的纯逻辑 helper。严格区分 helper 对拍与 4-9/4-10 完整菜单功能迁移，避免将候选代码误报为完整业务验收。
+
+【修改/新增文件】
+- pytools-core/src/file_sort_prefix.rs、pytools-core/src/lib.rs：新增并导出纯逻辑 helper 模块。
+- pytools-core/tests/fixtures/file_sort_prefix_cases.json、pytools-core/tests/file_sort_prefix_parity.rs：新增对拍向量与集成测试；修正 JSON 数组与 serde_json::Value 比较。
+- pytools-core/probe/file_sort_prefix_baseline.py、pytools-core/probe/reports/file_sort_prefix_python_baseline.json：新增只读 Python 源函数基线生成器及输出。
+- pytools-core/MIGRATION_INVENTORY.md：登记 helper 的有限范围和未完成业务环节。
+- pytools-core/probe/reports/file_sort_prefix_parity.json：新增机器可读对拍报告。
+- pytools-core/GPT修改记录/20261023_011441_文件排序前缀Rust helper对拍.txt：新增本记录。
+
+【逻辑与迁移范围】
+- Rust helper 位于 pytools-core/src/file_sort_prefix.rs，覆盖数字提取、宽度、规范化、配置行规则生成、关键词匹配、清除已有前缀和目标文件名组合。
+- Python 基线来自只读源 PyCode/core/convert_33_34_35_37.py；源模块 SHA256 为 F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65。基线生成器使用源项目 Python 3.12.10 环境，配置规则基线通过合成 xlsx 调用原 `_load_file_sort_rules`。
+- 源项目聚焦测试此前运行结果为 23 passed、1 warning，设置禁止写 pyc 且关闭 pytest cache；本轮确认源模块 SHA256 与基线生成时一致。
+- 当前 Rust 接受解析后的配置行，尚未读取配置工作簿；配置集成、目录发现、碰撞安全改名、xlsx 报告、内容前缀/4-10 完整分支、COM 和菜单集成均未迁移，相关菜单维持未验证。
+- 不改变生产默认路由或 Cargo 依赖，不触及原始 Python 项目。
+
+【验证】
+- `cargo fmt --all -- --check`：通过。
+- `cargo test --workspace --locked -q`：31 passed，0 failed；其中文件排序前缀 parity 集成测试通过。
+- Rust 与 Python helper 对拍：数字提取 9 项、宽度 7 项、规范化 6 项、规则生成 4 条、匹配 4 项、前缀清除 8 项、目标文件名 3 项，7 组一致。
+- 未执行真实用户文件夹/模板对拍、Windows/Linux 文件系统异常测试、目标 Linux 构建或打包验证。
+
+【组件版本】
+pytools-core：0.1.0 → 0.1.0（不升级）。共享 crate 和依赖版本未变。未更新用户版更新日志。
+
+【删除清单】无。
+【已知问题/后续】此结果仅证明纯逻辑 helper 与限定源基线一致，不证明 4-9/4-10 端到端行为、文件安全性、Excel 报告或其他格式兼容。下一步应按源调用链迁移配置读取与文件操作，定义碰撞/失败回退契约后再对拍。
+【回滚提示】可单独撤销本记录、parity JSON、测试修正及迁移清单段落；本轮没有新增业务模块或依赖。保留此前 helper 源码、基线和夹具，除非明确回滚该迁移切片。

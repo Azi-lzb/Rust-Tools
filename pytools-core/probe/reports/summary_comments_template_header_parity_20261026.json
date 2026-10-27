@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_comments_template_header_parity",
+  "date": "2026-10-26",
+  "status": "passed_python_rust_projection_parity",
+  "data_origin": "synthetic XLSX contract fixture and read-only PyCode baseline",
+  "environment": {
+    "platform": "Windows x86_64",
+    "rust_target": "x86_64-pc-windows-msvc",
+    "rust_toolchain": "1.99.1",
+    "python_version": "3.12.10",
+    "openpyxl_version": "3.1.5",
+    "pytools_branch": "pytools-dev"
+  },
+  "entry_route": "pytools summary-comments",
+  "baseline": "PyCode/core/summary_321_322.py::run_summary_by_comment",
+  "input": {
+    "format": "xlsx",
+    "date_system": "1904",
+    "sample_count": 2,
+    "template_source_sheet_names": [
+      "  Branch_A  ",
+      "branch_a"
+    ],
+    "expected_output_sheet_names": [
+      "Branch_A",
+      "branch_a1"
+    ]
+  },
+  "behaviors": [
+    "formula template header remains formula text in the output workbook",
+    "blank template header falls back to its Excel column letter",
+    "boolean template header uses Python string capitalization",
+    "numeric and date template headers use Python string conversion",
+    "numeric headers match Python scientific-notation thresholds, exponent signs, and padding",
+    "duration headers use Python timedelta string conversion",
+    "template sheet output names trim surrounding whitespace like PyCode",
+    "case-insensitive output sheet collisions use openpyxl numeric suffix behavior"
+  ],
+  "comparison": {
+    "workbook_projection": "exact",
+    "different_fields": [],
+    "fields": [
+      "sheet names and dimensions",
+      "row values and cell types",
+      "non-empty cell styles",
+      "freeze panes and header bold state",
+      "merged ranges, formula text, and defined names",
+      "print area, page setup, margins, and centering"
+    ]
+  },
+  "execution": {
+    "status": "succeeded",
+    "summary_rows": 6,
+    "output_dimensions": [
+      {
+        "name": "Branch_A",
+        "rows": 4,
+        "columns": 12
+      },
+      {
+        "name": "branch_a1",
+        "rows": 4,
+        "columns": 5
+      }
+    ],
+    "python_dimensions": [
+      {
+        "name": "Branch_A",
+        "rows": 4,
+        "columns": 12
+      },
+      {
+        "name": "branch_a1",
+        "rows": 4,
+        "columns": 5
+      }
+    ],
+    "reader_engine": "calamine",
+    "writer_engine": "rust_xlsxwriter"
+  },
+  "safety": {
+    "source_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_input_filenames_or_cell_values": false
+  },
+  "limitations": [
+    "This evidence covers a synthetic template and does not substitute for a valid real PT-6-2 business template.",
+    "Linux targets and offline deb acceptance were not tested."
+  ]
+}

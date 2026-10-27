@@ -1,0 +1,34 @@
+时间：2026-10-22 13:34:38 UTC
+执行者：Codex
+修改前 commit：无；当前 Git 状态为全量未跟踪 WIP。
+修改后 commit：无；未提交、未推送。
+目的：为 py_statistics_tools 建立独立迁移清单、probe 配置、fixtures 与报告目录，并统一技术边界。
+修改/新增文件：
+- pytools-core/MIGRATION_PLAN.md
+- pytools-core/MIGRATION_INVENTORY.md
+- pytools-core/README.md
+- pytools-core/probe/probe.toml
+- pytools-core/probe/reports/.gitkeep
+- pytools-core/tests/fixtures/.gitkeep
+- pytools-core/GPT修改记录/20261022_133438_pytools迁移清单与probe配置.txt
+
+变化摘要：
+- 依据 PyCode/main.py 菜单列出时序、去重、打印、转换、配置、汇总、批处理、归档和快捷工具。
+- 标记普通无批注工作表提取为迁移基线；Python 模式切换和 PDF 导出不迁移。
+- 将 NoComPyTools 作为同一产品目标的变体参考，要求盘点独有行为，不静默遗漏、不单独创建第三产品。
+- 为 pytools 建立与 audit 分离的 probe/fixtures/reports 路径；尚未添加真实或合成工作簿夹具。
+- 文件转换首批限制为同类 .et→.xlsx、.xls→.xlsx、.doc→.docx；公式重算默认关闭、显式时调用 sidecar。
+
+验证：
+- 检查 PyCode/main.py 用户菜单与 dispatch 映射、PyCode/core 文件名及 NoComPyTools 子项目目录。
+- 这些清单是菜单级初盘，尚未逐个跟踪全部源调用链。
+- 业务代码与真实模板尚未对拍。
+
+已知问题：
+- NoComPyTools 与 PyCode 的行为差异还未逐函数核对。
+- 旧项目 openpyxl baseline JSON 和 pytools 自有 workbook fixtures 尚未生成。
+- 不能将 audit-core 中的合成 fixture 或报告当成 pytools 验收结果。
+
+删除清单：无。
+回滚提示：只回退本记录列出的 pytools 文档、probe 配置和占位目录文件；不要改动只读源项目或其他 workspace WIP。
+组件版本：不升级（迁移清单和 probe 配置文档）。

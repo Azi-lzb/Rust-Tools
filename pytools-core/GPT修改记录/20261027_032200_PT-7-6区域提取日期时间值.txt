@@ -1,0 +1,23 @@
+时间：2026-10-27 03:22（本机时间）
+执行者：Codex
+修改前 commit：cdfba3a
+修改后 commit：待提交
+WIP：修改前工作树干净；仅变更 PyTools 子树。
+
+目的：恢复旧 PyCode 区域提取对日期时间值的支持，修复 Rust area-only writer 对 DateTimeIso 一律拒绝的问题。
+
+修改文件：
+- pytools-core/src/sheet_extract.rs：解析 ISO 日期时间，使用 ExcelDateTime 与 `yyyy-mm-dd h:mm:ss` 写入新工作簿。
+- pytools-core/tests/sheet_extract_area_operation_parity.rs：将旧日期拒绝用例改为成功断言，并新增 V2 菜单 PT-7-6 日期提取及源文件安全回归。
+- pytools-core/MIGRATION_INVENTORY.md：记录旧 Python 语义、验证结果和剩余验收范围。
+
+测试：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过；存在既有 deprecated API、unused import 和 dead-code 警告。
+- `cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity -j 1`：12/12 通过。
+- 构建与测试临时目录位于 F:\RustBuild\pytools 和 F:\PyToolsRustV2\cargo-temp。
+- 旧 PyCode 使用只读测试源簿提取 E1，输出为 `2024-12-31T09:30:00` datetime，数字格式 `yyyy-mm-dd h:mm:ss`；未修改源 Python 或源工作簿。
+
+未执行：用户真实业务样本对拍、Excel GUI 打开与完整格式保真、Linux/麒麟/UOS/glibc 2.28/deb 验收。PT-7-6 的 DurationIso、Error 等其他类型仍失败关闭。
+
+风险/回滚：当前仅恢复 DateTimeIso；若发现格式或值差异，可回滚 `write_extracted_value` 分支及对应测试，其他提取逻辑不变。未删除文件，未改变配置或 VBA，组件版本不升级。

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "feature": "ordinary_fx_header_unit_replacement",
+  "source_project": "PyCode",
+  "source_file": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main\\PyCode\\core\\feature_1_4_fx_header.py",
+  "source_sha256": "cc436a215d577f6063cc1847024f890448711d22278bcf07eff7088452e0e00e",
+  "fixture": "pytools-core/tests/fixtures/fx_header/source.xlsx",
+  "fixture_sha256": "977b7d29aa582efc8f9021a733b543146716b4a6c9303921079acbe4491e6ce8",
+  "python_baseline_stats": {
+    "files": 1,
+    "saved_files": 1,
+    "fx_sheets": 2,
+    "modified_sheets": 1,
+    "failed_files": 0
+  },
+  "headers_after": {
+    "外汇报表": {
+      "odd": {
+        "left": "单位：万美元",
+        "center": "外汇报表 单位：万美元",
+        "right": "右侧万美元"
+      },
+      "even": {
+        "left": "偶数页：万美元",
+        "center": null,
+        "right": null
+      },
+      "first": {
+        "left": null,
+        "center": "首页不替换",
+        "right": null
+      }
+    },
+    "外汇空白": {
+      "odd": {
+        "left": "单位：万美元",
+        "center": null,
+        "right": null
+      },
+      "even": {
+        "left": null,
+        "center": null,
+        "right": null
+      },
+      "first": {
+        "left": null,
+        "center": null,
+        "right": null
+      }
+    },
+    "普通报表": {
+      "odd": {
+        "left": "普通报表：万元",
+        "center": null,
+        "right": null
+      },
+      "even": {
+        "left": null,
+        "center": null,
+        "right": null
+      },
+      "first": {
+        "left": null,
+        "center": null,
+        "right": null
+      }
+    }
+  },
+  "preserved_workbook_properties": {
+    "cell_b2": 12.5,
+    "formula_c2": "=B2*2",
+    "merged_ranges": [
+      "C3:D3"
+    ],
+    "comment_a1": "原有批注保留",
+    "column_d_width": 18.0,
+    "orientation": "landscape",
+    "fit_to_width": 1,
+    "print_area": "'外汇报表'!$A$1:$D$3",
+    "data_validation_count": 1,
+    "conditional_formatting_count": 1
+  }
+}

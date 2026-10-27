@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.precheck_real_config_python_rust",
+  "date": "2026-10-23",
+  "status": "passed",
+  "source_configuration": "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/config/config.xlsx",
+  "source_configuration_sha256": "e000c784e85b63b4fc19fd45684aa8729dbd032238d78321fdc9fb4c33cee716",
+  "source_configuration_modified": false,
+  "execution": "a temporary copy was used; only the input/output/log directory values in that copy were redirected to temporary directories",
+  "python": {"errors": 0, "warnings": 0},
+  "rust": {"errors": 0, "warnings": 0},
+  "limitations": [
+    "This validates configuration precheck only; the configured business workbooks were not available for timeline operations.",
+    "The temporary copy was opened and saved with openpyxl; this was not a workbook-preservation test.",
+    "Windows native execution, Kylin/UOS, glibc 2.28 and deb packaging were not validated."
+  ]
+}

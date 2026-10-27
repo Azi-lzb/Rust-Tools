@@ -1,0 +1,20 @@
+时间：2026-10-26（Windows 11，UTC+8）
+执行者：Codex
+修改前 HEAD：33ea688d303ae294b795f2212530239d423be8e5
+修改后 HEAD：本记录随本次功能提交纳入，提交 SHA 见当前分支 Git 历史。
+WIP：开始时 PyTools 菜单冒烟测试有未提交修改，检查后延续；未修改原 Python 项目、真实配置或其他工作树。
+
+目的：维持 Windows 直接启动 `pytools.exe` 时的旧版数字菜单，并保留旧 NoComPyTools 入口的 `PYTOOLS_CONFIG_PATH` 配置覆盖。既有 Rust 菜单/API 和功能编号不变；未实现 PDF 仍明确失败提示，PT-1-2 仍排除。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：菜单无 `--config` 参数时读取既有 `PYTOOLS_CONFIG_PATH` 环境变量，未设置时仍使用可执行文件同级 `config/config.xlsx`。
+- `pytools-core/tests/quick_menu_cli.rs`：验证无参数菜单数字项、正常退出与配置环境变量兼容。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录入口回归覆盖，保持业务验收状态不变。
+
+验证：指定 Rust 文件 `rustfmt --check --edition 2021` 通过；`cargo test --offline --locked -p pytools-core --test quick_menu_cli -j 1` 4/4 通过。构建的 Windows `pytools.exe` 无参数启动后显示 1–9/0 主菜单并正常退出。该构建目录尚无配置文件，界面如实提示进入 5→1 初始化或指定配置；未执行业务工作簿。
+
+未执行/已知边界：各菜单业务项的真实样本验收不因入口测试改变；PT-1-2 保持排除。用户可通过 `PYTOOLS_CONFIG_PATH` 或菜单配置初始化准备配置。Linux/glibc 2.28/deb 验收未执行。
+
+删除清单：无。
+回滚：仅回滚本记录所列 PyTools 三项文件的本次差异。
+【组件版本】不升级；本次只补入口配置兼容与回归测试。

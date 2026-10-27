@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_python_rust_parity",
+  "date": "2026-10-25",
+  "status": "passed_synthetic_parity",
+  "source_python_files": [
+    "PyCode/core/wide_397_398.py",
+    "PyCode/core/io_excel.py"
+  ],
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "features": [
+      "merged set-region label",
+      "multi-row and merged column headers",
+      "duplicate dynamic headers",
+      "duplicate row labels",
+      "date in the input filename",
+      "configured target worksheet",
+      "cached formula value with no parsable input date",
+      "recursive configured-input default scan",
+      "Excel lock-file and unsupported-extension exclusion"
+    ]
+  },
+  "environment": {
+    "python": "3.12.10",
+    "python_packages": {
+      "numpy": "2.1.3",
+      "pandas": "2.2.3",
+      "openpyxl": "3.1.5"
+    },
+    "python_baseline": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "rust_execution": "Windows native pytools menu and CLI",
+    "sample_kind": "synthetic XLSX only"
+  },
+  "comparison": {
+    "worksheet_names_order_values_and_types": "exact except numeric values compared with relative and absolute tolerance 1e-15",
+    "effective_cell_styles": "exact across every cell in generated summary workbooks, including font, fill, border, alignment, number format, and protection",
+    "formula_text_merges_dimensions_defined_names_freeze_panes": "exact; cached source formula values are projected as values, matching PyCode; generated summary output contains no formulas, merges, defined names, or frozen panes",
+    "data_date_number_formats": "exact across the generated summary worksheet",
+    "new_target_append": "exact after the real Rust menu generated, validated, confirmed and committed the candidate"
+  },
+  "scenarios": [
+    {
+      "row_suffix": false,
+      "cached_formula_value_projected": false,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 46,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 28,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      }
+    },
+    {
+      "row_suffix": true,
+      "cached_formula_value_projected": false,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 44,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 27,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      }
+    },
+    {
+      "row_suffix": false,
+      "cached_formula_value_projected": true,
+      "blank_data_date_format": "yyyy/m/d",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 19,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      }
+    }
+  ],
+  "input_filter_case": {
+    "selected_paths": 3,
+    "python_eligible_sources": 1,
+    "rust_eligible_sources": 1,
+    "unsupported_extension": ".xlsb",
+    "missing_supported_path": true,
+    "summary_projection": "exact Python/Rust parity",
+    "source_and_config_unchanged": true,
+    "target_append_plan_count": 1
+  },
+  "default_input_scan_cases": [
+    {
+      "row_suffix": false,
+      "source_selection": "PyCode source_paths=None and Rust CLI without positional paths",
+      "python_eligible_sources": 2,
+      "rust_eligible_sources": 2,
+      "nested_directory": "included",
+      "excel_lock_file": "excluded",
+      "unsupported_xlsb": "excluded by configured .xlsx extension",
+      "summary_projection": "exact Python/Rust parity",
+      "developer_history_source_discovery_events": 2,
+      "source_and_config_unchanged": true,
+      "target_append_plan_count": 1
+    },
+    {
+      "row_suffix": true,
+      "source_selection": "PyCode source_paths=None and Rust CLI without positional paths",
+      "python_eligible_sources": 2,
+      "rust_eligible_sources": 2,
+      "nested_directory": "included",
+      "excel_lock_file": "excluded",
+      "unsupported_xlsb": "excluded by configured .xlsx extension",
+      "summary_projection": "exact Python/Rust parity",
+      "developer_history_source_discovery_events": 2,
+      "source_and_config_unchanged": true,
+      "target_append_plan_count": 1
+    }
+  ],
+  "native_file_dialog_menu_scenarios": [
+    {
+      "sample_kind": "synthetic_xlsx",
+      "source_workbooks": 1,
+      "windows_native_file_dialog": true,
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "python_rust_summary_projection": "exact",
+      "python_rust_target_candidate_projection": "exact",
+      "python_rust_committed_target_projection": "exact",
+      "reader_engine": "calamine",
+      "writer_engine": "rust_xlsxwriter",
+      "target_operation": "created new target in isolated temporary directory after explicit confirmation",
+      "source_semantics_unchanged": true,
+      "configuration_values_unchanged": true,
+      "production_acceptance": false,
+      "row_suffix": true,
+      "entry_route": "pytools menu -> 1 -> 3 -> Windows native file dialog -> confirm",
+      "summary_rows": 3,
+      "target_appended_rows": 3,
+      "duplicate_rows_filtered": 0,
+      "target_execute_status": "succeeded",
+      "target_execute_elapsed_ms": 40
+    },
+    {
+      "sample_kind": "synthetic_xlsx",
+      "source_workbooks": 1,
+      "windows_native_file_dialog": true,
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "python_rust_summary_projection": "exact",
+      "python_rust_target_candidate_projection": "exact",
+      "python_rust_committed_target_projection": "exact",
+      "reader_engine": "calamine",
+      "writer_engine": "rust_xlsxwriter",
+      "target_operation": "created new target in isolated temporary directory after explicit confirmation",
+      "source_semantics_unchanged": true,
+      "configuration_values_unchanged": true,
+      "production_acceptance": false,
+      "row_suffix": false,
+      "entry_route": "pytools menu -> 1 -> 4 -> Windows native file dialog -> confirm",
+      "summary_rows": 3,
+      "target_appended_rows": 2,
+      "duplicate_rows_filtered": 1,
+      "target_execute_status": "succeeded",
+      "target_execute_elapsed_ms": 42
+    },
+    {
+      "row_suffix": true,
+      "selection_mode": "multi_select",
+      "entry_route": "pytools menu -> 1 -> 3 -> Windows native multi-select file dialog -> confirm",
+      "sample_kind": "synthetic_xlsx",
+      "source_workbooks": 2,
+      "windows_native_file_dialog": true,
+      "summary_rows": 6,
+      "summary_dimensions": [
+        [
+          7,
+          9
+        ]
+      ],
+      "python_rust_summary_projection": "exact",
+      "python_rust_target_candidate_projection": "exact",
+      "python_rust_committed_target_projection": "exact",
+      "target_appended_rows": 6,
+      "duplicate_rows_filtered": 0,
+      "reader_events": 2,
+      "reader_engine": "calamine",
+      "writer_engine": "rust_xlsxwriter",
+      "target_execute_status": "succeeded",
+      "target_execute_elapsed_ms": 43,
+      "target_operation": "created new target in isolated temporary directory after explicit confirmation",
+      "source_and_configuration_bytes_unchanged": true,
+      "production_acceptance": false
+    }
+  ],
+  "limitations": [
+    "No sanitized real business sample was available.",
+    "Temporary capability evidence is test-only and does not register a production route.",
+    "麒麟/UOS glibc 2.28 deb remains unverified.",
+    "The cached-formula scenario validates reading and projecting a stored formula result; it does not perform or validate formula recalculation."
+  ]
+}

@@ -1,0 +1,25 @@
+时间：2026-10-23 12:11（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：修改前检查了 `git status --short --branch`、`git ls-files` 和 remote。workspace 有 `origin`，但 `git ls-files` 为 0，已有内容整体未跟踪。本轮未 stage、commit 或 push，避免把整个 workspace 和既有用户内容一并纳入提交。原始 pytools 项目保持只读。
+
+目的：为归档工具按日期预览、按类型预览、执行归档计划、按日期复制、按类型复制建立可重复的 Python/Rust 合成端到端对拍，并修正发现的差异。
+
+变更文件：
+- `pytools-core/src/archive_ops.rs`：执行计划时清空预览期的冲突备注；只在复制阶段实际发生重名时写入执行备注；日期预览 API 接受可选扩展名筛选配置。
+- `pytools-core/src/bin/pytools.rs`：`archive-date-preview` 支持 `--config <config.xlsx>`。
+- `pytools-core/tests/fixtures/archive_cases.json`：归档路径与文件名合成案例。
+- `pytools-core/tests/fixtures/archive_type_config.xlsx`：合成归档类型及扩展名配置。
+- `pytools-core/probe/archive_baseline.py`：调用只读 Python 源函数生成基线，运行中禁写 Python 字节码。
+- `pytools-core/probe/reports/archive_python_baseline.json`：Python 基线，源函数文件 SHA-256 为 `9cfd0de33f6cc0cc7c665ace7c445feb125b24f0c201165bcf281a53f24617a3`。
+- `pytools-core/tests/archive_parity.rs`：六种 API 场景逐行/统计比较、复制字节检查及实际 CLI 参数测试。
+- `pytools-core/probe/reports/archive_parity_20261023.json`：本轮机器对拍摘要。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记当前合成对拍和未验收边界。
+- 本记录。
+
+结果：日期预览、带扩展名筛选的日期预览、类型预览、日期复制、类型复制、执行归档计划六个场景的统计和报告行与 Python 基线一致；所有成功复制项的源/目标字节一致。CLI 测试验证 `--config` 筛选。发现并修复了预览冲突备注残留至执行报告的问题。`cargo test -p pytools-core --test archive_parity`：2/2 通过；`cargo test --workspace`：通过。
+
+未执行项与已知问题：真实配置和真实业务目录未用于文件操作；GUI 菜单集成、权限错误/竞争条件、非 UTF-8 路径、麒麟 V10/UOS V20、glibc 2.28 与 deb 均未验收。此对拍只覆盖合成文件及当前开发机，不代表整个归档产品功能已完成。workspace 没有 Git 首次提交且本轮未建立提交，无法用 commit 回滚；如需撤销本轮内容，按变更文件清单逐项恢复/移除，先与用户确认当前未跟踪 WIP 的归属。
+
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.user_selected_batch_scope",
+  "date": "2026-10-23",
+  "scope": {
+    "timeline": ["1-1", "1-3", "1-4", "1-5"],
+    "dedup": "all six operations",
+    "printing": ["3-1", "3-2", "3-3", "3-4"],
+    "conversion_and_file_operations": "4-1 through 4-10",
+    "configuration": ["5-1", "5-2"],
+    "summary": ["6-1", "6-2"],
+    "batch": "7-1 through 7-8",
+    "archive": "all listed operations",
+    "quick_tools": "all listed operations",
+    "excluded": ["timeline 1-2", "printing 3-5 PDF", "conversion 4-11 Python mode toggle"]
+  },
+  "implementation_state": "Rust CLI entry points and candidate business modules exist for the selected scope; this report does not mark whole menu groups as migrated or accepted.",
+  "validation": {
+    "cargo_fmt_all": "passed",
+    "cargo_check_pytools_core": "passed",
+    "cargo_test_workspace": "passed",
+    "read_only_source_pycode_tests": {
+      "result": "passed",
+      "passed": 78,
+      "failed": 0
+    },
+    "cli_smokes": {
+      "read_current_source_config": "passed; stdout discarded to avoid exposing configuration values",
+      "config_init_and_readback_in_temporary_directory": "passed",
+      "archive_date_preview_and_copy_on_temporary_file": "passed; temporary outputs cleaned"
+    },
+    "source_projects_modified": false
+  },
+  "parity_boundary": "Only operations with existing dedicated reports have synthetic baseline evidence. The full selected workflows listed in MIGRATION_INVENTORY.md remain unverified on real business files.",
+  "existing_real_config_evidence": "A narrow temporary-file smoke test reads one valid alias from the read-only source PyCode/config/config.xlsx; it does not validate real business files.",
+  "file_preservation": "No source configuration or real business workbook was copied into fixtures in this batch.",
+  "edit_routing": "Existing-workbook modification remains gated by exact capability evidence through ExcelEditPlan/ExcelModifier; no production default route changed.",
+  "conversion": "Explicit sidecar conversion entry points exist; real .et/.xls/.doc conversion preservation is unverified.",
+  "git": {
+    "branch": "main",
+    "has_commit": false,
+    "tracked_file_count": 0,
+    "origin_advertised_refs": 0,
+    "staged_or_committed": false,
+    "note": "No baseline commit exists and origin currently advertises no refs. No bulk stage/commit was made because that would capture all currently untracked workspace contents."
+  }
+}

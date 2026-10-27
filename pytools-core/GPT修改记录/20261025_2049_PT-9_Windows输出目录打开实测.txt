@@ -1,0 +1,16 @@
+时间：2026-10-25 20:49–20:54（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+
+目的：补验 PT-9 快捷工具在 Windows 原生环境实际打开配置文件、最新输出文件和 output 文件夹的入口行为。
+
+修改文件：
+- `pytools-core/MIGRATION_INVENTORY.md`：补记本次 Windows 文件夹打开证据与剩余边界。
+- 本修改记录。
+
+验证：`cargo build --offline --locked -p pytools-core --bin pytools` 通过（既有弃用/未使用警告）；`cargo test --offline --locked -p pytools-core --test quick_menu_cli -j 1` 1/1 通过。使用 Rust `config-init` 在 `%TEMP%` 生成临时配置后，经真实 CLI 和交互菜单调用快捷动作：`open-output-dir`/菜单 9→3 退出码 0，`Shell.Application` 枚举到精确对应的 Explorer 窗口；菜单 9→1 打开生成配置簿，确认启动 Excel；菜单 9→2 在 output 中选择生成的 `latest-smoke.txt`，确认启动 Notepad。Excel 和 Notepad 测试进程已正常关闭。所有文件均为临时生成，未读取、打开或修改真实业务文件。
+
+限制：三条动作已验证 Windows 原生入口和文件关联，但未与旧 Python `os.startfile` 的所有行为逐项对拍，也未验证 Linux 桌面；PT-9 整体仍未验收。麒麟 V10/UOS V20 交付状态不变。
+
+无生产 Rust 代码、共享 crate、配置或 Cargo 文件改动；无用户数据删除。临时配置、输出目录及合成文本文件留在 `%TEMP%` 下；本轮针对临时目录的递归清理操作被本地命令策略拒绝，未绕过策略。
+
+回滚：删除本修改记录并还原迁移清单中 PT-9 状态行即可；本次未提交业务实现。

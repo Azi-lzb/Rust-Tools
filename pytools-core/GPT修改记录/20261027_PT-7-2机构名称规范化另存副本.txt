@@ -1,0 +1,14 @@
+日期：2026-10-27
+功能：V2 菜单 5-2（PT-7-2）机构名称规范化另存副本
+
+变更：执行模式在 ExcelModifier 能力验证后，将候选安全发布到每个源文件同目录的 `PyTools_机构名称规范化结果` 文件夹；源文件不替换，已存在结果不覆盖并使用序号新文件名。运行记录增加输出路径与发布结果。递归选择时跳过该结果目录，防止再次规范化已生成副本。未增加配置开关，待用户汇总各功能后统一接入。
+
+修改文件：`pytools-core/src/institution_normalize.rs`、`pytools-core/src/bin/pytools.rs`、`pytools-core/tests/batch_tools_menu_cli.rs`、`pytools-core/tests/institution_normalize_openpyxl.rs`。
+
+验证：Windows 原生 `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli -j 1` 通过（18/18）；`cargo test --offline --locked -p pytools-core --test institution_normalize_batch_cli -j 1` 通过（6/6）；`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`git diff --check` 通过。菜单执行测试使用临时合成 Umya capability，核验结果内容、源文件字节不变、已存在副本不覆盖和输出路径；递归菜单测试核验跳过先前生成副本。
+
+未执行：未运行 Release/package 构建；未使用真实业务工作簿；未执行 ignored openpyxl worker 集成测试、Windows WPS/Excel 或 Linux/deb 验收。
+
+限制：当前没有 PT-7-2 生产 Passed ExcelModifier capability；普通程序启动仍只生成计划，不能真实执行。这项共享能力请求已发给 main。测试用 capability 仅为合成测试，不作为生产能力或路由证据。
+
+回滚：如需回滚本次功能代码，回退包含上述四个代码/测试文件的本地提交；不需要恢复或修改任何用户源工作簿。既有未提交的迁移清单及 PT-2-3 工作记录不属于本次修改。

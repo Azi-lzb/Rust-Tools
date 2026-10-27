@@ -1,0 +1,33 @@
+日期：2026-10-25
+功能：PT-6-2 按批注汇总
+
+修改目的
+
+对照原 PyCode `run_summary_by_comment` 的错误值行为，修复 Rust `summary-comments` 对未知 OOXML 错误 token 读取失败、以及已知 Excel 错误被写成普通文本的差异。只复用已存在的 `excel-reader` opt-in 兼容 API；不修改共享 crate、Cargo 依赖或只读 Python 项目。
+
+变更文件
+
+- `pytools-core/src/summary_ops.rs`：批注汇总源簿启用未知 token 文本兼容；记录兼容 reader 引擎；已知错误值按目标输出工作表分组，通过 OOXML Patch 写回 Excel error 类型并重读验证；错误输出经暂存路径处理。
+- `pytools-core/tests/summary_comments_cli.rs`：新增双输出工作表回归，验证已知/未知错误值、运行历史、隐私及源/模板不变。
+- `pytools-core/tests/fixtures/summary_comments/error_tokens_template.xlsx`
+- `pytools-core/tests/fixtures/summary_comments/error_tokens_source.xlsx`
+- `pytools-core/probe/compare_summary_comments_error_tokens.py`
+- `pytools-core/probe/reports/summary_comments_error_tokens_parity_20261025.json`
+- `pytools-core/MIGRATION_INVENTORY.md`：记录合成对拍结果和真实样本边界。
+
+验证
+
+- `cargo fmt --manifest-path pytools-core/Cargo.toml`：通过。
+- `cargo test --offline --locked --manifest-path pytools-core/Cargo.toml --test summary_comments_cli -j 1`：6/6 通过。
+- `cargo test --offline --locked --manifest-path pytools-core/Cargo.toml --test summary_used_range_error --test summary_menu_cli -j 1`：summary_used_range_error 5/5、summary_menu_cli 4/4 通过；覆盖 PT-6-1 共用错误值补丁和 PT-6-2 交互菜单回归。
+- `python pytools-core/probe/compare_summary_comments_error_tokens.py`：Windows MSVC Rust CLI 与只读 PyCode 完整工作簿投影精确一致，覆盖两个输出工作表；源簿和模板未变化。
+
+未执行/已知限制
+
+- 当前无已授权真实批注区域模板；本次证据仅为合成 XLSX，不代表 PT-6-2 真实样本验收。
+- 未验证麒麟 V10、统信 UOS V20、glibc 2.28、deb 及离线交付。
+- 仅未知字面 `t="e"` token 使用已有 reader 兼容 API；不扩大到公式错误缓存或其他未验证结构。
+
+回滚
+
+- 本功能提交后如需回滚，使用该功能提交的 `git revert <commit>`；不会影响既有 PT-6-1 默认读取路由或共享 crate。

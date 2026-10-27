@@ -1,0 +1,36 @@
+时间：2026-10-22 13:39:22 UTC
+执行者：Codex
+修改前 commit：无；当前 workspace 文件均为未跟踪 WIP。
+修改后 commit：无；未提交、未推送。
+目的：核对并修正 py_statistics_tools 日期解析 helper 的 Rust 迁移行为，建立可重复的共享向量对拍。
+修改/新增文件：
+- pytools-core/src/date_parse.rs
+- pytools-core/Cargo.toml
+- Cargo.lock
+- pytools-core/tests/fixtures/date_parse_cases.json
+- pytools-core/probe/date_parse_baseline.py
+- pytools-core/probe/reports/date_parse_baseline.json
+- pytools-core/probe/reports/date_parse_parity.json
+- pytools-core/MIGRATION_INVENTORY.md
+- pytools-core/GPT修改记录/20261022_133922_date_parse_rust对拍.txt
+
+变化摘要：
+- 发现 Rust 解析器未将“月”接受为年月日之间的月日分隔符，无法解析 2026年1月1日；已修正以匹配源 Python 正则。
+- 建立 22 个共享测试向量，覆盖空值、完整日期、年月月末、闰年、无效日期、date/datetime 对象、文件名优先和 A1 回退。
+- 加入 Rust 单测读取共享 JSON fixture，并提供仅用于测试的 Python 基线脚本。脚本从只读源目录导入原始 date_parse，不属于生产依赖。
+- MIGRATION_INVENTORY 只将日期解析 helper 的这 22 个向量标为对拍通过，不将结果外推到完整业务功能。
+
+测试与结果：
+- 原 Python 基线：使用源项目 .venv 的 Python，带 -B 禁止写字节码；22/22 共享向量通过，报告写入 pytools-core/probe/reports/date_parse_baseline.json。
+- Rust：cargo fmt --all；cargo test -p pytools-core --offline；共享向量测试通过，22/22。
+- 首次 --locked 检查因 dev dependency 更新需要修改 Cargo.lock 而停止；之后在离线模式更新锁文件并通过。
+- 未运行完整原项目 pytest，也未运行工作簿对拍、目标系统测试或 deb 构建。
+
+已知问题：
+- 日期解析 helper 尚未与所有真实调用点做端到端对拍。
+- 其余 pytools 功能仍待源码调用链盘点和迁移。
+- 对拍只覆盖 22 个合成向量，不能替代真实 workbook 样本。
+
+删除清单：无。
+回滚提示：仅回退本记录列出的 Rust helper/test 夹具/基线报告和清单变化；不要清理 target 缓存或修改源 Python 项目。
+组件版本：不升级。

@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.region_sum_check",
+  "source": "PyCode/core/feature_1_5_region_sum_check.py::run_region_sum_check",
+  "source_python_version": "3.12.10",
+  "source_sha256": {
+    "feature_1_5_region_sum_check.py": "78ABDA7379B4CC64F704E07B15426CB0A5D9D92ADFE94E747B982D3F7CCFD38C",
+    "logger.py": "F05B0E3B82D255D6AB6035AD9AF727157C3044E326307657AD3EA0BD094AEFF4"
+  },
+  "fixtures": [
+    "cached_formula_total.xlsx"
+  ],
+  "fixture_sha256": {
+    "cached_formula_total.xlsx": "4DBE94141200E8E379AAF8D04583D67587573FCF2F2E28EAD859D9F182EEC9D4"
+  },
+  "scope": "Synthetic XLSX inputs; normal non-COM implementation only.",
+  "python_baseline": {
+    "status": "保留",
+    "case_count": 1
+  },
+  "statistics": {
+    "files": 1,
+    "sheets": 2,
+    "errors": 1,
+    "failed_files": 0
+  },
+  "output_workbook": {
+    "sheet_name": "核对结果",
+    "max_row": 4,
+    "max_column": 6,
+    "cells": {
+      "A1": {
+        "type": "string",
+        "value": "序号"
+      },
+      "B1": {
+        "type": "string",
+        "value": "文件名"
+      },
+      "C1": {
+        "type": "string",
+        "value": "工作表名"
+      },
+      "D1": {
+        "type": "string",
+        "value": "核对状态"
+      },
+      "E1": {
+        "type": "string",
+        "value": "错误数量"
+      },
+      "F1": {
+        "type": "string",
+        "value": "错误信息"
+      },
+      "A2": {
+        "type": "integer",
+        "value": 1
+      },
+      "B2": {
+        "type": "string",
+        "value": "cached_formula_total.xlsx"
+      },
+      "C2": {
+        "type": "string",
+        "value": "本期分地区"
+      },
+      "D2": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E2": {
+        "type": "integer",
+        "value": 1
+      },
+      "F2": {
+        "type": "string",
+        "value": "指标甲: 75.00 ≠ 60.00 (差15.00)"
+      },
+      "A3": {
+        "type": "integer",
+        "value": 2
+      },
+      "B3": {
+        "type": "string",
+        "value": "cached_formula_total.xlsx"
+      },
+      "C3": {
+        "type": "string",
+        "value": "同期分地区"
+      },
+      "D3": {
+        "type": "string",
+        "value": "正确"
+      },
+      "E3": {
+        "type": "integer",
+        "value": 0
+      },
+      "F3": {
+        "type": "string",
+        "value": "核对通过"
+      },
+      "B4": {
+        "type": "string",
+        "value": "已检查文件数: 1"
+      },
+      "C4": {
+        "type": "string",
+        "value": "已检查工作表数: 2"
+      },
+      "D4": {
+        "type": "string",
+        "value": "发现错误总数: 1"
+      }
+    },
+    "formulas": {
+      "A4": "=== 统计汇总 ==="
+    },
+    "column_widths": {
+      "A": 18.0,
+      "B": 27.0,
+      "C": 19.0,
+      "D": 17.0,
+      "E": 10.0,
+      "F": 34.0
+    },
+    "styles": {
+      "A1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "B1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "C1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "D1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "E1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "F1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "A2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F2": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "B3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "C3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "D3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "E3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "F3": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "B4": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      },
+      "C4": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      },
+      "D4": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      }
+    }
+  },
+  "limitations": [
+    "No real business workbook, XLSM/XLT input, target Linux platform, or menu/CLI integration was tested.",
+    "The source feature's COM variant is outside this migration slice; no Office engine is used."
+  ]
+}

@@ -1,0 +1,26 @@
+时间：2026-10-25 02:41:38 +08:00
+执行者：Codex PyTools Agent
+分支：pytools-dev
+修改前 commit：8ea679473935e5a8e7e23daa4d9baf43dd9a9fd4
+修改后代码 commit：6eb2181 test(pytools): fix Windows native regression fixtures
+WIP：修改前工作树干净；未发现 WIP 文件。修改范围限于 pytools-core。
+
+目的：修复 Windows 原生 pytools-core 全量测试的两处测试环境缺陷，恢复整 crate 回归。
+
+修改文件：
+- pytools-core/src/workbook_extract.rs：单测从 JSON 基线动态生成 XLSX 和合并区域，不再依赖当前工作树中缺失的业务 XLSX 文件；临时目录在测试结束时清理。
+- pytools-core/tests/config_task_loader_parity.rs：比较配置路径前统一移除 Windows 扩展设备路径前缀，修复 `\\?\` 与普通路径的等价路径比较。
+
+逻辑/文档/配置/VBA 影响：只调整测试夹具和测试路径投影；未改变产品业务逻辑、配置、VBA 迁移范围或共享 crate。Python 源项目未修改。
+
+实际测试：
+- `cargo test --offline --locked -p pytools-core --lib workbook_extract::tests::workbook_extraction_matches_original_python_helper`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core -q`：通过，全部单元及集成测试无失败。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `git diff --check`：通过。
+
+未执行项/已知问题：未运行 Python 探针或 workspace 全量测试；未做 Linux、真实业务样本或 deb 验证。编译仍显示共享 excel-editor 的既有弃用 API 警告，以及 pytools-core 两个既有未使用导入警告，本次未触及。
+
+删除清单：无。
+回滚：仅撤销上述两个测试文件与本记录；不删除任何用户文件或业务夹具。
+【组件版本】：不升级（本次无业务功能变更）。

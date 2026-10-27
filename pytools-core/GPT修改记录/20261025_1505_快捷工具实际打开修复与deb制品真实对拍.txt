@@ -1,0 +1,30 @@
+时间：2026-10-25 15:05（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：5e2f1fc；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：补齐清单中"Windows 实际打开未实测"的快捷工具验证，并把 deb 制品与真实样本对拍挂钩；修复验证中发现的真实缺陷。
+
+修改文件：
+- `pytools-core/src/quick.rs`（生产修复：Windows 打开器退出码 0/1 均视为成功）
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261025.json`（新增 `deb_artifact_real_sample_validation_20261025` 段）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+缺陷与修复：
+- 现象：`pytools open-output-dir --config <真实配置>` 实际打开了输出目录，但 CLI 报 "system opener exited with exit code: 1" 并以退出码 2 失败。直接调用 `explorer.exe <dir>` 确认其成功交接后惯例返回 1（Windows 已知行为）。
+- 根因：`quick.rs::open_path` 用通用 `!status.success()` 判定所有平台；PyCode 对应实现是 `os.startfile`（ShellExecute，不暴露退出状态），成功打开在旧产品永不报错。
+- 修复：Windows 分支仅将 0/1 之外的退出码视为失败（附注释说明 explorer 交接语义与 PyCode 对齐依据）；存在性预检保留；Linux/macOS 分支严格检查不变。
+- 验证：修复后真实打开退出码 0；`cargo test --offline --locked -p pytools-core --test quick_menu_cli` 1/1、全量 42 项结果全部 0 failed；`cargo fmt --check` 通过。`open-config`/`open-output-latest` 与 `open-output-dir` 共用同一 `open_path`；经关联应用拉起文件不在开发机实测（避免启动 Office），其失败判定语义与本次修复一致。
+
+deb 制品真实对拍：
+- 从 `target/deb/pytools_0.1.0-20261025_amd64.deb` 解包 `/usr/bin/pytools`，WSL 内对只读 `xlsx/1.报表分口径.xlsx` 运行真实 `summary-used-range`（developer 视图）。
+- 与 PyCode 完整工作簿投影精确一致：7,462 行 × 213 列；1,212 个错误单元格由 OOXML Patch 保留；14 条开发者事件与保存历史一致；输入前后 SHA-256 相同；引擎 Calamine + rust_xlsxwriter。
+- 边界：仍为 WSL 阶段证据；麒麟 V10/UOS V20 实机安装、离线交付与整体验收仍归 main + 目标实机。
+
+影响与未完成项：快捷工具 Windows 成功打开不再误报失败；不影响其他功能。真实样本（宽表输入/批注模板）、NoCom 变体与生产 capability 决策、main 最终打包与实机验收等外部阻塞不变。
+
+敏感内容检查：验证配置与输出均位于系统 TEMP；报告只含计数、维度、引擎与事件；无业务数据进入提交。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销修复与记录。
+【组件版本】：缺陷修复，产品/组件版本不升级。

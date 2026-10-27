@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.dedup.append_execution_parity",
+  "date": "2026-10-23",
+  "feature_id": "PT-2-5",
+  "status": "passed_synthetic_parity_and_capability_gated_execution",
+  "sample": {
+    "kind": "generated_synthetic_xlsx",
+    "real_business_workbook": false,
+    "real_configuration": false
+  },
+  "environment": {
+    "python_baseline": "Windows Python 3.12.10; read-only PyCode run_append_by_config",
+    "rust_cli_and_tests": "Ubuntu on WSL2, x86_64; rustc 1.99.1; cargo 1.99.1",
+    "windows_native_rust_validated": false,
+    "kylin_v10_validated": false,
+    "uos_v20_validated": false,
+    "glibc_2_28_validated": false,
+    "offline_deb_validated": false
+  },
+  "scenarios": {
+    "absent_target": {
+      "status": "passed_synthetic_parity",
+      "tasks": 2,
+      "appended_rows": 7,
+      "duplicate_rows_filtered": 7,
+      "writer": "rust_xlsxwriter",
+      "workbook_projection_equal": true,
+      "target_absent_during_planning": true,
+      "source_and_configuration_unchanged": true
+    },
+    "existing_target": {
+      "status": "passed_synthetic_parity_and_candidate_execution",
+      "python_baseline_function": "PyCode.core.dedup_311.run_append_by_config",
+      "rust_cli": "pytools dedup-append-plan -> dedup-append-execute",
+      "python_target_rows_before": 2,
+      "parity_probe": {
+        "tasks": 1,
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 1,
+        "comparison": "worksheet names, cell values, and formula text",
+        "semantic_equal": true,
+        "rust_original_target_bytes_unchanged": true
+      },
+      "rust_integration_test": {
+        "tasks": 2,
+        "appended_rows": 4,
+        "duplicate_rows_filtered": 4,
+        "engine": "umya_spreadsheet",
+        "candidate_output_created": true,
+        "temporary_test_capability_only": true,
+        "checked": [
+          "source, original target, and configuration remain byte-identical",
+          "worksheet identity and order",
+          "formula text and appended row order",
+          "existing target cell style",
+          "untouched worksheet comment, merge, and row height"
+        ]
+      }
+    }
+  },
+  "tests": {
+    "python_rust_probe": {
+      "command": "py -3.12 pytools-core/probe/compare_dedup_tools.py",
+      "result": "passed",
+      "suite_status": "passed"
+    },
+    "append_integration": {
+      "command": "cargo test -p pytools-core --offline --test dedup_append_execution -- --nocapture",
+      "passed": 2,
+      "failed": 0
+    },
+    "delete_and_append_integration": {
+      "command": "cargo test -p pytools-core --offline --test dedup_comment_delete_umya --test dedup_append_execution -- --nocapture",
+      "passed": 3,
+      "failed": 0
+    },
+    "workspace_format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "passed"
+    },
+    "workspace_tests": {
+      "command": "cargo test --workspace --offline --locked -q",
+      "result": "passed"
+    }
+  },
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "overall_production_acceptance": "unverified",
+  "not_verified": [
+    "real pytools workbook and configuration",
+    "XLS, XLSM, XLSB, and ET inputs",
+    "unlisted OOXML objects and preservation requirements",
+    "Windows-native Rust build",
+    "Kylin V10 and UOS V20",
+    "glibc 2.28 and offline deb packaging",
+    "production ExcelModifier capability and default routing",
+    "full dedup menu acceptance"
+  ],
+  "limitations": [
+    "All parity and execution samples were generated synthetic XLSX workbooks.",
+    "The parity probe compares worksheet names, cell values, and formula text; preservation assertions are covered by a separate Rust integration test.",
+    "The existing-target Umya capability is generated only for the synthetic test plan and is not production evidence.",
+    "No production capability record was created and no default route was changed."
+  ]
+}

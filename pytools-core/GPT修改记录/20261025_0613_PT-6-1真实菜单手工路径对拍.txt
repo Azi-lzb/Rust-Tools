@@ -1,0 +1,26 @@
+时间：2026-10-25 06:13 Asia/Shanghai（2026-10-24 22:13 UTC）
+执行者：Codex PyTools migration agent
+修改前 commit：13c83fb
+WIP：修改前 git status 干净；无未提交文件。
+
+目的：在当前 Windows MSVC 构建上，以原 PyTools 只读 XLSX 样本验证真实 `pytools menu → 6 → 1` 入口和手工分号路径回退，并与 PyCode 输出对拍。
+
+修改文件：
+- 新增 `pytools-core/probe/reports/summary_used_range_real_menu_parity_20261025.json`，记录去敏后的机器结果。
+- 更新 `pytools-core/MIGRATION_INVENTORY.md`，补充当前 HEAD 的真实菜单回退证据。
+- 新增本记录。
+
+测试结果：
+- Windows x86_64-pc-windows-msvc，当前 `target/debug/pytools.exe`；输入为原 PyTools 项目只读目录中的 2 份 XLSX。
+- 实际入口 `pytools menu → 6 → 1 → 手工分号路径回退` 成功，生成汇总 1,102 行；PyCode `run_summary_by_usedrange` 与 Rust 输出的完整工作簿投影精确一致，比较包括值/类型、样式、工作表及维度、冻结窗格、公式、合并、定义名称、打印区域与页面设置。
+- 运行历史为 succeeded，记录 16 条阶段事件；实际读取引擎 Calamine，写入引擎 rust_xlsxwriter。
+- 源文件大小与修改时间未变；Python/Rust 输出和运行日志均在临时目录，测试后自动清理。报告不含文件名、单元格值或源路径。
+
+未执行项与已知问题：
+- Windows 桌面锁屏，未操作 Win32 原生文件对话框；本记录只证明手工路径回退。
+- 原 PyTools 业务含 VBA 的 XLSM、NoCom 专属输入、麒麟 V10/UOS V20、glibc 2.28 与离线 deb 未验证。
+- 首次一次性驱动使用系统默认 GBK 编码，导致 Rust 正确拒绝非 UTF-8 输入；显式 UTF-8 后测试通过，未发现产品代码缺陷。
+
+【组件版本】不升级；本次只新增去敏对拍证据和迁移留痕，没有业务代码或配置变化。
+
+回滚：删除本记录、新增的 JSON 报告，并移除迁移清单中对应的证据段；无需回滚 Rust 运行代码。

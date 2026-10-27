@@ -1,0 +1,33 @@
+时间：2026-10-27 11:16（Asia/Shanghai）
+执行者：Codex
+修改前 commit：939d3b9
+修改后 commit：待提交
+WIP：修改前当前 codex/pytools-menu-entry 工作树干净。
+
+【组件版本】不升级（补充 PT-6-2 合成菜单验收证据）
+
+目的：
+提供一组用户可手工运行的命名区域汇总样本，专门覆盖不同机构具有不同明细行数，确认新版任意行区域通过真实 Rust 菜单入口运行。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md
+- F:PyToolsRustV2manual-acceptance-20261027README.txt（不纳入 Git）
+- F 盘 01-summary
+amed-region 下的模板和两个合成源簿，以及 actual/ 和 logs/ 下的输出（不纳入 Git）
+
+实际业务路径：
+- 菜单主项 1→子项 3，输入模板及两个分号分隔的源路径。
+- 模板含表结构区域_1、表头区域_1、任意行汇总区域_1、表头区域_2、固定行汇总区域_2。
+- 北区动态有效行数 3（甲/0、乙/2、仅数值零行）加固定行 2，抽取 5 行。
+- 南区动态行数 1（丙/5）加固定行 2，抽取 3 行。
+- CLI 总计 2 个源簿、8 行、跳过 0；writer 为 rust_xlsxwriter，reader 为 calamine 与 namespace-aware OOXML supplement。
+- WPS 重开输出为 XLSX，工作表“数据”9×8（含表头），关键值/类型与预期相同。
+- 输出和日志在 F 盘 actual/20261027_111636_按模板命名区域汇总.xlsx 与 logs/PT-6-2_pytools-pt-6-2-named-20600-1793070996665020900.json。
+
+验证和未执行项：
+- 已直接运行 Windows Rust 菜单并以 WPS 打开输出检查内容。
+- 本轮没有改业务算法代码，没有运行旧 Python、样式对拍或其他全量测试；没有真实业务模板或 Linux/deb 验收。
+- 该样本通过只证明此合成场景可运行，不将 PT-6-2 标为真实业务验收通过。
+
+回滚：
+- 回退本记录、迁移清单新增段落和 F 盘 README 新增段落即可；F 盘合成样本/结果单独保留供人工操作。没有修改源 Python、共享 crate 或其他工作树。

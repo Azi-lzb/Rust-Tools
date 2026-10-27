@@ -1,0 +1,31 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改开始时：`C:\Users\AZI\Desktop\VibeCode\pytools-dev`，分支 `pytools-dev`，HEAD `91b9dcd`，与 `origin/pytools-dev` 同步，工作树干净。开发期间 main 协调的共享 OOXML 提交 `9668d17` 以 `69bc901` cherry-pick 到本分支；该提交不属于本轮修改。目标分支其余未提交工作仅包含本轮 PT-6-1 文件。
+
+目的：为 PT-6-1 已接入的未知 Excel 错误值文本兼容路径补齐明确 token 范围、真实 CLI 回归与 PyCode 对拍；不改共享 reader、默认读取路由或用户目标文件。
+
+修改文件：
+- `pytools-core/tests/fixtures/summary_used_range/error_token_matrix.xlsx`：新增合成 XLSX，15 个单元格均为字面 `t=e`，覆盖 7 种常见错误和 8 种扩展 token；不含真实业务数据。
+- `pytools-core/tests/summary_used_range_error.rs`：新增真实 `summary-used-range` CLI 集成测试，验证输入 token、标准错误输出 OOXML 类型和值、扩展 token 文本值、兼容计数、日志不泄漏 token 和源 fixture 不变。
+- `pytools-core/probe/compare_summary_error_token_matrix.py`：新增可复用的 PyCode/Rust CLI 矩阵对拍入口，保存完整工作簿投影比较结果和运行引擎/阶段日志摘要。
+- `pytools-core/probe/reports/summary_used_range_error_token_matrix_20261024.json`：机器对拍结果，不含业务数据或单元格内容。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录矩阵覆盖和仍未验证的格式/平台边界。
+- 本修改记录。
+
+真实入口与结果：在 Windows 11 x64、Python 3.12.10 上，通过只读 PyCode `run_summary_by_usedrange` 和 Windows GNU debug `pytools summary-used-range` CLI 对拍。1 个输入、1 行汇总，完整工作簿投影一致。7 个常见错误保留为 Excel error 类型；`#DATA!`、`#SPILL!`、`#CALC!`、`#FIELD!`、`#BLOCKED!`、`#UNKNOWN!`、`#CONNECT!` 和 `#BUSY!` 作为文本输出。Rust 实际组件为 `calamine + OOXML error-token normalization`、OOXML Patch 和 rust_xlsxwriter；阶段计数为规范化 8 个扩展 token、保留 7 个常见错误。开发者事件流与历史日志一致，历史不包含错误 token，输入夹具字节不变。
+
+验证：
+- Windows Python/Rust 真实入口对拍：`python pytools-core/probe/compare_summary_error_token_matrix.py`，通过。
+- WSL 格式检查：`cargo fmt -p pytools-core -- --check`，通过。
+- WSL 集成测试：`cargo test --offline --locked -p pytools-core --test summary_used_range_error -q`，5/5 通过。
+- `git diff --check`：提交前执行。
+
+对拍差异：列出的 15 个 token 未发现值、类型或工作簿投影差异。证据只覆盖合成 XLSX 字面 `t=e`；不推断其他 token、XLS/XLSB、生产默认路由或目标发行版支持。PT-6-1 整体仍未完成麒麟 V10/UOS V20、deb 和离线交付验收。
+
+未执行项及限制：未重跑 PT-6-1 全部真实工作簿批次；本轮仅验证 15-token 边界。未重建 glibc 2.28 release；已有 release 证据不外推到本轮新增夹具。无源项目文件变更。
+
+删除文件：无；Python/Rust 临时输出位于 `%TEMP%`。
+回滚：使用 `git revert` 撤销本轮 PT-6-1 扩展错误值提交。原 Python 项目源文件保持只读。
+【组件版本】：不升级，当前 0.1.0。
+
+追加验证（同日）：将对拍 probe 改为并列记录不同运行环境，再次分别使用 Windows GNU debug CLI 和 WSL Ubuntu `cargo run` Linux debug CLI 对同一 fixture 执行 PyCode/Rust 完整投影比较。两端均通过；WSL developer 历史 14 条事件与 CLI 事件匹配，reader/writer 分别为 Calamine error-token normalization 与 rust_xlsxwriter。机器报告同时保存 `windows_gnu_debug` 和 `wsl_cargo_debug` 结果。WSL 有 cargo-zigbuild 与 objdump，但未找到 Zig 可执行文件，因此本次没有重建 glibc 2.28 release；已有 release 结果不外推到本轮新增 fixture。

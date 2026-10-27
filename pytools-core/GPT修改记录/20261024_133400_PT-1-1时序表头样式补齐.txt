@@ -1,0 +1,27 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d4b0baf；分支 `pytools-dev`。编辑前工作树干净。已通过 Git 安全合入 main 的共享 crate 更新；本轮只修改 PyTools 业务、对拍及迁移记录。
+
+目的：补齐 PT-1-1 `timeline-compare` 新建结果簿两张表共 17 个表头单元格的 Python 等价样式，并使用 Windows 原生 Rust CLI 复跑 Python/Rust 对拍。
+
+修改文件：
+- `pytools-core/src/timeline_ops.rs`：两张结果表表头设置粗体、细边框、水平居中和顶部对齐。
+- `pytools-core/probe/compare_timeline_compare.py`：Rust 调用改为当前平台的本机 debug CLI；对拍归一等价的隐式/显式 Excel 默认样式并断言 17 个表头属性。
+- `pytools-core/probe/reports/timeline_compare_keyword_parity_20261024.json`：记录 Windows 原生 CLI 的样式修复后对拍结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-1-1 样式差异及真实样本验收边界。
+- 本修改记录。
+
+真实入口与数据流：Windows 原生 `target/debug/pytools.exe timeline-compare --config ... --template ... <源工作簿...>` → `run_header_path_compare` → `rust_xlsxwriter` 新建两张结果表；Python 基线为只读 `PyCode/core/compare_393.py::run_compare`。
+
+验证结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p excel-writer -q`：2/2 通过，含共享 `FormatBorder` 导出 API 构造测试。
+- `cargo test --offline --locked -p pytools-core --lib keyword_match_tests -q`：1/1 通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -q`：通过。
+- Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5 与 Windows 原生 Rust CLI 对同一组合成配置/模板及 5 个源工作簿对拍：值、类型、表名/顺序、结构及有效样式一致；17/17 表头样式通过，样式差异 0。场景覆盖关键字大小写、逗号分隔、未命中源及模板路径跳过。
+
+差异与未执行项：当前原项目真实配置输入目录不存在，已有 70 份 XLSX 均未命中时序规则；本轮没有真实业务匹配样本，因此只关闭样式差异，PT-1-1 整体仍未完成真实业务验收。未执行麒麟 V10/UOS V20、glibc 2.28 与 deb 验收。编译仅显示 workspace 已有弃用 API 和未使用导入警告。
+
+删除文件：无；合成输入和输出位于系统临时目录。
+回滚：可用 `git revert <本轮提交>` 撤回本轮 PT-1-1 样式修复与对拍证据。
+【组件版本】：不升级，当前 0.1.0。

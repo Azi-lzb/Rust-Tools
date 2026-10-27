@@ -1,0 +1,27 @@
+时间：2026-10-25 10:01（Asia/Shanghai）
+执行者：Codex PyTools Agent
+修改前 commit：f8f8094（pytools-dev，与 origin/pytools-dev 同步）
+修改前 WIP：保留既有 PT-1-2 的 6 个未提交文件；本轮未编辑、暂存或覆盖这些文件。
+
+目的：记录 PT-1-3/1-4 两个宽表模式经 Windows 原生文件选择对话框和真实菜单入口的合成业务对拍结果。
+
+修改文件：
+- `pytools-core/probe/reports/wide_summary_parity_20261023.json`：增加两种宽表模式的原生文件对话框结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充入口、输出/目标对拍结果和仍未验收的范围。
+- 本修改记录。
+
+验证：
+- Windows 原生 `pytools.exe menu --config ... --log-view developer`，菜单 `1 → 3` 与 `1 → 4` 各经系统文件对话框选择一个合成 XLSX，并明确确认在唯一临时目录创建新目标。
+- 使用只读原 PyTools `.venv`（Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5）执行 PyCode 基线；现有 `compare_wide_summary.assert_parity` 对汇总、目标候选及提交后目标全部精确通过。
+- PT-1-3 汇总 3 行、4×9；追加 3 行、过滤重复 0 行。PT-1-4 汇总 3 行、4×9；追加 2 行、过滤重复 1 行。实际读取引擎 Calamine，写入引擎 `rust_xlsxwriter`；开发者事件记录目标执行阶段耗时分别为 40/42 ms。
+- 源工作簿与配置均为隔离临时合成文件；源语义投影和配置单元格值未变。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli`：9/9 通过。
+
+配置与 VBA 影响：不改变配置格式、VBA 或产品行为；仅增加迁移验证证据。组件版本：不升级。
+
+未执行项与已知限制：没有脱敏真实业务样本；未验收真实模板全量保真、生产 capability、既有目标生产写入、麒麟 V10/UOS V20、glibc 2.28 或离线 deb。PT-1-3/1-4 整体仍为未验证。
+
+临时文件清理：本轮菜单生成物、配置和样本均位于 `%TEMP%\pt134-native-menu-guxxevin`；确认其为系统 TEMP 下本轮唯一临时目录后已删除，原 PyTools 项目只读未改。
+回滚提示：仅回滚本记录列出的两份证据文件和本记录；不要触碰既存 PT-1-2 WIP。
+
+追加验证（2026-10-25 10:05）：PT-1-3 原生文件对话框一次多选 2 份合成源簿，读取事件 2 次，输出 6 行（7×9）；PyCode 与 Rust 汇总、目标候选和新建目标投影完全一致，追加 6 行、过滤重复 0 行。开发者记录实际使用 Calamine/`rust_xlsxwriter`，目标执行 43 ms。与运行前快照比对，两个源文件和配置文件字节均未变化。证据并入同一机器报告；测试目录已清理。

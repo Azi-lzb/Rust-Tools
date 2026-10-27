@@ -1,0 +1,31 @@
+时间：2026-10-26 23:19（Asia/Shanghai）
+执行者：Codex
+修改前提交：d5924d5
+修改后提交：本记录与 PT-6-2 功能一并提交；提交 SHA 以包含本记录的 Git 提交为准。
+WIP：修改前确认工作树仅有本 PT-6-2 业务层、CLI 和测试三处未提交改动；无其他未提交文件。保留并纳入本次功能提交。
+
+目的：在 PyTools Rust V2 数据菜单接入按模板命名区域汇总，并提供独立 Rust CLI；不改变旧 Python 项目。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：增加四类命名区域解析、任意行/固定行提取、表结构比较、结果生成和阶段事件。
+- `pytools-core/src/bin/pytools.rs`：数据菜单 PT-6-2 和 `summary-named-ranges` 调用上述 API，输出运行历史及引擎/阶段日志。
+- `pytools-core/tests/summary_menu_cli.rs`：增加交互入口、独立 CLI、结构不匹配、源文件只读及旧批注菜单回归覆盖。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录首版生命周期与未验证范围。
+- 本记录：保留本次修改与验证信息。
+
+实现边界：定义名称必须符合 `表头区域_N`、`固定行汇总区域_N`、`任意行汇总区域_N`、`表结构区域_N`，且解析为单个连续 A1 区域。分组、表头组合、同名输出 Sheet、多个区域纵向追加及结构失败跳过整份源文件均为基于需求文档示例的可运行首版；需求文档将语法和布局列为待样板确认，故不视为最终业务契约。表结构检查覆盖区域值、公式文本、合并范围；未覆盖样式及其他 OOXML 元数据。新建输出使用 Calamine/命名区域元数据读取、rust_xlsxwriter 写入；错误单元格使用既有 OOXML Patch 辅助，不修改共享 crate。
+
+版本：`pytools-core` 版本未调整；本轮不修改 VBA/旧 Python 代码，不变更配置格式。
+
+验证（Windows 原生）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --lib named_range_spec_tests -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test summary_menu_cli --test summary_comments_cli -j 1`：13/13 通过（6 + 7）。
+- 合成模板/源文件的菜单和 standalone CLI 输出断言通过，源文件字节保持不变；结构不匹配源文件被跳过且记录位置详情。
+- `CARGO_TARGET_DIR=F:\PyTools_Rust_本轮工作文件_20261026\target`；测试临时文件位于同一 F 盘专用目录。
+
+未执行/已知限制：无可用真实命名区域业务模板，未进行 Python/Rust 对拍、Excel GUI 人工验收、模板样式/元数据保真验证或 Linux/glibc/deb 验收。输入输出布局需要真实模板确认；不将合成测试视为业务验收。暂未发现共享 Excel-Core 缺口，不提交共享组件请求。
+
+删除清单：无。
+回滚提示：仅回滚本次 PT-6-2 功能提交可撤销新增 V2 路由、业务实现、测试和状态记录；不要删除或覆盖之前的 PT-6-2 批注兼容代码及其他工作树成果。

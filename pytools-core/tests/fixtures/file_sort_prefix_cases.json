@@ -1,0 +1,113 @@
+{
+  "digit_cases": [
+    "001.0",
+    "A-02B",
+    "",
+    " 000 ",
+    "12.50",
+    "2.000",
+    "ab",
+    "٠٢",
+    "A-٠٢B"
+  ],
+  "width_cases": [
+    "001.0",
+    "A-02B",
+    "",
+    "12.50",
+    "2.000",
+    "٠٢",
+    "A-٠٢B"
+  ],
+  "normalize_cases": [
+    {"value": "2", "width": 3},
+    {"value": "001", "width": 1},
+    {"value": "A-02B", "width": 3},
+    {"value": "", "width": 3},
+    {"value": "000", "width": 3},
+    {"value": "٠٢", "width": 3}
+  ],
+  "strip_cases": [
+    "12 old-name.xlsx",
+    "1234_old-name.xlsx",
+    "02-202506.xlsx",
+    "003 202506.xlsx",
+    "01__foo.tar.gz",
+    "0012_ab.xlsx",
+    "٠٢ 报告.xlsx",
+    "无前缀.xlsx"
+  ],
+  "config_rows": [
+    {"row_no": 2, "enabled": "Y", "sort_prefix": "1", "keywords": "政策性银行;国开行;农发行", "remark": "政策性银行"},
+    {"row_no": 3, "enabled": "Y", "sort_prefix": "02", "keywords": "工商银行；农业银行,中国银行;建设银行;交通银行", "remark": "国有银行"},
+    {"row_no": 4, "enabled": "Y", "sort_prefix": "003", "keywords": "招商银行;浦发银行;中信银行", "remark": "股份制银行"},
+    {"row_no": 5, "enabled": "N", "sort_prefix": "9999", "keywords": "不应命中", "remark": "禁用宽度"},
+    {"row_no": 6, "enabled": "启用", "sort_prefix": "4", "keywords": "FOO;Quarterly", "remark": "英文关键词"},
+    {"row_no": 7, "enabled": "是", "sort_prefix": "", "keywords": "无有效前缀", "remark": "跳过"}
+  ],
+  "match_names": [
+    "202506_国开行_贷款表.xlsx",
+    "202506_建设银行_存款表.xlsx",
+    "quarterly_FOO_report.xlsx",
+    "2026_未命中.xlsx"
+  ],
+  "prefix_names": [
+    {"file_name": "02-202506_国开行_贷款表.xlsx", "prefix": "001"},
+    {"file_name": "1234_原始文件.xlsx", "prefix": "002"},
+    {"file_name": "无前缀报告.xlsx", "prefix": "003"}
+  ],
+  "operation49": {
+    "input_names": [
+      "202506_建设银行_存款表.xlsx",
+      "202506_国开行_贷款表.xlsx",
+      "202506_未命中文件.xlsx",
+      "02-202506_国开行_重复.xlsx",
+      "003 202506_浦发银行_存款表.xlsx",
+      "quarterly_FOO_report.xlsx",
+      "missing.xlsx",
+      "not-a-file.xlsx"
+    ],
+    "existing_names": [
+      "001_202506_国开行_重复.xlsx"
+    ],
+    "missing_names": [
+      "missing.xlsx"
+    ],
+    "directory_names": [
+      "not-a-file.xlsx"
+    ]
+  },
+  "operation410": {
+    "content_spec": "sheet1@A1",
+    "input_names": [
+      "001_报表.xlsx",
+      "001_冲突.xlsx",
+      "机构A_002_内容报告.xlsx",
+      "机构A_001_内容冲突.xlsx",
+      "机构B_001_不匹配.xlsx",
+      "未加前缀.xlsx",
+      "missing.xlsx",
+      "not-a-file.xlsx",
+      "机构A_001_损坏.xlsx",
+      "001_损坏.xls"
+    ],
+    "existing_names": [
+      "冲突.xlsx",
+      "机构A_内容冲突.xlsx"
+    ],
+    "missing_names": [
+      "missing.xlsx"
+    ],
+    "directory_names": [
+      "not-a-file.xlsx"
+    ],
+    "corrupt_names": [
+      "机构A_001_损坏.xlsx"
+    ],
+    "workbook_values": {
+      "机构A_002_内容报告.xlsx": "机构A",
+      "机构A_001_内容冲突.xlsx": "机构A",
+      "机构B_001_不匹配.xlsx": "机构A"
+    }
+  }
+}

@@ -1,0 +1,1149 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_negative_cached_elapsed_formula_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_python_rust_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "rust_entry": "pytools menu -> 1 timeline -> 3/4 wide summary -> confirm",
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "formula_cell": "elapsed-formatted formula with a negative cached numeric result",
+    "number_format": "[h]:mm:ss.000",
+    "formula_recalculation": "not performed; existing negative cached result is projected",
+    "cases": [
+      "negative_multiday_formula",
+      "negative_half_day_formula",
+      "negative_half_millisecond_tie_formula",
+      "negative_one_and_half_millisecond_tie_formula"
+    ],
+    "row_modes": [
+      "no_suffix",
+      "row_suffix"
+    ],
+    "target_modes": [
+      "new_target_append",
+      "existing_target_replacement"
+    ]
+  },
+  "comparison": {
+    "summary_values_types_and_effective_styles": "exact",
+    "new_target_values_types_and_effective_styles": "exact",
+    "existing_target_values_types": "exact",
+    "existing_target_style_differences": "reported_per_case",
+    "source_and_configuration_unchanged": true
+  },
+  "summary_results": [
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 43,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 26,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_multiday_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 43,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_multiday_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_half_day_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 43,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 26,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_half_day_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 41,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 46,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 20,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 41,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_one_and_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": true,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": null,
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 48,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 27,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 19,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_elapsed_formula_case": "negative_one_and_half_millisecond_tie_formula"
+    }
+  ],
+  "existing_target_results": [
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 1,
+        "duplicate_rows_filtered": 2,
+        "elapsed_ms": 197,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 97,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 20,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 47,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 467,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_multiday_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 205,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 98,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 21,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 50,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 476,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_multiday_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 1,
+        "duplicate_rows_filtered": 2,
+        "elapsed_ms": 196,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 95,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 19,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 47,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 467,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_half_day_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 199,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 98,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 21,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 47,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 476,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_half_day_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 1,
+        "duplicate_rows_filtered": 2,
+        "elapsed_ms": 208,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 101,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 21,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 51,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 467,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 208,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 102,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 21,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 50,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 476,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 1,
+        "duplicate_rows_filtered": 2,
+        "elapsed_ms": 202,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 99,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 20,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 48,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 467,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_one_and_half_millisecond_tie_formula"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": false,
+      "elapsed_formula": true,
+      "cached_formula_value_projected": true,
+      "elapsed_number_format": null,
+      "summary_status": "passed",
+      "existing_target_replacement_status": "passed",
+      "engine": "umya_spreadsheet",
+      "target_commit_operation": "replaced",
+      "execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 218,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 103,
+            "engine": "umya_spreadsheet",
+            "name": "excel_modify",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 20,
+            "name": "replacement_contract_validation",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 54,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "candidate_artifacts_retained": false,
+      "candidate_matches_committed_target_bytes": true,
+      "compared_sheet_order": [
+        "Before",
+        "Append",
+        "After"
+      ],
+      "compared_cell_count": 476,
+      "target_sheet_style_status": "exact",
+      "target_sheet_style_differences": [],
+      "source_input_and_config_unchanged": true,
+      "configured_target_bytes_unchanged": false,
+      "configured_target_committed": true,
+      "configured_target_changed_from_seed": true,
+      "intentional_target_sheet_drops": [
+        "styles",
+        "comments",
+        "merged_ranges",
+        "row_dimensions",
+        "column_dimensions"
+      ],
+      "untouched_sheets": [
+        "Before",
+        "After"
+      ],
+      "untouched_sheet_checks": [
+        "values",
+        "style_fill",
+        "comments",
+        "merges",
+        "row_height",
+        "column_width"
+      ],
+      "temporary_test_capability_only": true,
+      "negative_elapsed_formula_case": "negative_one_and_half_millisecond_tie_formula"
+    }
+  ],
+  "safety": {
+    "source_unchanged": true,
+    "configuration_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_input_filenames_or_cell_values": false,
+    "existing_target_capability": "temporary test-only capability"
+  },
+  "limitations": [
+    "Synthetic XLSX only; no sanitized real wide-summary workbook was available.",
+    "The fixture carries a pre-populated formula cache; this does not test formula recalculation.",
+    "This does not register a production edit capability.",
+    "Linux targets and offline deb acceptance were not tested."
+  ]
+}

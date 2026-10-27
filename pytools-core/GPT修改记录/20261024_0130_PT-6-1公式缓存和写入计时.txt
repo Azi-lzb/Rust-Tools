@@ -1,0 +1,29 @@
+时间：2026-10-24 01:30（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：56c2d18；该基线已推送到 origin/pytools-dev。
+WIP 状态：开始时 pytools-dev 工作树干净，HEAD 与 origin/pytools-dev 一致。本轮只修改 pytools-core。DEVELOPMENT_GOAL.md、AGENTS.md、Rules 均未修改。
+
+目的：继续 PT-6-1 对拍；核实 PyCode data_only=True 对有缓存与缺缓存公式的行为，并让 CLI 写入阶段耗时覆盖实际输出构建过程。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：将 write_elapsed_ms 计时起点前移到 rust_xlsxwriter 工作簿构建之前，覆盖工作簿创建、逐行/单元格写入、保存和必要的 OOXML 错误类型补丁。
+- pytools-core/probe/compare_summary_tools.py：合成 XLSX 同时包含有缓存的公式 E8（缓存值 2）与缺缓存公式 F8；先校验夹具在 openpyxl data_only=True 下分别读出 2 和 None，再走 PyCode/Rust CLI 对拍。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：重跑同一 PT-6-1 机器报告，记录更新后的阶段计时和公式场景。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-1 合成覆盖说明。
+- 本修改记录。
+
+结果：真实 summary-used-range CLI 仍输出 13 行。对有缓存公式按缓存结果输出、对缺缓存公式输出空值的行为与 PyCode 一致；原有值/类型、已填充单元格样式、维度、冻结窗格、表头、合并区域、公式文本、定义名称、打印区和页面设置对拍仍通过。报告记录本次样本 reader=calamine、writer=rust_xlsxwriter、error cells patched=1；write_elapsed_ms 现在包括 workbook 构建、逐格写入、保存与 OOXML 补丁，不再只计保存阶段。
+
+验证：
+- python pytools-core/probe/compare_summary_tools.py：通过，状态 passed_synthetic_cli_parity。
+- cargo test -p pytools-core --test summary_used_range_error --offline --locked -q：1/1 通过。
+- cargo fmt -p pytools-core -- --check：通过。
+- 上一提交中的 patch_error_cells 所有权回归单测 1/1 通过；本轮没有改该逻辑。
+- 目标 Linux、Windows 原生环境未验证；本轮通过 WSL 调用 Linux cargo 执行 Rust 测试。
+- 未触及 audit-core/**、crates/**、根 Cargo.toml、Cargo.lock、共同规则或源 Python 项目。
+
+已知限制：仍只有合成 XLSX，没有授权的真实汇总工作簿；XLSM/XLS/XLSB、Windows 原生、麒麟/UOS、glibc 2.28 和 deb 未验证。NoComPyTools 与 Rust 的差异字段仍为 汇总.rows/styles/types/values，格式范围差异待确认。PT-6-1 整体仍未完成验收。
+
+回滚：通过 git revert <本轮提交> 回滚本轮 Rust 计时、probe、报告和记录变更，保留已推送的前一 PT-6-1 提交。
+删除文件：无。
+【组件版本】：不升级，当前 0.1.0。

@@ -1,0 +1,33 @@
+日期：2026-10-26
+功能：PT-7-2 机构名称规范化菜单的递归目录输入
+修改前提交：2cd7bce
+修改后提交：本记录随同一 Git 提交保存
+组件版本：不升级
+
+修改目的
+
+核实当前清单中关于 PT-7-2 尚未接入 GUI/目录发现的描述。实际 `pytools menu` 已接入 7→2；本轮补足递归目录入口回归，覆盖嵌套同名 XLSX、格式筛选、Excel 锁文件过滤和只计划不修改源簿。
+
+变更文件
+
+- `pytools-core/tests/batch_tools_menu_cli.rs`：增加真实 Rust 菜单递归目录测试；以既有 PyCode 基线中的单文件 `mapped_rows` 断言校验两个相同样本的 Rust 汇总计数，并验证每个输入均生成独立计划且字节不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：修正已过时的 PT-7-2 菜单/目录发现状态，明确合成证据和真实验收边界。
+- 本记录文件。
+
+验证
+
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli interactive_institution_normalize_menu_recursively_plans_xlsx_files_only -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test institution_normalize_plan_parity -j 1`：1/1 通过，Rust 修改计划与既有 PyCode 基线一致。
+- 测试期间仅读取并复制仓库内合成 fixture；未修改原 Python 项目、真实业务数据、共享 crate、根 Cargo 文件或 `Cargo.lock`。
+
+未执行/已知限制
+
+- 递归菜单测试为合成 XLSX 的计划模式；没有执行 Excel 修改或声称文件保真通过。
+- 本轮没有真实业务样本；PT-7-2 真实模板及 `.xlsm` 保留、生产 capability、麒麟/UOS、glibc 2.28、deb 和离线交付仍未验证。
+- 构建输出包含既有共享 `excel-editor` deprecation 警告及 PyTools `batch_ops.rs`、`quick.rs` 未使用导入警告；本轮未修改这些无关代码。
+- 修改前已存在的 PT-4-2 迁移清单 WIP、ZCode 交接文件和 PT-4-2 失败记录均保留，未纳入本次提交。
+
+回滚
+
+- 本轮提交后如需回滚，使用该提交的 `git revert <commit>`；不影响 PT-7-2 生产 capability 或现有路由。

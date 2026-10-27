@@ -1,0 +1,39 @@
+时间：2026-10-24 19:09（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+工作树：C:\Users\AZI\Desktop\VibeCode\pytools-dev
+分支：pytools-dev
+修改前 commit：ef926ba（pytools-dev，已推送 origin/pytools-dev）
+本轮结束状态：PT-7-3 主菜单 7→3 已接入；Windows 原生菜单/执行回归和 Python/Rust 合成对拍通过。
+
+修改目的：在继承既有 PT-7-3 Rust 计划与批处理执行的基础上接入真实 PyTools 菜单入口；默认生成修改计划，只有显式 capability/platform 才执行 ExcelModifier 并生成 `(金融局)` 输出副本。补齐用户/开发者/off 视图、阶段进度及运行历史，并用真实菜单 CLI 验证。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs
+- pytools-core/tests/batch_tools_menu_cli.rs
+- pytools-core/probe/compare_pt73_execution.py
+- pytools-core/probe/reports/PT-7-3_execution_parity_windows_native_20261024.json
+- pytools-core/MIGRATION_INVENTORY.md
+- 本记录
+
+真实业务路径：主菜单 7→3 → 配置读取与外资行映射预检查 → 手工/弹窗/当前层或递归目录选择 → `.xlsx` 过滤 → `remove-foreign-bank` 真实 CLI → `build_remove_foreign_plan`。无 capability 时仅将有效计划保存到 `output/plans/PT-7-3`；显式 capability/platform 才执行 `ExcelModifier` 并生成相邻 `(金融局)` 副本，绝不原位覆盖源文件。拒绝未验收输入格式。
+
+日志行为：`user` 视图显示进度并保存不含文件路径/文件名/单元格内容的 JSON 历史；`developer` 输出结构化阶段事件并将实际引擎、组件及耗时保存到历史；`off` 不输出阶段事件、不写历史，仍保留最终摘要。默认直接 CLI 输出契约保持原有 developer JSON 结构；新增菜单参数是可选项。
+
+验证：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools --tests`：通过。
+- `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli -j 1`：10/10 通过，覆盖空外资映射预检查、7→3 计划只读/日志/off 与临时 capability 的真实菜单执行。
+- `cargo test --offline --locked -p pytools-core --test foreign_bank_batch_execution -j 1`：2/2 通过；包括多工作表删除、公式/名称范围调整、批注、合并、样式/行高保留、无操作输出字节复制，以及对动态/复杂引用的写入前拒绝。
+- 上述集成测试在 F 盘独立目标 `F:\pytools-dev-verify-20261024` 使用 `RUSTFLAGS=-C debuginfo=0`；默认 target 链接曾被 MSVC PDB `LNK1318 LIMIT` 阻止，换用独立目标后测试正常通过。共享 `excel-editor` 弃用 API 和 `batch_ops.rs`/`quick.rs` 未使用导入警告保持原样。
+- Python 3.12.10 / openpyxl 3.1.5 与 Windows native Rust CLI 合成对拍：2 个输入、4 张分机构表、删除 3 行、失败 0；计数、表序和值投影一致，源输入未修改，无操作输出字节复制。报告：`pytools-core/probe/reports/PT-7-3_execution_parity_windows_native_20261024.json`。报告将运行临时路径归一为 `<synthetic-temp>`。
+- PT-7-3 公式、批注、合并、定义名称和跨表引用的合成 Excel COM 对拍沿用 `pytools-core/probe/reports/PT-7-3_excel_com_parity_20261023_r8.json`；本轮未重新执行 Excel COM。
+
+对拍差异：上述受测合成值/计数和行删除结果没有发现差异。当前 Rust 菜单只接收 `.xlsx`，旧 Python `.xls` COM 路由与 `.xlsm` VBA 保留路径仍未迁移；NoCom 变体不作为本次 PyCode 基线。
+
+未执行项与已知限制：没有真实 PyTools 样本/配置；未进行 Windows 桌面文件弹窗人工操作；没有生产 Passed capability；未验证真实模板未知 OOXML 部件、麒麟 V10/UOS V20、glibc 2.28、离线 deb 或目标机离线验收。合成测试能力不登记为生产路由，也不改变默认路由。native 对拍 probe 通过 `--pytools-exe` 调用 Windows Rust CLI，并设置 `PYTHONIOENCODING=utf-8` 保持终端基线日志可读。
+
+回滚：仅回退本次 PT-7-3 菜单/日志实现、测试、合成对拍适配器/报告、清单和本记录；本轮未改共享 crates、根 Cargo 文件、Cargo.lock、`DEVELOPMENT_GOAL.md` 或 Audit 代码。
+
+提交/同步：完成验证后作为 pytools-dev 独立提交；推送前核对提交内容仅含 Rust 入口、PyTools 合成测试/报告及迁移留痕，无真实业务数据或凭据。远端仅允许同步 `origin/pytools-dev`。
+
+【组件版本】：不升级；现有版本 `0.1.0`。

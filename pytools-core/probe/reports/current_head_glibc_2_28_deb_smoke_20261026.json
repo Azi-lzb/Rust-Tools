@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.package.current_head_glibc_2_28_stage_smoke",
+  "date": "2026-10-26",
+  "status": "passed_stage_smoke",
+  "source_commit": "b0fe425",
+  "branch": "pytools-dev",
+  "environment": {
+    "host": "Ubuntu 24.04 LTS on WSL2 x86_64",
+    "host_glibc": "2.39",
+    "rust": "1.99.1",
+    "cargo_zigbuild": "0.24.0",
+    "zig": "0.17.0"
+  },
+  "build": {
+    "command": "TZ=Asia/Shanghai bash pytools-core/packaging/build_deb.sh",
+    "target": "x86_64-unknown-linux-gnu.2.28",
+    "result": "passed",
+    "objdump_max_glibc_symbol": "GLIBC_2.28"
+  },
+  "linux_host_negative_serial_regression": {
+    "source_commit": "29030aa",
+    "environment": "Ubuntu 24.04 LTS WSL2, host glibc 2.39",
+    "target": "x86_64-unknown-linux-gnu debug CLI",
+    "command": "cargo test --offline --locked -p pytools-core --test timeline_menu_cli interactive_wide_summary_menu_preserves_negative_date_serial_in_new_target -j 1",
+    "result": "passed: 1",
+    "scope": "Linux host integration regression; not execution of the glibc 2.28 release/deb binary"
+  },
+  "glibc_2_28_release_negative_serial_regression": {
+    "binary_source_commit": "b0fe425",
+    "execution_host": "Ubuntu 24.04 LTS WSL2, host glibc 2.39",
+    "binary": "x86_64-unknown-linux-gnu.2.28 release pytools",
+    "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix wide summary -> confirm new target",
+    "input_serial": -0.5,
+    "python_rust_full_workbook_projection": "passed using compare_wide_summary.assert_parity; cell numeric tolerance 1e-15",
+    "python_openpyxl_and_rust_output_datetime": "1899-12-29T12:00:00",
+    "candidate_matches_committed_target": true,
+    "input_and_config_unchanged": true,
+    "temporary_fixture_cleaned": true,
+    "limitation": "This target binary ran on host glibc 2.39; not a glibc 2.28/Kylin/UOS system acceptance."
+  },
+  "package": {
+    "filename": "pytools_0.1.0-20261026_amd64.deb",
+    "bytes": 5181360,
+    "architecture": "amd64",
+    "dependencies": [
+      "libc6 (>= 2.28)",
+      "xdg-utils"
+    ],
+    "dpkg_deb_info_and_contents": "passed",
+    "extracted_binary_smoke": {
+      "command": "summary-used-range",
+      "fixture": "pytools-core/tests/fixtures/summary_used_range/error_token_matrix.xlsx",
+      "result": "passed",
+      "error_cells_patched": 7,
+      "unknown_error_tokens_normalized": 8
+    },
+    "installed": false,
+    "git_ignored_build_artifact": true
+  },
+  "limitations": [
+    "Both the deb summary-used-range smoke and the negative-serial wide-summary parity fixture are synthetic; no real PyTools business sample was used.",
+    "The glibc 2.28-target release binary ran on WSL host glibc 2.39, not on an actual glibc 2.28, Kylin V10 or UOS V20 system.",
+    "Offline deployment, installation dependencies and end-user operation on target systems remain unverified."
+  ]
+}

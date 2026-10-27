@@ -1,0 +1,35 @@
+时间：2026-10-25 13:55（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：9926692；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：按用户指示"自行新建测试文件"，构造贴近业务形态的合成样本对拍剩余功能，发现并修复宽表汇总日期单元格数字格式与 PyCode 不一致的真实缺口。
+
+修改文件：
+- `pytools-core/src/timeline_ops.rs`（生产修复：`write_wide_cell` 数据单元格与 `wide_append_cell` 目标追加单元格的日期数字格式统一为 `YYYY-MM-DD HH:MM:SS`，删除按含时成分分支的 `wide_date_format_code`；数据日期列保持 `yyyy/m/d`）
+- `pytools-core/probe/compare_realistic_synthetic_suite.py`（新增对拍脚本：多规则配置驱动宽表 + 多页签多区域批注汇总）
+- `pytools-core/probe/reports/realistic_synthetic_suite_parity_20261025.json`（新增机器报告）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+根因与修复说明：
+- PyCode 宽表汇总与目标追加（`io_excel.write_workbook`/`append_to_target`）均经 pandas 2.2.3 `to_excel` 写出，datetime 值默认数字格式 `YYYY-MM-DD HH:MM:SS`（不区分是否含时间成分）；数据日期列由 `_apply_data_date_format` 覆写为 `yyyy/m/d`。
+- Rust 原实现整日序列写 `yyyy-mm-dd`、含时写 `yyyy-mm-dd hh:mm:ss`，与 PyCode 不一致；既有夹具数据列无日期故未暴露。本轮合成样本源数据列含日期后由完整投影对拍发现。
+- 修复后数据单元格与目标追加单元格（非数据日期列）统一 `YYYY-MM-DD HH:MM:SS`；PT-6-2 批注汇总 PyCode 走 openpyxl 直接写出（默认 `yyyy-mm-dd h:mm:ss`），Rust `summary_ops::date_format` 原本一致，经套件验证未改动。
+
+新套件覆盖：
+- 场景 1：同一配置簿驱动两侧（Python 经 PyCode `load_global`/`load_timeline_rules`/`load_path_maps`），双规则（Report/余额关键字）、合并二级表头、跳过关键字、必含列头、set 区域、双源工作簿、未命中页；两种行头模式汇总投影与有效样式 exact（39×11、37×7）。
+- 场景 2：模板双规格页（双行区域+双 set 列；单行区域+set 列）+ 无批注页，双源簿含同名页与未匹配页（一致跳过）；投影 exact（206 行，85×8、123×8）。
+
+验证结果（Windows 原生）：
+- `cargo build --offline --locked -p pytools-core --bin pytools`：通过。
+- `cargo test --offline --locked -p pytools-core`：42 项结果全部 0 failed（含既有宽表/汇总/去重/追加回归）。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过；`git diff --check`：通过。
+- 套件脚本在修复前发现差异（宽表日期格式），修复后全 exact；脚本 JSON 解析一度按行处理多行输出导致误报，已改为字符扫描。
+
+影响与未完成项：宽表日期格式语义与 PyCode 对齐，影响 PT-1-3/PT-1-4 汇总簿与目标追加中含日期数据列的输出；数据日期列行为不变。套件为业务形态合成样本，不构成真实样本验收；宽表真实输入、批注汇总真实模板仍缺，PT-1-3/1-4、PT-6-2 整体仍未验收；目标平台未验证。
+
+敏感内容检查：无真实业务数据、凭据或源文件内容进入提交；全部样本为脚本生成的合成数据。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销格式修复、套件脚本、报告与清单记录；修复为单一格式常量，可独立还原。
+【组件版本】：缺陷修复与测试补充，产品版本不升级（按 workspace 规则纯功能对齐不写用户版更新日志）。

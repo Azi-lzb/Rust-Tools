@@ -1,0 +1,33 @@
+时间：2026-10-23 02:08:48 +08:00
+执行者：Codex
+修改前/后 commit：workspace 尚无首次提交；文件原本处于未跟踪工作区，未清理或覆盖。
+【组件版本】：pytools-core 0.1.0，不升级（候选未接入产品菜单/CLI，也未变更发布路由）。
+
+目的
+继续 pytools 4-7“取消内容前缀”Rust 增量迁移；使用现有 Python 实现作为只读行为基线，不把候选标为完整迁移或生产默认。
+
+修改/新增文件
+- pytools-core/src/file_sort_prefix.rs：已有 4-7 .xlsx/.xlsm 候选 API；只读工作簿单元格并按内容前缀改名，不保存 Excel 文件。
+- pytools-core/tests/content_unrename_47_parity.rs、pytools-core/tests/fixtures/content_unrename_cases.json：覆盖主场景和缺失排序配置表的旧配置场景；cargo fmt 对测试文件作了格式化。
+- pytools-core/probe/content_unrename_47_baseline.py：只读调用源 Python 实现，重生成 Python 对拍基线。
+- pytools-core/probe/reports/content_unrename_47_python_baseline.json：记录源模块 SHA-256 和 Python 输出。
+- pytools-core/probe/reports/content_unrename_47_parity.json：记录 Rust 集成断言、结果范围、测试命令和未验收边界。
+- pytools-core/MIGRATION_INVENTORY.md、PYTHON_EXCEL_OPERATION_INVENTORY.md、EXCEL_ENGINE_ARCHITECTURE.md：登记候选范围、证据、限制和路由状态。
+- 本记录。
+
+行为与安全边界
+Python 基线 PyCode/core/convert_33_34_35_37.py::run_batch_unrename_by_content_47 的 SHA-256：F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65。Rust 候选仅读 .xlsx/.xlsm；.xls/.xlt 的源 COM 路径未迁入。配置排序表缺失时仍按空排序前缀列表运行。改名以硬链接 no-clobber 预留目标，已存在目标保留并尝试 _1 后缀；成功改名的文件字节与改名前一致。每个输入独立处理，后续失败不会撤销此前成功项，与源函数逐文件处理语义一致。
+
+对拍与测试
+- 旧 Python 聚焦测试：	est_rename_by_content_46.py，13 passed。
+- Rust 4-7 集成对拍：2 passed；主场景 13 个输入，改名 8、跳过 5；无排序配置表场景 2 个输入，改名 1、跳过 1；统计与最终文件集合断言通过，改名文件字节不变。
+- cargo fmt --all -- --check：通过。
+- cargo test -p pytools-core --locked -q：23 passed。
+- cargo test --workspace --locked -q：42 passed，doc-tests 0。
+- Python 基线脚本执行成功，机器报告：pytools-core/probe/reports/content_unrename_47_parity.json。
+
+未执行项与已知风险
+真实业务模板、真实宏启用 XLSM、.xls/.xlt、日期/公式缓存单元格、原生 Windows Rust 与目标 Linux/deb/glibc 2.28 均未验收。硬链接清理失败注入没有测试；不同文件系统的硬链接能力未验证。候选没有接入菜单/CLI，整项 4-7 仍未迁移完成。没有修改 Python 源项目、Cargo 依赖或生产路由。
+
+回滚
+本候选尚未接入产品入口；如需撤回，只按本记录列出的单个文件逐项恢复/删除，不运行 git clean、git reset --hard 或覆盖 workspace。原 Python 源目录保持只读并保留为基线。

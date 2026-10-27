@@ -1,0 +1,28 @@
+时间：2026-10-25 15:35（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：ec65e91；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：按用户"以合成数据继续测试"的指示，补 1904 日期系统数据单元格对拍；修复发现的真实缺陷。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`（生产修复：新增 `shift_datetime_serials_to_1900_epoch`，在 PT-6-1 读取点 `read_workbook_with_unknown_error_tokens_as_text` 之后与 PT-6-2 读取点 `read_workbook` 之后，对 `uses_1904_date_system` 为真的源簿把全部 `datetime_serial` 值 +1462）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+缺陷与根因：
+- 现象：1904 日期系统合成源簿（`date1904="1"`，含纯日期与日期时间单元格）经 Rust `summary-used-range` 汇总后，日期整体偏移 1462 天（2026-06-30 → 2022-06-29）；PyCode（openpyxl，epoch 感知）正确。差异由完整投影对拍发现（`汇总.values` 不一致）。
+- 根因：Calamine 数值日期单元格按源簿序列原样返回（1904 簄即 1904 基准序列），汇总输出新簿为 1900 基准，Rust 未做 epoch 转换。既有夹具均无 1904 日期数据单元格；此前 PT-6-2 1904 记录只覆盖模板日期表头的 ISO 投影路径（`read_value_columns_with_iso_dates`，该路径无此问题）。
+- 修复语义：1904 源簿读入后全部 `datetime_serial` +1462（1904→1900 纪元差），duration `[h]:mm:ss` 序列与 epoch 无关不调整；两个汇总功能共用同一辅助函数；常规 1900 簿零变化。
+
+验证结果（Windows 原生）：
+- PT-6-1：1904 合成源簿（日期/日期时间/数值混合）PyCode/Rust 完整工作簿投影精确一致（修复前失败于 values 差异）。
+- PT-6-2：1904 模板 + 数据区含日期/日期时间单元格的批注汇总精确一致（修复前该路径未测过日期数据）。
+- 源簿前后字节未变；`cargo test --offline --locked -p pytools-core` 全量 42 项结果 0 failed；`cargo fmt --check`、`git diff --check` 通过。
+
+影响与未完成项：影响 1904 日期系统源簿（典型为 Mac Excel 遗产文件）的 PT-6-1/PT-6-2 输出正确性；不影响 1900 簄与既有行为。验证为合成证据；真实样本、NoCom/capability 决策、main 打包与实机验收等外部阻塞不变。
+
+敏感内容检查：全部夹具为脚本生成合成数据，位于系统 TEMP。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可撤销修复与记录；修复集中于一个辅助函数与两处调用。
+【组件版本】：缺陷修复，产品/组件版本不升级。

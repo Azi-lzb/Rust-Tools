@@ -1,0 +1,47 @@
+时间：2026-10-23 08:15:20（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：开始时 workspace 文件均为未跟踪状态；保留已有实现。本轮只增量新增工作表区域提取候选，不修改原始 Python 项目。
+
+目的：为 py_statistics_tools 普通版工作表提取建立一个可运行、可对拍的 Rust 文件流程切片，并接入独立 CLI，不将未实现的整表保真能力伪装成已支持。
+
+修改/新增文件：
+- `pytools-core/src/sheet_extract.rs`：增加 `run_extract_sheets_area_candidate`，经共享 `excel-reader`/Calamine 读值，用 `excel-writer`/rust_xlsxwriter 新建结果簿；添加临时输出校验、不覆盖提交和失败清理。
+- `pytools-core/src/bin/pytools.rs`：添加 `pytools extract-sheets-area --config <配置簿> [--output-dir <目录>] <源工作簿>...` 子命令，通过已有配置加载器读取提取任务。
+- `pytools-core/tests/fixtures/sheet_extract_area/`：增加案例 JSON、两份有效合成 XLSX、一份损坏输入和配置 XLSX。
+- `pytools-core/tests/compare/run_sheet_extract_area_baseline.py`：调用只读 PyCode 普通版 `run_extract_sheets` 生成 Python 基线；使用源函数哈希和输入哈希确认基线过程没有修改源代码及输入。
+- `pytools-core/probe/reports/sheet_extract_area_python_baseline.json`：保存 Python 结果及 source/config/input fixture 哈希。
+- `pytools-core/probe/reports/sheet_extract_area_parity.json`：由 Rust 对拍集成测试在所有值、类型、尺寸、统计和输入保持断言通过后生成。
+- `pytools-core/tests/sheet_extract_area_operation_parity.rs`：对拍值/类型/尺寸/表名/统计；覆盖 CLI 配置读取、输入字节保持、拒绝整表与追加、不支持日期及已有输出不覆盖。
+- `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/README.md`、`EXCEL_ENGINE_ARCHITECTURE.md`、`PYTHON_EXCEL_OPERATION_INVENTORY.md`：登记候选范围、CLI 入口、对拍结果及未完成项。
+- 本记录。
+
+候选能力与显式边界：
+- 支持配置驱动的文件名/工作表名匹配与排除、A1 区域及多区域横/纵拼接、空行列压缩、输出路径、新工作簿工作表命名和结果统计。
+- 只处理调用方明确传入的工作簿路径；当前夹具仅为 XLSX。输入目录发现、产品菜单/dispatcher 接入、日志等价和非 XLSX 格式未验证。
+- 输出值口径沿用源项目 `data_only=True`。不复制公式文本；公式缓存相关夹具未覆盖。
+- 完整工作表（样式、合并、行列尺寸等）和追加既有输出簿会显式拒绝。日期、时长、错误值与非有限数也显式拒绝；拒绝后不提交输出。
+- 临时新簿重开后校验工作表数、名称、尺寸和非空格数量；使用硬链接提交，目标冲突不会覆盖既有文件，失败时清理临时文件并撤销本轮已提交输出。
+- 这是候选 CLI 子命令，不是原菜单的完整迁移或生产默认。
+
+对拍与测试：
+- Python 基线：`C:\Users\AZI\Desktop\VibeCode\4.pytools-main\.venv\Scripts\python.exe pytools-core/tests/compare/run_sheet_extract_area_baseline.py`，通过。两个有效输入、一个损坏输入；Python 统计 files=2、extracted_sheets=4、output_files=1、failed_files=1；源函数和输入哈希前后一致。
+- Rust 专项：`cargo test -p pytools-core --test sheet_extract_area_operation_parity --locked`，4/4 通过，含跨引擎浮点相对容差断言。
+- pytools 全量：`cargo test -p pytools-core --locked`，40 项通过。
+- workspace 编译：`cargo check --workspace --locked`，通过。
+- workspace 全量：`cargo test --workspace --locked`，112 项通过。
+- 格式：`cargo fmt --all`，通过。
+- Rust 命令在 Windows 11 x64 主机的 WSL 环境运行；这不等于麒麟 V10/UOS V20 或 glibc 2.28 验证。
+
+未完成与已知风险：
+- 对拍仅用合成 XLSX，没有真实业务模板；输出格式属性未纳入本次值级对拍。
+- 公式缓存、真实 xls/xlsm/xlsb/csv/et 输入、目录扫描、用户交互、产品菜单调用、性能和峰值内存、Windows 原生 Rust、目标 Linux/deb 均未验证。
+- 整表保真和追加既有结果簿仍需要通过真实模板对拍的 ExcelModifier 引擎；不得在此候选中静默降级。
+- 硬链接提交要求临时文件与目标文件处于同一文件系统且该文件系统支持硬链接；本次 WSL `/mnt/c` 夹具通过，目标 Linux 文件系统仍待验收。
+- Python 基线的日志经 PowerShell 显示中文乱码，但基线脚本 JSON、状态、统计和 Python/Rust 对拍均通过；乱码仅是终端编码呈现问题。
+
+源 Python 项目未修改；没有改 Excel 默认路由、依赖或构建配置。
+
+删除清单：无。
+回滚提示：可回退本记录列出的 Rust 候选、CLI、测试/fixtures/probe、报告和文档更新；不要清理其他未跟踪 workspace WIP，也不要回滚只读源项目。

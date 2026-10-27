@@ -1,0 +1,15 @@
+功能：PT-4-2 原生 Excel 按值转换的日期/时长序列验证
+基线：pytools-dev 已推送 HEAD d61d7fe。
+
+验证目的：补充 ISO-typed 日期失败关闭修复的边界证据，确认常见 1900 日期系统数值序列可按值转换，不把“拒绝 ISO 日期”扩大解释为“日期/时间均不支持”。
+
+修改文件：
+- pytools-core/probe/compare_native_excel_value_conversion.py：增加由 openpyxl 创建的合成 XLSM，含日期时间、时刻和累计 26 小时 15 分时长；运行真实 Rust `convert-excel --engine native` CLI，并检查源 serial 与输出数值单元格。
+- pytools-core/probe/reports/native_excel_value_conversion_parity_20261026.json：记录三个数值序列及容差、ISO 日期失败关闭结果。
+- pytools-core/MIGRATION_INVENTORY.md：更新合成覆盖与未验证范围。
+
+验证：`python pytools-core/probe/compare_native_excel_value_conversion.py` 通过。Rust 输出 A1 日期时间、A2 时刻、A3 累计时长均为数值，分别与 Python serial 的绝对误差不超过 1e-10；格式按 native 按值契约丢弃，输入字节不变。相同探针继续验证 ISO-typed 日期输入失败且未发布输出。Rust 代码未改动，相关 cargo 测试和构建已在基线提交 d61d7fe 验证通过。
+
+限制：仅合成 1900 日期系统输入；1904 日期系统、真实业务 XLS/XLSM、公式缓存与保真转换仍未验证；PT-4-2 整项未验收。未改原 Python 项目、共享 crate 或真实业务数据。
+
+回滚：如需撤销本轮纯验证记录，只回退本轮报告/探针/迁移记录提交；保留 d61d7fe 的类型失败关闭修复。

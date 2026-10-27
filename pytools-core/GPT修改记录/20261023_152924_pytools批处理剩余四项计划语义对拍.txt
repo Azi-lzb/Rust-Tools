@@ -1,0 +1,25 @@
+时间：2026-10-23（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：修改前检查 Git 状态及修改记录目录，没有 WIP 文件；workspace 当前整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：补齐 pytools 批处理 7-1、7-3、7-7、7-8 尚缺的合成语义对拍，并修正发现的 Rust 计划差异。
+
+修改文件：
+- `pytools-core/src/batch_ops.rs`
+- `pytools-core/probe/compare_batch_remaining.py`
+- `pytools-core/probe/reports/batch_remaining_plan_parity_20261023.json`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- 本修改记录。
+
+验证：Python/Rust 计划在四组临时合成工作簿上的值投影均一致。7-3 删除行数与 Python 相同；7-7/7-8 汇总字段逐项一致，数字使用 `1e-15` 容差。复测脚本：`& 'C:\Users\AZI\Desktop\VibeCode\4.pytools-main\.venv\Scripts\python.exe' pytools-core/probe/compare_batch_remaining.py`，通过。
+
+发现及修正：
+- 旧版 `openpyxl cell(..., value=None)` 不清除已有 D 列值；Rust 7-7/7-8 计划停止为未匹配机构生成清空操作，以匹配旧行为。
+- Rust 7-8 先前使用 `HashMap` 遍历地区，导致报告顺序不稳定；现在按当前簿工作表顺序生成地区报告，前期簿只用于地区查找。
+
+限制：计划操作由 probe 用 openpyxl 应用到临时副本对拍，不是生产 ExcelModifier 执行。7-1 Python `branch_sheets=6` 统计名称含“分机构”的所有工作表，Rust `matched_sheets=3` 统计可生成计划的工作表，口径不同；Rust warnings 记录其余 3 张跳过原因，修改后值投影一致。真实模板、保真属性、失败回退、菜单日志/交互、目标平台与 deb 未验收，未创建 capability 或改变默认路由。
+
+回滚：回退 `batch_ops.rs` 的两处计划差异修改，删除本记录及新增 probe/报告，并恢复迁移清单本轮增补。workspace 无 Git 首次提交，不能通过 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

@@ -1,0 +1,29 @@
+时间：2026-10-27 10:53（本地时区）
+执行者：Codex
+修改前 HEAD：6d9cbb8
+修改前 WIP：工作树干净；未触碰 pytools-dev、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+【组件版本】pytools-core 0.1.0；不升级组件版本号。
+
+修改文件：
+- `pytools-core/Cargo.toml`：将 workspace 已锁定的 rust_xlsxwriter 加入运行依赖，用于产品新建静态打印工作簿。
+- `pytools-core/src/print_ops.rs`：实现按已有打印计划读取配置范围并新建静态 XLSX，物化公式缓存值、按配置隐藏数值零、不复制批注；写入文本合并区与必要打印范围/页面设置，安全发布新目标并拒绝覆盖。
+- `pytools-core/src/bin/pytools.rs`：菜单 3→1 提供 Rust writer 执行确认，并记录实际 writer/ExcelModifier 调用状态。
+- `pytools-core/tests/print_menu_cli.rs`：增加无 ExcelModifier 能力时通过真实菜单生成文件的回归，检查值、公式静态化、零值、文本零、工作表、合并区和源文件安全。
+- `pytools-core/tests/print_config_new_target.rs`：断言打印范围不包含尾随空行。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录功能状态及有限验证结论。
+- F 盘人工验收包：补充静态打印输出、运行记录及 README；`config.xlsx` 的下次打印目标改为未占用的新文件名。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib static_print_autofit_distinguishes_numeric_zero_from_text_zero -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test print_menu_cli --test print_config_new_target -j 1`：9/9 通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- F 盘人工包菜单 3→1 运行退出码 0，生成 `actual/static-print-final.xlsx`；直接读 OOXML 核对打印区域 A1:B5、数值/字符串、公式缓存静态值及无公式输出；源文件字节未变。
+- Cargo target、临时文件位于 F 盘专用目录。
+
+未执行：真实业务打印模板对拍、旧 Python 对拍、Excel GUI/打印机验收、Linux/glibc/deb 验收。普通样式与分页差异不阻塞当前实现，留给用户实际打印反馈。
+
+已知边界：静态 writer 不复制普通样式和源行列尺寸；ISO 日期时间以文本保持语义；日期序列按源工作簿的 1900/1904 日期系统写入新簿默认的 1900 日期系统；无法精确表示为 XLSX 数值的超大整数会失败关闭。公式只使用源缓存，不重算。
+
+回滚：回滚本次 PT-3-3 业务提交中的上述代码、测试和清单变更；F 盘人工包为独立生成物，不包含在 Git 提交中。

@@ -1,0 +1,21 @@
+日期：2026-10-22
+
+变更：
+- 新增 pytools-core/src/workbook_extract.rs，将共享 excel-reader 读取到的 worksheet 值及合并区域转换为规则引擎可处理的矩阵。
+- 新增 extract_cells_from_workbook，连接纯 Rust 工作簿读取与已有的时序单元格抽取逻辑。
+- 新增共享工作簿向量、合成 xlsx fixture、原 Python 基线脚本、Rust 对拍测试和机器报告。
+- 更新迁移清单，明确目前只完成单工作表抽取原语，不是完整时序产品工作流。
+
+对拍：
+- 原项目 PyCode/core/rule_engine.py::extract_cells 对合成 xlsx 产出 6 个单元格。
+- Rust workbook_extract::tests::workbook_extraction_matches_original_python_helper 对同一 xlsx 产出完全相同的 6 个单元格，包括合并表头路径、重复列头后缀、重复行头后缀、路径映射、日期、数值类型和值、单元格地址。
+- 单元格整数值按 Excel 数值精度归一化，避免 Calamine 的整数值表现为带小数点的 JSON 数值。
+
+验证：
+- cargo fmt -p pytools-core
+- cargo test -p pytools-core --locked：5 项通过，0 项失败。
+
+范围限制：
+- 仅一条规则、一个合成 xlsx 工作表和一个合并区域；真实业务模板尚未验收。
+- 批量目录调度、CSV、结果 workbook 写入、追加目标簿、日期序列单元格回退、xlsb 合并区域仍未实现或验证。
+- 原 Python 项目未修改；Python 仅作为对拍基线。

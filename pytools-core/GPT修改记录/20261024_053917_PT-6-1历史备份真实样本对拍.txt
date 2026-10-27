@@ -1,0 +1,23 @@
+时间：2026-10-24 05:39:17 中国标准时间
+执行者：Codex（pytools-dev）
+修改前 commit：3b9a6d315b14c859c2a3930ee3ec46b7e2df8fb1；分支 pytools-dev 与 origin/pytools-dev 同步。修改前工作树仅含本轮机器对拍报告变更。origin/main：473c75a4c93cd4875e37f31c53e567120cb9d040。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+目的：为 PT-6-1 按使用区域汇总补充真实历史/备份工作簿对拍，并验证真实 summary-used-range 入口在普通用户、开发者和 off 三种日志视图下结果一致。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：新增历史簿与备份簿的真实 CLI 对拍结果、行数、三视图结果及开发者事件/历史一致性；只保留来源目录类别，不记录工作簿名称或单元格数据。
+- pytools-core/MIGRATION_INVENTORY.md：追加本次 PT-6-1 样本、入口、引擎、结果和验收边界。
+- 本修改记录。
+
+数据流与结果：Windows GNU 目标 CLI summary-used-range → Calamine 读取 → Rust 汇总 → rust_xlsxwriter 新建输出。使用原 PyTools xlsx/历史测试数据/ 的 4 份只读工作簿（448 行）及 xlsx/备份/ 中最小的 1 份只读工作簿（343 行），共 791 行。完整工作簿投影在 user/developer/off 三视图下都与只读 PyCode 完全一致；观察到的读取/写入引擎为 Calamine/rust_xlsxwriter。开发者事件数为 26/11，保存历史与相应事件流一致。源文件大小和修改时间不变；输出位于临时目录。
+
+验证：
+- Windows PowerShell 实际运行交叉构建的 Windows GNU pytools.exe summary-used-range，按三种 --log-view 分别对 4 份历史簿与 1 份备份簿运行，并以只读 PyCode run_summary_by_usedrange 完整投影对拍：通过，无差异。
+- wsl.exe --cd /mnt/c/Users/AZI/Desktop/VibeCode/pytools-dev -- bash -lc 'cargo test --offline --locked -p pytools-core --test summary_used_range_error'：4/4 通过。
+- 原 PyTools .venv 的 Python json.tool 校验机器报告：通过；git diff --check：通过（提交前复验）。
+- Windows 原生 Cargo、麒麟 V10/UOS V20 实机、glibc 2.28、deb 未在本轮验证。PT-6-1 因已登记的不支持/未验证输入与目标平台验收未完成，仍不得标记完成。
+
+差异与已知问题：5 份样本无输出差异。工作簿未加入仓库，报告与修改记录未包含工作簿内容或凭据。未新增/删除夹具和源文件。
+删除清单：无。
+回滚：可通过 git revert <本轮提交> 撤回本轮 PT-6-1 证据与清单记录。
+【组件版本】：不升级，本轮没有改变业务行为。

@@ -1,0 +1,28 @@
+时间：2026-10-25 13:15（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：c47f231；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：为 PT-1-3/PT-1-4 宽表默认源发现补相对配置目录（原产品真实配置形态）的行为覆盖；复检真实样本可用性。不修改生产代码。
+
+修改文件：
+- `pytools-core/tests/timeline_menu_cli.rs`：`create_timeline_config*` 夹具抽出 `create_timeline_config_inner`（新增 `relative_dirs` 参数），新增集成测试 `wide_summary_cli_resolves_relative_configured_directories_for_discovery`。
+- `pytools-core/MIGRATION_INVENTORY.md`：末尾新增日期化小节。
+- 本记录。
+
+背景与结果：
+- 真实样本复检：原 PyCode 只读 `PyCode/config/config.xlsx` 全局配置输入目录为相对值 `input`，该目录在原项目中不存在；结合此前源树只读预检结论，PT-1-3/PT-1-4 仍无可命中规则的真实样本。
+- Rust `load_global` base=`config.parent().parent()` 及相对值解析与 PyCode `config_xlsx.load_global` 一致；此前默认发现测试只覆盖绝对路径配置。新增测试覆盖：配置写相对值 `input`/`output`/`logs` 时，默认发现按 `<config 上上级>/input` 扫描根与嵌套目录、跳过 `~$` 锁文件与未配置 `.xlsb`（2 个有效源），汇总簿与运行历史分别写入配置相对 `output`、`logs` 目录。
+- 初版测试因夹具文件名缺少规则工作簿关键字 `sample` 而未命中规则（0 输出），修正夹具命名后通过；生产代码未改。
+
+验证结果（Windows 原生）：
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 2`：13/13 通过。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `git diff --check`：通过。
+
+影响与未完成项：仅测试与留痕，不改生产行为、路由或格式范围，不升级组件版本。PT-1-3/PT-1-4 仍无可命中真实样本、生产 capability 未登记、目标平台未验收，整体保持未验收状态。
+
+敏感内容检查：无真实业务数据、凭据或源文件内容进入提交；测试夹具全部为合成数据。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销测试改动与清单记录。
+【组件版本】：纯测试补充，不升级。

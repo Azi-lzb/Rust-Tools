@@ -1,0 +1,15 @@
+PT-3-1 按配置生成打印报表的失败反馈
+
+修改范围：
+- pytools-core/src/bin/pytools.rs：打印操作和预校验失败时输出具体错误/配置问题，并回到菜单；失败仍标记为失败，不显示成功。
+- pytools-core/tests/print_menu_cli.rs：新增真实菜单回归，验证目标已存在时报错可见、主菜单可继续使用、源文件与目标文件字节不变。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo check --offline --locked -p pytools-core --bin pytools -j 1：通过；有既有依赖弃用和未使用代码警告。
+- cargo test --offline --locked -p pytools-core --test print_menu_cli -j 1：7/7 通过。
+- git diff --check：通过。
+
+限制：未提供用户失败时的实际工作簿/配置，尚不能确定原始业务错误原因；改动确保下次运行显示完整错误并避免窗口直接关闭。未运行 Python/Rust 业务对拍、真实报表样本或 Linux/deb 验收；未生成 Release 包。
+
+回滚：仅回滚本记录和本次打印菜单错误反馈代码/测试提交，不影响其他工作树修改。

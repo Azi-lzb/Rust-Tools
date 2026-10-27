@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.workbook_extract",
+  "source": "PyCode/core/rule_engine.py::extract_cells",
+  "shared_vectors": "tests/fixtures/workbook_extract_cases.json",
+  "workbook_fixture": "tests/fixtures/季度报表_县区报表_2024-12-31.xlsx",
+  "python_baseline": {
+    "status": "保留",
+    "passed": 6,
+    "total": 6
+  },
+  "result": [
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_1",
+      "col_path": "指标_余额_1",
+      "value": 12,
+      "cell_addr": "B4"
+    },
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_1",
+      "col_path": "指标_余额_2",
+      "value": 13.5,
+      "cell_addr": "C4"
+    },
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_1",
+      "col_path": "其他_金额",
+      "value": 100,
+      "cell_addr": "D4"
+    },
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_2",
+      "col_path": "指标_余额_1",
+      "value": 14,
+      "cell_addr": "B5"
+    },
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_2",
+      "col_path": "指标_余额_2",
+      "value": 15,
+      "cell_addr": "C5"
+    },
+    {
+      "source_file": "季度报表_县区报表_2024-12-31.xlsx",
+      "sheet_name": "数据",
+      "rule_name": "规则1",
+      "data_date": "2024-12-31",
+      "row_path": "新村名_2",
+      "col_path": "其他_金额",
+      "value": 200,
+      "cell_addr": "D5"
+    }
+  ],
+  "limitations": [
+    "Covers one synthetic xlsx worksheet, one merge, and one extraction rule.",
+    "Does not verify batch discovery, CSV, output workbook writing, target append, or real templates."
+  ]
+}

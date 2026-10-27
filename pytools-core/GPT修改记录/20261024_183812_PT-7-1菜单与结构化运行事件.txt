@@ -1,0 +1,34 @@
+时间：2026-10-24 18:38（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+工作树：C:\Users\AZI\Desktop\VibeCode\pytools-dev
+分支：pytools-dev
+修改前 commit：1e550d4（pytools-dev）
+本轮结束状态：PT-7-1 真实菜单合成执行对拍及 Excel 保留项回归通过；生产验收仍待真实业务模板与目标平台。
+WIP 情况：开始时保留已有未提交 PT-7-1 菜单和单工作表测试；未覆盖或清理这些修改。
+
+修改目的：在既有村镇银行拆分计划逻辑上接入 PyTools 真实菜单/批处理入口，补齐普通用户、开发者和关闭三种运行视图及可查询的安全摘要；建立真实菜单的 Python/Rust 多工作表执行对拍。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs
+- pytools-core/tests/batch_tools_menu_cli.rs
+- pytools-core/probe/compare_village_split_menu.py
+- pytools-core/probe/reports/village_split_menu_parity_20261024.json
+- pytools-core/MIGRATION_INVENTORY.md
+- 本记录
+
+业务路径：主菜单 7→1 → 读取本期/上期/目标 XLSX → 既有 Rust `build_village_split_plan` 计算 → 默认只保存 ExcelEditPlan；显式提供 capability 时经 ExcelModifier 执行、校验候选并安全替换目标。手工路径及弹窗均只接受当前已选定的 XLSX 输入合同。没有 capability 时不修改目标。
+
+运行事件：菜单继承 `--log-view user|developer|off` 和全局日志目录。事件覆盖计划计算、计划保存、引擎执行、提交和文件摘要，记录实际阶段耗时、进度、组件与实际引擎。运行历史为 `PT-7-1_<run_id>.run.json`；历史不包含原始单元格值、输入文件名或路径。用户视图只打印业务消息，开发者视图输出结构化 JSON 事件，off 不记录事件或历史。
+
+验证：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli -j 1`：4/4 通过；验证计划模式不改源/目标、用户视图历史、开发者实际引擎事件、off 模式不写历史，以及单个目标工作表的合成 capability 执行。
+- Python/Rust 实际菜单执行对拍：通过，使用 Python 3.12.10/openpyxl 3.1.5 基线和 Windows Rust CLI，在三张填充表及未匹配/未修改工作表上比较完整值投影，结果一致；本期/上期文件未改变，目标通过候选校验和安全替换提交。机器报告：`probe/reports/village_split_menu_parity_20261024.json`，不保留单元格内容。
+- Excel 保留项集成断言：公式及跨表引用、全局定义名称、合并区域、批注、目标/非目标工作表行高和非目标表内容均按插删行契约保留或更新。
+- 先前 `probe/compare_batch_remaining.py` 的 PT-7-1 计划语义对拍仍为合成计划级证据，不等同于实际 ExcelModifier 执行对拍。
+
+共享适配器修复由 main 提交并安全 cherry-pick 到本分支：`4a08852` 将插行限制到目标 worksheet 并增加共享回归，`afaed4f` 完成共享修改记录；main 报告共享 `insert_rows` 测试 1/1 通过。本分支未重复运行该共享测试。PT-7-1 仍仅有合成 XLSX 证据；fixture-scoped capability 不登记为生产 Passed 或默认路由。未测真实用户工作簿、Windows 弹窗手工操作、目标 Linux/glibc 2.28 或 deb。
+
+提交/同步：main 的共享修复已形成两个本地 cherry-pick 提交；PT-7-1 业务改动与本记录尚在工作树，待最终检查后另行提交。推送仅限 `origin/pytools-dev`，不修改或推送 main。
+
+配置和回滚：不改原 Python 源、Excel 配置、共享 crate、根 Cargo 文件或 Cargo.lock。测试输入均为临时合成文件。若需要回滚，先保护当前 WIP，再只逆向 PT-7-1 对应文件/提交；不使用 reset、clean 或覆盖工作树操作。

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "operation": "pytools.file_sort_prefix_remove_410",
+  "status": "cli_integrated_synthetic_parity_passed",
+  "cli_command": "pytools remove-file-sort-prefix --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [<file>...]",
+  "original_gui_menu_integrated": false,
+  "implementation": "pytools_core::file_sort_prefix::run_remove_file_sort_prefix_410",
+  "source_baseline": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "function": "run_remove_file_sort_prefix_410",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "detailed_report": "probe/reports/file_sort_prefix_remove_python_baseline.json"
+  },
+  "contract": {
+    "data_owner": "rust",
+    "input_format": "synthetic XLSX for content-cell reads; opaque .xls-named file only for direct filename-prefix removal",
+    "output_format": "XLSX",
+    "output_kind": "new_report plus filesystem renames",
+    "content_spec": "sheet1@A1",
+    "report_sheet": "取消文件排序前缀结果",
+    "report_headers": ["源文件路径", "原文件名", "新文件名", "状态", "备注"]
+  },
+  "fixture_result": {
+    "rules": 4,
+    "input_paths": 10,
+    "renamed": 5,
+    "skipped": 5,
+    "failed": 0,
+    "row_parity": "passed",
+    "report_header_and_cells": "passed",
+    "empty_input_report_matches_python_blank_sheet": "passed",
+    "final_file_name_set": "passed",
+    "renamed_input_bytes_unchanged": "passed",
+    "collision_no_clobber": "passed",
+    "corrupt_xlsx_content_read_is_skipped": "passed",
+    "report_write_failure_rolls_back": "passed",
+    "no_valid_rules_is_rejected": "passed"
+  },
+  "source_tests": {
+    "command": "pytest -p no:cacheprovider -q PyCode/tests/test_file_sort_prefix_49.py PyCode/tests/test_convert_rename_edges.py",
+    "result": "23 passed",
+    "warning": "one existing pandas FutureWarning",
+    "provenance": "recorded Python baseline; not rerun during the current Rust CLI integration round"
+  },
+  "rust_tests": {
+    "operation_410_integration_tests": "5 passed, including two product CLI invocations",
+    "pytools_core": "46 passed, 0 failed",
+    "workspace": "118 passed, 0 failed",
+    "format_check": "cargo fmt --all -- --check passed",
+    "doc_tests": 0,
+    "workspace_test_command": "cargo test --workspace --locked"
+  },
+  "limitations": [
+    "The CLI is not connected to the original GUI menu/dispatcher and is not a production default.",
+    "Timestamp, repeated-run, concurrency, and failure-event logging are not compared line-by-line with Python; synthetic CLI tests assert success log lines and empty-input produces an empty log.",
+    "Content-cell reads were parity-tested only on synthetic XLSX files; .xls content reads and .xlt are unverified.",
+    "Date-typed cells, formula cached values, multi-cell content specifications, real templates, real directories, and Windows-native Rust are unverified.",
+    "Hard-link target reservation can fail on filesystems that do not support hard links; the source remains when the rename fails safely.",
+    "Kylin/UOS, glibc 2.28, and offline deb packaging were not tested."
+  ]
+}

@@ -1,0 +1,24 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证起点 commit：0efc92e；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。`origin/main` 为 473c75a。原 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、规则、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。
+
+目的：将 PT-6-1 的 musl Linux 阶段验证从 debug 扩展到优化 release CLI，并以真实业务入口运行已登记的 VBA 启用 XLSM 对拍样本。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：记录 musl release 构建、ELF ABI 检查和 release CLI 对拍结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-6-1 Linux 阶段验证边界。
+- 本修改记录。
+
+真实入口与结果：WSL Ubuntu（host glibc 2.39）离线构建 `x86_64-unknown-linux-musl` release `pytools`，通过。产物为 ELF static PIE；`readelf -l` 无动态解释器段，`objdump -T` 无 GLIBC 动态符号。直接运行 release `pytools summary-used-range --log-view developer` 处理固定 XlsxWriter VBA 测试 XLSM；与只读 PyCode 基线的工作簿投影完全一致（1 行），实际引擎为 Calamine 与 rust_xlsxwriter。源文件 SHA-256 前后相同，输出为不含 VBA 的 `.xlsx`。开发者事件流与保存历史逐项一致，共 11 条；`output_workbook` 阶段为 104 ms，且等于 CLI `write_elapsed_ms`。宏未执行。
+
+验证：
+- `cargo build --release --offline --locked -p pytools-core --bin pytools --target x86_64-unknown-linux-musl`（WSL）：通过。
+- `file` / `readelf -l` / `objdump -T`（release CLI）：static PIE，无动态解释器段，无 GLIBC 动态符号。
+- release CLI 与 PyCode VBA 启用 XLSM 对拍：值/类型、样式、工作表与输出属性完全一致；源未改变，输出 XLSX 不含 VBA，进度事件历史匹配。
+- `git diff --check`：通过。
+
+差异与边界：未观察到 PyCode/Rust 输出差异。此项是 WSL Ubuntu 上 musl release 阶段证据，不是麒麟 V10/UOS V20 实机或 deb 安装验收；glibc 2.28 路径、原 PyTools 业务含 VBA 的 XLSM 样本、Windows 原生 Rust 及正式峰值 RSS 仍未验证。未修改 Rust 产品业务语义和生产路由。
+
+删除文件：无；CLI 输出与对拍文件均位于系统临时目录。
+回滚：可用 `git revert <本轮提交>` 撤回本轮验证记录。
+【组件版本】：不升级，当前 0.1.0。

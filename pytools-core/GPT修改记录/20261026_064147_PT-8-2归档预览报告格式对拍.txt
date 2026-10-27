@@ -1,0 +1,25 @@
+时间：2026-10-26 06:41:47（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：修改前 b07e454；修改后将随本地功能提交，最终 SHA 以该提交记录为准。
+WIP 状态：修改前检查了 pytools-dev 工作树和 git status。已有未提交的 MIGRATION_INVENTORY.md、HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 失败记录及过期 PT-6-2 说明均保持原状；本轮只纳入下列归档代码、定向回归和汇总报告文件。
+
+目的：修正按类型归档预览生成工作簿的表头格式和页面边距，使其符合原 Python 输出外观；增加对应 OOXML 断言并保留本地样本对拍边界。
+
+变更文件：
+- pytools-core/src/archive_ops.rs：归档报告表头加粗、细边框、水平居中、垂直顶端，并设置与 Python 输出一致的页边距。
+- pytools-core/tests/archive_parity.rs：检查标题格式及六项页边距；边框黑色允许 Excel 自动黑色与主题黑色的等效表示。
+- pytools-core/probe/reports/archive_type_source_preview_20261026.json：记录仅含计数和保真差异的本地按类型预览对拍摘要，不包含输入名称、真实路径或业务数据。
+- pytools-core/GPT修改记录/20261026_064147_PT-8-2归档预览报告格式对拍.txt：本记录。
+
+逻辑变化：不改变计划行、分类、目标路径或文件操作；只修复生成的 Excel 报告格式与页边距。
+
+测试结果：
+- Windows 原生 cargo fmt -p pytools-core -- --check：通过。
+- Windows 原生 cargo test --offline --locked -p pytools-core --test archive_parity：5/5 通过。
+- Windows 原生 cargo test --offline --locked -p pytools-core --test archive_menu_cli：1/1 通过。
+- 既有原项目只读目录和配置对拍观察到 Python/Rust 计划数据 149/149 一致，输入与配置未变化；147 个空备注单元格的低层 OOXML 标记不同，但两侧均解码为空。表头外观与页边距按本轮修复后相符。该源目录不是用户批准的脱敏样本，因此不关闭 PT-8-2 真实样本验收。
+
+未执行项与已知问题：未手动操作原生文件选择器；未执行 glibc 2.28、麒麟 V10、统信 UOS V20、deb 验收。空备注格标记差异仍存在。编译输出包含既有、与本变更无关的 unused import 警告。
+
+回滚提示：本地提交可用 git revert <本次提交 SHA> 安全撤销；未提交时只恢复本记录中列出的两个源/测试文件和两项新增证据，保留原有 WIP。删除清单：无。
+【组件版本】：不升级，仍为 0.1.0。

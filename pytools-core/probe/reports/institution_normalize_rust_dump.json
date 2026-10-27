@@ -1,0 +1,162 @@
+{
+  "business_stats": {
+    "branch_sheets": 3,
+    "errors": [],
+    "failed_files": 0,
+    "files": 1,
+    "mapped_rows": 3,
+    "mapped_sheets": 2,
+    "mapping_empty": false
+  },
+  "elapsed_ms": 66,
+  "reader": "calamine",
+  "schema_version": 3,
+  "sheets": [
+    {
+      "comments": {
+        "E1": "保留批注"
+      },
+      "comments_status": "read_by_namespace_aware_ooxml_supplement",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "read_by_namespace_aware_ooxml_supplement",
+      "data_validations": [],
+      "data_validations_status": "read_by_namespace_aware_ooxml_supplement",
+      "formula_status": "read_by_calamine",
+      "formulas": {
+        "F2": "SUM(1,2)"
+      },
+      "merge_status": "read_by_calamine",
+      "merges": [
+        "C1:D1"
+      ],
+      "name": "报表分机构本外币",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "A2": {
+          "type": "string",
+          "value": "Exact Standard"
+        },
+        "A3": {
+          "type": "string",
+          "value": "Short Standard"
+        },
+        "A4": {
+          "type": "string",
+          "value": "Unmapped"
+        },
+        "A5": {
+          "type": "string",
+          "value": "   "
+        },
+        "B1": {
+          "type": "string",
+          "value": "说明"
+        },
+        "B2": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "B3": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "B4": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "B5": {
+          "type": "string",
+          "value": "空白行"
+        },
+        "C1": {
+          "type": "string",
+          "value": "合并标题"
+        },
+        "E1": {
+          "type": "string",
+          "value": "批注保留"
+        }
+      }
+    },
+    {
+      "comments": {},
+      "comments_status": "read_by_namespace_aware_ooxml_supplement",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "read_by_namespace_aware_ooxml_supplement",
+      "data_validations": [],
+      "data_validations_status": "read_by_namespace_aware_ooxml_supplement",
+      "formula_status": "read_by_calamine",
+      "formulas": {},
+      "merge_status": "read_by_calamine",
+      "merges": [],
+      "name": "分机构-备用",
+      "values": {
+        "B1": {
+          "type": "string",
+          "value": "机构名称"
+        },
+        "B2": {
+          "type": "string",
+          "value": "Branch Standard"
+        },
+        "B3": {
+          "type": "string",
+          "value": "unchanged"
+        },
+        "B4": {
+          "type": "string",
+          "value": "   "
+        }
+      }
+    },
+    {
+      "comments": {},
+      "comments_status": "read_by_namespace_aware_ooxml_supplement",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "read_by_namespace_aware_ooxml_supplement",
+      "data_validations": [],
+      "data_validations_status": "read_by_namespace_aware_ooxml_supplement",
+      "formula_status": "read_by_calamine",
+      "formulas": {},
+      "merge_status": "read_by_calamine",
+      "merges": [],
+      "name": "分机构-空表",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "B1": {
+          "type": "string",
+          "value": "说明"
+        }
+      }
+    },
+    {
+      "comments": {},
+      "comments_status": "read_by_namespace_aware_ooxml_supplement",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "read_by_namespace_aware_ooxml_supplement",
+      "data_validations": [],
+      "data_validations_status": "read_by_namespace_aware_ooxml_supplement",
+      "formula_status": "read_by_calamine",
+      "formulas": {},
+      "merge_status": "read_by_calamine",
+      "merges": [],
+      "name": "汇总",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "A2": {
+          "type": "string",
+          "value": "ABC Bank"
+        }
+      }
+    }
+  ]
+}

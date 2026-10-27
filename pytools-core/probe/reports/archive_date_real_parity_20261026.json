@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-8-1",
+  "command": "archive-date-preview",
+  "status": "windows_real_input_value_parity_pass_with_blank_cell_type_difference",
+  "validation_scope": {
+    "input": "original PyTools xlsx directory, read-only",
+    "input_files": 149,
+    "config": "original PyTools config.xlsx, read-only",
+    "outputs": "temporary directory"
+  },
+  "python": {
+    "entry": "PyCode.core.convert_33_34_35_37.run_archive_by_date_preview",
+    "files": 149,
+    "invalid": 0,
+    "planned": 149
+  },
+  "rust": {
+    "entry": "archive-date-preview CLI",
+    "files": 149,
+    "invalid": 0,
+    "planned": 149
+  },
+  "comparison": {
+    "row_values_order_and_target_paths_equal": true,
+    "workbook_sheet_names": ["归档计划"],
+    "workbook_dimensions": {"rows": 150, "columns": 8},
+    "nonempty_cell_types_equal": true,
+    "blank_note_cell_type_mismatches": 147,
+    "low_level_cell_type_parity": false,
+    "style_mismatches": 0,
+    "unrecognized_date_rows": 75,
+    "extension_skipped_rows": 0,
+    "source_file_size_and_modified_time_unchanged": true,
+    "config_file_size_and_modified_time_unchanged": true
+  },
+  "limitations": [
+    "Blank note cells read back blank in both workbooks; the 147 OOXML cell-type markers differ.",
+    "This Windows run does not establish glibc 2.28, Kylin V10, UOS V20, deb, archive-copy, or archive-execution acceptance."
+  ]
+}

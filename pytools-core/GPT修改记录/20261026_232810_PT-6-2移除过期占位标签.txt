@@ -1,0 +1,17 @@
+时间：2026-10-26 23:28（Asia/Shanghai）
+执行者：Codex
+修改前提交：aa24692
+修改后提交：本记录随菜单修复一并提交；SHA 以包含本记录的提交为准。
+WIP：仅有本次 PT-6-2 标签修复，前一 PT-6-2 功能已提交并推送。
+
+目的：命名区域汇总已可经菜单执行，移除汇总子菜单上遗留的“尚未实现”占位字样，并防止回归。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：移除 PT-6-2 菜单项的过期占位标签。
+- `pytools-core/tests/summary_menu_cli.rs`：交互入口测试断言菜单不再显示“尚未实现”。
+- 本记录：记录本次修正。
+
+验证（Windows 原生）：`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`cargo check --offline --locked -p pytools-core --bin pytools -j 1` 通过；`cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1` 6/6 通过。目标文件位于 `F:\PyTools_Rust_本轮工作文件_20261026\target`。
+
+组件版本：不调整 `pytools-core` 版本。未修改业务算法、配置、Excel-Core、旧 Python 或源工作簿；无删除文件。
+回滚提示：可单独回滚本菜单文案修复；PT-6-2 业务实现提交 aa24692 不应随之回滚。

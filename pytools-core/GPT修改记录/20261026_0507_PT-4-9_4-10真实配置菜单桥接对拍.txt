@@ -1,0 +1,33 @@
+时间：2026-10-26 05:07（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证源码 HEAD：6b6e1f8ed2020225081c88c5a131a9a3214e2d46
+提交：本记录生成时尚未提交，SHA 见本轮 Git 历史。
+WIP：保留既有 `pytools-core/MIGRATION_INVENTORY.md` 修改、`HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 转换失败记录及 PT-6-2 样本缺口记录；均未暂存或修改。
+
+【目的】
+在用户尚无可提供脱敏样本的情况下，使用原 PyCode 只读配置和隔离生成的合成文件，补验 PT-4-9/4-10 的实际 Rust 交互菜单路由与配置解析。避免把合成桥接结论当作真实业务目录验收。
+
+【修改文件】
+- `pytools-core/probe/reports/file_sort_prefix_real_config_menu_bridge_20261026.json`：仅记录通过/一致性状态、规则数量、引擎和验证边界；不包含配置值、文件名或绝对路径。
+- 本记录。
+
+【验证】
+- Windows 原生 `cargo build --offline --locked -p pytools-core --bin pytools -j 1` 通过；显示既有共享 `excel-editor` 弃用 API 和 PyTools 未使用导入警告，未修改这些代码。
+- 使用 `NoComPyTools/.venv` Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5 执行只读 PyCode 基线；原 `PyCode/config/config.xlsx` 含 3 条有效排序规则和 2 个内容取值单元格。原配置运行前后字节一致。
+- PT-4-9：PyCode `run_file_sort_prefix_49` 与 Rust `pytools menu → 4 → 9` 比较 5 个临时合成文件。统计、报告工作表名称/形状/表头/单元格值与 Excel 类型、最终文件名及文件字节一致；命中冲突目标和未命中规则分支均纳入。
+- PT-4-10：PyCode `run_remove_file_sort_prefix_410` 与 Rust `pytools menu → 4 → 10` 比较 3 个临时合成文件，包含排序前缀冲突目标、内容前缀在排序前缀之前的 XLSX，以及未命中项。统计、报告投影、最终文件名及文件字节一致。
+- 两项 Rust 菜单均使用 developer 视图，历史记录包含实际引擎 `Calamine`、`RustFilesystem`、`rust_xlsxwriter` 及必要组合；历史记录不包含所选文件名。
+- 只在派生的临时配置副本中重定向输入/输出/日志目录；原 Python 项目只读，合成文件、配置副本和临时脚本均在临时目录运行后清理。
+
+【未执行项与已知边界】
+- 本次是“真实 PyCode 配置 + 合成文件”桥接，不是实际业务目录/真实工作簿验收。报告工作表的样式未纳入本次比较。
+- 生产 Excel capability、麒麟 V10/统信 UOS V20 及独立离线 deb 验收仍未完成。
+- 没有修改 Rust 业务代码；本次验证不改变 PT-4-9/4-10 的总体“未验证”状态。
+
+【删除清单】
+无仓库文件删除。运行脚本创建的临时输入、配置副本、报告和日志目录均已由脚本清理；原配置未修改。
+
+【回滚提示】
+如撤销本次验证证据，仅回滚本记录和对应机器报告；不删除 `target/` 中构建产物，也不触及既有 WIP。
+
+【组件版本】不升级（仅验证）。

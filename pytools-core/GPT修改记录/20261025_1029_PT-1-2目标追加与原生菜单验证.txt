@@ -1,0 +1,29 @@
+时间：2026-10-25 10:29（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+工作树：`pytools-dev`；修改前 HEAD `688c4d3`，与 `origin/pytools-dev` 同步。保留此前 PT-1-2 六文件 WIP。
+
+目的：完成 PT-1-2 的目标追加候选、真实菜单入口对拍及表头不匹配保护验证；保留真实业务样本未验证状态。
+
+涉及文件：
+- `src/timeline_extract.rs`：Rust 时序提取、目标写入计划及已有目标列头/去重语义。
+- `src/bin/pytools.rs`：`timeline-extract` CLI、菜单 1→2 与显式目标提交流程。
+- `src/dedup_ops.rs`、`src/timeline_ops.rs`：新建追加工作簿的标题样式配置。
+- `probe/compare_timeline_extract.py`、`probe/reports/timeline_extract_parity_20261025.json`：Python/Rust 自动对拍与表头不匹配场景；报告增加原生文件对话框手工验证摘要，不含文件路径或单元格值。
+- `MIGRATION_INVENTORY.md`：记录实际数据流、验证结果与未验收边界。
+- 本记录。
+
+实际入口与数据流：`pytools menu → 1 → 2` / `pytools timeline-extract` → Calamine 读取 XLSX → Rust 规则提取、路径映射与去重 → rust_xlsxwriter 新建输出；目标不存在时 Rust 创建目标。已有目标默认只留计划；用户确认且提供 capability/platform 后，通过 ExcelEditPlan/ExcelModifier 以 `umya_spreadsheet` 候选引擎提交。普通用户、开发者和关闭日志视图仍由同一运行事件数据驱动。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：9/9 通过。
+- `cargo test --offline --locked -p pytools-core --lib -j 1`：33/33 通过。
+- `probe/compare_timeline_extract.py`：通过。包含多输入及损坏输入、continue/fail_fast、新建目标、已有目标计划/显式提交、表头不匹配拒写；值、类型、样式、合并、公式、批注、行列尺寸、页面设置等完整投影按各场景比较，差异为空。已有目标候选用临时 synthetic capability，未登记生产能力。
+- 普通用户视图：Rust 输出完整投影与 PyCode 一致；stdout/stderr 报告进度但不泄露 calamine、rust_xlsxwriter 等引擎名，持久化历史保留实际引擎列表。
+- Windows 原生菜单 1→2 和系统 Open 对话框：选择 1 个临时合成文件，4 个规则工作表、20 条提取记录、10 行输出；与只读 PyCode 完整投影一致。
+- 输入目录审计：原 PyCode 默认配置 input_dir 不存在，源项目内未找到命中其时序规则的 XLSX/XLSM 工作簿；未执行真实业务数据对拍。
+
+限制：D01 未将 PT-1-2 纳入已确认目标写入合同，既有目标候选仍为 capability-gated、默认计划态；没有生产 Passed capability。未验证真实业务文件、其他格式、麒麟 V10/UOS V20、glibc 2.28、deb 离线安装。整体状态保持未验证。
+
+安全与边界：提交内容只包含 Rust 代码、合成对拍脚本/报告和迁移记录；没有将源业务工作簿、单元格数据、凭据或实际用户文件带入 Git。源 Python 项目只读；未修改 Audit、共享 crates、根 Cargo 文件、Cargo.lock、DEVELOPMENT_GOAL.md 或 Rules。组件版本不变。回滚使用 `git revert <本轮提交>`；本地提交及 `origin/pytools-dev` 同名分支同步状态见 Git 历史与本轮报告。

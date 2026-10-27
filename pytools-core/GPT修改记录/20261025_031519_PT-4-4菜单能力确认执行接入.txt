@@ -1,0 +1,24 @@
+时间：2026-10-25 03:15（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+修改前 commit：cc40679（pytools-dev）
+WIP 情况：开始时工作树干净；本次只修改 PT-4-4 的菜单接入、对应集成测试和迁移清单。
+
+修改目的：让已有 PT-4-4 Sheet 改名候选能从真实交互菜单显式选择执行，同时保持默认 plan-only 和 capability 门控。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：向转换菜单传递主菜单已校验成对的 capability/platform 参数；PT-4-4 无 capability 时保持计划流程，有 capability 时先提示原位修改并要求 y/yes/是 确认，随后调用现有带安全替换的 `rename-sheets` CLI 处理器。
+- pytools-core/tests/conversion_menu_cli.rs：增加菜单确认执行、用户拒绝后只生成计划的真实 CLI 集成测试，使用仅供合成夹具的临时 Passed capability。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-4-4 菜单行为、测试证据和未完成验收项。
+- 本记录。
+
+真实入口与数据流：`pytools menu [--capabilities <json> --platform <id>]` → 转换工具 4 → Sheet 改名 4 → 文件选择 → 用户明确确认 → 现有 `run_batch_sheet_rename_candidate` → `ExcelEditPlan`/ExcelModifier 能力匹配、临时候选验证、输入快照核验与安全替换。未给 capability/platform 时不执行修改。
+
+测试与 Python/Rust 对拍：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test conversion_menu_cli --test sheet_rename_execution -j 1`：7/7 通过。
+- 菜单 4→4 的 synthetic capability 确认测试读回工作表顺序和 A1 值；拒绝测试确认源文件字节不变并生成计划；既有缺少 Passed capability 测试确认执行前失败、源文件不变。
+- 同轮重跑 `sheet_rename_execution` 的只读 PyCode baseline 对拍通过；覆盖工作表顺序、值/公式、自定义名称、样式、批注、合并、行列尺寸、页面方向/打印区域和安全提交。菜单分支使用同一 Rust CLI 处理器，不复制业务逻辑。
+
+未执行项和已知问题：未使用真实业务工作簿或生产 capability，也没有启动 Windows Explorer/桌面文件弹窗。XLSM 保留、真实模板全部对象、麒麟 V10/UOS V20、glibc 2.28 和离线 deb 未验收；PT-4-4 整体状态仍为未验证。测试产生的 capability 仅在临时目录，不登记到产品能力配置。
+
+回滚信息：本项可通过对应提交整体 revert；不涉及源 Python 项目、共享 crates、根 Cargo 文件、audit-core 或 `DEVELOPMENT_GOAL.md`。

@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-23",
+  "operation": "pytools 4-6 run_batch_rename_by_content_46",
+  "status": "cli_integrated_synthetic_parity_passed",
+  "candidate": {
+    "api": "pytools_core::file_sort_prefix::run_content_prefix_rename_46_xlsx_candidate",
+    "scope": [".xlsx", ".xlsm"],
+    "reader": "shared excel-reader backed by Rust calamine",
+    "file_operation": "filesystem rename with no-clobber destination reservation",
+    "cli_integrated": true,
+    "cli_command": "pytools rename-by-content --config <workbook.xlsx> <file>...",
+    "original_menu_integrated": false,
+    "production_default": false
+  },
+  "python_baseline": {
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "function": "run_batch_rename_by_content_46",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "report": "probe/reports/content_rename_46_python_baseline.json"
+  },
+  "case": {
+    "fixture": "tests/fixtures/content_rename_46_cases.json",
+    "config_spec": "sheet1@A1;sheet2@A2",
+    "input_paths": 12,
+    "python_stats": {
+      "ok": 5,
+      "skip": 7,
+      "config_row": 2,
+      "config_remark": "4-6 对拍"
+    },
+    "rust_stats": {
+      "ok": 5,
+      "skip": 7,
+      "config_row": 2,
+      "config_remark": "4-6 对拍"
+    },
+    "python_and_rust_final_entries_match": true,
+    "rust_input_workbook_bytes_preserved": true,
+    "preexisting_conflict_target_preserved": true,
+    "renamed_names": [
+      "A_B_report.xlsx",
+      "A_B_A_partial.xlsx",
+      "A_B_conflict_1.xlsx",
+      "A_sheet2!A2_missing_sheet.xlsx",
+      "A_B_macroLess.xlsm"
+    ],
+    "skipped_names": [
+      "A_B_already.xlsx",
+      "report_A_B_later.xlsx",
+      "A_B_corrupt.xlsx",
+      "missing.xlsx",
+      "directory.xlsx",
+      "A_B_unverified.xlsb",
+      "legacy.csv"
+    ]
+  },
+  "verification": {
+    "python_baseline_run": "passed",
+    "python_focused_source_tests": "13 passed; tests/test_rename_by_content_46.py (covers both 4-6 and 4-7 source behavior)",
+    "rust_integration_tests": "2 passed; API parity and direct CLI workflow parity",
+    "pytools_core_tests": "49 passed in the current workspace run",
+    "workspace_tests": "121 passed in the current workspace run",
+    "cargo_fmt_check": "passed"
+  },
+  "unverified": [
+    "real .xlsx/.xlsm workbooks and real macros",
+    "numeric, date, formula-cache, error, and whitespace-sensitive cell values",
+    ".xls/.xlt source COM branch",
+    ".xlsb, .csv, and other extensions accepted by the legacy Excel-like filter",
+    "Windows-native Rust build and filesystem behavior",
+    "filesystems without hard-link support",
+    "麒麟 V10/UOS V20 target package and real directories",
+    "original GUI menu/dispatcher integration and complete user workflow"
+  ],
+  "routing_decision": "Rust CLI integrated; original GUI menu not integrated; candidate-only with no production default change"
+}

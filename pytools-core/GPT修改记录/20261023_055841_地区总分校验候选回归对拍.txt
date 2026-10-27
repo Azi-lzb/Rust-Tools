@@ -1,0 +1,44 @@
+【时间】2026-10-23 05:58:41（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】不可用；workspace 尚无首次提交
+【修改后 commit】未提交
+【WIP 情况】修改前检查 Git 状态：workspace 文件均为未跟踪 WIP。本轮仅围绕 pytools 地区总分校验候选补充测试、对拍报告和状态说明；没有清理或覆盖其他 WIP。原始 `4.pytools-main` 项目只读。
+
+【目的】
+继续增量迁移 PyCode 普通版 `feature_1_5_region_sum_check.py::run_region_sum_check`，复核 Python 行为基线，补足输出安全测试，并记录候选边界。候选仍未接入菜单/CLI，不改变生产默认路由。
+
+【修改文件】
+- `pytools-core/src/region_sum.rs`：将结果汇总公式标记的空缓存补丁目标从固定 `A5` 改为依据结果行数计算的 `A{rows.len()+2}`。回归测试发现，少于三条结果时固定坐标会使输出失败。
+- `pytools-core/tests/region_sum_parity.rs`：增加结果文件/日志重名时不覆盖、自动使用后缀的安全用例；增加输出目录实际为文件时的失败用例，检查阻塞文件和输入工作簿均未改变；确认少量结果的动态公式位置仍保留公式且没有缓存值。
+- `pytools-core/probe/reports/region_sum_python_baseline.json`：重新运行只读 Python 基线，刷新五个合成场景的统计、工作簿语义和源文件摘要。
+- `pytools-core/probe/reports/region_sum_parity.json`：新增候选机器对拍报告，登记读写后端、值/公式/样式/列宽对拍、安全测试、未验证范围及回退方式。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录地区总分校验候选状态；菜单总项继续为“未验证”。
+- `PYTHON_EXCEL_OPERATION_INVENTORY.md`：将地区总分校验源操作映射到候选及对拍报告。
+- `EXCEL_ENGINE_ARCHITECTURE.md`：登记空公式缓存窄补丁能力及该候选的证据与限制。
+- 本记录。
+
+【行为与迁移边界】
+- Python 基线函数：`PyCode/core/feature_1_5_region_sum_check.py::run_region_sum_check`；SHA-256：`78ABDA7379B4CC64F704E07B15426CB0A5D9D92ADFE94E747B982D3F7CCFD38C`。`logger.py` SHA-256：`F05B0E3B82D255D6AB6035AD9AF727157C3044E326307657AD3EA0BD094AEFF4`。复核前后源哈希一致。
+- Python 环境：3.12.10、OpenPyXL 3.1.5。基线覆盖 5 个合成 XLSX 输入，Python 与 Rust 统计均为文件 4、工作表 3、错误 1、失败文件 1。
+- Rust 结果通过共享 `excel-reader`/Calamine 读取并与 Python 基线比较；结果新建由共享 `excel-writer`/rust_xlsxwriter 写入。结果单元格值、归一后的公式文本、数据区域尺寸、样式、列宽（绝对误差不超过 0.01）通过；对拍由 Calamine 和测试专用 namespace-aware OOXML 检查器完成，没有声称 Rust 输出经 OpenPyXL 重开。
+- 输出汇总标记为了保留 Python 基线的公式文本和空缓存，需要极窄的 `ooxml-patch::clear_empty_formula_cache`。补丁目标按实际结果行数计算；它不是通用公式写入或重算能力。
+- 输入工作簿只读。结果/日志文件名冲突时保留占用文件并生成带后缀的新输出；输出目录创建失败时，输入和阻塞文件保持不变。失败时没有引擎自动回退；迁移期回退方式是继续使用原 Python 路径，Rust 未被路由调用。
+
+【测试】
+- Python 基线生成：通过，5 个合成 XLSX；结果统计 4/3/1/1；源文件哈希与已登记值一致。
+- `cargo fmt --all -- --check`：通过，WSL Ubuntu / Rust 1.99.1。
+- `cargo test -p ooxml-patch`：2 项通过。
+- `cargo test -p pytools-core --test region_sum_parity`：3 项通过，包括值/输出对拍、文件名冲突保护和输出目录失败保护。
+- `cargo test --workspace --locked`：89 项通过、0 失败、doc-tests 0 项；其中 pytools-core 为 17 个单元测试与 16 个集成测试。
+
+【未执行项/已知问题】
+- 仅有合成 XLSX 样本；真实业务工作簿、其他输入格式、菜单/CLI、完整日志字节一致性、性能/峰值内存均未验证。
+- 未做 Windows 原生 Rust 构建、麒麟 V10/UOS V20 glibc 2.28 离线 deb 构建和运行验证。
+- COM 变体不在本迁移切片；没有引入 Python、Office 或外部引擎运行依赖。
+- 结果写入使用 no-clobber 文件系统链接；目标文件系统覆盖行为尚未在 Windows 原生和目标 Linux 系统验证。
+
+【删除清单与回滚提示】
+- 本轮无删除。
+- 若需回滚本轮改动，恢复 `region_sum.rs` 的本轮公式坐标修改并移除两个新增安全测试；移除本轮 `region_sum_parity.json`、本记录及三份迁移清单中的地区校验候选说明。不要删除本轮前已存在的 Python 基线、fixture、地区校验候选实现或共享 OOXML 补丁；这些在其他已验证工作中可能继续使用。生产默认和旧 Python 路径未改变。
+
+【组件版本】不升级。

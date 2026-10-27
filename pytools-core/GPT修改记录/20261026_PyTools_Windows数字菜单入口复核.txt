@@ -1,0 +1,33 @@
+PyTools Windows 数字菜单入口复核
+
+日期：2026-10-26
+分支基线：origin/pytools-dev @ 49fe393747bf28576fdfd81dc81e371f8858bab0
+执行分支：codex/pytools-menu-entry（由 pytools-dev 基线隔离创建，未改原 pytools-dev 工作树）
+
+目的
+
+核实旧 PyCode 数字菜单与 Rust 入口接线，确保此前明确排除的 PT-1-2 不会从交互菜单启动，并保留旧打印子菜单 PDF 编号但安全提示未实现。
+
+变更文件
+
+- src/bin/pytools.rs：无参数仍进入现有 1–9/0 数字菜单；菜单 1→2 显示 PT-1-2 范围排除提示并返回，不打开选文件流程或调用历史候选。保留独立子命令及底层实现，不改变既有候选。
+- src/bin/pytools.rs：打印子菜单保留旧编号 5，明确提示 PDF 导出尚未实现且超出范围，不生成输出；帮助文本也标明 5 未实现。
+- tests/timeline_menu_cli.rs、tests/print_menu_cli.rs：增加直接无参启动、PT-1-2 菜单排除和 PDF 编号安全提示回归。
+- MIGRATION_INVENTORY.md：记录入口和验收边界，不提升业务迁移状态。
+- probe/reports/windows_interactive_menu_entry_20261026.json：入口构建、测试和冒烟机器记录。
+- 本记录：修改留痕。
+
+验证
+
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli --test print_menu_cli -q：25 + 5 个测试通过，0 失败。
+- cargo build --offline --locked -p pytools-core --bin pytools -q：通过，产物位于当前隔离工作树 target/debug/pytools.exe。
+- 直接运行产物且不带参数：显示旧版数字主菜单 1–9/0，选择 0 正常退出。
+- 运行 `pytools menu --config pytools-core/tests/fixtures/config_loader.xlsx` 并输入 `1, 2, 0`：显示 PT-1-2 已排除，不要求输入源文件，之后正常返回/退出。
+- 运行打印菜单 `3, 5, 0`：显示旧 PDF 选项编号及尚未实现提示；隔离配置指定的目标文件未创建。
+
+结果范围与未验证项
+
+本轮没有修改业务算法或 Excel 引擎，没有运行 Python/Rust 业务对拍，也未提升任何业务功能的真实样本验收状态。菜单中已有的计划模式与 capability 门控保持原样；PT-1-2 独立 `timeline-extract` 候选仍留在代码中，但不纳入交互菜单或确认迁移范围。真实业务人工验收、目标 Linux/glibc 2.28 和离线 deb 未在本轮执行。
+
+原 Python 项目保持只读；未改 Audit、共享 crate、根 Cargo.toml/Cargo.lock 或原 pytools-dev 工作树中的未提交文件。无删除文件、无配置或 VBA 迁移影响。回滚仅撤销本次提交。

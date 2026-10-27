@@ -1,0 +1,21 @@
+时间：2026-10-27（Asia/Shanghai）
+开始时 HEAD：a3fc1b4ce275385db475a15cdad00049467ecd65；分支：codex/pytools-menu-entry；工作树干净。未发现 WIP 记录。
+
+目的：批量重命名配置校验失败时，CLI 原先留下空 `.log`。现在日志写入失败阶段和错误类别；不复制具体错误文本、输入路径或文件名。失败仍以非零码退出，原输入不变。仅 developer 视图保存完整事件；其他视图只暂存失败事件，developer 历史行为保持不变。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：记录失败事件并写安全的失败日志。
+- `pytools-core/tests/conversion_menu_cli.rs`：新增真实菜单路径的配置失败、日志分类、终端提示和原文件保护回归；配置夹具支持缺少数据日期。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充 PT-4-1 负向菜单证据，整体真实业务验收状态不变。
+- 本记录。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli batch_rename_menu_persists_configuration_failure_log_without_touching_input -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli batch_rename_menu_supports_user_developer_and_off_progress_views -j 1`：1/1 通过。
+- 真实 Windows CLI：`F:\RustBuild\pytools\debug\pytools.exe` 使用 F 盘模拟配置经菜单 `4→1→1` 失败，退出码 2，输出必要配置错误；输入 XLSX 字节不变，新日志 `F:\PyToolsRustV2\manual-acceptance-20261027\logs\3_3_batch_rename_20261027_130105.log` 为 144 字节，含 `configuration_read` 和 `configuration_error`，不含源路径。
+- `git diff --check`：通过。
+
+未执行：Python/Rust 业务结果对拍、真实业务文件验收、全量集成测试、Linux/glibc 2.28/deb。此修改仅修复日志错误路径，不改变重命名业务结果；PT-4-1 仍待真实业务验收。编译输出含现有 Excel-Core 弃用 API、PyTools 未使用导入和 dead-code 警告，本轮未处理。
+
+原 Python 项目、Audit、共享 crate、Cargo 清单及 F 盘既有 0 字节历史日志均未修改或清理。当前分支不是 `pytools-dev`，不推送到其他远程分支。

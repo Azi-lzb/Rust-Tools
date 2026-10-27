@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "source": "PyCode.core.convert_33_34_35_37.run_batch_rename_33",
+  "config_sheet": "重命名配置",
+  "headers": [
+    "简称", "全称", "占位C", "代码", "全称(代码映射)", "占位F", "键", "值", "占位I",
+    "原表名", "新表名", "占位L", "原文件名片段", "新文件名片段", "内容重命名启用",
+    "内容重命名取值规则", "备注"
+  ],
+  "config_rows": [
+    ["建", "短名优先银行", "", "0008", "短名优先银行", "", "数据日期", "2026-01-31", "", "", "", "", "", "", "", "", ""],
+    ["建行", "中国建设银行", "", "0001", "中国建设银行", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["2026-01-31", "短名优先银行", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["乙行", "乙银行", "", "", "乙银行", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["丙行", "丙银行", "", "0003", "丙银行", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["ABC", "英文银行", "", "A01", "英文银行", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "报表名称", "存款表", "", "", "", "", "", "", "", "", ""]
+  ],
+  "inputs": [
+    {"kind": "file", "name": "客户_建行.xlsx", "exists": true, "content": "source-one"},
+    {"kind": "file", "name": "2026-01-31 0008 短名优先银行 存款表.xlsx", "exists": true, "content": "existing-target"},
+    {"kind": "file", "name": "乙行.xls", "exists": true, "content": "no-code"},
+    {"kind": "file", "name": "UNKNOWN.csv", "exists": true, "content": "unknown"},
+    {"kind": "file", "name": "missing.xlsx", "exists": false, "content": ""},
+    {"kind": "directory", "name": "丙行-folder", "exists": true, "content": "marker"},
+    {"kind": "file", "name": "xabcx.xlsm", "exists": true, "content": "case-insensitive"}
+  ],
+  "reserved": [
+    {"name": "2026-01-31 0008 短名优先银行 存款表_1.xlsx", "content": "reserved-one"}
+  ]
+}

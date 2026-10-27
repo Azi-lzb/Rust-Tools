@@ -1,0 +1,34 @@
+时间：2026-10-27 09:41（Asia/Shanghai）
+执行者：Codex
+修改前 commit：3820616（已包含 main 共享提交的本地 cherry-pick）
+修改后 commit：随本次 PyTools 提交记录
+WIP：修改前 worktree clean。
+
+目的：把 main 的 WPS 原生 ET 来源格式校验接入状态记录，关闭旧的共享格式误判阻塞。
+
+修改文件：
+- `pytools-core/MIGRATION_INVENTORY.md`
+- `pytools-core/GPT修改记录/20261027_0941_PT-4-4ET共享格式校验接入.txt`
+
+逻辑/业务变化：
+- 共享 sidecar 提交 `6fdf78e` 已 cherry-pick 到 PyTools 分支，当前本地提交为 `3820616`。ET COM 转换只路由到 WPS，并在写输出前验证源 `FileFormat=65521`；独立保真探测再次核对该值。
+- PyTools 既有发布门槛检查 `source_format_verified` 和 `source_format`，现在与共享 sidecar 成功报告字段匹配；来源无法验证时仍不发布。
+- 不升级产品/组件版本，不改变原 Python 项目，不修改配置或 Excel-Core。
+
+测试结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo fmt --manifest-path sidecar/lo-convert/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p lo-convert -j 1`：7 个单测、2 个 ET 集成测试、1 个公式重算集成测试通过。
+- `cargo test --offline --locked -p pytools-core --lib et_sidecar_must_explicitly_verify_native_source_format -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：11 通过、1 个需 WPS 的用例默认忽略。
+- 显式运行 `conversion_cli_does_not_publish_xls_payload_mislabeled_as_et`：1/1 通过，实际调用 WPS COM，源字节不变、无最终 XLSX。
+
+未执行项/已知问题：
+- 无合法原生 ET/业务 ET 样本，未验证正向 ET→XLSX、转换后样式/对象保留或 Python/Rust 输出一致性。
+- LibreOffice 不提供原生 ET 来源格式证明；PyTools 对该路径安全失败关闭。
+- Linux、glibc 2.28、麒麟 V10、统信 UOS V20 和离线 deb 未验证。
+
+回滚：撤销本次 PyTools 提交可回滚状态记录；共享 sidecar 提交是 main 协调的公共修复，保留其历史提交，不单独回退。
+
+【组件版本】：不升级。

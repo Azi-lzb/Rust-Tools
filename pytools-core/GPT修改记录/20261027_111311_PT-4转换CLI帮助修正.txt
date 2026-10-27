@@ -1,0 +1,26 @@
+时间：2026-10-27 11:13（Asia/Shanghai）
+执行者：Codex
+修改前 commit：cccbdee
+修改后 commit：待提交
+WIP：修改前当前 codex/pytools-menu-entry 工作树干净。
+
+【组件版本】不升级（修正 CLI 帮助文本）
+
+目的：
+转换实现已接受 --engine com，但 pytools --help 未列出该选项；更正帮助，便于明确选择 WPS/Office COM。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：Excel、Word 和单文件转换引擎选项增加 com。
+- pytools-core/tests/conversion_menu_cli.rs：断言三条帮助项准确列出 com。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml（通过）。
+- cargo test --offline --locked -p pytools-core --test conversion_menu_cli native_conversion_help_lists_legacy_epoch_formats -j 1（1/1 通过）。
+- 同一工作阶段已通过的实际 XLS/DOC 转换菜单均使用 Windows auto→WPS COM，分别输出成功 1、失败 0；内容检查见 20261027_110759_PT-4-2_4-3转换冒烟.txt。
+
+未执行项/问题：
+- 未重跑完整转换测试组或 workspace 测试。
+- 不改变引擎路由、默认值或业务逻辑；ET 正向仍未验证。
+
+回滚：
+- 回退上述帮助字符串、对应断言和本记录即可。未修改共享 crate、Cargo.lock、源 Python 或其他工作树。

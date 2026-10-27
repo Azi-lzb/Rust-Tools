@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.institution_normalize_preservation",
+  "before": "institution_normalize.xlsx",
+  "after": "pytools-institution-normalize-probe.xlsx",
+  "status": "保留",
+  "matched_sheets": 4,
+  "total_sheets": 4,
+  "failures": [],
+  "checked": [
+    "sheet order and visibility",
+    "cell styles",
+    "comments and merged ranges",
+    "row heights and hidden state",
+    "column widths and hidden state",
+    "page setup, print area, centering, and header/footer"
+  ]
+}

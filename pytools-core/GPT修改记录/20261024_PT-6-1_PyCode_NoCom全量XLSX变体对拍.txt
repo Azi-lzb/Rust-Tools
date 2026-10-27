@@ -1,0 +1,15 @@
+PT-6-1 按使用区域汇总：PyCode/NoComPyTools 全量 XLSX 变体对拍
+
+开始时确认当前 checkout 为 `pytools-dev` worktree，分支为 `pytools-dev`。原 HEAD 为 `caa4b67`；工作树中已有本轮对拍脚本和机器报告 WIP。进行期间 main 协调的共享提交 `757de31 fix(excel-editor): support formula-copy worker batch` 已同步到当前分支，本记录未修改该共享代码。仅修改 `pytools-core/**`；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。原 Python 项目和 XLSX 样本保持只读。
+
+变更文件：
+- `pytools-core/probe/compare_nocom_summary_assets.py`：执行原 PyCode 与 NoComPyTools 使用区域汇总真实入口的分批投影比较，输出批次级精确/差异计数和汇总行数差值。
+- `pytools-core/probe/reports/summary_used_range_nocom_assets_20261024.json`：记录全量对拍机器结果，不保存工作簿名称、值、路径或哈希。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 NoCom 行为待确认口径并登记 70 份真实 XLSX 的比较结果。
+- 本记录：留存本次修改范围、结果及未执行项。
+
+验证：在 Windows Python 3.12.10 中运行对拍脚本，递归处理原项目 xlsx/ 下 70 份 XLSX，按每批最多 3 份共执行 24 批。PyCode/NoComPyTools 分别使用 openpyxl 3.1.5；NoCom 环境另有 python-calamine 0.9.0。24 批全部产生输出，12 批相同、12 批不同；一致批次包含 34 份输入，差异批次包含 36 份输入，比较粒度为批次而非单个工作簿；失败和缺失输出均为 0。汇总行数分别为 1,260,077 与 1,258,014，差值为 2,063。源文件大小和修改时间前后未变。
+
+本次仅验证两个原 Python 变体的行为差异，没有修改 Rust 业务实现，因而未重跑 Rust 测试或 Rust CLI。既有 PT-6-1 PyCode/Rust 对拍记录仍按各自报告范围解释；本报告不能替代 PyCode/Rust 对拍。NoCom 差异尚未确认是否纳入产品范围，不据此改变生产基线。麒麟 V10/UOS V20 实机、deb 和最终离线交付未验证。
+
+回滚：仅回退本记录所列四个 `pytools-core/**` 文件；不要回退 main 协调的 `757de31`，也不要改动只读源项目。

@@ -1,0 +1,28 @@
+时间：2026-10-24 02:23（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：031796d（与 origin/pytools-dev 同步）；修改后 commit：b56d896。
+WIP 状态：恢复上轮 PT-6-1 真实样本对拍 WIP，未覆盖已有修改；本轮开始时有 `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/probe/compare_summary_tools.py` 修改及真实样本 JSON 报告。已 fetch origin/main，main 仍为当前分支祖先，没有新的公共 crate、规则或目标文件变化。本轮只改 pytools-core/**；`DEVELOPMENT_GOAL.md`、AGENTS、Rules、Audit、共享 crates、根 Cargo 配置及 Cargo.lock 未改。原 Python 项目和样本保持只读。
+
+目的：将 PT-6-1 `summary-used-range` 的原项目真实 XLSX 对拍纳入可重复 probe，验证已实现 Rust 业务入口在实际 PyCode 工作簿上的输出语义。
+
+修改文件：
+- `pytools-core/probe/compare_summary_tools.py`：新增真实样本对拍步骤，读取原项目 `xlsx/2.报表不分口径.xlsx`，分别调用 PyCode `run_summary_by_usedrange` 与 Rust `summary-used-range` CLI；比较完整投影并验证源输入前后 SHA-256 相同；输出按日期命名、仅含统计和比较状态的 JSON 报告，输出工作簿保留在系统临时目录。
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261024.json`：记录本次真实样本结果，不含单元格值或输出工作簿。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：由本轮完整 probe 更新的合成 PT-6-1/PT-6-2 结果与阶段计时。
+- `pytools-core/MIGRATION_INVENTORY.md`：补入一份真实 XLSX、15 个工作表、740 条汇总结果及精确对拍状态，并明确该样本不代表格式矩阵/生产路由已验收。
+- 本修改记录。
+
+逻辑和数据流：只读真实 XLSX → PyCode 汇总基线；同一输入 → Rust CLI `summary-used-range`（Calamine 读取、Rust 汇总、rust_xlsxwriter 新建 XLSX）→ 系统临时输出 → Python probe 独立读取并对比值/类型、已填充样式、工作表名/尺寸、冻结窗格/表头以及公式、合并、定义名称和页面属性。未改变 Rust 生产逻辑、配置或 VBA 处理行为。
+
+验证与对拍：
+- `python pytools-core/probe/compare_summary_tools.py`：通过。两个合成输入（XLSX/XLSM）19 条结果和既有 PT-6-2 测试通过；7 种受支持错误值回归通过。真实源项目 XLSX 经 PyCode 与实际 Rust CLI 输出 740 条结果，值/类型、非空样式、工作表名与尺寸、冻结窗格/表头、公式/合并/名称/页面属性完全一致；输出维度均为 `汇总` 741×36。输入前后 SHA-256 相同；两份输出在临时目录，报告无单元格内容。
+- `wsl -e sh -lc "cd /mnt/c/Users/AZI/Desktop/VibeCode/pytools-dev && cargo test --offline --locked -p pytools-core summary_used_range"`：通过，PT-6-1 CLI 错误值/未知错误/无读取器 3/3；编译产生既有弃用 API 与未使用导入警告。由于 Windows 原生环境未安装 cargo，本轮按既有 probe 路径在 WSL 执行 Rust CLI 与定向测试。
+- `git diff --check`：通过。
+
+对拍差异：真实样本 PyCode/Rust 未发现差异。NoComPyTools 与 PyCode 的既有合成差异继续见机器报告，不据此扩展 PyTools 生产契约。
+
+未执行项及限制：未运行全 crate/workspace 测试；全库测试既有缺失夹具问题按前序记录处理。本轮没有 Windows 原生 Rust 工具链；样本仅一份普通 XLSX，真实 VBA XLSM、XLS/XLSB、麒麟/UOS、glibc 2.28、deb 未验证；峰值 RSS 未测；普通用户/开发者双视图日志未完成。该对拍不登记 Calamine/rust_xlsxwriter 的生产默认能力；PT-6-1 整体验收仍未完成。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`；源 Python 文件及真实样本均未复制或修改。
+【组件版本】：不升级，当前 0.1.0。

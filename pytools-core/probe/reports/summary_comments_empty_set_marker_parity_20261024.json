@@ -1,0 +1,17 @@
+{
+  "feature_id": "PT-6-2",
+  "status": "passed_python_rust_cli_parity",
+  "scenario": "empty set() comment is ignored; non-empty column markers remain ordered",
+  "comparison": "exact full workbook projection, including values, types, styles, dimensions, freeze panes, and page settings",
+  "rows": 2,
+  "columns": 5,
+  "header_contract": "duplicate column names receive _2 suffix and no blank set column is added",
+  "template_and_source_unchanged": true,
+  "rust_runtime": {
+    "host": "Windows native MSVC x86_64-pc-windows-msvc",
+    "entrypoint": "pytools summary-comments",
+    "reader_engine": "calamine",
+    "writer_engine": "rust_xlsxwriter"
+  },
+  "python_runtime": "win32 Python 3.12"
+}

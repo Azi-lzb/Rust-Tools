@@ -1,0 +1,21 @@
+时间：2026-10-24 14:32:47 中国标准时间
+执行者：Codex（pytools-dev）
+修改前 commit：94d1498；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。修改前无 WIP 文件。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、Rules、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+目的：修复 PT-6-1 错误值 CLI 集成测试在 Windows 并行运行时偶发输出路径已存在的问题。原测试目录名只依赖系统时间与进程号；改为进程内原子序号并通过 create_dir 原子预留目录，降低并行测试共享临时目录的风险。未改生产业务逻辑、CLI 命令、配置或 VBA 行为。
+
+修改文件：
+- pytools-core/tests/summary_used_range_error.rs：让集成测试临时目录在并行执行时唯一且预先创建。
+- 本修改记录。
+
+PT-6-1 当前 HEAD 验证：
+- Windows 原生：`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过；`cargo test --offline --locked -p pytools-core --test summary_used_range_error` 并行 5/5 通过。修改前同一并行命令曾 4/5，其中错误值用例遇到临时输出路径已存在；该用例单独运行 1/1、串行全量 5/5 通过。
+- WSL musl：`cargo test --offline --locked -p pytools-core --test summary_used_range_error --target x86_64-unknown-linux-musl` 5/5 通过。
+- 当前 HEAD 的 musl release CLI 处理原 PyTools 备份目录最大 XLSX，与只读 PyCode 完整工作簿投影在 user/developer/off 三视图均精确一致（每个输出 39,172 行，含标题）。user/developer 运行历史成功，各 18 条事件；developer stderr 事件流与历史 JSON 一致；off 未生成历史。实际引擎为 Calamine、`excel-reader::read_xlsx_worksheet_extents`、rust_xlsxwriter；输入大小和修改时间未变化。
+- glibc 2.28 release 本轮未重建：WSL 缺少 Zig，`cargo zigbuild` 无法启动。既有 glibc 2.28 证据不外推为当前 HEAD 的新构建或目标发行版验收。
+
+未执行项与已知问题：未运行 pytools-core 全量测试；未在麒麟 V10/UOS V20 实机安装 deb 或验证离线交付；原 PyTools 含 VBA 真实业务 XLSM 样本仍缺。WSL musl 不替代目标系统验收。测试输出使用临时目录；未将源工作簿、输出工作簿或凭据加入仓库。
+
+删除清单：无。
+回滚：可通过 `git revert <本轮提交>` 撤回测试目录隔离修复及本记录。
+【组件版本】：不升级，本轮只修复测试临时目录隔离。

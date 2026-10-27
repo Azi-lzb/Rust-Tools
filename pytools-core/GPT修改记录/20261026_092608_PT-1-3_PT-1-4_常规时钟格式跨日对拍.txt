@@ -1,0 +1,34 @@
+时间：2026-10-26 09:26:08（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前提交：bf6608f（pytools-dev，与 origin/pytools-dev 同步）
+修改前 WIP：`pytools-core/MIGRATION_INVENTORY.md` 已修改；交接文件、PT-4-2 失败记录和 PT-6-2 缺口记录未跟踪。本次未修改、暂存或覆盖这些既有 WIP。
+
+## 目的
+
+补充 PT-1-3/PT-1-4 普通时钟格式 `h:mm`、`mm:ss` 的日内时间及舍入到次日边界对拍。已有覆盖主要使用 `h:mm:ss`；本次验证不同显示格式是否影响 PyCode 的时间/日期类型投影。
+
+## 修改文件
+
+- `pytools-core/tests/timeline_menu_cli.rs`：新增 `wide_summary_cli_projects_clock_formats_across_midnight_rounding`，在 `wide-summary` 和 `wide-summary-row-suffix` 两个真实 CLI 命令中覆盖 `h:mm`、`mm:ss` 格式与序列 0.5、0.999999999，断言日内值为 `12:00:00`、舍入至次日的值为序列 1，并确认源工作簿未改变。
+- `pytools-core/probe/compare_wide_summary.py`：为时钟格式合成夹具增加格式参数，新增 `--clock-time-formats` 真实菜单对拍模式。
+- `pytools-core/probe/reports/wide_summary_clock_format_parity_20261026.json`：记录完整机器对拍结果。
+- 本记录：留存本次修改与验证范围。
+
+## 验证
+
+- Windows 原生定向 Rust CLI 回归：`cargo test --offline --locked -q -p pytools-core --test timeline_menu_cli wide_summary_cli_projects_clock_formats_across_midnight_rounding -j1`，1/1 通过。
+- Windows 原生 `timeline_menu_cli` 集成测试目标：23/23 通过；`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 与 `git diff --check` 通过。
+- Python/Rust 实际菜单对拍使用只读原项目 `.venv`（Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5）和 Windows 原生 Rust CLI。`h:mm:ss`、`h:mm`、`mm:ss` × 1900/1904 日期系统 × 两种行头模式共 12 组；汇总及新目标追加的值、类型、有效样式全部精确一致，源工作簿与配置未变。
+- 本次没有生产 Rust 业务逻辑修改；新增证据仍是合成数据。
+
+## 未执行项与已知限制
+
+- 暂无脱敏真实宽表样本，PT-1-3/PT-1-4 整体仍未真实业务验收。
+- 本次未覆盖既有目标替换、其他未列时钟格式、麒麟 V10/UOS V20、真实 glibc 2.28 和离线 deb；本次证据不改变生产 capability 状态。
+- 初次使用系统 Python 启动 probe 时发现缺少 pandas；随后改用已有只读源项目 `.venv` 完成对拍，没有安装依赖或修改原项目。
+
+## 版本与回滚
+
+- 【组件版本】不升级（仅增加测试、probe 和验证证据）。
+- 删除清单：无。
+- 回滚：撤销本项对应提交中的测试、probe、机器报告和记录；保留当前工作树中既有清单、交接及其他阻塞记录 WIP。

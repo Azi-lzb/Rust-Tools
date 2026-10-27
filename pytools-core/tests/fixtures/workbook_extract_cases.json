@@ -1,0 +1,41 @@
+{
+  "filename": "季度报表_县区报表_2024-12-31.xlsx",
+  "sheet_name": "数据",
+  "sheet": [
+    ["报告日期 2024-12-31", null, null, null],
+    [null, "指标", null, "其他"],
+    [null, "余额", "余额", "金额"],
+    ["旧村名", 12, 13.5, 100],
+    ["旧村名", 14, 15, 200],
+    ["合计", 26, 28.5, 300]
+  ],
+  "merges": ["B2:C2"],
+  "rule": {
+    "name": "规则1",
+    "wb_keyword": "县区;报表",
+    "sheet_keyword": "数据",
+    "row_header_col": 1,
+    "row_header_cols": [1],
+    "row_header_col_specified": true,
+    "col_header_rows": [2, 3],
+    "required_col_headers": ["余额", "金额"],
+    "required_row_headers": ["旧村名"],
+    "data_row_start": 4,
+    "data_row_end": 6,
+    "data_col_start": 2,
+    "data_col_end": 4,
+    "skip_keywords": ["合计"]
+  },
+  "path_maps": [
+    {
+      "name": "村名统一",
+      "applicable_rule": "规则1",
+      "wb_keyword": "季度报表",
+      "sheet_keyword": "数据",
+      "target": "行头",
+      "match_mode": "包含",
+      "original": "旧村名",
+      "standard": "新村名"
+    }
+  ]
+}

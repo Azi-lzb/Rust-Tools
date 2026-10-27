@@ -1,0 +1,36 @@
+时间：2026-10-25 22:19（Asia/Shanghai）
+执行者：Codex
+分支：pytools-dev
+修改前 HEAD：1393d94（`feat(pytools): add print menu run views`）
+修改后提交：随本记录所在 Git 提交确认。
+
+## WIP 保护
+
+修改前确认 `pytools-dev` 与 `origin/pytools-dev` 本地跟踪引用同步（ahead/behind 0）。工作树已有 PT-4-2 迁移清单尾部、其独立真实 XLS 转换失败记录，以及未跟踪的 ZCode handoff；这些内容均不属于本次 PT-5 提交，保留原样。未修改共享 crates、根 Cargo 文件、DEVELOPMENT_GOAL.md、Audit 业务或只读 Python 源项目。
+
+## 目的
+
+补齐 PT-5-1 初始化/修复与 PT-5-2 查看配置真实菜单入口的 user/developer/off 日志：记录业务状态、统计、阶段耗时及实际执行组件/引擎，开发者历史不落配置路径或原始单元格内容，off 不写运行历史。
+
+## 修改文件
+
+- `pytools-core/src/bin/pytools.rs`：PT-5-1/5-2 菜单动作摘要、阶段记录、脱敏 developer JSON 历史、off 视图静默及失败状态。候选修改记录使用 `EditExecutionReport.engine`，不从 JSON 读取。
+- `pytools-core/tests/config_menu_cli.rs`：验证修复计划历史、新配置写入引擎与查看计数、off 行为、无效工作簿失败状态和历史脱敏。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录本次运行日志验证及仍未验收边界；原有 PT-4-2 EOF WIP 仍保持未暂存。
+- 本记录。
+
+## 验证
+
+- Windows 原生首次定向 Cargo 编译发现 `EditExecutionReport` 无 JSON `.get` 方法；改用现有 `engine` 字段后复验通过。
+- `cargo test --offline --locked -p pytools-core --test config_menu_cli --test plan_file_output_toggle -j 1 -q`：配置菜单 5/5、计划文件开关 1/1 通过。
+- `cargo fmt --check --manifest-path pytools-core/Cargo.toml`：通过。
+- `git diff --check`：通过（Git 提示现有工作树 LF 将按 core.autocrlf 转成 CRLF）。
+- Windows CLI 以只读 `tests/fixtures/vba_config/VbaV2.4.2.xlsm` 走菜单 5-2；off/user 输出的工作表列表投影相同，developer 历史记录 Calamine、14 张表和 3,996 行，无夹具路径。VBA 版全局页无法按 PyCode 格式载入，状态 `partial`/`global_config_refresh_failed`，与既有清单边界相同。无源文件修改。
+- Windows debug CLI 预热后每视图 3 次总进程墙钟中位数：off 20.606 s、user 20.326 s、developer 8.275 s。off/user 数据路径相同且差值在该小样本噪声范围内；developer 的输出/配置摘要路径不同，不作同口径对比。历史运行文件与空临时目录已清理。
+- 本轮没有重跑 PyCode 基线或 Python/Rust 配置业务对拍；没有运行 ExcelModifier 候选、真实用户配置修改、完整 workspace 测试、Linux、麒麟/UOS 或 deb 验收。本次只增强菜单日志，没有改变配置业务计算或 Excel 输出契约。PT-5 生产修复 capability 仍未验证。
+
+## 组件版本、删除清单与回滚
+
+- 【组件版本】不升级；不改变配置模式、产品数据或 Excel 输出合同。
+- 删除清单：无。仅移除本轮性能采样生成的四条临时运行历史和空临时目录。
+- 回滚：撤销本记录所在独立 PT-5 日志提交即可；不得触碰之前已有的 PT-4-2 WIP 与 ZCode handoff。

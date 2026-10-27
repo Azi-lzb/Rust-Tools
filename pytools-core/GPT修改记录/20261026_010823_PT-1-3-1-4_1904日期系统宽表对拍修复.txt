@@ -1,0 +1,37 @@
+时间：2026-10-26 01:13:04
+执行者：Codex
+修改前 commit：c81c1b2（本轮 PT-6-2 时长表头修复已提交并推送）
+修改后 commit：本记录所在的 PT-1-3/1-4 功能提交（SHA 见当前 Git 历史）
+WIP：保留交接报告、PT-4-2 XLS 转换失败记录、PT-6-2 真实样本缺口记录，以及 MIGRATION_INVENTORY.md 中其他未提交状态更新。
+
+【目的】
+修复 PT-1-3/1-4 宽表汇总中 1904 日期系统工作簿的日历日期值按 1900 epoch 写入输出而偏移的问题。只对包含 datetime_serial 值的 1904 OOXML 工作簿调用现有 excel-reader::read_value_columns_with_iso_dates；Calamine 返回的 DateTimeIso 按工作表和单元格坐标覆盖宽表业务值。仅覆盖 serial >= 1 的 datetime_serial，避免将可能的时间小数值误重分类；普通单元格和 Calamine 未识别为日历日期的值不变。不修改共享 crate。
+
+【修改文件】
+- pytools-core/src/timeline_ops.rs：为 PT-1-3/1-4 接入定点 1904 日历日期投影；记录实际 Calamine 引擎、处理数量及阶段耗时；投影失败按全局 error_policy 失败或跳过该输入，不静默使用未归一化结果。
+- pytools-core/probe/compare_wide_summary.py：加入仅运行 1904 日历日期业务对拍的选项，调用真实 PyTools 菜单入口并检查开发者运行历史。
+- pytools-core/probe/reports/wide_summary_1904_date_parity_20261026.json：记录合成输入结果；不含输入文件名或单元格值。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-1-3/1-4 日期 epoch 缺口及合成验证状态。
+- 本记录：记录本次实现和验证。
+
+【验证】
+- Windows 原生 cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --lib wide_date_projection_does_not_reclassify_subday_serials -j 1：1/1 通过。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1：14/14 通过。
+- 使用 PyTools Python 3.12.10（openpyxl 3.1.5、pandas 2.2.3）和 Windows MSVC Rust CLI 运行 `compare_wide_summary.py --1904-date-only`：通过。1904 日历日期值在 Python/Rust 完整输出工作簿及目标追加候选中的投影精确一致；实际菜单历史包含 Calamine 日期投影阶段和耗时；源工作簿与配置未变。
+- git diff --check：通过。
+
+【未执行项与已知问题】
+- 本次输入为合成 XLSX；用户目前没有可提供的脱敏真实宽表样本，故 PT-1-3/1-4 仍未完成真实样本业务验收。
+- 本次只验证 >=1 的日期格式日历日期值。小于 1 的 serial（包括 1904 epoch 起点）可能是时间值，故保持原值且尚未按格式区分；时长/时间格式、真实样本、生产 ExcelModifier capability、目标 Linux、麒麟 V10/UOS V20 及离线 deb 未验证。
+- 构建输出中的 umya-spreadsheet 弃用 API 和 PyTools unused-import 警告为既有警告，本次未处理。
+
+【删除清单】
+无。
+
+【回滚提示】
+若后续发现问题，只回滚本次 PT-1-3/1-4 功能提交；不要删除或覆盖其他未提交工作。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

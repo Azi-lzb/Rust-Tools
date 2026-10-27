@@ -1,0 +1,29 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：7e31993；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。`origin/main` 为 473c75a。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、规则、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。
+
+目的：修复 PT-6-2 按批注汇总新工作簿页边距与原 PyCode 输出默认值不一致的问题，并让回归 probe 比较完整页面设置。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：批注汇总新工作表写入与 openpyxl 新工作簿一致的默认页边距。
+- `pytools-core/probe/compare_summary_tools.py`：标准和重复标记对拍不再禁用页面设置字段。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：记录完整页面设置对拍及模板范围。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 PT-6-2 差异修复和无真实模板边界。
+- 本修改记录。
+
+真实入口与结果：实际运行 Windows GNU 目标 `pytools.exe summary-comments`，由 Windows PowerShell 启动；分别处理标准批注模板和重复行区域标记模板，各含 2 个合成源工作簿。两场景均输出 21 行，PyCode/Rust 完整工作簿投影完全一致。Rust 先前输出边距为 0.7/0.7/0.75/0.75/0.3/0.3；PyCode `openpyxl.Workbook()` 默认是左/右 0.75、上/下 1.0、页眉/页脚 0.5。Rust 已显式设置后一组值，输出与 PyCode 一致。样式、值/类型、工作表维度、冻结窗格、页面设置均比较通过。
+
+真实样本范围：扫描原项目中 72 份 XLSX/XLSM；含批注的两个配置工作簿没有“行区域N/列区域N/set(...)”标记，因此没有可供 PT-6-2 汇总的真实业务模板。本轮使用 probe 中既有合成模板；真实业务模板对拍仍待样本提供。
+
+验证：
+- `cargo fmt -p pytools-core -- --check`（WSL）：通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools --target x86_64-pc-windows-gnu`（WSL/MinGW）：通过。
+- Windows PowerShell 实际运行标准/重复标记两场景 `summary-comments` CLI，完整 Excel 投影包括页面设置：2/2 场景精确一致。
+- `python -m json.tool pytools-core/probe/reports/summary_used_range_parity_20261024.json`：通过。
+- `git diff --check`：通过。
+
+差异与边界：提交前仅确认页边距差异；修复后两场景完整投影无差异。无原项目 PT-6-2 标记模板；Windows 本机 Cargo、麒麟/UOS、deb 和目标 glibc 验收未执行。本轮未更改 PT-6-1 行为。
+
+删除文件：无；对拍输入/输出位于系统临时目录。
+回滚：可用 `git revert <本轮提交>` 撤回本轮修复和证据。
+【组件版本】：不升级，当前 0.1.0。

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-4-2",
+  "operation": "C01 native Excel .xls to .xlsx value-only conversion",
+  "platform": "Windows 11 x64",
+  "data_owner": "rust",
+  "engine": ["calamine", "rust_xlsxwriter"],
+  "status": "unverified",
+  "sample": {
+    "kind": "real .xls copied to a temporary directory",
+    "committed": false,
+    "source_modified": false
+  },
+  "previous_candidate_diagnostic": {
+    "source_value_coordinates": 18080,
+    "reopened_output_value_coordinates": 15957,
+    "source_only_coordinates": 2123,
+    "unexpected_output_coordinates": 0,
+    "source_only_value_type": "string",
+    "source_only_value_is_empty": true,
+    "candidate_accepted": false
+  },
+  "current_cli_recheck": {
+    "entrypoint": "pytools convert-excel --engine native",
+    "exit_code": 2,
+    "converted": 0,
+    "failed": 1,
+    "output_published": false,
+    "failure_class": "native C01 cannot preserve an explicitly stored empty-text cell; external fidelity engine required"
+  },
+  "tests": [
+    {
+      "command": "cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1",
+      "result": "passed",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1",
+      "result": "passed",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "command": "cargo fmt --manifest-path pytools-core/Cargo.toml --package pytools-core -- --check",
+      "result": "passed"
+    }
+  ],
+  "python_or_fidelity_engine_parity": "not run",
+  "preservation": {
+    "values_and_formula_text": "candidate rejected before output because coordinates would be lost",
+    "formatting_and_other_C01_dropped_objects": "not evaluated for this rejected candidate",
+    "formula_recalculation": "not run"
+  },
+  "known_issue": "The shared read/write path does not round-trip the observed explicitly stored empty-text cells. PyTools now fails closed before creating a candidate. Shared engine coordination is pending; no production capability or default route was changed."
+}

@@ -1,0 +1,21 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：735ce3e
+修改后 commit：待提交
+修改前 WIP：工作树仅有本次宽表/追加拆分修改；未发现 WIP 文件。
+
+目的：落实 V2 需求中“生成中间宽表、人工检查、单独去重追加”的步骤边界。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：`wide-summary` 只生成中间工作簿；移除按时序配置生成目标追加计划及 1-1 菜单的目标确认/提交分支和对应运行事件。
+- pytools-core/tests/timeline_menu_cli.rs：把历史目标不变、无追加计划/确认事件、中间簿数据及负日期序列保留加入真实菜单回归。
+- pytools-core/MIGRATION_INVENTORY.md：记录新合同及仍待真实验收状态。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`cargo check --offline --locked -p pytools-core --bin pytools -j 1` 通过；`timeline_menu_cli` 25/25、`dedup_menu_cli` 7/7 通过。dedup 菜单测试继续覆盖独立的 2-3 新目标追加与 capability 门控的既有目标提交。
+
+未执行项/已知问题：测试使用合成工作簿；本轮未运行 Python/Rust 对拍、真实业务样本、Windows 人工验收或 Linux/deb 验收。PT-1-1 状态不提升，仍待 Windows 真实验收。
+
+删除清单：无。
+回滚提示：还原 `pytools.rs`/`timeline_menu_cli.rs` 路由，并撤销迁移清单段落和本记录。
+【组件版本】pytools-core 0.1.0，不升级。

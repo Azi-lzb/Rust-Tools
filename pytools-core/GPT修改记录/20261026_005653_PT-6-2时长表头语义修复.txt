@@ -1,0 +1,38 @@
+时间：2026-10-26 00:56:53
+执行者：Codex
+修改前 commit：8bdd2e8324f9af8d0218bfd3d197475719d795ea
+修改后 commit：待本轮功能提交
+WIP：保留既有 PT-4-2 失败记录、PT-6-2 缺口记录、交接报告及此前迁移清单/探针/代码修改；仅继续 PT-6-2 时长表头差异。
+
+【目的】
+修复 PT-6-2 合成模板中 [h]:mm:ss.000 数值表头被当作日历日期输出、与 PyCode timedelta 文本不一致的问题。共享 excel-reader 的值 API 不暴露 number format；本次只在 pytools-core 的批注模板表头路径通过 namespace-aware OOXML 适配器补读工作簿样式关系、cellXfs 和工作表单元格样式索引，不改共享 crate、不替代 Calamine 的值读取。
+
+【修改文件】
+- pytools-core/src/summary_ops.rs：为累计时长格式单元格构建局部地址集合；按 openpyxl 3.1.5 的 elapsed-format 识别和 timedelta 微秒/毫秒 ties-to-even 规则格式化数值表头；保留公式表头及其他值的既有转换路径；记录实际模板时长格式元数据阶段。
+- pytools-core/probe/compare_summary_comments_template_header.py：将合成 [h]:mm:ss.000 时长表头纳入 Python/Rust CLI 工作簿投影对拍。
+- pytools-core/probe/reports/summary_comments_template_header_parity_20261026.json：保存 Windows 合成对拍结果，报告不含输入文件名或单元格数据。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-2 当前合成验证与未完成真实样本验收状态。
+- 本记录：记录本次代码和验证。
+
+【验证】
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --lib comment_region_tests -j 1：7/7 通过。
+- cargo test --offline --locked -p pytools-core --test summary_comments_cli -j 1：6/6 通过。
+- cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1：4/4 通过。
+- cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- 在 PYTHONDONTWRITEBYTECODE=1 下，以原 PyCode 只读基线、openpyxl 3.1.5 和 Windows MSVC Rust CLI 运行 compare_summary_comments_template_header.py：通过；1904 date-system 合成模板的输出值/类型、工作表、维度、样式、冻结窗格、公式、定义名称和页面属性投影精确一致，源合成输入未变。
+
+【未执行项与已知问题】
+- 用户当前没有可提供的脱敏真实 PT-6-2 批注模板与匹配源工作簿；本次仅为合成契约对拍，PT-6-2 真实业务验收仍未完成。
+- .xlsm 真实模板、生产 ExcelModifier capability、Linux/glibc 2.28、麒麟 V10/UOS V20 和离线 deb 未验证。
+- 公共 reader 尚未提供 number format 元数据；本次 adapter 仅限定于 PT-6-2 模板表头。不修改共享能力。
+- 编译日志存在既有 umya-spreadsheet 弃用 API 与 PyTools unused-import 警告，本次未处理。
+
+【删除清单】
+无。
+
+【回滚提示】
+代码修改随功能提交。若需回滚，只撤销本次功能提交；不要删除或覆盖此前保留的 WIP 文件。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

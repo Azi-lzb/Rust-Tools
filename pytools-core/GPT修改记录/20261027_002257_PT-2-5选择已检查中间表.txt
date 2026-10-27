@@ -1,0 +1,23 @@
+时间：2026-10-27 00:22 +08:00
+执行者：Codex
+修改前 commit：4bae5d7
+修改后 commit：本记录随 PT-2-5 菜单输入修复提交
+修改前 WIP：上一项 PT-2-5 严格表头修复已提交并推送；随后工作树仅有本项菜单和测试修改。原 Python 项目只读。
+
+目的：落实新版 V2 PT-2-5 独立读取用户已检查的 PT-1-1 中间表，不让菜单追加隐式沿用配置中的旧来源工作簿。
+
+修改/新增文件：
+- `pytools-core/src/bin/pytools.rs`：菜单 2→3 增加单选 `.xlsx` 中间表文件选择；启用任务临时使用所选来源，其余配置映射保持原样。取消、错误扩展名、多个路径或不存在文件时不执行追加；直接 `dedup-append-plan` CLI 保持兼容。
+- `pytools-core/tests/dedup_menu_cli.rs`：更新交互输入；新增断言证明配置来源与用户选取工作簿不同时，菜单结果来自所选中间表，源文件均未改变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 V2 输入链和验证范围。
+- `pytools-core/GPT修改记录/20261027_002257_PT-2-5选择已检查中间表.txt`：本记录。
+
+逻辑/配置/VBA 影响：不改配置字段或配置文件；保留源 Sheet、去重键、目标路径及 Sheet、能力门控与确认提交逻辑。不把 PT-1-1 和 PT-2-5 自动串联；输入只读取，不修改。
+
+测试：Windows 原生 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --test dedup_menu_cli --test dedup_append_execution -j 1`（14/14）、`git diff --check` 通过。测试及构建产物位于 F 盘专用目录。
+
+未执行项/已知问题：无真实用户中间表；未执行 Python/Rust 真实样本对拍、Excel 手工打开、Linux/glibc 2.28/麒麟/UOS 或离线 deb 验收。PT-2-5 整体仍待 Windows 真实验收。
+
+删除清单：无。
+回滚提示：回退本次功能提交可恢复菜单从配置源路径规划的行为；不影响 PT-2-5 计划构造、执行器或 PT-1-1。
+【组件版本】pytools-core 0.1.0，不升级。

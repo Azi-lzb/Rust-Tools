@@ -1,0 +1,47 @@
+【时间】2026-10-23 02:25:30（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】不可用；workspace 尚未创建首次提交
+【修改后 commit】未提交
+【WIP 情况】修改前检查 workspace Git 状态：当前文件均为未跟踪 WIP。仅增加 4-8 候选及本次对拍资料/状态文档，没有清理或覆盖其他文件。原始 py_statistics_tools 项目只读。
+
+【目的】
+增量迁移 pytools 操作 4-8“局部文件名映射重命名”。按 Python `run_batch_rename_local_map_48` 对拍，保持该功能为候选，不接入菜单/CLI，也不改变生产默认路由。
+
+【修改文件】
+- `pytools-core/src/local_filename_map.rs`：新增 4-8 候选 API。通过共享 excel-reader/Calamine 读取“重命名配置”表头和映射；按规则行序替换文件名 stem、保留末尾扩展名；拒绝空文件名/路径分隔符目标；用不覆盖的硬链接预留改名目标。
+- `pytools-core/src/lib.rs`：导出 `local_filename_map` 模块。
+- `pytools-core/src/file_sort_prefix.rs`：将已有 `move_to_available_path` helper 改为 `pub(crate)`，由新候选复用安全改名逻辑。
+- `pytools-core/tests/fixtures/local_filename_map_48_cases.json`：新增合成配置和文件案例。
+- `pytools-core/tests/local_filename_map_48_parity.rs`：增加 Python 统计/目录集合、文件字节、碰撞目标与空映射错误对拍。
+- `pytools-core/probe/local_filename_map_48_baseline.py`：新增只读 Python 基线生成器，数据与临时文件只写 workspace probe/temp。
+- `pytools-core/probe/reports/local_filename_map_48_python_baseline.json`、`local_filename_map_48_parity.json`：保存源文件 SHA-256、运行统计、文件哈希、目录集合、范围和未验证项。
+- `pytools-core/MIGRATION_INVENTORY.md`、`PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：登记 4-8 候选、报告、测试和限制。
+- 本记录。
+
+【行为与迁移边界】
+- Python 基线文件：`PyCode/core/convert_33_34_35_37.py`，SHA-256：`F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`。
+- 合成场景有 10 个输入路径、6 条映射。Python 与 Rust 均为改名 5、跳过 5，最终文件/目录名称集合一致。
+- 案例覆盖按顺序链式替换、中文片段、空替换目标、任意扩展名、多个来源竞争同一目标、编号后缀、未命中、缺失路径、目录、目标包含路径分隔符及超长目标名失败。
+- 改名只变更文件系统目录项，不打开或保存输入文件。Rust 对拍确认输入字节保持，占用目标 `same_cc.xlsx` 未覆盖。
+- API 仍是候选，不代表 pytools 4-8 完整迁移或生产可用；没有接入菜单/CLI。
+
+【测试】
+- Python 基线生成器：通过；统计 5/5/6（ok/skip/rules），输入字节摘要在改名后仍可找到。
+- 原始项目只读聚焦测试：`test_rename_local_map_48.py` 与 `test_convert_rename_edges.py`，19 passed；使用 `PYTHONDONTWRITEBYTECODE=1`、`-p no:cacheprovider`。
+- Rust 4-8 integration tests：2 passed；模块纯逻辑测试：2 项。
+- `cargo fmt --all -- --check`：通过。
+- `cargo test -p pytools-core --locked -q`：28 项通过。
+- `cargo test --workspace --locked -q`：47 项通过，doc-tests 0 项。
+- Rust 命令在 WSL Ubuntu 执行。未在 Windows 原生 Rust、麒麟 V10 或统信 UOS V20 环境验证。
+
+【未执行项/已知问题】
+- 未验证真实配置簿、真实用户目录、多进程并发处理、目标平台文件系统和 Linux deb。
+- Linux 非 UTF-8 文件名会显式跳过；数字/日期/错误类型配置值和平台特有非法文件名字符尚未验收。
+- 目标名过长及含路径分隔符都以逐项跳过处理；不同 OS 的底层错误信息不属于对拍契约。
+- 无 Cargo 依赖、版本、产品路由、默认后端或 Python 源项目变化。
+
+【删除清单与回滚提示】
+- 本轮无删除。
+- 回滚时删除 `local_filename_map.rs`、`local_filename_map` 模块导出、专用测试/fixture/baseline/probe 报告和本记录，恢复 `move_to_available_path` 私有可见性，并撤销三份迁移/架构文档中的 4-8 条目。不要删除或改动已验收的 4-6/4-7/4-9/4-10 候选及其报告。
+
+【组件版本】不升级。

@@ -1,0 +1,18 @@
+时间：2026-10-25 03:42（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+修改前 commit：aa4364a（pytools-dev）
+WIP 情况：修改前无未提交文件；本轮生成的 PT-6-1 机器报告为新文件。
+【组件版本】：pytools-core 0.1.0；仅补充验证证据，未升级版本。
+
+目的：继续优先验证 PT-6-1 的原 PyTools 真实 XLSX 输入，并补录 Windows 上运行现有 Rust CLI 的阶段对拍结果；未改业务实现或共同目标文件。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261025.json：13 份只读源 XLSX 的新机器对拍报告，无单元格内容与临时输出。
+- pytools-core/MIGRATION_INVENTORY.md：登记本次结果和未完成验收项。
+- 本记录。
+
+验证：原 PyCode Python 3.12.10/openpyxl 3.1.5 与 Windows 上运行的 `target/debug/pytools.exe` 对 13 份真实 XLSX 分四批执行 `summary-used-range`。96 张工作表、203,580 行完整投影一致，四批开发者事件历史匹配，源输入指纹不变。独立入口成功，报告为 `probe/reports/summary_used_range_real_parity_20261025.json`。
+
+未完成项：整体 probe 的 NoComPyTools 分支因 venv 缺少 `python_calamine` 未运行；未安装该依赖。Windows 原生 Cargo 构建、原项目 VBA 业务 XLSM、麒麟 V10/UOS V20、glibc 2.28、deb、离线交付仍未验收；PT-6-1 状态仍为未完成。
+
+删除清单：无。回滚：回退本次清单与记录提交，并删除对应 20261025 机器报告即可。没有修改源 Python 项目、共享 crates、根 Cargo 文件、Cargo.lock、audit-core 或 DEVELOPMENT_GOAL.md。

@@ -1,0 +1,28 @@
+时间：2026-10-25 06:40 Asia/Shanghai（2026-10-24 22:40 UTC）
+执行者：Codex PyTools migration agent
+分支/工作树：pytools-dev / C:\Users\AZI\Desktop\VibeCode\pytools-dev
+修改前 commit：71e68da
+WIP：修改前工作树干净；无未提交文件。
+
+目的：对齐 PT-6-2 无有效批注区域模板时的 Python 用户错误合同；不把拒绝路径验证当作真实正向模板验收。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：将缺少可用批注区域的错误文本对齐 PyCode。
+- `pytools-core/tests/summary_menu_cli.rs`：增加真实 CLI 错误码、兼容提示及不生成工作簿的回归。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录真实配置簿拒绝路径证据及范围。
+- 新增本记录。
+
+验证结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过。
+- `cargo test --offline --locked -p pytools-core --test summary_menu_cli`：4/4 通过。
+- 原项目只读配置簿作为无区域标记模板，PyCode `run_summary_by_comment` 与 Windows 原生 Rust `summary-comments` CLI 错误文本逐字相同；Rust 退出码 2，未生成输出工作簿，输入簿大小与修改时间未变。
+- `git diff --check` 通过。
+
+未执行项与已知问题：
+- 没有找到合法的真实行/列区域批注模板；PT-6-2 正向真实业务结果仍未验收。
+- Windows 文件选择器手工操作、麒麟 V10/UOS V20、glibc 2.28 与离线 deb 未验证。
+- 本次未运行完整 PyTools 工作区测试，也未登记生产 capability。
+
+【组件版本】不升级；未修改共享 crate、根 manifest、Cargo.lock 或长期目标。
+
+回滚：恢复 `summary_ops.rs` 原英文错误字符串；删除新增 CLI 测试及本记录，移除迁移清单中对应补充段。

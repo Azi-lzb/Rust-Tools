@@ -1,0 +1,24 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：1b2a784cb4452c0794e2ad54e4ba4c99da86ad70；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。`git fetch origin main` 后 `origin/main` 仍为 `473c75a4c93cd4875e37f31c53e567120cb9d040`，本轮未发现新的 DEVELOPMENT_GOAL、AGENTS 或 workspace 规则变更；未修改共享 crate、根 Cargo 文件、Audit 或源 Python 项目。
+
+目的：继续 PT-6-1 的真实业务验证，确认 NoComPyTools 变体在项目锁定环境中的实际输出与 PyCode、Rust CLI 的关系，避免把未确认的变体行为混入 PyCode 生产合同。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261024.json`：补入一份真实 XLSX 的 PyCode/NoComPyTools/Rust 变体对拍结果，不记录源文件名或单元格值。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 NoComPyTools 变体核对状态和 PT-6-1 真实样本差异证据。
+- 本修改记录。
+
+真实入口与数据流：Windows GNU `pytools.exe summary-used-range` 处理原 PyTools 只读 `xlsx/` 中一份真实 XLSX；分别与只读 PyCode `run_summary_by_usedrange` 以及 NoComPyTools `run_summary_by_usedrange` 输出比较完整工作簿投影。Rust 入口实际使用 Calamine、rust_xlsxwriter 和既有 OOXML Patch。
+
+验证结果：
+- PyCode 使用原项目 `.venv` 的 Python 3.12.10/openpyxl 3.1.5；NoComPyTools 使用自身 `.venv` 的 Python 3.12.10/openpyxl 3.1.5/python-calamine 0.9.0。
+- PyCode 与 Rust 完整投影精确一致：7,462 行，输出维度 7,463 × 213（含标题行）；Rust `ooxml_error_cells_patched=1212`，读/写/总耗时为 9,519/10,789/20,312 ms。
+- NoComPyTools 同样输出 7,462 行、维度 7,463 × 213；与 PyCode 的投影差异字段为 rows/styles/types/values，涉及 1,213 个单元格：1,212 个错误类型值变为空值，另有一个空值变为字符串。此差异只适用于这份真实样本，不外推为其他文件或功能合同。
+- 源文件测试前后大小与修改时间相同。输出、运行日志均写在系统临时目录；未输出或保存源单元格内容。
+- 首次探索曾误用全局 Python 的 python-calamine 0.3.1；其结果未纳入报告。报告只记录 NoComPyTools 项目虚拟环境锁定的 0.9.0 结果。
+
+对拍结论与边界：当前 Rust 仍精确匹配已确认的 PyCode 基线。本轮仅识别 NoComPyTools 在该样本上的错误单元格差异，不变更生产业务逻辑，也不判定 NoComPyTools 独有行为的最终范围。其他 NoComPyTools 样本/格式、麒麟 V10/UOS V20 实机、deb 和最终离线交付仍未验收。
+
+回滚：可用 `git revert <本轮提交>` 撤回本轮报告、清单和修改记录更新。
+【组件版本】：不升级，当前 0.1.0。

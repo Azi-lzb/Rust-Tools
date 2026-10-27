@@ -1,0 +1,36 @@
+{
+  "status": "passed_synthetic_parity",
+  "scope": [
+    "5-1 new configuration initialization",
+    "5-2 read-only configuration view"
+  ],
+  "python_init": {
+    "created_sheets": 11,
+    "repaired_sheets": 0
+  },
+  "rust_init": {
+    "created": true,
+    "path": "/mnt/c/Users/AZI/AppData/Local/Temp/pytools-config-admin-11g_gq8d/Rust/config/config.xlsx",
+    "sheets": 11,
+    "message": "new configuration template created; existing files are never overwritten"
+  },
+  "comparison": {
+    "sheet_order": "exact",
+    "cell_values": "exact",
+    "header_comment_text": "exact",
+    "header_comment_author": "exact",
+    "config_view_rows_and_comments": "exact"
+  },
+  "existing_file_protection": "Rust config-init rejected the second invocation; SHA-256 unchanged",
+  "real_source_config_view": {
+    "status": "passed_read_only_projection",
+    "sheets": 12,
+    "sha256_before_after": "e000c784e85b63b4fc19fd45684aa8729dbd032238d78321fdc9fb4c33cee716"
+  },
+  "source_python_sha256": "c6cd86e5275e63845b48db6029c14e09ee3edc2ec30057047999da244a14a0ab",
+  "limitations": [
+    "Initialization parity uses a synthetic new configuration; the real source config was only read for config-view parity and was not modified.",
+    "Config repair is a plan-only operation and its ExcelModifier execution remains unverified.",
+    "Target Linux/deb behavior was not validated."
+  ]
+}

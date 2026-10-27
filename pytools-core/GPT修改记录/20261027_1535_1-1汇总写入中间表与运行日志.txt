@@ -1,0 +1,14 @@
+时间：2026-10-27 15:35:59 +08:00
+执行者：Codex
+修改前 HEAD：1ee903a43b97bf9a2b689d2bae412655518c4d13；分支：codex/pytools-menu-entry
+修改前 WIP：`pytools-core/MIGRATION_INVENTORY.md` 已有 PT-7-6、PT-2-3 记录改动；未跟踪 `20261027_1428_PT-2-3新目标去重追加菜单冒烟.txt` 保持原状。本轮在迁移清单末尾追加 1-1 记录，没有覆盖既有内容。
+
+目的：依据人工验收反馈，使当前菜单路径 1-1 在保存汇总结果后，将结果写入配置指定的中间工作簿；2-3 继续作为随后去重追加到历史簿的独立步骤。将无后缀时序汇总日志 feature_id 更新为当前路径 ID `1-1`；增加源工作簿名、工作表名、逐阶段耗时、跳过原因，并在用户输出和 JSON 中去除 Windows 扩展路径前缀。
+修改文件：`pytools-core/src/timeline_ops.rs` 扩展进度事件及文件/工作表级诊断；`pytools-core/src/bin/pytools.rs` 接入既有安全目标追加计划、能力门控、路径显示规范化及帮助文本；`pytools-core/tests/timeline_menu_cli.rs` 覆盖新目标写入、既有目标无能力时保持原样、日志和跳过输入名称；`pytools-core/MIGRATION_INVENTORY.md` 追加本次状态。
+安全边界：新目标走既有 Rust writer 和 create-new 提交路径；已存在的中间簿仅在提供匹配的 ExcelModifier capability/platform 时修改。未提供能力时汇总结果仍生成、运行状态标为 partial，目标簿不变。不触及共享 crates、Audit、Cargo 根配置/锁文件或只读 Python 源项目。
+【组件版本】沿用 pytools-core 0.1.0，本轮不改版本号。
+
+验证：Rust 目标文件 `rustfmt --edition 2021 --check` 通过；`cargo test --offline --locked -p pytools-core --test timeline_menu_cli wide_summary -j 1` 通过 18/18（F 盘 Cargo target）；`cargo test --offline --locked -p pytools-core --bin pytools strips_windows_extended_prefix_from_user_facing_paths -j 1` 通过 1/1；边界状态收紧后 `interactive_wide_summary` 目标写入测试 3/3 通过。回归覆盖汇总中间簿生成及值写入、新目标创建、既有目标缺少 capability 时不修改、1-1 feature ID、输入跳过名称、工作簿/工作表名称及耗时、失败继续策略和既有时序边界。最终 `cargo build --release --offline --locked -p pytools-core --bin pytools -j 1` 通过；已更新 `F:\PyToolsRustV2\windows-manual-acceptance-20261027\pytools.exe`，从 `C:\Windows\System32` 使用包内配置启动，显示 V2 主菜单并输入 0 正常退出；配置、sidecar 和输入/输出/日志目录存在。
+未执行：真实业务宽表对拍、已存在目标的生产 ExcelModifier 路由、Linux/deb 验收。真实业务样本暂不可用；普通 Excel 外观差异未作为本次门槛。
+已知限制：已存在的配置目标需要运行时提供匹配的 ExcelModifier capability 文件和 platform；在能力缺失时不能直接改写既有工作簿。JSON 中反斜杠仍会按 JSON 规范转义，但展示路径不再包含 `\\?\`。
+删除清单：无。回滚提示：仅回滚本记录列出的 1-1 业务实现、测试、清单增补及本记录；不得改动先前 PT-7-6/PT-2-3 清单内容或既有 PT-2-3 未跟踪记录。

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "normalize": [
+    {"id":"empty_none","value":null,"expected":null},
+    {"id":"empty_string","value":"","expected":null},
+    {"id":"compact_ymd","value":"20260101","expected":"2026-01-01"},
+    {"id":"dot_ymd","value":"2026.01.01","expected":"2026-01-01"},
+    {"id":"hyphen_ymd","value":"2026-04-09","expected":"2026-04-09"},
+    {"id":"chinese_ymd_with_month_marker","value":"2026年1月1日","expected":"2026-01-01"},
+    {"id":"year_month_marker","value":"2026年4月","expected":"2026-04-30"},
+    {"id":"dot_year_month","value":"2026.04","expected":"2026-04-30"},
+    {"id":"hyphen_year_month","value":"2026-04","expected":"2026-04-30"},
+    {"id":"compact_year_month","value":"202604","expected":"2026-04-30"},
+    {"id":"leap_month_end","value":"2024.02","expected":"2024-02-29"},
+    {"id":"common_month_end","value":"2026.02","expected":"2026-02-28"},
+    {"id":"invalid_month","value":"account-201413","expected":null},
+    {"id":"invalid_day","value":"2026-02-30","expected":null},
+    {"id":"date_object","value":{"kind":"date","value":"2026-02-03"},"expected":"2026-02-03"},
+    {"id":"datetime_object","value":{"kind":"datetime","value":"2026-02-03T12:30:00"},"expected":"2026-02-03"}
+  ],
+  "parse": [
+    {"id":"filename_month_end","file_name":"报表_202604.xlsx","sheet_a1":null,"expected_date":"2026-04-30","expected_source":"文件名"},
+    {"id":"filename_wins","file_name":"报表_2024.02.xlsx","sheet_a1":"2026年4月","expected_date":"2024-02-29","expected_source":"文件名"},
+    {"id":"invalid_filename_falls_back_to_a1","file_name":"file_202613.xlsx","sheet_a1":"2026年4月","expected_date":"2026-04-30","expected_source":"A1"},
+    {"id":"invalid_full_date_falls_back_to_a1","file_name":"file_2026-02-30.xlsx","sheet_a1":"2026.03","expected_date":"2026-03-31","expected_source":"A1"},
+    {"id":"chinese_full_date","file_name":"报表_2026年2月28日.xlsx","sheet_a1":null,"expected_date":"2026-02-28","expected_source":"文件名"},
+    {"id":"no_date","file_name":"no-date.xlsx","sheet_a1":null,"expected_date":null,"expected_source":null}
+  ]
+}

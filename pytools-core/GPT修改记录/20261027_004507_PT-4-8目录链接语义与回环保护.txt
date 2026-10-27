@@ -1,0 +1,22 @@
+时间：2026-10-27 00:45 +08:00
+执行者：Codex
+修改前 commit：8653136
+修改后 commit：本记录随 PT-4-8 目录链接语义修复提交
+修改前 WIP：工作树干净；本轮修复尚未提交。原 Python 项目只读。
+
+目的：保留旧 Python 递归选择对目录链接的遍历语义，同时避免 Rust 在目录链接环中无限递归。
+
+修改/新增文件：
+- `pytools-core/src/submission_check.rs`：递归跟随文件系统识别出的目录链接；用当前递归链路的 canonical directory 集合识别祖先回环，跳过回环而继续处理其他项；I/O 错误仍传播。新增 Windows junction 测试，同时确认外部非循环 junction 的文件会被扫描、指回根目录的 junction 不会形成无限递归。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录旧 Python 语义证据及当前验证状态。
+- `pytools-core/GPT修改记录/20261027_004507_PT-4-8目录链接语义与回环保护.txt`：本记录。
+
+旧版行为核对：只读 `PyCode/main.py::_collect_files` 使用 `folder.rglob("*")` 并以 `Path.is_file()` 筛选。使用源项目 `.venv` Python 3.12.10 在 F 盘临时目录创建指向外部目录的 junction，确认该表达式会收集 junction 下的文件；临时夹具已清理。未修改源代码或业务数据。
+
+测试：Windows 原生 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --lib submission_check::tests -j 1`（2/2）、`cargo test --offline --locked -q -p pytools-core --test submission_check_parity -j 1`（4/4）、`git diff --check` 通过。前述原生递归目录 CLI 冒烟继续通过；构建和测试产物在 F 盘专用目录。
+
+未执行项/已知问题：未用旧 Python 的完整提交检查函数逐文件比较链接输出路径顺序；真实用户目录、ACL 拒绝/瞬时 I/O 故障、其他 reparse 类型、Unix 符号链接及真实工作簿仍未验收。PT-4-8 仍为**已实现，待 Windows 真实验收**；Linux/glibc 2.28/麒麟/UOS/deb 未验证。
+
+删除清单：无。
+回滚提示：回退本提交会取消路径规范化祖先回环保护；不影响之前提交的递归扫描错误传播和 CLI 回归。
+【组件版本】pytools-core 0.1.0，不升级。

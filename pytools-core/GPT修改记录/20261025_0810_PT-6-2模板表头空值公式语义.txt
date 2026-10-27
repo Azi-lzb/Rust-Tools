@@ -1,0 +1,31 @@
+时间：2026-10-25 08:09（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：fcb96b5；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无既有 WIP。本轮业务提交：7985628（fix(pytools): preserve comment summary template headers）。本记录单独提交。
+
+目的：修复 PT-6-2 按批注汇总中由模板列头空值和公式引起的 Python/Rust 差异，并为这些语义建立真实 CLI 回归与可重复对拍。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：模板列头读取优先采用公式文本，遵循 PyCode 的 data_only=False 语义；公式列头在新工作簿中写成公式，公式缓存留空，不执行重算。空值按空字符串参与列字母回退；布尔值按 Python 字符串大小写转换。源工作簿数据区域仍按值读取。
+- pytools-core/tests/summary_comments_cli.rs：增加真实 `summary-comments` CLI 回归，覆盖公式/空白/布尔列头、公式类型和输入不变。
+- pytools-core/probe/compare_summary_comments_template_header.py：新增 Windows 原生 PyCode/Rust 完整投影对拍 probe。
+- pytools-core/probe/reports/summary_comments_template_header_parity_20261025.json：记录合成模板对拍结果和限制，不含文件名或单元格值。
+- pytools-core/MIGRATION_INVENTORY.md：记录修复范围、真实入口、对拍和未完成验收项。
+- 本记录。
+
+真实入口与行为：`pytools summary-comments`，并由现有 `pytools menu → 6 → 2` 调用该 CLI。模板公式头、空白头及布尔头现在与 PyCode 保持一致；业务行数据、模板匹配、日志和配置语义未改变。未修改 Cargo workspace、共享 crate、配置或 VBA 行为；原 PyTools 项目只读。
+
+验证（Windows 原生 MSVC）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo build --offline --locked -q -p pytools-core --bin pytools`：通过。输出包含既有 excel-editor 弃用警告及 pytools-core 的两处无关未使用导入警告。
+- `cargo test --offline --locked -p pytools-core --lib comment_region_tests`：3/3 通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli --test summary_menu_cli -j 1`：5/5 与 4/4 通过。
+- `py -3.12 pytools-core/probe/compare_summary_comments_template_header.py`：Python 3.12.10/openpyxl 3.1.5 与原 PyCode 基线、Windows MSVC Rust 1.99.1 CLI 完整工作簿投影精确一致；3 行结果、1 张输出表、6 列；实际引擎 Calamine/rust_xlsxwriter，源输入未变，输出只在临时目录。
+- `git diff --cached --check`：通过。
+
+限制与未执行项：对拍使用合成 XLSX 模板与源簿；原项目中的真实配置簿没有有效行/列区域标记，当前仍缺有效真实业务模板。未在本轮验证 Linux、麒麟 V10/UOS V20、glibc 2.28 或离线 deb；PT-6-2 生产验收仍未完成。未运行 workspace 全量测试。
+
+敏感内容检查：提交限于 PyTools Rust 业务代码、合成测试/probe、无原始值的机器报告、迁移清单和本记录；未发现凭据、真实业务数据或不应公开文件。probe 对原 PyTools 只读调用。
+
+删除清单：无。
+回滚提示：`git revert 7985628` 可回滚本轮业务、测试、probe、报告和迁移清单；如需移除本记录，再单独撤销本记录提交。
+【组件版本】：pytools-core 0.1.0，不升级。

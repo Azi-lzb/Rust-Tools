@@ -1,0 +1,20 @@
+时间：2026-10-27 20:29（Asia/Shanghai）
+执行者：Codex
+修改前 commit：a3f12e69c27c13303cbad450167a6fc200593e01
+修改后 commit：待提交
+修改前 WIP：工作树已有未提交的 AGENTS.md、pytools-core/AGENTS.md、MIGRATION_INVENTORY.md、bin/pytools.rs、timeline_ops.rs、timeline_menu_cli.rs 和其他记录；summary_ops.rs 与 summary_menu_cli.rs 原先干净，本次只在这两处增加 PT-6-2 修改。
+
+目的：PT-6-2 按模板命名区域汇总按工作表使用各自的表头和汇总区域；模板中没有表头区域的工作表不再导致整个模板解析失败，并在进度日志中列出被跳过的工作表。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：仅把含有至少一个表头命名区域的模板工作表作为汇总规格；其它带有命名区域但没有表头的工作表跳过并记录名称。表头所在工作表继续独立产生同名输出工作表；已纳入工作表中的不完整分组仍明确报错。
+- pytools-core/tests/summary_menu_cli.rs：新增多工作表合成回归，验证两张不同表头的工作表分别汇总、无表头的说明页跳过、输入模板和源工作簿字节不变；调整不完整分组样本，使缺表头分组位于已有有效表头的工作表中，继续验证配置错误提示。
+- 本记录。
+
+验证：静态检查 `git diff --check` 通过。按 AGENTS.md 编译授权规则，本轮未运行 Cargo 编译、测试或程序；新增集成回归和菜单实际运行效果未验证。用户 F 盘模板、源工作簿和运行日志未读取或修改，真实模板对拍尚未执行。
+
+已知问题：工作表按模板中的工作表名与源工作表名对应；本次没有改变已有的模板兜底规则或命名区域格式。
+
+删除清单：无。
+回滚提示：还原 `summary_ops.rs` 与 `summary_menu_cli.rs` 本次差异，并删除本记录；保留工作树原有 WIP。
+【组件版本】pytools-core 0.1.0，不升级。

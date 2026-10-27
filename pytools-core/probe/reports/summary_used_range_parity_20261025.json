@@ -1,0 +1,545 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_used_range_python_rust_parity",
+  "date": "2026-10-25",
+  "status": "passed_synthetic_cli_parity",
+  "source_python_file": "PyCode/core/summary_321_322.py::run_summary_by_usedrange",
+  "real_sample": false,
+  "inputs": {
+    "files": [
+      "sample_2026-06-30.xlsx",
+      "sample_2026-07-31.xlsm"
+    ],
+    "sha256_before_after_equal": true,
+    "source_workbooks": 2
+  },
+  "scenario": {
+    "rows": 19,
+    "features": [
+      "actual Rust summary-used-range CLI",
+      "multiple workbooks and worksheets in selection order",
+      "macro-free XLSM source with macro-enabled workbook content type",
+      "empty worksheet produces the default-bound row seen in PyCode",
+      "hidden and veryHidden worksheets are included in workbook order",
+      "offset used range retains source row numbers and blank leading columns",
+      "format-only used-range tail",
+      "merged range used as an extent",
+      "cached formula values and missing formula-cache semantics",
+      "date, boolean, numeric, text and blank semantics",
+      "seven common Excel error values preserved as error-typed cells"
+    ]
+  },
+  "comparison": {
+    "cell_values_and_types": "exact",
+    "cell_styles": "exact for populated output cells",
+    "worksheet_names_and_dimensions": "exact",
+    "freeze_panes": "exact",
+    "header_bold_flags": "exact",
+    "formulas_merges_defined_names_print_area_page_setup": "exact (default portrait normalized)"
+  },
+  "rust_execution": {
+    "ooxml_error_cells_patched": 7,
+    "read_elapsed_ms": 16,
+    "reader_engine": "calamine",
+    "total_elapsed_ms": 76,
+    "write_elapsed_ms": 58,
+    "writer_engine": "rust_xlsxwriter"
+  },
+  "progress_logging": {
+    "view": "developer",
+    "status": "succeeded",
+    "event_stream_matches_saved_history": true,
+    "event_count": 18,
+    "phases": [
+      "extent_scan",
+      "ooxml_error_patch",
+      "output_save",
+      "output_workbook",
+      "row_write",
+      "run",
+      "value_read"
+    ],
+    "actual_engines": [
+      "OOXML Patch",
+      "calamine",
+      "excel-reader::read_xlsx_worksheet_extents",
+      "rust_xlsxwriter"
+    ],
+    "completed_stage_elapsed_ms": {
+      "extent_scan": 1,
+      "value_read": 6,
+      "row_write": 0,
+      "output_save": 12,
+      "ooxml_error_patch": 44,
+      "output_workbook": 58,
+      "run": 76
+    },
+    "skipped_input_names": [],
+    "input_filter_events_have_no_engine": true
+  },
+  "input_filter_probe": {
+    "python_supported_extensions": [
+      ".xlsx",
+      ".xlsm"
+    ],
+    "unsupported_extensions_skipped": [
+      ".xls",
+      ".xlsb"
+    ],
+    "python_rust_output": "exact",
+    "files_summarized": 2,
+    "summary_rows": 19,
+    "skipped_input_names": [
+      "ignored_source.xls",
+      "ignored_source.xlsb"
+    ],
+    "skipped_inputs_used_no_engine": true,
+    "progress_log": {
+      "view": "developer",
+      "status": "succeeded",
+      "event_stream_matches_saved_history": true,
+      "event_count": 20,
+      "phases": [
+        "extent_scan",
+        "input_filter",
+        "ooxml_error_patch",
+        "output_save",
+        "output_workbook",
+        "row_write",
+        "run",
+        "value_read"
+      ],
+      "actual_engines": [
+        "OOXML Patch",
+        "calamine",
+        "excel-reader::read_xlsx_worksheet_extents",
+        "rust_xlsxwriter"
+      ],
+      "completed_stage_elapsed_ms": {
+        "extent_scan": 2,
+        "value_read": 6,
+        "row_write": 0,
+        "output_save": 13,
+        "ooxml_error_patch": 48,
+        "output_workbook": 63,
+        "run": 83
+      },
+      "skipped_input_names": [
+        "ignored_source.xls",
+        "ignored_source.xlsb"
+      ],
+      "input_filter_events_have_no_engine": true
+    }
+  },
+  "vba_enabled_xlsm_probe": {
+    "status": "passed_python_rust_cli_parity",
+    "fixture": "tests/fixtures/summary_used_range/vba_enabled_xlsxwriter_macro01.xlsm",
+    "fixture_origin": {
+      "repository": "jmcnamara/XlsxWriter",
+      "commit": "a880ecc15c1573449dba051e5c21025f00c7c9fc",
+      "path": "xlsxwriter/test/comparison/xlsx_files/macro01.xlsm",
+      "license": "BSD-2-Clause; notice is adjacent to fixture",
+      "macro_execution": "not performed"
+    },
+    "vba_project_bytes": 13312,
+    "summary_rows": 1,
+    "python_rust_output": "exact",
+    "new_output_format": "xlsx",
+    "source_vba_copied_to_new_summary": false,
+    "source_sha256_before_after_equal": true,
+    "rust_execution": {
+      "reader_engine": "calamine",
+      "writer_engine": "rust_xlsxwriter",
+      "read_elapsed_ms": 5,
+      "write_elapsed_ms": 12,
+      "total_elapsed_ms": 20
+    },
+    "progress_log": {
+      "view": "developer",
+      "status": "succeeded",
+      "event_stream_matches_saved_history": true,
+      "event_count": 11,
+      "phases": [
+        "extent_scan",
+        "output_save",
+        "output_workbook",
+        "row_write",
+        "run",
+        "value_read"
+      ],
+      "actual_engines": [
+        "calamine",
+        "excel-reader::read_xlsx_worksheet_extents",
+        "rust_xlsxwriter"
+      ],
+      "completed_stage_elapsed_ms": {
+        "extent_scan": 2,
+        "value_read": 3,
+        "row_write": 0,
+        "output_save": 11,
+        "output_workbook": 12,
+        "run": 20
+      },
+      "skipped_input_names": [],
+      "input_filter_events_have_no_engine": true
+    }
+  },
+  "offset_used_range_probe": {
+    "source_sheet": "Offset",
+    "source_bounds": "D5:F6",
+    "projected_cells": {
+      "A19": "sample_2026-07-31",
+      "B19": "Offset",
+      "C19": 5,
+      "G19": "偏移区域起点",
+      "A20": "sample_2026-07-31",
+      "B20": "Offset",
+      "C20": 6,
+      "I20": 3.5
+    },
+    "comparison": "exact with PyCode"
+  },
+  "unknown_cell_error_probe": {
+    "input": "synthetic XLSX t=e cell with value #DATA!",
+    "pycode": {
+      "saved": true,
+      "output_value": "#DATA!",
+      "output_type": "s",
+      "rows": 1
+    },
+    "rust_cli": {
+      "runtime": "Windows 11 x64, native MSVC target",
+      "configured_executable": "native cargo build: x86_64-pc-windows-msvc, rustc 1.99.1, HEAD 26d0d9e",
+      "status": "succeeded",
+      "entrypoint": "pytools summary-used-range",
+      "reader_api": "read_workbook_with_unknown_error_tokens_as_text",
+      "reader_engine": "calamine + OOXML error-token normalization",
+      "writer_engine": "rust_xlsxwriter",
+      "normalized_cell_count": 1,
+      "output_value": "#DATA!",
+      "output_type": "s",
+      "rows": 1,
+      "progress_log": {
+        "view": "developer",
+        "status": "succeeded",
+        "event_stream_matches_saved_history": true,
+        "event_count": 12,
+        "phases": [
+          "extent_scan",
+          "output_save",
+          "output_workbook",
+          "row_write",
+          "run",
+          "value_read",
+          "value_read_compatibility"
+        ],
+        "actual_engines": [
+          "calamine",
+          "calamine + OOXML error-token normalization",
+          "excel-reader::read_xlsx_worksheet_extents",
+          "rust_xlsxwriter"
+        ],
+        "completed_stage_elapsed_ms": {
+          "extent_scan": 2,
+          "value_read_compatibility": 31,
+          "value_read": 31,
+          "row_write": 0,
+          "output_save": 11,
+          "output_workbook": 12,
+          "run": 48
+        },
+        "skipped_input_names": [],
+        "input_filter_events_have_no_engine": true
+      },
+      "developer_compatibility_event_count": 1,
+      "developer_history_omits_cell_token": true
+    },
+    "business_parity": "exact",
+    "cross_platform_runs_after_shared_reader_api": {},
+    "note": "PT-6-1 opts into the shared reader's narrow literal error-token normalization API. Ordinary read_workbook remains fail-closed; this probe does not infer support for other tokens."
+  },
+  "comment_summary_probe": {
+    "baseline_rows": 6,
+    "merged_non_anchor_cell": {
+      "fixture": "tests/fixtures/summary_comments/merged_children_source.xlsx",
+      "scenario": "B2 contains a synthetic OOXML value inside merge A2:C3; PyCode _gcv resolves B2 and C2 to A2",
+      "pycode_values": {
+        "D2": "merged anchor",
+        "E2": "merged anchor",
+        "D3": "merged anchor",
+        "E3": "merged anchor"
+      },
+      "rust_values": {
+        "D2": "merged anchor",
+        "E2": "merged anchor",
+        "D3": "merged anchor",
+        "E3": "merged anchor"
+      },
+      "rust_rows": 3,
+      "rust_execution": {
+        "ooxml_error_cells_patched": 0,
+        "read_elapsed_ms": 9,
+        "reader_engine": "calamine",
+        "total_elapsed_ms": 24,
+        "write_elapsed_ms": 13,
+        "writer_engine": "rust_xlsxwriter"
+      },
+      "comparison": "exact",
+      "rust_runtime": {
+        "host": "Windows 11 x64, native MSVC target",
+        "executable": "native cargo build: x86_64-pc-windows-msvc, rustc 1.99.1, HEAD 26d0d9e"
+      },
+      "python_runtime": "win32 Python 3.12",
+      "source_unchanged": true
+    },
+    "duplicate_row_region_marker": {
+      "scenario": "duplicate 行区域1 starts at A2 and A3; duplicate 行区域#1 ends at A4 and A5",
+      "python": {
+        "saved": true,
+        "rows": 6,
+        "source_row_numbers": [
+          3,
+          4,
+          5,
+          3,
+          4,
+          5
+        ]
+      },
+      "rust_cli": {
+        "saved": true,
+        "rows": 6,
+        "source_row_numbers": [
+          3,
+          4,
+          5,
+          3,
+          4,
+          5
+        ]
+      },
+      "comparison": "exact",
+      "rule": "last matching start/end marker in row-major order, matching PyCode overwrite behavior"
+    }
+  },
+  "python_variant_scope": {
+    "nocom_pytools_output_matches_rust_for_this_xlsx_sample": false,
+    "nocom_pytools_difference_fields": [
+      "worksheet_dimensions",
+      "汇总.rows",
+      "汇总.styles",
+      "汇总.types",
+      "汇总.values"
+    ],
+    "nocom_pytools_vs_pycode": {
+      "difference_fields": [
+        "worksheet_dimensions",
+        "汇总.rows",
+        "汇总.styles",
+        "汇总.types",
+        "汇总.values"
+      ],
+      "cell_differences": {
+        "汇总.values": {
+          "count": 28,
+          "coordinates_sample": [
+            "A20",
+            "B15",
+            "B17",
+            "B18",
+            "B20",
+            "C15",
+            "C16",
+            "C17",
+            "C18",
+            "C19",
+            "C20",
+            "D15"
+          ],
+          "examples": [
+            {
+              "cell": "A20",
+              "pycode": "sample_2026-07-31",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "B15",
+              "pycode": "Empty",
+              "nocom_pytools": "Hidden"
+            },
+            {
+              "cell": "B17",
+              "pycode": "Hidden",
+              "nocom_pytools": "VeryHidden"
+            },
+            {
+              "cell": "B18",
+              "pycode": "VeryHidden",
+              "nocom_pytools": "Offset"
+            },
+            {
+              "cell": "B20",
+              "pycode": "Offset",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "C15",
+              "pycode": 1,
+              "nocom_pytools": 2
+            }
+          ]
+        },
+        "汇总.types": {
+          "count": 20,
+          "coordinates_sample": [
+            "A20",
+            "B20",
+            "C20",
+            "D15",
+            "D16",
+            "D17",
+            "D18",
+            "E16",
+            "E17",
+            "G18",
+            "G19",
+            "H5"
+          ],
+          "examples": [
+            {
+              "cell": "A20",
+              "pycode": "s",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "B20",
+              "pycode": "s",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "C20",
+              "pycode": "n",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "D15",
+              "pycode": null,
+              "nocom_pytools": "s"
+            },
+            {
+              "cell": "D16",
+              "pycode": "s",
+              "nocom_pytools": null
+            },
+            {
+              "cell": "D17",
+              "pycode": null,
+              "nocom_pytools": "s"
+            }
+          ]
+        },
+        "汇总.styles": {
+          "count": 21,
+          "coordinates_sample": [
+            "A20",
+            "B20",
+            "C20",
+            "D15",
+            "D16",
+            "D17",
+            "D18",
+            "E16",
+            "E17",
+            "E4",
+            "G18",
+            "G19"
+          ],
+          "examples": [
+            {
+              "cell": "A20",
+              "pycode": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              },
+              "nocom_pytools": null
+            },
+            {
+              "cell": "B20",
+              "pycode": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              },
+              "nocom_pytools": null
+            },
+            {
+              "cell": "C20",
+              "pycode": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              },
+              "nocom_pytools": null
+            },
+            {
+              "cell": "D15",
+              "pycode": null,
+              "nocom_pytools": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              }
+            },
+            {
+              "cell": "D16",
+              "pycode": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              },
+              "nocom_pytools": null
+            },
+            {
+              "cell": "D17",
+              "pycode": null,
+              "nocom_pytools": {
+                "number_format": "General",
+                "bold": false,
+                "fill_type": null,
+                "fill_color": "00000000"
+              }
+            }
+          ]
+        }
+      },
+      "pycode_dimensions": [
+        {
+          "name": "汇总",
+          "rows": 20,
+          "columns": 14
+        }
+      ],
+      "nocom_pytools_dimensions": [
+        {
+          "name": "汇总",
+          "rows": 19,
+          "columns": 14
+        }
+      ]
+    },
+    "format_difference": "This probe covers xlsx, macro-free xlsm and the pinned VBA-enabled XlsxWriter test fixture. Original PyTools VBA-bearing xlsm and NoComPyTools-only xls/xlsb remain outside the validated set."
+  },
+  "limitations": [
+    "This report covers synthetic XLSX/XLSM plus one pinned VBA-enabled XlsxWriter test fixture; real-project XLSX parity is recorded separately in summary_used_range_real_parity_<date>.json.",
+    "The official VBA-enabled fixture passed, but original PyTools VBA-bearing XLSM, XLS, XLSB, Kylin/UOS, glibc 2.28 and deb packaging remain unvalidated.",
+    "NoComPyTools and PyCode input-format scopes differ; no production scope was inferred from the NoCom-only formats.",
+    "Output is a new data workbook; source workbook styles, formulas and unrelated OOXML parts are not copied by contract.",
+    "A synthetic XLSX t=e #DATA! cell is written as a string by PyCode; PT-6-1 now uses the shared reader's narrow literal-token normalization API and matches this case. No broader token or format support is inferred."
+  ]
+}

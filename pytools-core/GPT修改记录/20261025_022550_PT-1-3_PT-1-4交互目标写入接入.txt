@@ -1,0 +1,30 @@
+时间：2026-10-25 02:25:50（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：5b021eb。已先核实 worktree 和分支；修改前存在 `pytools-core/src/bin/pytools.rs`、`pytools-core/tests/timeline_menu_cli.rs` 两处 WIP，本轮在其上增量修改，未覆盖或清理。main 的 PyTools README 更新已通过 Git 同步至该基线。
+修改后业务 commit：af91775（`feat(pytools): confirm wide summary target writes in menu`）。本记录单独纳入后续提交。
+
+目的：将 PT-1-3/PT-1-4 的宽表目标追加计划接入真实交互菜单确认与提交流程，并通过 Windows 原生菜单测试及只读 PyCode 对拍验证。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：将菜单启动参数中的 capability/platform 传入时序子菜单；宽表汇总菜单现在检查计划载荷、展示目标及追加数量并要求确认。新目标确认后沿用 rust_xlsxwriter 写入、重开校验和不覆盖发布；既有目标无能力证据时仅保留计划，提供匹配 capability/platform 时调用既有显式安全替换路径。把追加执行摘要和实际引擎/耗时写入开发者运行历史，保留 user/developer/off 视图边界。提取 `run_dedup_append_execute_report`，原 `dedup-append-execute` CLI 输出保持不变。
+- `pytools-core/tests/timeline_menu_cli.rs`：覆盖新目标确认/拒绝、既有目标无 capability 仅计划、临时 fixture-scoped capability 下的菜单安全提交和历史事件。
+- `pytools-core/probe/compare_wide_summary.py`：新目标对拍改为调用 `pytools menu → 1 → 3/4 → 确认`，核对 Python/Rust 汇总、候选和提交工作簿、源/配置未变及目标执行历史；既有目标仍运行直接 CLI 替换对拍。
+- `pytools-core/probe/reports/wide_summary_parity_20261023.json`、`wide_summary_existing_target_parity_20261023.json`：更新合成对拍结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录本轮入口、对拍、测试和未验收边界。
+- 本记录。
+
+真实入口与数据流：`pytools menu` → 时序工具 1 → 宽表汇总 3/4 → Rust Calamine 读取和业务汇总 → rust_xlsxwriter 新建汇总与新目标簿 → 用户确认 → 新目标安全发布；既有目标仅在 capability/platform 匹配时走 ExcelModifier 候选验证和安全替换。既有 `wide-summary`、`wide-summary-row-suffix` 与 `dedup-append-execute` CLI 入口仍可用。
+
+验证结果（Windows 原生）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli --test dedup_append_execution`：12/12 通过（各 6/6）。
+- `cargo build --offline --locked -p pytools-core --bin pytools`：通过。
+- 使用只读 PyTools Python 3.12.10 环境运行 `probe/compare_wide_summary.py`：新目标菜单流程两种行头模式均通过；汇总输出各比较 36 个单元格且有效样式精确，候选和提交目标语义一致且字节相同，源与配置未变。既有目标两种模式各对拍 467/476 个单元格，目标 sheet 样式精确，未触及工作表抽查属性一致。
+- 菜单集成测试及 Python/Rust 对拍均确认开发者历史记录 `target_append_execute` 成功状态、实际引擎和阶段耗时；未记录源路径或单元格内容。
+- `git diff --check`：通过。构建仍有共享 excel-editor 的既有 umya 弃用警告及 PyTools 既有未使用导入警告，本轮未改这些文件。
+
+未执行项与已知限制：仅使用临时合成 XLSX 和输入管道，没有手动实测 Windows 原生文件选择弹窗或脱敏真实业务模板；既有目标测试 capability 仅为临时 fixture-scoped 证据，不登记生产能力或改变默认路由。公式保留、未列 OOXML 部件、真实模板完整保真、麒麟 V10/UOS V20、glibc 2.28 和离线 deb 未验收；PT-1-3/PT-1-4 整体状态仍为未验证。原 Python 源项目保持只读。
+
+删除清单：无。
+回滚：`git revert af91775` 撤回业务入口、测试、机器报告与迁移清单更新；本记录随其独立提交管理。
+【组件版本】：pytools-core 0.1.0，不升级。

@@ -1,0 +1,20 @@
+功能：PT-6-2 V2 模板命名区域汇总
+
+修改：
+- pytools-core/tests/summary_menu_cli.rs：新增 `interactive_named_range_summary_collects_valid_rows_through_row_200`，通过 `pytools menu` → 数据提取与汇总 → 按模板命名区域汇总真实 Rust 菜单路径验证 A08。
+- pytools-core/MIGRATION_INVENTORY.md：补充 A08 验证范围及本地状态。
+
+样本与断言：
+- 合成模板任意行命名区域为 C5:E6，源数据区域延伸至第 200 行。
+- 逐行生成 168 条有效记录，包含仅有数值零的记录；空行、样式残留空行被跳过；Z500 远端无关值不参与汇总。
+- 检查结果记录行数、最终有效行、零值保留，并验证模板和源文件字节不变。
+
+验证（Windows 原生 Rust，产物位于 F:\PyTools_Rust_本轮工作文件_20261026）：
+- `cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1`：7/7 通过。
+- `cargo fmt -p pytools-core`：通过。
+
+未验证：
+- 该新版命名区域模式没有旧 Python 对应实现，未做 Python/Rust 对拍；没有真实业务模板或真实工作簿验收。
+- 模板格式保真、原生文件选择器、Linux/glibc 2.28 和 deb 未验证。
+
+回滚：仅回滚本记录新增的合成菜单回归及对应迁移清单文字；不影响 PT-6-2 业务实现和既有验收证据。

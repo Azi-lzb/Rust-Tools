@@ -1,0 +1,20 @@
+时间：2026-10-27 01:23 +08:00
+执行者：Codex
+修改前 commit：30e2703
+修改后 commit：本记录随 V2 菜单回归校准提交
+修改前 WIP：只有 conversion_menu_cli.rs 的 V2 导航校准未提交；无业务代码 WIP。
+
+目的：让文件处理集成测试验证当前 V2 菜单和确认取消的业务范围，避免旧入口编号导致回归目标失败。
+
+修改文件：
+- pytools-core/tests/conversion_menu_cli.rs：输入序列改为 V2 菜单路径；移除已取消的同格式复制、内容撤销、局部映射和菜单原生值转换预期，增加取消项不显示断言。
+- pytools-core/MIGRATION_INVENTORY.md：记录回归目标已与 V2 菜单对齐。
+- 本记录。
+
+验证：Windows 原生 cargo fmt --manifest-path pytools-core/Cargo.toml；cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1，10/10 通过；git diff --check 通过。上一条提交中的真实 COM 菜单转换冒烟证据保持不变。
+
+未执行项/已知问题：只重跑文件菜单专项集成目标，未运行 PyTools 全量测试、Python/Rust 结果对拍、真实用户样本及 Linux/deb 验收。此修改不提升业务功能的真实验收状态。
+
+删除清单：无。
+回滚提示：回退本提交会恢复旧菜单输入路径和对已取消菜单项的过期断言；不改变生产业务实现。
+【组件版本】pytools-core 0.1.0，不升级。

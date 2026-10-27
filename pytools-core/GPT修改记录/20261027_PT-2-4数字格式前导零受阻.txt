@@ -1,0 +1,21 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：1ec7baa
+修改后 commit：待提交
+修改前 WIP：工作树干净；本次只登记 PT-2-4 的共享 reader 阻塞证据。
+
+目的：记录 V2 按配置删除重复生成结果簿对 Excel 数字显示格式的保真风险，并请求 main 补充共享读取能力。
+
+证据与复现：`excel_reader::SheetDump` 不含单元格数字格式字段；`pytools-core/src/dedup_ops.rs::write_config_duplicate_result_candidate` 读取 Calamine 数值后通过 rust_xlsxwriter 普通数字分支重建，无法保留源单元格 `000000` 格式。最小合成复现：A1 为“机构代码”，A2 存储数值 123 并设置 `000000`，B 列提供复合键且至少有一条重复行；原表显示 `000123`，PT-2-4 重建输出只有普通数字显示 `123`。这项报告是由当前读写调用链确认的能力缺失，尚未运行真实工作簿或 Python/Rust 对拍。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md：将 PT-2-4 生命周期标为受阻，说明影响、最小复现和 main 协调状态。
+- 本记录。
+
+协调：已向 main 请求在共享 `excel-reader` 提供通用、按工作表与 A1 坐标读取 number format code 的 API，并补自定义零填充合成测试。PyTools 本轮未修改共享 crate，后续需从 Git 安全同步 main 的代码后再接入验证。
+
+未执行项/已知问题：无真实业务样本，未做 Python/Rust 输出对拍、Excel 手工查看、生产 capability 或目标 Linux/deb 验收。收到跨会话消息不表示共享代码已更新；只有核实 Git 变更后才能继续接入。
+
+删除清单：无。
+回滚提示：回退本记录和清单更新会移除已知的 PT-2-4 数字格式保真阻塞证据。
+【组件版本】pytools-core 0.1.0，不升级。

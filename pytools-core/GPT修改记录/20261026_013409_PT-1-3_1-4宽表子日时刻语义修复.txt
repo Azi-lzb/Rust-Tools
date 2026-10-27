@@ -1,0 +1,39 @@
+时间：2026-10-26 01:34:09
+执行者：Codex
+修改前 commit：5eed955（PT-1-3/1-4 1904 日期系统日历值修复，已推送）
+修改后 commit：本次功能提交（最终 SHA 见 Git 历史）
+WIP：保留 HANDOFF_ZCODE_TO_CODEX.md、既有 PT-4-2 XLS 转换失败记录、PT-6-2 真实样本缺口记录，以及 MIGRATION_INVENTORY.md 中 PT-4-2 未提交证据；不纳入本功能提交。
+
+【目的】
+修复 PT-1-3/1-4 宽表汇总对 Excel 子日日期时间值的 Python/Rust 差异。PyCode 经 openpyxl 3.1.5 将 0–1 天内值读为 datetime.time，pandas 2.2.3 写入汇总时将其转为字符串；Rust 原来将 Calamine datetime_serial 直接写为带日期格式的数值。对 1900/1904 日期系统，两种行头模式均按 Python 语义处理午夜、毫秒精度与舍入到次日的边界；同时修正输出 1900-01-01 至 1900-02-28 日期时的 Excel 闰年序列换算。
+
+【修改文件】
+- pytools-core/src/timeline_ops.rs：在宽表读取后把 Calamine typed datetime_serial 的子日值投影为 Python time 字符串；若 openpyxl 毫秒 ties-to-even 舍入进次日，则投影为日期时间。新增双视图子日归一化阶段运行事件，记录 Rust 业务层与耗时。1900 日期序列写出增加 openpyxl 的 serial 1–60 校正。
+- pytools-core/probe/compare_wide_summary.py：增加四组合真实菜单对拍（1900/1904 × 行头加/不加后缀），覆盖午夜、毫秒和跨日舍入，并核对汇总簿、目标候选/提交结果及阶段运行历史。
+- pytools-core/probe/reports/wide_summary_subday_time_parity_20261026.json：记录四组合合成对拍结果，不含输入路径、文件名或单元格值。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-1-3/1-4 验证状态；该文件原有 PT-4-2 未提交段仍保留，不纳入本提交。
+- 本记录：记录本次实现和验证。
+
+【验证】
+- Windows 原生 `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过（修改后执行格式化并再次由测试编译验证）。
+- `cargo test --offline --locked -p pytools-core --lib wide_subday -j 1`：2/2 通过，覆盖 1900/1904 子日、零时、跨日舍入、负序列拒绝以及 1900 序列边界。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：14/14 通过。
+- PyTools Python 3.12.10（openpyxl 3.1.5、pandas 2.2.3）与 Windows MSVC Rust CLI 运行 `compare_wide_summary.py --subday-time-only`：4/4 菜单组合的完整输出簿、目标追加候选与已提交目标投影精确一致；源和配置未变，开发者历史记录归一化阶段、实际 Rust 业务层及耗时。
+- 同一 CLI 运行 `compare_wide_summary.py --1904-date-only` 回归：通过。
+- 变更前的端到端探针已复现样式不一致：Python `General` 文本与 Rust 日期格式数值不同；实现后上述四组合通过。
+- `git diff --check`：通过。
+
+【未执行项与已知问题】
+- 用户目前没有可用脱敏真实宽表样本；本轮输入均为临时合成 XLSX。PT-1-3/1-4 仍未通过真实样本验收。
+- 负序列、其他时间/时长格式、其他输入格式、生产 ExcelModifier capability、Linux/glibc 2.28、麒麟 V10/UOS V20 与离线 deb 未验收。
+- 构建仅有既存 Excel-Editor 弃用 API 和 PyTools unused-import 警告，本轮未处理。
+
+【删除清单】
+- 删除本轮探索阶段生成的单场报告 `wide_summary_1904_time_parity_20261026.json`；以覆盖 1900/1904 两种日期系统和两种行头模式的最终报告替代。未删除既有项目文件。
+
+【回滚提示】
+若后续发现问题，只回滚本次 PT-1-3/1-4 子日时间值功能提交；不要覆盖或清理其他 WIP。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

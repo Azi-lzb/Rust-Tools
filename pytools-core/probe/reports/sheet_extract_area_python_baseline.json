@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "suite": "pytools.sheet_extract_area_python_baseline",
+  "baseline": "PyCode/core/feature_1_6_extract_sheets.py::run_extract_sheets",
+  "python_source_sha256": "a1e99aac411dcda78e75a5e6072317564df376efba9304cff9adac23761732c9",
+  "cases_sha256": "2a9b2735dd45affbb66aa45bec018607be9ccc7b43299bc8340b2c7b06410fa4",
+  "config_sha256": "fef230db9ebf8cbfbef671d9a2173a672ce929c79254d24994b767fc0688872e",
+  "input_sha256": {
+    "省级月度报表_A.xlsx": "189972eccfd4421dc01366027aaceff359c9489f0cd67142c66fb22a4dfc4ec2",
+    "省级月度报表_B.xlsx": "189972eccfd4421dc01366027aaceff359c9489f0cd67142c66fb22a4dfc4ec2",
+    "省级月度报表_损坏.xlsx": "55d90be8806610a76d02bf8b89d234d9009b41c0002fac44ac7b5b4fee7e3ca8"
+  },
+  "stats": {
+    "files": 2,
+    "extracted_sheets": 4,
+    "output_files": 1,
+    "failed_files": 1
+  },
+  "output_files": [
+    "area-result.xlsx"
+  ],
+  "worksheets": [
+    {
+      "name": "月度资金报表",
+      "max_row": 5,
+      "max_column": 3,
+      "values": [
+        [
+          {
+            "type": "string",
+            "value": "指标"
+          },
+          {
+            "type": "string",
+            "value": "本月"
+          },
+          {
+            "type": "string",
+            "value": "备注"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "存款"
+          },
+          {
+            "type": "integer",
+            "value": 10
+          },
+          {
+            "type": "boolean",
+            "value": true
+          }
+        ],
+        [
+          null,
+          null,
+          {
+            "type": "string",
+            "value": "保留此行"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "贷款"
+          },
+          {
+            "type": "integer",
+            "value": 20
+          },
+          {
+            "type": "boolean",
+            "value": false
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "制造业"
+          },
+          {
+            "type": "integer",
+            "value": 30
+          },
+          {
+            "type": "number",
+            "value": 0.125
+          }
+        ]
+      ]
+    },
+    {
+      "name": "月度资金报表_2",
+      "max_row": 7,
+      "max_column": 1,
+      "values": [
+        [
+          {
+            "type": "string",
+            "value": "存款"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "贷款"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "制造业"
+          }
+        ],
+        [
+          {
+            "type": "boolean",
+            "value": true
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "保留此行"
+          }
+        ],
+        [
+          {
+            "type": "boolean",
+            "value": false
+          }
+        ],
+        [
+          {
+            "type": "number",
+            "value": 0.125
+          }
+        ]
+      ]
+    },
+    {
+      "name": "月度资金报表_3",
+      "max_row": 5,
+      "max_column": 3,
+      "values": [
+        [
+          {
+            "type": "string",
+            "value": "指标"
+          },
+          {
+            "type": "string",
+            "value": "本月"
+          },
+          {
+            "type": "string",
+            "value": "备注"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "存款"
+          },
+          {
+            "type": "integer",
+            "value": 10
+          },
+          {
+            "type": "boolean",
+            "value": true
+          }
+        ],
+        [
+          null,
+          null,
+          {
+            "type": "string",
+            "value": "保留此行"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "贷款"
+          },
+          {
+            "type": "integer",
+            "value": 20
+          },
+          {
+            "type": "boolean",
+            "value": false
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "制造业"
+          },
+          {
+            "type": "integer",
+            "value": 30
+          },
+          {
+            "type": "number",
+            "value": 0.125
+          }
+        ]
+      ]
+    },
+    {
+      "name": "月度资金报表_4",
+      "max_row": 7,
+      "max_column": 1,
+      "values": [
+        [
+          {
+            "type": "string",
+            "value": "存款"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "贷款"
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "制造业"
+          }
+        ],
+        [
+          {
+            "type": "boolean",
+            "value": true
+          }
+        ],
+        [
+          {
+            "type": "string",
+            "value": "保留此行"
+          }
+        ],
+        [
+          {
+            "type": "boolean",
+            "value": false
+          }
+        ],
+        [
+          {
+            "type": "number",
+            "value": 0.125
+          }
+        ]
+      ]
+    }
+  ],
+  "input_unchanged": true,
+  "source_unchanged": true,
+  "limitations": [
+    "synthetic XLSX fixture only",
+    "area extraction and new workbook output only",
+    "full-sheet style copying and append-existing are outside this Rust candidate",
+    "formula text is not copied; the source also loads data_only values, but no formula fixture was included",
+    "dates, durations, and error cells are explicitly rejected by this candidate"
+  ]
+}

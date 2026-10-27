@@ -1,0 +1,28 @@
+时间：2026-10-25 12:50（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：48bb378；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：把 glibc 2.28 目标 ABI 证据从 HEAD `98a702f` 推进到包含最新功能变更的当前 HEAD `48bb378`，并以 glibc 2.28 release 二进制复验 PT-6-1 真实样本；不修改业务代码、共享 crates、Cargo 配置或默认引擎。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261025.json`（新增顶层段 `platform_validation_linux_glibc_2_28_release_current_head_20261025`，保留既有键）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+实际过程与结果：
+- 构建：WSL Ubuntu（host glibc 2.39）中 Zig 0.17.0 + cargo-zigbuild，`cargo zigbuild --release --offline --locked --target x86_64-unknown-linux-gnu.2.28 -p pytools-core --bin pytools`，2 分 30 秒完成，仅既存警告。
+- ELF 检查：`objdump -T` 数值排序最高 GLIBC 符号为 `GLIBC_2.28`；ELF 64-bit LSB PIE，x86-64。
+- 真实样本对拍：以该 release 二进制经 WSL 直接运行 `summary-used-range`，对原项目只读 `xlsx/` 目录 13 份 XLSX 分 4 批与只读 PyCode 完整工作簿投影对拍，96 张工作表、203,580 行精确一致；输入前后 SHA-256 相同；批次开发者事件 26/14/27/63 与保存运行历史一致；批次 2 的 1,212 个错误单元格由 OOXML Patch 保留；实际引擎 Calamine、excel-reader::read_xlsx_worksheet_extents 与 rust_xlsxwriter。对拍断言复用 `compare_summary_tools.py` 现有 `python_used_range_only`、`assert_equivalent`，驱动脚本位于会话临时目录，不进入仓库。
+- 基线健康：Windows 原生 `cargo test --offline --locked -p pytools-core` 全量通过，39 个测试目标、42 项结果全部 0 failed；此前登记的 `workbook_extract` 缺夹具失败在当前 checkout 不再出现。
+
+验证结果：
+- 构建与 ELF 检查如上；`git diff --check`：通过。
+- 机器报告只记录计数、维度、引擎、事件与耗时，不含单元格值；输出仅位于系统 TEMP。
+
+影响与未完成项：纯验证轮次，不改业务实现或路由，不升级组件版本。该证据只覆盖 WSL glibc 2.28 ABI release 阶段，不是麒麟 V10/UOS V20 实机、deb 安装或离线交付验收；每批单次执行，不作性能结论；PT-6-1 整体仍未完成最终验收（业务 VBA XLSM 样本、目标实机与 deb 仍缺）。
+
+敏感内容检查：无真实业务数据、凭据或单元格内容进入提交。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销报告段与迁移清单记录。
+【组件版本】：纯验证，不升级。

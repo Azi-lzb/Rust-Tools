@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_comments_error_token_parity",
+  "status": "passed_synthetic_windows_native_python_rust_parity",
+  "recorded_at": "2026-10-25T23:57:13.666291+08:00",
+  "feature_id": "PT-6-2",
+  "entrypoint": "pytools summary-comments",
+  "fixtures": [
+    "tests/fixtures/summary_comments/error_tokens_template.xlsx",
+    "tests/fixtures/summary_comments/error_tokens_source.xlsx"
+  ],
+  "output_worksheets": [
+    "模板",
+    "Branch_B"
+  ],
+  "compared_projection": "exact, including values, Excel cell types, styles, dimensions and page settings",
+  "error_value_behavior": {
+    "known_division_by_zero": "Excel error type preserved on both output worksheets",
+    "unknown_data_token": "written as text on both output worksheets, matching PyCode"
+  },
+  "rust_execution": {
+    "ooxml_error_cells_patched": 2,
+    "read_elapsed_ms": 31,
+    "reader_engine": "calamine + OOXML error-token normalization",
+    "total_elapsed_ms": 89,
+    "unknown_error_token_cells_normalized": 2,
+    "write_elapsed_ms": 54,
+    "writer_engine": "rust_xlsxwriter + OOXML Patch"
+  },
+  "developer_history": {
+    "status": "succeeded",
+    "compatibility_read_recorded": true,
+    "OOXML_error_patch_recorded": true,
+    "raw_cell_values_logged": false
+  },
+  "input_fixtures_unchanged": true,
+  "scope_limits": [
+    "synthetic XLSX fixtures only; no authorized real PT-6-2 template was available",
+    "target Linux/deb acceptance remains unverified"
+  ]
+}

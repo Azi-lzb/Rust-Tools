@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.realistic_synthetic_parity_suite",
+  "date": "2026-10-25",
+  "status": "passed_synthetic_realistic_parity",
+  "scope_note": "Synthetic but business-shaped inputs created per user instruction; config-driven both sides for wide summary. Not real-sample acceptance.",
+  "wide_summary_multi_rule": [
+    {
+      "row_suffix": false,
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "WideReport",
+        "WideBalance"
+      ],
+      "dimensions": [
+        [
+          39,
+          11
+        ],
+        [
+          37,
+          7
+        ]
+      ],
+      "python_summary_dimensions": [
+        {
+          "name": "WideReport",
+          "rows": 39,
+          "columns": 11
+        },
+        {
+          "name": "WideBalance",
+          "rows": 37,
+          "columns": 7
+        }
+      ]
+    },
+    {
+      "row_suffix": true,
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "WideReport",
+        "WideBalance"
+      ],
+      "dimensions": [
+        [
+          39,
+          11
+        ],
+        [
+          37,
+          7
+        ]
+      ],
+      "python_summary_dimensions": [
+        {
+          "name": "WideReport",
+          "rows": 39,
+          "columns": 11
+        },
+        {
+          "name": "WideBalance",
+          "rows": 37,
+          "columns": 7
+        }
+      ]
+    }
+  ],
+  "wide_summary_rule_match_modes": [
+    {
+      "mode": "all_match",
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "WideAll",
+        "WideRep"
+      ],
+      "dimensions": [
+        [
+          39,
+          11
+        ],
+        [
+          35,
+          8
+        ]
+      ],
+      "python_summary_dimensions": [
+        {
+          "name": "WideAll",
+          "rows": 39,
+          "columns": 11
+        },
+        {
+          "name": "WideRep",
+          "rows": 35,
+          "columns": 8
+        }
+      ]
+    },
+    {
+      "mode": "first_match",
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "WideAll"
+      ],
+      "dimensions": [
+        [
+          39,
+          11
+        ]
+      ],
+      "python_summary_dimensions": [
+        {
+          "name": "WideAll",
+          "rows": 39,
+          "columns": 11
+        }
+      ]
+    }
+  ],
+  "wide_summary_sets_and_conflicts": {
+    "python_rust_summary": "exact",
+    "sheet_names": [
+      "WideSet"
+    ],
+    "dimensions": [
+      [
+        7,
+        9
+      ]
+    ],
+    "headers": [
+      "工作簿名",
+      "工作表名",
+      "数据日期",
+      "集团",
+      "期间",
+      "行头路径",
+      "行序号",
+      "公共存款",
+      "贷款_本息"
+    ],
+    "sample_rows": [
+      [
+        "sample_2026-06-30.xlsx",
+        "2026-06Report",
+        "2026-06-30T00:00:00",
+        "集团A",
+        "2026-06期",
+        "甲分行",
+        "5",
+        10.25,
+        23
+      ],
+      [
+        "sample_2026-06-30.xlsx",
+        "2026-06Report",
+        "2026-06-30T00:00:00",
+        "集团A",
+        "2026-06期",
+        "乙分行",
+        "6",
+        14,
+        29
+      ],
+      [
+        "sample_2026-06-30.xlsx",
+        "2026-06Report",
+        "2026-06-30T00:00:00",
+        "集团A",
+        "2026-06期",
+        "甲分行",
+        "7",
+        31,
+        35
+      ],
+      [
+        "sample_2026-07-30.xlsx",
+        "2026-07Report",
+        "2026-07-30T00:00:00",
+        null,
+        null,
+        "甲分行",
+        "5",
+        10.25,
+        23
+      ],
+      [
+        "sample_2026-07-30.xlsx",
+        "2026-07Report",
+        "2026-07-30T00:00:00",
+        null,
+        null,
+        "乙分行",
+        "6",
+        14,
+        29
+      ],
+      [
+        "sample_2026-07-30.xlsx",
+        "2026-07Report",
+        "2026-07-30T00:00:00",
+        null,
+        null,
+        "甲分行",
+        "7",
+        31,
+        35
+      ]
+    ],
+    "conflict_policy": "first value kept for duplicate column paths (PyCode 保留首值)"
+  },
+  "comment_summary_multi_sheet": {
+    "python_rust_output": "exact",
+    "sheet_names": [
+      "余额表",
+      "流水表"
+    ],
+    "dimensions": [
+      [
+        85,
+        8
+      ],
+      [
+        123,
+        8
+      ]
+    ],
+    "rust_rows": 206,
+    "unmatched_source_sheet": "说明 skipped by both sides"
+  },
+  "rust_runtime": {
+    "host": "Windows 11 x64, native MSVC target",
+    "entrypoint": "pytools wide-summary[-row-suffix] / pytools summary-comments"
+  },
+  "limitations": [
+    "Synthetic inputs only; real business samples for wide summary and comment templates remain unavailable.",
+    "No target append in this suite; existing-target semantics are covered by compare_wide_summary.py cases.",
+    "Report records dimensions and counts only; outputs were temporary."
+  ]
+}

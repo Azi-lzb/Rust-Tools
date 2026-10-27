@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "run_files": [
+    "balanced.xlsx",
+    "mismatch.xlsx",
+    "no_target.xlsx",
+    "non_numeric_missing.xlsx",
+    "numeric_text_underscores.xlsx",
+    "unicode_math_digits.xlsx",
+    "broken.xlsx"
+  ],
+  "expected_stats": {
+    "files": 6,
+    "sheets": 10,
+    "errors": 8,
+    "failed_files": 1
+  }
+}

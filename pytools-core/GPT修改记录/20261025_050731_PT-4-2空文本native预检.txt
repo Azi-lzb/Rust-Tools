@@ -1,0 +1,32 @@
+时间：2026-10-25 05:07:31（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：1b6fe27b76ab10d43117f6aaefa872e0bcc0b232（main 协调的 LibreOffice 计算验证范围文档提交已安全同步到本地 pytools-dev；origin/pytools-dev 当时停在 ad94d3b，尚未推送）
+修改后业务 commit：3dcdf76（fix(pytools): reject empty-text loss in native conversion）
+WIP：开始时只有 `pytools-core/src/conversion.rs` 的 PT-4-2 诊断改动未提交；无 WIP 文件。保留并完成该改动，没有覆盖其他文件。
+
+目的：在 native C01 `.xls`→`.xlsx` 按值重建前识别共享 reader 能读到、但当前 native writer/readback 路径无法保真的显式空文本单元格。以前真实样本的候选少了 2,123 个空文本坐标，验证因此失败。现在写候选前给出“需要外部保真引擎”的明确错误，避免再创建无效候选；空缓存公式仍按原行为跳过值预检并保留公式文本。未改变转换引擎默认路由或生产 capability。
+
+修改文件：
+- `pytools-core/src/conversion.rs`：抽出 native 源值预检；拒绝空文本值；保留错误单元格、非有限数和超出精确数值范围的既有保护；扩充数据坐标差异诊断；添加空文本与空缓存公式单测。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录真实样本失败类别、CLI 拒绝结果及仍未验收事项。
+- `pytools-core/probe/reports/PT-4-2_native_empty_text_guard_20261025.json`：记录样本类型、结构计数、真实 CLI 结果和测试，不包含业务文件或单元格数据。
+- 本修改记录。
+
+真实入口与行为：Windows 原生 `pytools convert-excel --engine native` 读取一个仅存于临时目录的 `.xls` 副本；因首个显式空文本无法在 C01 路径保真，CLI 退出码 2，统计为 0 转换/1 失败，output 目录没有发布文件。原输入未被写入。本轮没有调用 Excel COM、LibreOffice 或 Python 转换。
+
+测试与验证（Windows 原生）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml --package pytools-core -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1`：6/6 通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：5/5 通过。
+- 真实 `.xls` native CLI 复验：预期失败并退出 2，0 个输出文件。
+- `git diff --cached --check`：通过。
+
+对拍、未执行项与已知问题：该输入的 Python/Excel/LibreOffice 保真转换对拍未运行；sidecar 引擎转换结果、真实工作簿对象保留、Linux、麒麟 V10/UOS V20 与 deb 均未验证。上一轮候选读入 18,080 个值坐标，重读输出 15,957 个，缺失的 2,123 个全部为类型化空文本；候选未通过校验。PT-4-2 保持未验证，不据此宣称 native 路径支持该样本。共享 reader/writer 对显式零长度文本的处理已向 main 请求协调，未修改共享 crate；等待共享侧提供最小合成复现或能力结论。
+
+构建输出仍有既有 `excel-editor` deprecated API 与 PyTools 其他模块 unused import 警告，本轮未触及。未执行 workspace 全量测试、Linux 验证或 Python 基线。
+
+Git：业务代码/清单/机器报告提交为 `3dcdf76`。本记录单独提交。两个提交经敏感内容检查后可推送 `origin/pytools-dev`；未推送 main，也未修改共享 crate、root Cargo 文件或 Audit。
+
+删除清单：无。
+回滚：`git revert 3dcdf76` 可撤销本次业务代码、迁移记录和机器报告；本修改记录若需撤销，再单独 revert 其记录提交。
+【组件版本】：pytools-core 0.1.0，不升级。

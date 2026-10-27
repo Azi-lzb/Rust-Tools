@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "main": {
+    "去重追加数据配置": [
+      ["启用", "任务名称", "源工作簿路径", "源工作表名", "去重列", "目标工作簿路径", "目标工作表名", "覆盖方式"],
+      ["yes", "main task", "input/source.xlsx", "Data", "1,2；3:bad,-4;0;2.9", "output/target.xlsx", "Out", "append"],
+      ["N", "disabled", "", "", "bad", "", "", ""]
+    ],
+    "打印配置": [
+      ["是否启用", "打印模式", "源工作簿", "源工作表", "源工作表打印区域", "目标工作簿", "目标工作表", "FitToPagesWide", "FitToPagesTall", "打印方向", "水平居中", "垂直居中", "不输出批注", "零值不输出", "备注"],
+      ["是", 2, "input/source.xlsx", "Data", "A1:B2", "output/print.xlsx", "Printed", "bad", 0, "横向", "yes", "no", "Y", 1, "fixture print"],
+      ["no", "3", "", "", "", "", "", "", "", "", "", "", "", "", "disabled print"]
+    ],
+    "工作表提取": [
+      ["是否启用", "工作簿关键字", "工作表关键字", "排除关键字", "提取区域", "多区域拼接方式", "输出文件夹", "文件名", "备注"],
+      ["否", "ignored", "Data", "", "A1", "", "", "", "disabled"],
+      ["是", "", "", "", "", "", "", "empty.xlsx", "empty selectors"],
+      ["是", "县区;支行", "数据", "汇总", "A1:C9", "horizontal", "out", "name.xlsx", "fixture extract"]
+    ],
+    "机构映射表": [
+      ["原始机构名称", "映射后机构名称", "是否为外资行"],
+      ["raw1", "mapped1", 1],
+      ["raw2", "mapped2", 0],
+      ["", "nameless", 1],
+      ["raw3", "mapped3", "yes"],
+      ["raw4", "", 1],
+      ["raw1", "mapped-new", ""],
+      ["raw5", "float-flag", 1.5]
+    ]
+  },
+  "legacy": {
+    "数据处理配置": [
+      ["启用", "源工作簿路径", "源工作表名", "去重列", "目标工作簿路径", "目标工作表名"],
+      ["Y", "legacy/source.xlsx", "Data", "2:3", "legacy/target.xlsx", "Out"]
+    ]
+  },
+  "missing": {
+    "其他配置": [["字段"], ["值"]]
+  }
+}

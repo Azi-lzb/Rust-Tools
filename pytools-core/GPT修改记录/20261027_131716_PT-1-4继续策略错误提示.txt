@@ -1,0 +1,14 @@
+时间：2026-10-27 13:17:32 +08:00
+执行者：Codex
+修改前 HEAD：8de2009302cc799a9e68dfe012c61872d363360a；分支：codex/pytools-menu-entry
+修改前 WIP：代码工作树干净；未发现 WIP 修改记录。原 Python 项目只读。
+
+目的：损坏或不可读的宽表输入在 continue 错误策略下被跳过时，向用户说明可检查的原因范围及跳过结果，避免只有泛化的“读取失败”提示。
+修改文件：pytools-core/src/timeline_ops.rs 增加安全提示；pytools-core/tests/timeline_menu_cli.rs 覆盖 continue 策略且检查部分失败、无输出、不泄露路径/输入内容；pytools-core/MIGRATION_INVENTORY.md 记录有限度的合成样本证据。
+逻辑/配置/VBA：不改变业务筛选、计算、配置、Excel 路由或 VBA 行为；不显示原始错误文本、路径或输入内容。
+【组件版本】沿用 pytools-core 0.1.0，本轮不改版本号。
+
+验证：指定文件 rustfmt --check 通过；wide_summary_continue_policy_explains_read_failure_without_leaking_input 通过；既有 fail-fast 菜单失败回归 wide_summary_menu_failure_history_identifies_read_stage_without_source_data 通过；cargo build --offline --locked -p pytools-core --bin pytools -j 1 通过；F 盘正式菜单坏簿冒烟记录 status=partial、failed_inputs=1、output=null、new_xlsx=0 并显示检查建议。cargo fmt --check 全 workspace 因未改动的 audit-core/src/conditional_format.rs 与 audit-core/tests/s1_conditional_eval.rs 格式差异失败；未修改 Audit 文件。
+未执行：真实业务工作簿对拍、Excel 桌面打开、全量测试、Linux/deb 验收；本次不升级 PT-1-3/1-4 整体验收状态。
+已知限制：继续策略运行的进程退出码为 0，运行历史通过 status=partial 和失败计数表达部分失败；用户可见事件已明确说明原因范围和跳过动作。
+删除清单：无。回滚提示：回滚本次对应代码、测试、迁移记录和修改记录，或在该分支反向提交恢复；不得影响其他分支。

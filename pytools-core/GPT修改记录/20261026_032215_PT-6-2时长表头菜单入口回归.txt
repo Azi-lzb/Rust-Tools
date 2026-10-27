@@ -1,0 +1,25 @@
+时间：2026-10-26 03:22:15（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：793f1706d4287f27c9af428eea5519b5630f80f8
+分支：pytools-dev；origin/pytools-dev 与 HEAD 同步。
+
+【目的】
+为 PT-6-2 已完成的累计时长表头 Python 语义兼容补一条真实交互入口回归，覆盖菜单 6 → 2、配置目录输出和开发者运行历史。现有完整 Python/Rust 合成 CLI 对拍已在 `20261026_005653_PT-6-2时长表头语义修复.txt` 记录；本次不改业务逻辑或共享 Excel-Core。
+
+【修改文件】
+- `pytools-core/tests/summary_menu_cli.rs`：新增合成批注模板，表头值为 1 天 3:15:20.123，格式 `[h]:mm:ss.000`；通过交互菜单处理匹配源工作簿，断言输出表头为 Python `timedelta` 文本、阶段记录的实际读取/写入引擎，并确认输入模板和源工作簿未变。
+- 本记录。
+
+【验证】
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1`：5/5 通过，包含新增 PT-6-2 累计时长菜单路由回归。
+- 既有直接 CLI Python/Rust 完整工作簿投影对拍：已由上述 00:56 记录报告通过；本次只增加菜单入口断言，没有重跑 probe。
+- 编译日志仍显示 workspace 既有 umya 弃用 API 与 PyTools 未使用 import 警告，本次未处理。
+
+【限制与未完成项】
+- 用户暂时没有可用的脱敏 PT-6-2 真实批注模板及匹配源工作簿；本次为合成菜单集成验证，不构成真实样本验收。
+- 真实 XLSM、生产 ExcelModifier capability、Linux/glibc 2.28、麒麟 V10/UOS V20 及离线 deb 仍未验收。
+- 保留执行前已存在的 `MIGRATION_INVENTORY.md` 修改、交接报告、PT-4-2 失败记录及 PT-6-2 较早缺口记录；本次未覆盖或清理。
+
+【回滚提示】
+撤销本次测试提交即可；不触及生产源文件、共享 crate、源 Python 项目或真实数据。

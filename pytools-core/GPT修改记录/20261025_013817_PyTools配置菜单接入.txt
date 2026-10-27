@@ -1,0 +1,26 @@
+时间：2026-10-25 01:38:17 Asia/Shanghai
+执行者：Codex PyTools 专属开发 Agent
+分支：pytools-dev
+修改前 commit：db25fcb
+修改后 commit：本轮提交待生成（记录生成时尚不可得）
+WIP：修改前 pytools-dev 工作树干净；main 最新公共提交均已有 patch-equivalent 变更，无需重复同步。
+
+目的：把原 PyCode 主菜单的 5-1 初始化/修复、5-2 查看配置接入 Rust `pytools menu`，保留现有 ExcelModifier 能力门控及原文件保护。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：增加主菜单类别 5、配置子菜单；配置缺失/不可加载时允许进入配置工具并限制其他业务菜单；初始化新配置、查看磁盘配置、生成修复计划、能力门控候选、显式确认后的安全替换及阶段耗时/实际引擎信息。
+- pytools-core/tests/config_menu_cli.rs：增加真实 `pytools menu` 的缺失配置初始化与查看、既有配置修复计划只读测试。
+- pytools-core/MIGRATION_INVENTORY.md：记录入口、测试、Python 对拍沿用证据及未验收事项。
+- 本记录。
+
+配置/VBA 影响：只改变 PyTools 交互入口，不改共享 crate、根 Cargo 文件、DEVELOPMENT_GOAL.md、Audit 或源 Python；无 VBA 修改。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --manifest-path Cargo.toml -p pytools-core --test config_menu_cli --test timeline_menu_cli --test dedup_menu_cli --test print_menu_cli --test conversion_menu_cli --test summary_menu_cli --test batch_tools_menu_cli --test fx_header_menu_cli --test archive_menu_cli --offline --locked -j 1`：通过，主菜单相关回归合计 31/31（各目标明细见 `MIGRATION_INVENTORY.md`）。
+- 修复计划菜单测试确认非空计划已保存、候选未生成、原配置字节保持不变；初始化菜单测试确认 11 张配置表可创建并由 5-2 重新读取。
+- Python/Rust 配置模板和值、表头批注及修复候选语义对拍沿用 `probe/reports/config_admin_parity_20261023.json` 与既有 `config_repair_execution.rs` 证据；本轮未重新运行 Python。
+
+未执行/已知问题：没有生产 Passed capability，因此未在菜单中执行候选提交；未修改真实用户配置，未做 Windows 桌面交互、麒麟/UOS、glibc 2.28 或 deb 验收。PT-5-1 修复生产验收仍为未验证。`cargo test` 输出含已有 shared `excel-editor` 弃用 API 和 `pytools-core` 未使用导入警告，本轮未触碰这些文件。
+
+回滚：提交后可用 `git revert <本轮功能提交>` 回滚本功能；不得用 reset/clean。测试生成的临时目录由集成测试清理。

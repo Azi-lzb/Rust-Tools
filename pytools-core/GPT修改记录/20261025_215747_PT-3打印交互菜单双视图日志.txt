@@ -1,0 +1,31 @@
+时间：2026-10-25 21:57（Asia/Shanghai）
+执行者：Codex
+分支：pytools-dev
+修改前 HEAD：a43f3c72f5ad067a61bff52e4eb1404d62fe4836
+修改后提交：随本记录所在 Git 提交确认。
+
+## 目的
+
+为 PT-3-1 至 PT-3-4 的真实交互打印菜单接入主菜单既有 `--log-view`：普通用户可见开始/完成、业务计数和耗时；开发者获得脱敏运行历史，含 PT 编号、状态、计数、阶段耗时、实际引擎/组件；`off` 不显示进度且不生成历史。保持页面设置和打印业务合同不变。
+
+## 修改文件
+
+- `pytools-core/src/bin/pytools.rs`：传递菜单视图；将打印命令报告构造与 CLI 输出分开；补充菜单进度、指标、实际引擎记录和脱敏历史。
+- `pytools-core/tests/print_menu_cli.rs`：覆盖四项菜单 developer 历史、路径脱敏、统计、user/off 行为，以及 capability 执行时的 ExcelModifier 实际引擎。
+- `pytools-core/tests/print_config_new_target.rs`：为并行测试临时目录名增加进程内序号，避免时间戳碰撞和夹具互删。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记日志接入及验证边界；文件尾已有 PT-4-2 共享转换缺陷 WIP 仍保留且不在本提交。
+
+## 验证
+
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test print_menu_cli --test print_config_new_target --test print_comment_execution -j 1`：7 项全部通过（4 + 2 + 1）。
+- 首次复验中 `print_config_new_target` 两测试临时目录发生并行碰撞；按测试进程内原子序号修正夹具后重跑通过。
+- 未重跑 Python/Rust 页面设置语义对拍：本次改动限于菜单日志，原业务报告/计划/执行流程保持不变；既有 PT-3 合成对拍报告仍是业务语义证据。
+
+## 未执行项与已知限制
+
+没有真实打印模板或生产 capability 验收；麒麟 V10/UOS V20 实机、glibc 2.28 实机、deb 安装及离线交付未验证。PT-3 整体状态仍未验收。打印仅写页面设置，不渲染或导出 PDF。
+
+## 回滚
+
+回滚本次独立提交即可移除此功能和测试变化；保留其前后已有的 PT-4-2 工作树记录及交接材料。源 Python 项目未修改。

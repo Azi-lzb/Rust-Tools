@@ -1,0 +1,23 @@
+时间：2026-10-27
+修改前 HEAD：c56ae04
+修改前 WIP：当前隔离 Worktree 已检查为干净；未触碰 pytools-dev 另一 Worktree。
+
+修改文件：
+- pytools-core/src/submission_check.rs：报告先写到独占临时候选，再用共享 file_commit 验证并无覆盖发布；处理输出路径竞争；候选作用域结束时清理。
+- pytools-core/tests/conversion_menu_cli.rs：V2 菜单冒烟重开输出簿，检查工作表、业务结果和候选清理。
+- pytools-core/MIGRATION_INVENTORY.md：登记本次安全发布修复与验证边界。
+
+目的：避免报告写入中断留下最终路径上的损坏簿，并避免报告名竞争覆盖已存在文件。提交检查 AND/OR 匹配业务规则未变。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml
+- cargo test --offline --locked -p pytools-core --lib report_ -j 1：4/4 通过，其中含无覆盖发布与错误分类回归。
+- cargo test --offline --locked -p pytools-core --test conversion_menu_cli v2_file_menu_routes_supported_workflows -j 1：1/1 通过。
+
+补充：提交路径仅在明确的目标已存在或操作系统 `AlreadyExists` 时换名重试；其他候选校验、写入或目录同步失败不被误判为冲突。上述 4/4 结果也包含两项既有文件排序报告回滚测试。
+
+未执行：Python/Rust 重新对拍、真实业务目录/配置验收、Linux/deb 验收。真实业务样本仍缺。
+
+已知限制：提交检查完整业务状态仍待 Windows 真实验收；共享 file_commit 的引擎及目标平台边界不在本次调整范围。
+
+回滚：恢复上述两个代码/测试文件至修改前版本，并移除此记录和对应迁移清单条目即可；不涉及共享 crate 或原 Python 项目。

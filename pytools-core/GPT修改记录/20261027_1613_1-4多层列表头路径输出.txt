@@ -1,0 +1,19 @@
+时间：2026-10-27 16:13（Asia/Shanghai）
+执行者：Codex
+修改前提交：f50ca026514315318a4ea31d8ebc882498295c3b
+修改后提交：cd23d0b
+WIP：保留未提交的 MIGRATION_INVENTORY.md 与既有 PT-2-3 修改记录，未纳入本次提交。
+
+目的：按用户反馈，让 1-4“表头路径比对与映射”报告 H 列“原始路径”和 I 列“标准路径”中的多层列头与 1-1 一样拼接。
+
+修改文件：
+- pytools-core/src/timeline_ops.rs：比对报告仍沿用原位置/路径差异判定；列路径显示复用 1-1 的 `compute_wide_col_paths`，将合并单元格父级纳入 H/I。
+- pytools-core/tests/timeline_menu_cli.rs：添加三层表头、合并父级、实际菜单入口测试；检查位置差异与路径差异的 H/I 值，且源模板字节未改变。
+
+验证：`cargo test --offline --locked -p pytools-core --test timeline_menu_cli header_path_compare -j 1` 通过（4/4）；`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 和 `git diff --check` 通过。测试夹具、输出与构建缓存位于 F 盘；本次未生成 Release 包。
+
+未执行：未使用用户真实模板、未做 Python 对拍、未执行 Linux/deb 验收。已有依赖弃用、未使用代码警告未涉及。
+
+回滚：对提交 `cd23d0b` 执行 `git revert cd23d0b`。无共享 crate、配置或组件版本变更。
+
+【组件版本】pytools-core 0.1.0（不变）

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_negative_serial_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_parity",
+  "source_python_files": [
+    "PyCode/core/wide_397_398.py",
+    "PyCode/core/io_excel.py"
+  ],
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "features": [
+      "negative Excel datetime serial -0.5",
+      "date number format yyyy-mm-dd",
+      "configured new target",
+      "confirmed wide-summary row-suffix menu route"
+    ]
+  },
+  "environment": {
+    "python": "3.12.10",
+    "python_packages": {
+      "openpyxl": "3.1.5",
+      "pandas": "2.2.3"
+    },
+    "python_baseline": "PyCode/core in the read-only original project",
+    "rust_execution": "Windows native pytools.exe through the interactive menu",
+    "sample_kind": "synthetic XLSX only"
+  },
+  "execution": {
+    "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix wide summary -> confirm new target",
+    "python_baseline": "existing compare_wide_summary.py helpers invoking read-only PyCode",
+    "rust_target_append_status": "succeeded",
+    "input_and_config_unchanged": true,
+    "negative_serial_regression": "timeline_menu_cli integration test passed"
+  },
+  "comparison": {
+    "full_workbook_projection": "passed using compare_wide_summary.assert_parity; sheet order, dimensions, number formats, merges, formulas, defined names, freeze panes, values, types and effective styles matched (numeric tolerance 1e-15)",
+    "python_openpyxl_value": "1899-12-29T12:00:00",
+    "rust_output_value": "1899-12-29T12:00:00",
+    "rust_output_number_format": "YYYY-MM-DD HH:MM:SS",
+    "raw_input_serial": -0.5
+  },
+  "limitations": [
+    "Synthetic XLSX only; no real/de-identified PyTools wide-summary sample was available.",
+    "Production ExcelModifier capability, real template preservation, Windows file-dialog interaction, Kylin V10/UOS V20, glibc 2.28 and offline deb remain unverified.",
+    "The existing-target negative-serial path has Rust integration regression coverage with a temporary test capability, but no separate Python parity run for that branch."
+  ]
+}

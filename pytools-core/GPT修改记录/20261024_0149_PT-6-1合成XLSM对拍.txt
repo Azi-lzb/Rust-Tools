@@ -1,0 +1,24 @@
+时间：2026-10-24 01:49（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：1461431（已推送至 origin/pytools-dev）；修改后 commit：本轮 PT-6-1 对拍提交，编号见 Git 历史。
+WIP 状态：本轮开始时 pytools-dev 与 origin/pytools-dev 同步且工作树干净。本轮只修改 pytools-core 的对拍脚本、机器报告、迁移清单和本记录；不修改 Rust 公共 crate、根 Cargo 文件、DEVELOPMENT_GOAL.md、Rules 或 Audit。
+
+目的：核实 PT-6-1 已声明支持的 .xlsm 输入在真实 Rust summary-used-range CLI 与 PyCode 行为下能否对拍，同时清楚限定无 VBA 合成包证据，不扩张为宏保真验收。
+
+修改文件：
+- pytools-core/probe/compare_summary_tools.py：第二个合成输入改为 `.xlsm`；构造有效的 macro-enabled workbook ContentType；PyCode 原流程以 keep_vba=True 读取，NoCom 与 Rust CLI 运行同一选择。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录 xlsx + 无 VBA macro-enabled XLSM 两输入对拍、Rust 引擎和错误类型结果。
+- pytools-core/MIGRATION_INVENTORY.md：标记宏启用无 VBA 合成包已测试；含 VBA 的真实 XLSM 与目标平台仍未验收。
+- 本修改记录。
+
+验证：
+- `python pytools-core/probe/compare_summary_tools.py`：退出码 0，Rust summary-used-range CLI 与只读 PyCode 输出对拍通过。输入为 1 个 XLSX 和 1 个不含 VBA 项目的 macro-enabled XLSM；输出 13 行，值/类型、已填充单元格样式、维度、冻结窗格、公式/合并/定义名称/打印区及页面设置一致；七种常见错误值继续保留。
+- 同次样本 NoComPyTools 对七种错误均输出空值，并保留其与 PyCode 的日期格式差异；范围和坐标仅限合成样本。
+- 两次完整 probe 运行均在 PyCode 汇总基线阶段附近输出 Python ZipFile.__del__ 的非致命“I/O operation on closed file”异常信息，但进程退出码为 0，Rust CLI 和输出对拍均成功。单独打开并关闭本合成 XLSM 的 openpyxl keep_vba=True 操作未复现；来源尚未定位，作为基线/夹具环境观察，不归因于 Rust。
+- 本轮没有 Rust 代码变更；前序 commit `1461431` 已通过 PT-6-1 专项 CLI 集成测试 2/2 和 rustfmt 检查。
+
+限制：本输入没有 vbaProject.bin，不能验证实际宏包、VBA 部件保留或真实业务 XLSM；XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28、deb 仍未验证。无真实业务样本，PT-6-1 整体验收仍未完成。
+
+回滚：提交后使用 `git revert <本轮提交>` 回滚此次合成 XLSM 对拍和状态记录，不影响 `1461431` 及更早提交。
+删除文件：无。
+【组件版本】：不升级，当前 0.1.0。

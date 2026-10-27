@@ -1,0 +1,22 @@
+日期：2026-10-26
+功能：PT-4-1 配置驱动批量重命名
+
+修改文件：
+- pytools-core/src/batch_rename.rs：将 Excel `datetime_serial` 配置值按工作簿日期系统投影为 PyCode/pandas 的日期时间文本；1904 日期系统按 1462 天换算，普通数值保持原格式。
+- pytools-core/tests/batch_rename_parity.rs：新增日期单元格配置的端到端回归。
+- pytools-core/MIGRATION_INVENTORY.md：记录发现、修复及验收边界；此前未提交的 PT-4-2 记录仍保留在工作树。
+
+问题证据：原项目只读配置中的“数据日期”是 Excel 日期单元格。真实 Rust CLI 将 Calamine 的序列值写入目标文件名并完成改名；Python `run_batch_rename_33` 将其转换成日期时间文本，在 Windows 因非法文件名字符而跳过。此前两侧均未以该配置值类型对拍。
+
+验证：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过。
+- `cargo test --offline --locked -p pytools-core --lib batch_rename::tests -j 1`：3/3 通过。
+- `cargo test --offline --locked -p pytools-core --test batch_rename_parity -j 1`：4/4 通过。
+- 原只读重命名配置 + 临时合成文件名，两侧 CLI 对拍：Python/Rust 均 `ok=0, skip=1`；源名和文件内容均保留。该文件名由测试生成，不是实际业务源样本。
+- PT-1-5 对原配置隔离副本的 Python/Rust 预校验计数均为 0 错误、0 警告。
+
+未执行：全量 PyTools 测试、Linux/麒麟/UOS、glibc 2.28 和离线 deb 验收。原项目没有与 PT-4-1 配置映射匹配的源文件名，因此真实文件批次仍未验收。
+
+已知边界：本修复忠实保留 Python 在 Windows 下对带冒号日期文本的改名失败行为，不擅自清洗日期配置。用户需要实际改名时，应提供符合文件名规则的日期文本；行为变更需另行确认。
+
+回滚：如需撤回本修复，回退本记录对应的 PT-4-1 代码/测试提交；不得回退或覆盖同一工作树中原有 PT-4-2 未提交记录。

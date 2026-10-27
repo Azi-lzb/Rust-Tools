@@ -1,0 +1,36 @@
+时间：2026-10-26 09:45:35（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前提交：6017ff423dcd6f2ed678286f4e01062e32297ff1（pytools-dev，与 origin/pytools-dev 同步）
+修改前 WIP：`pytools-core/MIGRATION_INVENTORY.md` 已含此前未提交的 PT-4-2 失败、PT-4-1、PT-4-8 和 PT-2-5 记录；`HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 失败记录及 PT-6-2 缺口记录未跟踪。本次保留这些内容，仅在迁移清单末尾追加本功能状态。
+
+## 目的
+
+补齐 PT-4-2 已实现的原生值转换在真实交互菜单中的入口。保真 sidecar 仍按既有契约运行；原生值转换是用户明确接受 Excel 格式/对象损失后的另一条显式路径。
+
+## 修改文件
+
+- `pytools-core/src/bin/pytools.rs`：转换菜单增加第 11 项，转换前说明 XLS/XLSM/XLSB 与 CSV 的数据契约及损失并要求确认；仅接受 `.csv/.xls/.xlsm/.xlsb`，固定传入 `--engine native --to xlsx`，继续使用既有双视图日志。
+- `pytools-core/tests/conversion_menu_cli.rs`：增加真实菜单子进程测试，验证拒绝时不选文件/不产出，确认后处理合成 `.xls`、工作表和数据坐标/值、空公式映射、源文件字节及脱敏运行历史/实际引擎。该夹具无公式，不覆盖公式文本。
+- `pytools-core/probe/compare_native_excel_value_conversion.py`：新增可复跑的 Python 值投影核验，使用临时生成的最小配置和仓库合成 XLS 夹具执行 Windows 原生 `convert-excel --engine native`，检查值/坐标、引擎历史和输入不变；该核验不等同于和 PyCode 保真转换结果对拍。
+- `pytools-core/probe/reports/native_excel_value_conversion_parity_20261026.json`：记录对拍结果及未覆盖范围。
+- `pytools-core/MIGRATION_INVENTORY.md`：追加本功能入口、验证和未验收状态。
+- 本记录：留存本次修改与回滚范围。
+
+## 验证
+
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：9/9 通过。
+- `cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1`：6/6 通过。
+- 只读原项目 `.venv` Python 3.12.10、xlrd 2.0.1、openpyxl 3.1.5 运行 probe：1 个合成 XLS 工作表、2 个非空格（1 文本、1 数值），工作表顺序、坐标、文本和数值一致，源文件未变。这是跨格式值投影核验，不与旧 PyCode 的 LibreOffice/COM 保真转换输出对拍。旧 XLS 的整数存储到 XLSX 数字的读取器类型投影不同，数值精确一致，已记入报告。
+- `git diff --check`：通过。没有修改原 Python 项目、共享 crate、根 Cargo 文件或真实业务数据。
+
+## 未执行项与已知限制
+
+- 没有可用的脱敏真实转换样本。该合成 XLS 不覆盖公式文本、公式缓存、日期时间、空字符串/错误类型、格式或其他 OOXML 对象；这些以外对象由原生值路由明确丢弃，完整保真必须走通过验证的 sidecar。
+- 没有手动操作 Windows 文件选择器，也没有完成 glibc 2.28、麒麟 V10、统信 UOS V20 或离线 deb 验收。先前记录的真实 `.xls` sidecar 公式/空字符串保真失败仍有效；PT-4-2 整体仍未验收。
+
+## 版本与回滚
+
+- 【组件版本】不升级；增加交互入口和验证，不改 Rust 转换数据逻辑或共享能力。
+- 删除清单：无。
+- 回滚：撤销本次 PT-4-2 菜单、测试、probe、报告、清单追加和本记录；保留此前工作区 WIP、已有 native CLI 与 sidecar 失败关闭行为。

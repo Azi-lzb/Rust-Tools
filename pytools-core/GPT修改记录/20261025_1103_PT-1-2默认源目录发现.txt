@@ -1,0 +1,33 @@
+时间：2026-10-25 11:03（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+工作树与分支：`C:\Users\AZI\Desktop\VibeCode\pytools-dev`，`pytools-dev`
+修改前 HEAD：`dd24c98`，工作区干净，与 `origin/pytools-dev` 同步。
+修改后提交：本记录随本轮本地提交；远程同步状态见最终报告。
+
+目的：补齐 PT-1-2 直接 CLI 在未提供源工作簿位置参数时，对原 PyCode `source_paths=None` 默认行为的迁移与验证。
+
+涉及文件：
+- `pytools-core/src/timeline_extract.rs`：新增配置输入目录递归发现；仅接受 `source_exts` 中配置扩展名，忽略 `~$` 锁文件，排序后返回；非目录/不存在目录返回空列表。
+- `pytools-core/src/bin/pytools.rs`：`timeline-extract --config <配置簿>` 未带位置参数时调用默认发现；新增发现阶段进度和耗时记录；显式路径和菜单文件选择保持原路由；更新 CLI 用法。
+- `pytools-core/tests/timeline_menu_cli.rs`：加入递归、扩展名大小写、锁文件、未配置格式和空输入目录的真实 CLI 测试。
+- `pytools-core/probe/compare_timeline_extract.py`：增加无位置参数的 PyCode/Rust 默认目录扫描对拍；重跑时保留此前已记录的 Windows 原生文件对话框手工验证摘要。
+- `pytools-core/probe/reports/timeline_extract_parity_20261025.json`：更新合成对拍报告。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录默认目录发现证据及仍未验收项。
+- 本记录。
+
+业务行为：对照 `PyCode.core.timeline_396.run_timeline_slim` 和 `io_excel.list_source_files`。省略文件列表时递归扫描 `GlobalConfig.input_dir`，按配置扩展名不区分扩展名大小写筛选、跳过名称以 `~$` 开头的 Excel 锁文件并按路径排序。显式文件列表和交互菜单的原文件选择不变。没有可扫描输入时正常完成并不创建输出工作簿。运行记录加入 `source_discovery` 阶段；未使用共享 crate、目标文件或新外部依赖。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：11/11 通过，覆盖新建来源发现与空目录测试。
+- 使用只读源项目 `.venv`（pandas 2.2.3、openpyxl 3.1.5）运行 `pytools-core/probe/compare_timeline_extract.py`：通过。默认扫描 4 个配置扩展名文件（3 个有效、1 个损坏），递归子目录被纳入、锁文件跳过，输出完整工作簿投影与 PyCode 一致；既有显式输入、菜单和目标写入场景也全部通过。
+- 初次尝试系统 Python 时缺少 pandas；使用捆绑 Python（pandas 3.0.1）时发现既有基线的表头粗体行为与该版本不同。以源项目锁定环境复跑后通过；这不是本轮默认发现路径差异。
+- cargo 输出仍有既有共享 `excel-editor` 弃用 API 警告及 PyTools 两项未使用导入警告，本轮未改共享代码或无关模块。
+
+未执行/已知限制：未对原项目业务工作簿做写入；目录发现对拍使用合成工作簿。真实业务样本、麒麟 V10/UOS V20、glibc 2.28 与 deb 离线安装验收仍未完成，PT-1-2 整体保持未验证。
+
+敏感信息检查：提交仅含 Rust 代码、合成测试、探针和结果记录；不含源业务工作簿、单元格内容、凭据或用户数据。原 Python 项目只读。
+
+删除清单：无。
+回滚提示：可使用 `git revert <本轮提交>` 撤销本功能增量。
+【组件版本】：不升级；遵循现有 workspace crate 版本。

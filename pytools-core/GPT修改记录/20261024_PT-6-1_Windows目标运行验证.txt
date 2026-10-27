@@ -1,0 +1,28 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证起点 commit：c153fa0；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。`origin/main` 为 473c75a。原 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、规则、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。
+
+目的：使用可用的 Windows 目标工具链运行 PT-6-1 真实 CLI，补充 Windows 文件系统与进程环境下的业务对拍证据。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：记录 Windows GNU 目标二进制运行和 VBA XLSM 对拍。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-6-1 Windows 阶段验证状态。
+- 本修改记录。
+
+真实入口与结果：Windows 主机没有本机 Rust/Cargo。复用 WSL Ubuntu 已安装的 MinGW linker 和 `x86_64-pc-windows-gnu` target，离线构建 `pytools.exe` 成功；随后由 Windows PowerShell 进程直接启动该 exe 处理固定 XlsxWriter VBA 启用 XLSM 样本。与只读 PyCode 基线的工作簿投影完全一致（1 行），实际读写引擎为 Calamine/rust_xlsxwriter。源文件 SHA-256 前后相同，输出为不含 VBA 的 `.xlsx`；11 条开发者事件与保存历史逐项一致，`output_workbook` 阶段为 14 ms。宏未执行。
+
+真实业务样本扩展：在同一 Windows target exe 上重跑原 PyTools `xlsx/` 目录的 13 份只读 XLSX，按既有四批调用 PyCode 基线和真实 CLI。4 批共 203,580 行的完整工作簿投影全部精确一致；输出列分别为 260/213/17/22，开发者事件数为 26/14/27/63，逐批与保存历史一致。源文件大小和修改时间均未变化。各批 `output_workbook` 阶段记录 472/6,665/1,438/55,095 ms，仅是单次诊断数据，不作性能比较。
+
+验证：
+- `cargo build --offline --locked -p pytools-core --bin pytools --target x86_64-pc-windows-gnu`（WSL/MinGW 交叉构建）：通过。
+- Windows PowerShell 启动 `pytools.exe summary-used-range --log-view developer`：VBA XLSM 与 13 份原项目 XLSX 均完成实际运行。
+- Windows target CLI 与 PyCode 的 13 份 XLSX 四批对拍：4/4 批精确一致，203,580 行；事件历史均匹配，源文件大小/mtime 未变。
+- Windows target CLI 与 PyCode VBA 启用 XLSM 对拍：值/类型、样式、工作表与输出属性完全一致；源未改变，输出 XLSX 不含 VBA，进度事件历史匹配。
+- `python -m json.tool pytools-core/probe/reports/summary_used_range_parity_20261024.json`：通过。
+- `git diff --check`：通过。
+
+差异与边界：未观察到 PyCode/Rust 输出差异。Windows target exe 由 WSL 交叉构建，不是 Windows 原生 Cargo 构建；原生工具链不可用。该证据不覆盖麒麟 V10/UOS V20 实机、deb 安装、glibc 2.28、原 PyTools 业务含 VBA 的 XLSM 样本或正式峰值 RSS。未修改 Rust 产品业务语义和生产路由。
+
+删除文件：无；CLI 输出与对拍文件均位于系统临时目录。
+回滚：可用 `git revert <本轮提交>` 撤回本轮验证记录。
+【组件版本】：不升级，当前 0.1.0。

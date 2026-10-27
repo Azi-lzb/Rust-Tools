@@ -1,0 +1,28 @@
+时间：2026-10-26 03:43:56（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：daf837387689e726c167500deecaa3a8280dfaae
+分支：pytools-dev；开始时 HEAD 与 origin/pytools-dev 同步。原工作树已有 MIGRATION_INVENTORY.md 修改、HANDOFF_ZCODE_TO_CODEX.md 及 PT-4-2/PT-6-2 两份未跟踪记录，本次均保留且未暂存。
+
+【目的】
+为 PT-4-8 提交检查接入现有 user/developer/off 三视图运行日志，记录配置读取、文件扫描、文件名匹配、报表写出阶段的计数、耗时和实际引擎；交互菜单类别 4→8 沿用主菜单日志视图及全局日志目录。developer 视图在报表写出失败时仍保存失败历史并打印其路径。
+
+【修改文件】
+- pytools-core/src/submission_check.rs：新增进度事件 API；按阶段报告启用规则数、发现/处理文件数、匹配结果与耗时；报告写出失败时发出带错误类别的终态事件。
+- pytools-core/src/bin/pytools.rs：CLI 支持 --log-dir 与 --log-view；user 输出步骤与耗时，developer 输出 JSON 事件并写脱敏历史，off 不输出事件/历史；交互菜单传递全局日志目录和视图。
+- pytools-core/tests/submission_check_parity.rs：验证 Python 基线统计与日期单元格语义；验证三种视图、阶段/引擎/耗时字段、历史文件脱敏及写出失败记录。
+- pytools-core/tests/conversion_menu_cli.rs：修正既有局部映射菜单测试的规则数断言；其夹具含两条 M/N 映射，业务报告实际返回两条，原断言一条与夹具不符。
+- 本记录。
+
+【验证】
+- Windows 原生 cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- Windows 原生 cargo test --offline --locked -p pytools-core --test submission_check_parity --test conversion_menu_cli -j 1：12/12 通过（提交检查 4/4；转换菜单 8/8）。提交检查完整输出工作簿投影和统计仍与已生成的只读 Python 基线一致；菜单三视图与报告写出失败均验证通过。
+- developer 事件/历史只包含阶段、计数、耗时、组件和引擎，不含输入目录或文件名；实际记录 Calamine、Rust filesystem/Rust 匹配与 rust_xlsxwriter。
+- 初次转换菜单关联测试因其旧规则数断言失败，独立复现后确认测试夹具含两条映射；更正断言后整组测试通过。
+- 编译有既有 umya API 弃用及无关未使用导入警告。
+
+【未执行项及已知限制】
+本次仅使用合成配置与文件；用户暂无脱敏样本，因此 PT-4-8 真实业务验收仍未完成，不改变迁移状态。未运行全量 PyTools/workspace 测试、Linux/glibc 2.28、麒麟/UOS 或离线 deb 验收；未修改共享 crate、根 Cargo 文件或只读 Python 源项目。
+
+【组件版本】不升级：新增日志与测试，不改变依赖或产品版本。
+【删除清单】无。
+【回滚提示】仅撤销上述 PyTools 代码/测试和本记录；不要覆盖或丢弃原有迁移清单与未跟踪交接材料。

@@ -1,0 +1,33 @@
+{
+  "actual_engines": [
+    "calamine",
+    "rust_xlsxwriter"
+  ],
+  "baseline": "probe/reports/sheet_extract_area_python_baseline.json",
+  "checks": {
+    "damaged_xlsx_reported_as_partial_failure": "passed",
+    "menu_task_loading_and_file_selection": "passed",
+    "production_capability_created": false,
+    "run_history_excludes_cell_values": "passed",
+    "source_input_bytes": "preserved",
+    "unsupported_format_filtered_before_reader": "passed",
+    "worksheet_names_dimensions_values_and_types": "preserved"
+  },
+  "compared_cells": 44,
+  "entry_point": "pytools menu -> 7 -> 6",
+  "inputs": {
+    "damaged_xlsx_expected_failures": 1,
+    "filtered_unverified_formats": 1,
+    "xlsx": 3
+  },
+  "schema_version": 1,
+  "stats": {
+    "extracted_sheets": 4,
+    "failed_files": 1,
+    "files": 2,
+    "output_files": 1
+  },
+  "status": "passed",
+  "suite": "pytools.sheet_extract_area_menu_parity",
+  "worksheet_count": 4
+}

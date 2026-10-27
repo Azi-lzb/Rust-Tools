@@ -1,0 +1,36 @@
+{
+  "operation48": {
+    "remark": "4-8 对拍",
+    "mapping": [
+      {"source": "aa", "target": "bb"},
+      {"source": "bb", "target": "cc"},
+      {"source": "测试", "target": "结果"},
+      {"source": "del", "target": ""},
+      {"source": "nest", "target": "sub/name"},
+      {"source": "zlong", "target_repeat": 300}
+    ],
+    "input_names": [
+      "invoice_aa_aa.pdf",
+      "测试_aa.docx",
+      "same_aa.xlsx",
+      "same_bb.xlsx",
+      "prefix_del.doc",
+      "nest.txt",
+      "unmatched.txt",
+      "gone.pdf",
+      "folder_aa.pdf",
+      "zlong.bin"
+    ],
+    "existing_names": ["same_cc.xlsx"],
+    "missing_names": ["gone.pdf"],
+    "directory_names": ["folder_aa.pdf"],
+    "expected_renamed_names": [
+      "invoice_cc_cc.pdf",
+      "结果_cc.docx",
+      "same_cc_1.xlsx",
+      "same_cc_2.xlsx",
+      "prefix_nan.doc"
+    ],
+    "expected_skipped_names": ["nest.txt", "unmatched.txt", "gone.pdf", "folder_aa.pdf", "zlong.bin"]
+  }
+}

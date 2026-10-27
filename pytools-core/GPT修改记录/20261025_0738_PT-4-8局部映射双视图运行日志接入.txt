@@ -1,0 +1,29 @@
+时间：2026-10-25 07:38（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：e9cc884；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无既有用户 WIP。本轮业务提交：f187284（feat(pytools): add local filename map progress views）。本记录单独提交。
+
+目的：为 PT-4-8 局部文件名映射接入普通用户和开发者运行日志，并从真实类别 4 菜单选择和直接 CLI 提供三种日志视图。既有映射顺序、文件名扩展名处理、目标冲突后缀和逐项跳过行为保持不变。
+
+修改文件：
+- pytools-core/src/local_filename_map.rs：保留 `run_local_filename_map_candidate` 兼容入口，新增带进度事件的 Rust 业务 API。事件覆盖配置读取、逐文件处理和任务完成，带实际引擎、计数和累计耗时；未匹配、失败等状态不附加输入路径或名称。
+- pytools-core/src/bin/pytools.rs：菜单类别 4→7 传递全局日志目录/视图；`rename-local-map` CLI 支持 `--log-dir`、`--log-view user|developer|off`。developer 输出事件并写 `.run.json` 历史；off 不输出进度和历史；原结果 JSON 保持兼容，只在 developer 添加历史路径/警告字段。
+- pytools-core/tests/local_filename_map_48_parity.rs：给测试临时目录添加原子序号，避免并行运行时目录重用。
+- pytools-core/tests/conversion_menu_cli.rs：添加真实 Rust 菜单三视图用例，验证改名输出、文件字节保持、日志事件/引擎/耗时及路径/名称脱敏。
+- pytools-core/MIGRATION_INVENTORY.md：更新 4-8 菜单入口、日志和验证边界。
+- 本记录。
+
+真实入口与数据流：`pytools menu` → 主菜单 4（转换工具）→ 7；直接命令为 `pytools rename-local-map`。配置由共享 excel-reader/Calamine 读取，文件名映射和文件系统操作由 Rust 执行，工作簿不修改。user 显示阶段进度和耗时；developer 历史记录 Calamine、RustFilesystem、阶段耗时及总耗时，不含输入路径和文件名；off 隐藏进度且不生成结构化历史。未更改 Excel 配置或 VBA；原 PyTools Python 项目只读。
+
+验证（Windows 原生 MSVC）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test local_filename_map_48_parity --test conversion_menu_cli -j 1`：local_filename_map_48 3/3、conversion_menu_cli 7/7，共 10/10 通过。映射统计和最终目录对比既有 Python 基线；输入文件字节保持。原 Python 对拍脚本本轮未重跑；新增日志文字未与 Python logger 逐字比较。
+- `git diff --check`：通过。编译只有既有 excel-editor 弃用警告及 pytools-core 两项未使用导入警告。
+- WSL 当前缺少 `cargo-zigbuild` 和 Zig，未进行 glibc 2.28 Linux 构建；未跑 workspace 全量测试。
+
+限制与已知问题：当前测试使用合成配置和文件；真实业务目录、Windows 原生文件选择器、非 UTF-8 文件名跨平台语义、麒麟 V10/UOS V20、glibc 2.28 与离线 deb 未验证。日志性能开销和 Python logger 并发/时序差异未测量。
+
+敏感内容检查：本轮变更仅含 PyTools Rust 代码、合成测试、迁移清单和本记录；未发现凭据、业务样本或不应公开文件。开发者历史文件不记录输入路径或文件名。
+
+删除清单：无。
+回滚提示：`git revert f187284` 可撤销业务代码、测试和迁移清单更新；保留本记录作为修改证据。
+【组件版本】：pytools-core 0.1.0，不升级。

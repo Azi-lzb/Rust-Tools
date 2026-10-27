@@ -1,0 +1,35 @@
+时间：2026-10-23 08:46:25（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace 为未跟踪初始化状态；本轮只在现有 Rust 候选上补 CLI 调度、入口对拍与状态记录，未清理、重置或覆盖其他 WIP。
+
+目的：把已实现并与 Python 合成基线对拍的文件排序前缀功能（pytools 操作 4-9）接入可直接调用的 Rust `pytools` CLI，使显式文件列表可完成规则读取、文件改名与结果 XLSX 生成。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：增加 `file-sort-prefix` 命令，解析 `--config`、可选 `--output-dir`、`--log-dir` 和显式文件路径；默认输出目录为 `./output`、日志目录为 `./logs`，JSON 输出包含统计、逐项结果、报告及日志路径。
+- `pytools-core/tests/file_sort_prefix_operation_parity.rs`：增加真实产品二进制 CLI 集成测试，比较 Python 基线统计和最终文件名集合，确认结果簿可由共享 Calamine reader 重开，并检查改名文件及既有冲突目标的字节内容。
+- `pytools-core/probe/reports/file_sort_prefix_operation_parity.json`：记录 CLI 命令、接入边界、本轮测试及未覆盖行为。
+- `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/README.md`：记录功能入口与剩余差异。
+- `PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：同步 4-9 CLI 状态和证据范围。
+- 本记录。
+
+迁移范围：
+- 命令：`pytools file-sort-prefix --config <workbook.xlsx> [--output-dir <directory>] [--log-dir <directory>] <file>...`。
+- 调用现有 Rust `run_file_sort_prefix_49`：使用共享 Calamine 读取“文件排序配置”，按规则顺序/首次匹配规则为显式输入文件加排序前缀，并用 rust_xlsxwriter 生成“文件排序前缀结果”工作簿。
+- 目标文件不覆盖既有路径；报告写入失败时 Rust 实现回滚本轮已完成改名。CLI 不扫描目录，不接入原 GUI dispatcher，也未改变生产默认路由。
+- 源 Python 4-9 使用 `get_logger` 写文件并输出控制台日志；Rust CLI 为成功/失败项写入同格式的时间戳日志文件并输出到 stderr。测试断言合成案例的成功日志条数和消息字段，但未逐字对拍日志时间、并发及重复运行行为。
+
+对拍及验证：
+- Python 基线文件为 `probe/reports/file_sort_prefix_operation_python_baseline.json`，对应只读源 `PyCode/core/convert_33_34_35_37.py::run_file_sort_prefix_49`。本轮重新核对源文件 SHA-256 为 `F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`，与基线报告相同；本轮未重新运行 Python 测试或修改 Python 项目。
+- 已有合成基线覆盖 8 个输入路径、4 条有效规则、1 个既有冲突目标、1 个缺失路径和 1 个目录；Python/Rust 统计为规则 4、文件 8、改名 5、未命中 1、跳过 2、失败 0。既有 API 对拍比较逐项报告行及 XLSX 表头/单元格。
+- 新增 CLI 测试也验证以上计数、报告路径和工作表可打开、最终文件名集合与基线一致，普通文件内容保持且既有目标仍为原字节；日志文件包含 5 条成功事件。日志实现后 `cargo test -p pytools-core --test file_sort_prefix_operation_parity --locked -- --nocapture`：3/3 通过。
+- WSL Ubuntu 执行 `cargo fmt --all -- --check`：通过；`cargo test --workspace --locked`：116 passed、0 failed（其中 pytools-core 44 passed）；`cargo check --workspace --locked`：通过。上述均为日志实现后的最终复验。
+
+未完成与已知风险：
+- 原 GUI 菜单/dispatcher、目录发现、日志时间/并发/重复运行和失败事件与 Python logger 的逐项等价、真实用户配置和真实目录权限/占用场景尚未验证。
+- 对拍为合成 XLSX 配置和普通本地文件；Windows 原生 Rust、麒麟 V10、统信 UOS/glibc 2.28、离线 deb、不同文件系统（特别是不支持硬链接的文件系统）均未验收。
+- 这只完成 4-9 Rust CLI 接入，不代表转换与文件命名菜单组或 pytools 产品迁移完成；4-6、4-7、4-10 和其他菜单功能仍按迁移台账推进。
+- 本轮未修改依赖、构建配置、原 Python 项目或生产默认路由。
+
+回滚：从 `pytools.rs` 移除 `file-sort-prefix` 分派/handler；移除 `file_sort_prefix_operation_parity.rs` 中新增 CLI 测试；恢复 probe 报告、README、迁移台账、操作清单、架构状态和本记录。保留此前已存在的 `run_file_sort_prefix_49` Rust API、Python 基线和其他工作区 WIP；不得删除或修改只读 Python 源项目。

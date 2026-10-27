@@ -1,0 +1,9 @@
+# PyTools independent repository baseline
+
+- Baseline source: `C:\Users\AZI\.codex\worktrees\pytools-cli-menu-entry\1.rust-workspace`, branch `codex/pytools-menu-entry`, HEAD `a3f12e69c27c13303cbad450167a6fc200593e01`.
+- This was the source tree used by `F:\PyToolsRustV2\run-pytools-dev.bat` for manual testing. Its tracked and untracked work was copied; the source worktree remains unchanged.
+- The formal `pytools-dev` snapshot at `C:\Users\AZI\Desktop\VibeCode\pytools-dev`, branch `pytools-dev`, HEAD `4a7c56b10cba57ec4431b5d8a71d594fc749004c`, was compared for product-specific additions. PT-7-6 area extraction deltas selected for targeted inclusion: `.xlsm` area input, Python-compatible merged-child semantics, typed Excel error preservation, and a user-visible warning when configured areas are invalid. Source commits are `8671b1e`, `d1c7d9b`, and `47979ac`; the full formal branch was not replayed.
+- Existing executables under `F:\RustBuild\pytools` are not used by `run.bat`; it launches only `dist\pytools.exe`. The first Release EXE must be built from this repository using `build-release.bat` after explicit user authorization.
+- `config.xlsx` at the project root is a local ignored copy of the configuration used by the previous launcher. It is not part of the initial Git commit. `F:\PyToolsRustV2\config.xlsx` remains untouched.
+- All five original worktrees and their work-in-progress snapshots are preserved in `F:\RustWorkspaceSplitSnapshots\baseline-20261027`. The repository bundle, original paths/HEADs, status files, tracked WIP patches, and complete non-build tree copies are documented in its `manifest.txt`.
+- Cargo build, test, check, run, clippy, and executable validation were intentionally not performed for this split. The added PT-7-6 behavior remains unverified until explicitly authorized Windows validation.

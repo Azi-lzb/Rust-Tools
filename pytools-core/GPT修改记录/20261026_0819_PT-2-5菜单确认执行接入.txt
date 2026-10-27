@@ -1,0 +1,24 @@
+时间：2026-10-26 08:19 +08:00
+执行者：Codex
+修改前 commit：38b5167471fbd56a1e1b9fbbdf04ed1c9f87160a
+修改后 commit：本记录随 PT-2-5 菜单接入提交
+修改前 WIP：保留既有 MIGRATION_INVENTORY.md 改动、HANDOFF_ZCODE_TO_CODEX.md、PT-4-2/PT-6-2 未跟踪记录；未覆盖或清理。
+
+修改目的：把 PT-2-5“按配置追加到目标”从仅生成计划接入生产交互菜单，沿用现有 Rust append executor、安全目标提交和 capability 检查。
+修改文件：
+- pytools-core/src/bin/pytools.rs：主菜单传递 capability/platform；2-5 展示计划并要求明确确认；新目标通过 Rust writer 候选重开后安全创建，既有目标经已验收 ExcelModifier capability 执行，否则保持计划模式；developer 日志记录阶段、耗时、实际引擎及 writer/Modifier 调用状态；关闭附带计划文件时用自动清理的临时计划。
+- pytools-core/tests/dedup_menu_cli.rs：新增确认创建新目标、既有目标无 capability 保持原样、既有目标有合成 capability 经菜单提交的集成覆盖；原菜单计划测试改为断言未确认时只留计划。
+- pytools-core/MIGRATION_INVENTORY.md：追加本次执行入口状态与验证范围，保留此前未提交内容。
+- pytools-core/GPT修改记录/20261026_0819_PT-2-5菜单确认执行接入.txt：本记录。
+
+测试与验证：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml` 通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test dedup_menu_cli --test dedup_append_execution -j 1`：11/11 通过（菜单 5，执行器 6）。
+- Windows 原生 `cargo build --offline --locked -p pytools-core --bin pytools -j 1` 通过。
+- 复用现有 Ubuntu WSL，以 `target/pt2-menu-linux` 独立 Linux target 离线运行同一组测试：11/11 通过。普通 host 功能验证，不代表 glibc 2.28、麒麟 V10、统信 UOS 或 deb 验收。
+- 未运行 Python/Rust 对拍：本轮只接入已有业务执行器；旧合成语义对拍 `probe/reports/real_shape_dedup_parity_20261025.json` 未改变且不代表真实样本验收。
+
+未执行项及已知问题：当前无脱敏真实工作簿；生产 capability、完整真实模板保真、目标 Linux、glibc 2.28 与离线 deb 未验收。共享 crate、根 Cargo/Cargo.lock、Audit 与原 Python 项目未修改。
+删除清单：无。
+回滚提示：回滚包含本次源代码/测试/记录的功能提交；提交前既有 Worktree WIP 继续保留。
+【组件版本】：不升级；未改 Cargo manifest/lock。

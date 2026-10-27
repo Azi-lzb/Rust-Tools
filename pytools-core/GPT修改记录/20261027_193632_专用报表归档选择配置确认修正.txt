@@ -1,0 +1,17 @@
+工作树：`codex/pytools-menu-entry`，基线 HEAD `bf22a77`。
+
+本轮修改：
+- PT-7-4（菜单 5-4）：默认生成源文件旁 `PyTools_专用报表处理结果` 副本；使用页眉 OOXML 补丁，并验证补丁前置条件、写入统计、包内除目标页眉外所有部件及源文件哈希。临时候选处理后清理，源文件不修改；用户输出包含副本路径。
+- PT-8-4/PT-8-5（菜单 6-4/6-5）：输入选择增加“批量选择文件”“选择文件夹（仅当前层）”“选择文件夹（递归子目录）”；归档复制业务逻辑保持原样。
+- PT-5-1（菜单 7-1）：初始化/修复前增加独立确认步骤，必须再次输入 `1`；其他输入取消。菜单标签明确标注“需二次确认”。
+- PT-7-1/PT-7-3 副本执行实现仍在同一未提交代码集中，之前的针对性测试已通过；本次没有重复运行这两项测试。
+
+验证：
+- `cargo fmt -p pytools-core -- --check`：通过。
+- PowerShell：`$env:CARGO_TARGET_DIR='F:\RustBuild\pytools\debug'; cargo test --offline --locked -p pytools-core --test archive_menu_cli --test config_menu_cli --test fx_header_menu_cli -j 1`：15/15 通过（归档 2、配置 9、页眉 4）。首次构建的测试产物写入 F 盘 Debug 目录。
+- PT-7-4 样本为仓库合成夹具；真实业务工作簿和用户端人工检查仍未验证。未生成 Release，未执行 Linux 测试。
+
+留存：
+- `pytools-core/MIGRATION_INVENTORY.md` 有任务开始前已存在的未提交修改，本轮未改写、暂不纳入本记录提交。
+- 未跟踪的 PT-2-3 记录保持原样。
+- 回滚本轮菜单逻辑可恢复 `pytools-core/src/bin/pytools.rs`、`tests/archive_menu_cli.rs`、`tests/config_menu_cli.rs`、`tests/fx_header_menu_cli.rs` 对应改动；不回滚其他并行未提交内容。

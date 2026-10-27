@@ -1,0 +1,27 @@
+{
+  "source": "source.xlsx",
+  "python_legacy_output": "python_expected.xlsx",
+  "rust_output": "rust_output.xlsx",
+  "source_sha256_before": "33e2c2ca8faf5038ebb8951174dbe546100f54507f352c0f9500c97a7f8dc1d2",
+  "source_sha256_after": "33e2c2ca8faf5038ebb8951174dbe546100f54507f352c0f9500c97a7f8dc1d2",
+  "source_unchanged": true,
+  "sheets_compared": 1,
+  "difference_count": 0,
+  "differences": [],
+  "legacy_helper_output_style_readable": false,
+  "legacy_helper_output_style_error": "IndexError: list index out of range",
+  "comparison_oracle": "source worksheet properties copied by the legacy helper; its generated styled cross-workbook output is separately checked and is not used as the style oracle when unreadable",
+  "compared_properties": [
+    "cell values read with data_only=True",
+    "cell number formats, font, fill, alignment and protection",
+    "merged ranges",
+    "row height, hidden state and outline level",
+    "column width, hidden state and outline level",
+    "comment cell positions"
+  ],
+  "limitations": [
+    "synthetic XLSX only",
+    "direct Umya candidate output; does not register a production capability",
+    "does not validate every OOXML package preservation item"
+  ]
+}

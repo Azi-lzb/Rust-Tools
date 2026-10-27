@@ -1,0 +1,34 @@
+时间：2026-10-26 05:41（Asia/Shanghai）
+执行者：Codex
+修改前 commit：f73596335a12669c58721328842fabf3fdb6f382
+修改后 commit：待提交
+
+WIP 状态：修改前工作树已有 `pytools-core/MIGRATION_INVENTORY.md` 修改，以及 `HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 转换失败记录、PT-6-2 缺样本记录未跟踪。本次均未修改、暂存或丢弃。
+
+目的：补齐 PT-7-5 对 Python 3.12 `float(string)` 数值文本语义的 Unicode 15 数字覆盖。检查发现 `region_sum.rs` 原有十进制数字起始码点表只有 64 项，遗漏 Unicode 数学双线体、无衬线、无衬线粗体和等宽体四组 Nd 数字；合法文本因此会被当作非数值跳过。
+
+修改文件：
+- `pytools-core/src/region_sum.rs`：数字块表扩展为完整 68 组；单测对五组数学数字都断言下划线数值 `1000.25` 可解析。
+- `pytools-core/probe/generate_region_sum_fixtures.py`：添加独立五工作表合成夹具生成逻辑。
+- `pytools-core/tests/fixtures/region_sum/unicode_math_digits.xlsx`：新增包含五组数学数字的合成业务工作簿。
+- `pytools-core/tests/fixtures/region_sum/cases.json`：将该工作簿纳入现有 PT-7-5 CLI/输出投影对拍，更新统计期望。
+- `pytools-core/probe/reports/region_sum_python_baseline.json`：按更新后的现有夹具集重新生成只读 PyCode 基线。
+- `pytools-core/probe/reports/region_sum_unicode15_math_digits_parity_20261026.json`：记录本轮机器验证结果。
+- 本记录。
+
+实现/迁移影响：业务入口仍为 `pytools region-sum-check`；未改变命令、配置、输入输出合同、文件写入行为或 Excel 引擎。PyCode Python 3.12.10/OpenPyXL 基线对五组数字文本均解析为 1000.25；新增五张工作表各产生 1 条预期汇总差异，更新后基线统计为 files=6、sheets=10、errors=8、failed_files=1。Rust CLI 与 PyCode 完整结果投影一致。
+
+实际验证：
+- `cargo fmt --manifest-path pytools-core\Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib --test region_sum_parity -j 1 region_sum --quiet`：4 个 PT-7-5 库测试 + 5 个对拍测试通过。
+- `cargo test --offline --locked -p pytools-core --test region_sum_parity -j 1 --quiet`：7/7 通过。
+- 原 PyCode 只读基线：Python 3.12.10，输出 files=6、sheets=10、errors=8、failed_files=1；运行设置 `PYTHONDONTWRITEBYTECODE=1`，结果及日志仅写入临时目录。
+- 独立核对 Python 3.12 的 Unicode 数据库与 Rust 表：两边均为 68 个 Nd 十进制数字块，码点起始表逐项一致；五个新夹具文本均由 Python `float()` 解析为 1000.25。
+- 首次编译只因新增测试字面量被推断为 `i32` 失败；改为显式 `u32` 后上述最终测试全部通过。
+
+未执行及已知限制：目前没有真实业务样本；PT-7-5 仍未通过真实样本验收。未在本轮验证 Linux/glibc 2.28、麒麟 V10/UOS V20、GUI 文件选择器或离线 deb。Unicode 表固定匹配 Python 3.12.10 的 Unicode 15.0.0 数据库。
+
+【组件版本】pytools-core 0.1.0；不升级。
+公共能力：无共享 crate/依赖改动，无需 main 协调。
+删除清单：无。
+回滚提示：回滚本次 PT-7-5 数字块表、单测、生成器分支、新夹具及对应基线/机器报告/本记录；保留修改前的迁移清单、交接文件及 PT-4-2/PT-6-2 WIP。

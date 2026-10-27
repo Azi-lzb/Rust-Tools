@@ -1,0 +1,71 @@
+{
+  "suite": "pytools.pt_4_4_sheet_rename_python_baseline",
+  "source_function": "PyCode.core.convert_33_34_35_37.run_batch_rename_sheet_37",
+  "source_sha256": "9cfd0de33f6cc0cc7c665ace7c445feb125b24f0c201165bcf281a53f24617a3",
+  "python": "3.12.10",
+  "openpyxl": "3.1.5",
+  "pandas": "2.2.3",
+  "fixture_sha256": {
+    "config.xlsx": "537e92d4f90d5a6014f46f2fe0547a832c5a09b1a3385c75c11821f91934e2ce",
+    "input.xlsx": "ce07e553f8031604cc0a5dd55de2a2aae252ec7bf73bcd008657384c4c3f26ef"
+  },
+  "result": {
+    "workbooks": 1,
+    "rename_ok": 5,
+    "skip": 5
+  },
+  "projection": {
+    "sheet_names": [
+      "RenamedA",
+      "A",
+      "Taken2",
+      "Taken",
+      "Invalid",
+      "Same",
+      "Long",
+      "DupTarget",
+      "Dup2",
+      "Keep",
+      "Blocked"
+    ],
+    "a1_values": {
+      "RenamedA": "cell-a",
+      "A": "value-B",
+      "Taken2": "value-Taken",
+      "Taken": "value-Other",
+      "Invalid": "value-Invalid",
+      "Same": "value-Same",
+      "Long": "value-Long",
+      "DupTarget": "value-Dup1",
+      "Dup2": "value-Dup2",
+      "Keep": "value-Keep",
+      "Blocked": "value-Blocked"
+    },
+    "formula": "='A'!A1",
+    "defined_names": [
+      {
+        "name": "TargetCell",
+        "reference": "'A'!$A$1"
+      }
+    ],
+    "renamed_a1": {
+      "fill": "FFFF0000",
+      "bold": true,
+      "comment": "rename fixture comment",
+      "merged_ranges": [
+        "C1:D1"
+      ],
+      "row_1_height": 21.0,
+      "column_b_width": 18.0,
+      "orientation": "landscape",
+      "print_area": "'RenamedA'!$A$1:$D$1"
+    }
+  },
+  "expected_xlsx_sha256": "17158c8ceec5d26f13525a858edb6dea585b9f330c0af409bec33a689bee02ff",
+  "safety": {
+    "baseline_copy_changed": true,
+    "source_fixture_unchanged": true,
+    "config_unchanged": true
+  },
+  "scope_limit": "Synthetic XLSX only. The source normal branch supports XLSX/XLSM; this workspace candidate currently accepts only XLSX and needs real-template, XLSM/VBA, target-platform and deb verification."
+}

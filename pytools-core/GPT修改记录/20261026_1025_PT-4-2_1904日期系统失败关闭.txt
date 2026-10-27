@@ -1,0 +1,18 @@
+功能：PT-4-2 native 转换的 1904 日期系统保护
+基线：pytools-dev 已推送 HEAD 4f63354。
+
+发现与修复：合成 1904 epoch XLSM（A1 为 2024-02-29 日期，B1 为 `=DATE(2024,2,29)`）在旧 native 路径被转换到默认 1900 epoch，裸 serial 43889 被按 1900 系统解释为 2020-02-28；公式文本虽相同，但输出 epoch 变化。现 PyTools 复用 `excel_reader::uses_1904_date_system`，在 native 写入前拒绝检测为 1904 epoch 的 OOXML 输入；CLI 菜单和帮助均说明此限制。无共享 crate 修改。
+
+修改文件：
+- pytools-core/src/conversion.rs：native Excel 转换前检查共享 date-system API，检测到 1904 时失败且不发布输出。
+- pytools-core/src/bin/pytools.rs、pytools-core/tests/conversion_menu_cli.rs：显示并断言用户提示。
+- pytools-core/probe/compare_native_excel_value_conversion.py 与对应 JSON 报告：验证 1904 XLSM 拒绝、无输出、源字节不变；继续对拍 1900 日期/时刻/累计时长数值。
+- pytools-core/MIGRATION_INVENTORY.md：登记复现和共享能力缺口。
+
+验证：Windows `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过；`cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1` 7/7、`cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1` 9/9；`cargo build --offline --locked -p pytools-core --bin pytools -j 1`；`python pytools-core/probe/compare_native_excel_value_conversion.py` 均通过。1904 XLSM CLI 失败 1、输出不存在、源未改；1900 date/time/duration 的 numeric output 与 Python serial 误差 <=1e-10。
+
+共享阻塞：`excel_reader::uses_1904_date_system` 目前只识别 `.xlsx/.xlsm/.xlam`，对 `.xls/.xlsb` 返回 false；Calamine 当前版本虽能识别多种格式的 epoch，但共享 API 未暴露。已于 2026-10-26 向 main thread 请求扩充 epoch 检测；PyTools 不解析/修改共享 OOXML。main 的公共代码更新必须先通过 Git 安全同步，再做本地集成和回归。用户目前无可提供的脱敏真实样本。
+
+未完成：`.xls/.xlsb` 1904 epoch 语义尚无法防护；真实模板、legacy XLS sidecar保真、公式缓存、Windows 文件对话框、glibc 2.28、麒麟/UOS 和离线 deb 未验收。PT-4-2 整体仍未验收。
+
+回滚：若需撤销，仅回退本轮业务与证据提交；保留此前 ISO 类型失败关闭提交  d61d7fe 与 1900 serial 合成验证提交 4f63354。

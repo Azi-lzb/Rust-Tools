@@ -1,0 +1,22 @@
+时间：2026-10-27 00:18 +08:00
+执行者：Codex
+修改前 commit：9a0d397
+修改后 commit：本记录随 PT-2-5 修复提交
+修改前 WIP：工作树干净；`codex/pytools-menu-entry` 与同名远程同步。原 Python 项目只读。
+
+目的：落实新版 V2 对 PT-2-5 的严格表头合同，避免对列数不一致的既有目标追加，或把 A1 为空但其他表头有值的 Sheet 当作空表覆盖。
+
+修改/新增文件：
+- `pytools-core/src/dedup_ops.rs`：比较规范化后的完整来源/目标表头向量；仅所有表头单元格均空时，才按空 Sheet 初始化。
+- `pytools-core/tests/dedup_append_execution.rs`：新增真实 CLI 计划入口回归用例，覆盖多出目标列、列顺序不同及 A1 为空但其他表头非空；确认跳过任务且不改源/目标字节。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 V2 合同、旧 Python 语义差异、验证和未验收范围。
+
+逻辑/配置/VBA 影响：不变更配置或 VBA。V2 需求规定名称、顺序和列数必须完全一致；旧 PyCode `_headers_same` 允许目标有额外列。当前实现有意遵守 V2 严格合同，目标不匹配时报告 `header_mismatch` 并跳过，不尝试追加。
+
+测试：Windows 原生 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --test dedup_menu_cli --test dedup_append_execution -j 1`（14/14）、`git diff --check` 通过。构建及测试临时目录位于 F 盘专用目录。
+
+未执行项/已知问题：没有可用真实业务样本；未运行新合同的 Python/Rust 真实样本对拍、Excel 手工打开或 Linux、glibc 2.28、麒麟/UOS、离线 deb 验收。PT-2-5 整项仍为“已实现，待 Windows 真实验收”。
+
+删除清单：无。
+回滚提示：回退 PT-2-5 严格表头修复提交可恢复此前 V2 追加计划的前缀式表头比较行为；不影响其他去重菜单。
+【组件版本】pytools-core 0.1.0，不升级。

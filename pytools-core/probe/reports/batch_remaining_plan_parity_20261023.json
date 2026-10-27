@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "status": "passed_synthetic_plan_semantics",
+  "cases": {
+    "7-1 village split": {
+      "python": {
+        "files": 1,
+        "branch_sheets": 6,
+        "filled_sheets": 3,
+        "skipped_sheets": 3,
+        "failed_files": 0,
+        "matrix_empty": false
+      },
+      "rust_plan": {
+        "matched_sheets": 3,
+        "changed_cells": 60,
+        "warnings": [
+          "unrecognized branch sheet: 广东分机构未知",
+          "village bank row not found: 无村镇行分机构本外币",
+          "unrecognized branch sheet: 非分机构工作表"
+        ]
+      },
+      "output_projection": "equal"
+    },
+    "7-3 remove foreign banks": {
+      "python": {
+        "files": 1,
+        "ok_files": 1,
+        "branch_sheets": 2,
+        "deleted_rows": 3,
+        "failed_files": 0,
+        "foreign_empty": false
+      },
+      "rust_plan": {
+        "matched_sheets": 2,
+        "deleted_rows": 3
+      },
+      "output_projection": "equal",
+      "source_unchanged": true
+    },
+    "7-7 rural loan adjustment": {
+      "python": {
+        "matched": 1,
+        "fill_total": 5.0,
+        "area_total": 5.0,
+        "unmatched_current": [
+          "本期新增"
+        ],
+        "previous_only": [
+          "上期独有"
+        ],
+        "consistent": true,
+        "error": null
+      },
+      "rust_plan": {
+        "area_total": 5.0,
+        "consistent": true,
+        "error": null,
+        "fill_total": 5.0,
+        "matched": 1,
+        "previous_only": [
+          "上期独有"
+        ],
+        "unmatched_current": [
+          "本期新增"
+        ]
+      },
+      "output_projection": "equal"
+    },
+    "7-8 quarterly rural loan adjustment": {
+      "python": {
+        "regions": [
+          {
+            "region": "惠州市",
+            "sheet": "惠州市涉农贷款分机构",
+            "matched": 1,
+            "fill_total": 5.0,
+            "area_total": 5.0,
+            "consistent": true,
+            "unmatched_current": [
+              "本期新增"
+            ],
+            "previous_only": [
+              "上期独有"
+            ],
+            "error": null
+          },
+          {
+            "region": "江门市",
+            "sheet": "江门市涉农贷款分机构",
+            "matched": 1,
+            "fill_total": 4.0,
+            "area_total": 8.0,
+            "consistent": false,
+            "unmatched_current": [],
+            "previous_only": [],
+            "error": null
+          }
+        ],
+        "matched": 2,
+        "fill_total": 9.0,
+        "area_total": 13.0,
+        "consistent": false,
+        "error": null
+      },
+      "rust_plan": {
+        "area_total": 13.0,
+        "consistent": false,
+        "fill_total": 9.0,
+        "matched": 2,
+        "regions": [
+          {
+            "area_total": 5.0,
+            "consistent": true,
+            "fill_total": 5.0,
+            "matched": 1,
+            "previous_only": [
+              "上期独有"
+            ],
+            "region": "惠州市",
+            "sheet": "惠州市涉农贷款分机构",
+            "unmatched_current": [
+              "本期新增"
+            ]
+          },
+          {
+            "area_total": 8.0,
+            "consistent": false,
+            "fill_total": 4.0,
+            "matched": 1,
+            "previous_only": [],
+            "region": "江门市",
+            "sheet": "江门市涉农贷款分机构",
+            "unmatched_current": []
+          }
+        ]
+      },
+      "output_projection": "equal"
+    }
+  },
+  "scope_limits": [
+    "All inputs and outputs were synthetic temporary workbooks.",
+    "Python ran only as a read-only source baseline; no original source workbook was written.",
+    "Rust plans were applied to temporary copies by the probe's openpyxl helper, not through ExcelModifier.",
+    "No production capability or default route was changed.",
+    "Real templates, GUI integration, Windows native Rust, target Linux/deb, and file-preservation metadata are not covered."
+  ]
+}

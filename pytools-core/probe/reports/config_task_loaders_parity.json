@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.config_task_loaders",
+  "source_project": "py_statistics_tools/PyCode",
+  "source_module": "PyCode/core/config_xlsx.py",
+  "source_python_baseline": "probe/reports/config_task_loaders_python_baseline.json",
+  "rust_test": "tests/config_task_loader_parity.rs::task_config_loaders_match_python_baseline",
+  "source_python_version": "3.12.10",
+  "status": "保留（配置加载局部）",
+  "parity": {
+    "checks": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "items": [
+    {
+      "item": "去重任务当前配置表及列名别名",
+      "status": "保留"
+    },
+    {
+      "item": "去重任务旧版配置表回退",
+      "status": "保留"
+    },
+    {
+      "item": "打印准备配置字段、数值默认值和布尔值",
+      "status": "保留"
+    },
+    {
+      "item": "工作表提取启用筛选与空任务过滤",
+      "status": "保留"
+    },
+    {
+      "item": "机构映射表及外资行标记读取",
+      "status": "保留"
+    },
+    {
+      "item": "可选配置表缺失时返回空结果",
+      "status": "保留"
+    },
+    {
+      "item": "真实用户配置文件及消费配置的端到端业务",
+      "status": "未验证"
+    },
+    {
+      "item": "原位修改配置表、初始化/修复和格式保留",
+      "status": "未验证"
+    },
+    {
+      "item": "运行性能与目标 Linux 行为",
+      "status": "未测量"
+    }
+  ],
+  "verification": {
+    "python_command": "<pytools-main>/.venv/Scripts/python.exe probe/config_task_loaders_baseline.py --source-root <pytools-main>",
+    "python_result": "通过；源项目 loader 在合成配置簿上导出 11 组比较结果",
+    "rust_command": "cargo fmt --all && cargo test -p pytools-core --locked",
+    "rust_result": "通过；现有 9 项单元测试及 1 项配置 loader 对拍测试通过"
+  },
+  "limitations": [
+    "仅实现配置读取 API，不含去重执行、打印工作簿生成或工作表提取文件流程。",
+    "使用合成配置簿；真实配置、初始化/修复工作流以及 xls/xlsm/xlsb 配置输入未验证。",
+    "打印设置只作为配置数据读取，不在此处渲染或导出 PDF。"
+  ]
+}

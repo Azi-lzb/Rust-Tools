@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_used_range_pycode_nocom_asset_comparison",
+  "date": "2026-10-24",
+  "status": "completed_with_differences",
+  "source_scope": "all XLSX assets recursively under the original PyTools xlsx directory",
+  "input_workbooks": 70,
+  "comparison_unit": "batch",
+  "batch_size": 3,
+  "batches": 24,
+  "compared_batches": 24,
+  "exact_batches": 12,
+  "different_batches": 12,
+  "inputs_in_exact_batches": 34,
+  "inputs_in_different_batches": 36,
+  "pycode_failed_inputs": 0,
+  "nocom_failed_inputs": 0,
+  "missing_output_inputs": 0,
+  "summary_rows_including_headers": {
+    "pycode": 1260077,
+    "nocom_pytools": 1258014
+  },
+  "summary_row_delta_pycode_minus_nocom": 2063,
+  "projection_difference_fields_by_batch": {
+    "worksheet_dimensions": 12,
+    "汇总.header_bold": 5,
+    "汇总.rows": 12,
+    "汇总.styles": 12,
+    "汇总.types": 12,
+    "汇总.values": 12
+  },
+  "changed_output_cells_by_projection": {
+    "styles": 42944,
+    "types": 43122,
+    "values": 2213851
+  },
+  "source_size_and_mtime_unchanged": true,
+  "python_runtime": "3.12.10",
+  "pycode_environment": {
+    "openpyxl": "3.1.5"
+  },
+  "nocom_environment": {
+    "openpyxl": "3.1.5",
+    "python_calamine": "0.9.0"
+  },
+  "privacy": "No source workbook names, cell values, paths, or hashes are recorded.",
+  "scope_note": "This compares the two original Python variants only; it does not change the confirmed PyCode production baseline or infer NoCom-only product scope."
+}

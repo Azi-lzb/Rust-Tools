@@ -1,0 +1,27 @@
+时间：2026-10-27 08:35:27（Asia/Shanghai）
+执行者：Codex
+修改前 HEAD：681b7e22ef98d797adf3724434b02f02ea5f8841
+WIP：修改前工作树干净；仅修改 PyTools 文件，未触及 main 的 `excel-reader` 未提交 WIP。
+
+目的：让归档扫描错误显式失败，避免漏扫后仍生成看似完整的归档预览或开始复制；阻止递归目录链接回到活动祖先时无限遍历。
+
+修改文件：
+- `pytools-core/src/archive_ops.rs`：扫描和路径解析错误向上传播；使用活动 canonical directory 集合停止回环；新增两个单元回归。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 PT-8 的错误处理行为和当前验证边界。
+- 本记录。
+
+逻辑变化：全部输入扫描在复制或写预览报告前完成；读目录/目录项/元数据/canonicalize 失败时返回带路径上下文的错误。已不存在的顶层输入维持原来的无效路径报告行为；文件过滤、目标路径排序和复制规则不变。归档只复制，不移动或删除源文件。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib archive_directory_ -j 1`：2/2 通过。
+- `cargo test --offline --locked -p pytools-core --test archive_menu_cli --test archive_parity -j 1`：6/6 通过；归档菜单路由与只读 Python 合成基线通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- 测试/构建产物及临时目录位于 `F:\PyToolsRustV2\cargo-target`、`F:\PyToolsRustV2\tmp`。
+
+未执行项与已知问题：未运行 Python 测试脚本；归档对拍测试消费已保存的 Python 合成基线。未模拟真实 ACL/网络共享读取拒绝或 Windows junction；未使用真实归档目录。真实 Windows 业务样本、麒麟/UOS、glibc 2.28 与 deb 未验收。既有 `umya_spreadsheet` 弃用、unused import/dead-code 警告未由本项引入。
+
+配置与 VBA：无配置格式、VBA 或业务规则变化。
+【组件版本】：不升级，Cargo.toml/Cargo.lock 未修改。
+删除清单：无删除。
+回滚：回滚本项 `archive_ops.rs`、迁移清单和本记录的新增修改即可；不涉及源 Python、共享 crate 或其他工作树。

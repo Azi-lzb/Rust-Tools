@@ -1,0 +1,34 @@
+时间：2026-10-23 08:40:58（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace 文件当前均为未跟踪状态；保留已有 Rust 候选和对拍材料，未清理、重置或覆盖其他工作。
+
+目的：将 pytools 操作 4-8“按配置映射局部文件名”接入可直接调用的 Rust `pytools` CLI，使用 Rust 读取映射工作簿并完成文件改名。此次接入不等于原 GUI 菜单完整迁移或生产默认验收。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：注册 `rename-local-map` 子命令，读取 `--config` 和显式文件路径，调用 Rust 实现并输出 JSON。
+- `pytools-core/tests/local_filename_map_48_parity.rs`：增加真实产品二进制 CLI 集成对拍，检查结果统计、最终文件集合、文件字节和既有冲突目标。
+- `pytools-core/probe/reports/local_filename_map_48_parity.json`：登记 CLI 接入、命令、测试及未验证边界。
+- `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/README.md`：说明操作范围和命令用法。
+- `PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：同步功能入口与迁移状态。
+- 本记录。
+
+迁移范围：
+- 用法：`pytools rename-local-map --config <workbook.xlsx> <file>...`。
+- Rust 候选通过共享 `excel-reader`/Calamine 读取“重命名配置”工作表 M:N 映射，按配置顺序替换文件 stem 中的片段并保留末尾扩展名；支持任意扩展名普通文件，不打开或保存目标文件。
+- 目标重名时使用编号后缀且不覆盖已存在文件。命令处理显式传入的路径，不负责目录扫描或 GUI 交互。
+- 生产默认路由未改变；旧 Python 实现和入口保留。
+
+对拍及验证：
+- 基线为只读 Python `PyCode/core/convert_33_34_35_37.py::run_batch_rename_local_map_48`，源文件 SHA-256：`F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`。基线合成场景的 10 个输入路径包含 6 条规则；Python/Rust 均为改名 5、跳过 5，规则数均为 6，最终目录项一致。
+- Rust CLI 集成测试覆盖有序及链式替换、中文片段、空目标、任意扩展名、目标冲突编号、未命中、缺失路径/目录跳过、拒绝路径分隔符及过长目标失败保留源文件；验证改名后文件内容字节未变，并验证已有冲突目标未被覆盖。
+- 报告记录：Python 聚焦源测试 19 项通过；Rust 4-8 集成测试 3 项通过、模块纯逻辑测试 2 项通过、pytools-core 测试 28 项通过、workspace 测试 47 项通过；格式检查通过。此前命令 `cargo fmt --all -- --check`、`cargo test --workspace --locked -q` 和 `cargo check --workspace --locked` 均通过，退出码为 0。
+
+未完成与已知风险：
+- 仅合成文件/配置；真实配置簿、真实目录及完整用户工作流尚未验证，原 GUI 菜单尚未接入。
+- 非 UTF-8 Linux 文件名、Windows 原生 Rust、麒麟 V10/UOS V20、目标 Linux 文件系统和离线 deb 尚未验证。
+- 日期/数字/错误类型映射单元格、路径分隔符以外的平台非法文件名字符尚未验证。
+- 不据本次合成对拍宣称所有 4-8 业务场景完成迁移；不改变默认路由，不删除 Python 旧功能。
+
+回滚：从 `pytools.rs` 移除 `rename-local-map` dispatch/handler，并从 `local_filename_map_48_parity.rs` 移除 CLI 集成用例；还原本记录列出的迁移状态、用法和报告修改。保留既有 `local_filename_map` Rust 候选、Python 基线及其他 WIP，除非后续单独决定撤回；不得修改原始 Python 项目。

@@ -1,0 +1,29 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：7915b16956ee21781df1aefb94f56eeff55c7251；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。origin/main 为 473c75a4c93cd4875e37f31c53e567120cb9d040。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、规则、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。
+
+目的：修复 PT-1-1 表头路径比对的工作表关键字筛选，使大小写、ASCII/中文逗号和分号语义与 PyCode 一致；把现有合成探针提升为实际 Rust CLI 与 Python run_compare 对拍，并显式记录输出样式差异和当前真实样本缺口。
+
+修改文件：
+- pytools-core/src/timeline_ops.rs：工作表名匹配复用 path_map::match_all_keywords；新增大小写及分隔符回归测试。
+- pytools-core/probe/compare_timeline_compare.py：加入大小写/逗号变体，比较输出值、Excel 单元格类型、样式对象和工作簿结构。
+- pytools-core/probe/reports/timeline_compare_keyword_parity_20261024.json：记录 CLI 对拍结果、真实配置样本可用性及已知标题样式差异。
+- pytools-core/MIGRATION_INVENTORY.md：登记 PT-1-1 本轮证据、未验收边界及共享 API 协调需求。
+- 本修改记录。
+
+真实入口与结果：Windows 原生 Python 3.12 环境运行只读 PyCode core.compare_393.run_compare 基线；通过 WSL cargo 构建并运行实际 Rust pytools timeline-compare CLI。3 个命中源、1 个规则未命中源和模板同路径过滤场景中，输出值、单元格类型、工作表顺序/维度、合并区域、冻结窗格、页面设置和定义名称一致。关键字大小写和逗号分隔回归通过。对拍器同时检查样式；Rust/Python 有 17 个表头样式差异，详见机器报告，未将 PT-1-1 标记为验收完成。
+
+真实样本：PyCode 配置可读，但其配置输入目录不存在；原项目 xlsx/ 下扫描 70 份 XLSX，0 份命中配置中的工作簿与工作表关键字。无真实业务输入，真实对拍待可用样本。
+
+验证：
+- cargo fmt -p pytools-core -- --check（WSL）：通过。
+- cargo test -p pytools-core --lib sheet_keywords_match_python_case_and_delimiter_semantics --offline --locked（WSL）：1/1 通过。
+- pytools-core/probe/compare_timeline_compare.py（Windows Python + WSL Rust CLI）：关键字语义及输出值/类型/结构对拍通过；17 个标题单元格样式差异已记录。
+- git diff --check：通过。
+- cargo fmt --all -- --check：未通过，差异位于既有 audit-core 文件；遵守边界未修改 Audit。完整 workspace 测试、Windows 原生 Rust 构建、麒麟/UOS、glibc 2.28 与 deb 验收未执行。
+
+已知问题：Python/Pandas 输出标题为粗体、水平居中、顶部对齐、四边细边框；Rust 目前未设置标题格式。共享 excel-writer 未导出 FormatBorder，本轮不擅改公共 crate；需 main 协调共享 API 后修复并重跑完整样式对拍。原配置没有匹配样本。
+
+删除/回滚：未修改或删除源 Python 文件。对拍工作簿在系统临时目录。可用 git revert <本轮提交> 回滚本轮代码及证据。
+
+【组件版本】：不升级，当前 0.1.0。

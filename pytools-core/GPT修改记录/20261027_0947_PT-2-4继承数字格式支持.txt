@@ -1,0 +1,35 @@
+时间：2026-10-27 09:47（Asia/Shanghai）
+执行者：Codex
+修改前 commit：e4c25d1（包含 main 共享 reader API 的安全同步）
+修改后 commit：本次 PyTools 功能提交
+WIP：修改前本轮未提交改动仅涉及 `pytools-core/src/dedup_ops.rs` 及原继承格式阻塞测试；已先检查确认，无其他工作树修改。
+
+目的：完成 PT-2-4 对唯一可解析的行/列继承数字格式的安全读取和保留，继续高频“按配置删除重复”功能迁移。
+
+修改文件：
+- `pytools-core/src/dedup_ops.rs`
+- `pytools-core/tests/dedup_number_format_blocker.rs`（改名为 `dedup_number_format_inheritance.rs`）
+- `pytools-core/MIGRATION_INVENTORY.md`
+- `pytools-core/GPT修改记录/20261027_0947_PT-2-4继承数字格式支持.txt`
+
+逻辑变化：
+- 去重输出的源格式读取改用 main 共享的 `read_xlsx_effective_cell_number_formats`，不在 PyTools 内重复解析 OOXML。
+- 行样式或列样式唯一适用时，继承格式随删除后的保留记录写入并在候选重读时核对；冲突/无效样式和未知内置格式继续失败关闭。
+- 测试从“继承样式必然拒绝”改为验证直接、行继承和列继承格式在删除重复及上移后保留；输入簿只读。
+- 不修改共享 crate（仅同步 main 已提交能力）、根 Cargo 文件、配置和只读 Python 项目；不升级产品版本。
+
+测试结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test dedup_number_format_inheritance -j 1`：2/2 通过。
+- `cargo test --offline --locked -p pytools-core --test dedup_menu_cli -j 1`：7/7 通过。
+- `git diff --check`：通过。
+
+未执行项/已知问题：
+- 仅合成工作簿验证；未用真实业务文件进行 Python/Rust 输出对拍或 Excel GUI 手工验收。
+- 行、列样式同时命中的歧义输入仍明确拒绝；非纯数据工作簿仍拒绝。
+- Linux、glibc 2.28、麒麟 V10、统信 UOS V20 和离线 deb 未验证。
+
+回滚：以 `git revert` 回滚本次 PyTools 功能提交；保留 main 的共享 reader 提交及其他已完成迁移。
+
+【组件版本】：不升级（pytools-core 0.1.0）。

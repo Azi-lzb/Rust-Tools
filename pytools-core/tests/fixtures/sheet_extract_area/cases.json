@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "input_files": [
+    "省级月度报表_A.xlsx",
+    "省级月度报表_B.xlsx",
+    "省级月度报表_损坏.xlsx"
+  ],
+  "tasks": [
+    {
+      "row_no": 2,
+      "workbook_keywords": "省级,区域;月度",
+      "sheet_keywords": "月度,Monthly;资金|余额",
+      "exclude_keywords": "旧版;归档",
+      "area_spec": "A1:B5;D1:D5",
+      "stitch_mode": "横向拼接",
+      "output_folder": "区域提取",
+      "output_name": "area-result.xlsx",
+      "remark": "horizontal areas"
+    },
+    {
+      "row_no": 3,
+      "workbook_keywords": "省级;月度",
+      "sheet_keywords": "月度;资金",
+      "exclude_keywords": "旧版;归档",
+      "area_spec": "A2:A5;D2:D5",
+      "stitch_mode": "纵向追加",
+      "output_folder": "区域提取",
+      "output_name": "area-result.xlsx",
+      "remark": "vertical areas"
+    }
+  ],
+  "expected": {
+    "files": 2,
+    "extracted_sheets": 4,
+    "output_files": 1,
+    "failed_files": 1,
+    "output_file": "area-result.xlsx"
+  }
+}

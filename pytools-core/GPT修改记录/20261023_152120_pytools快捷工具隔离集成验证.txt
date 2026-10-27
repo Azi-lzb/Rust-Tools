@@ -1,0 +1,20 @@
+时间：2026-10-23（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：修改前检查 workspace Git 状态和 `pytools-core/GPT修改记录/`，无 WIP 文件；workspace 文件整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：验证 pytools 快捷工具 9-1/9-2/9-3 的 Rust CLI 路径选择与系统启动参数，不启动真实桌面应用。
+
+修改文件：
+- `pytools-core/probe/compare_quick_tools.py`
+- `pytools-core/probe/reports/quick_tools_parity_20261023.json`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- 本修改记录。
+
+验证：Rust CLI 在 WSL 下依次打开临时配置文件、递归选择 output 中最新的非 `~$` 文件、创建并打开缺失的 output 目录；空 output 返回 null 且不调用启动器。假 `xdg-open` 仅记录被打开路径。命令 `& 'C:\Users\AZI\Desktop\VibeCode\4.pytools-main\.venv\Scripts\python.exe' pytools-core/probe/compare_quick_tools.py` 通过。
+
+限制：未运行旧版 Windows `os.startfile`，也未打开真实桌面应用；Windows Explorer、macOS、真实用户目录及麒麟/UOS 桌面集成未验证。本结果不是 Python/Rust 对拍，也不代表快捷工具整体验收。
+
+回滚：删除本记录、`probe/compare_quick_tools.py`、对应机器报告，并恢复迁移清单中的快捷工具状态。workspace 无 Git 首次提交，不能通过 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

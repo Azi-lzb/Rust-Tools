@@ -1,0 +1,19 @@
+执行者：Codex（pytools-dev）
+目的：修复 PT-4-8 局部文件名映射与当前 PyCode 的 Pandas 缺失值语义不一致。
+
+发现：只读调用原 Python _load_file_local_rename_map 读取原项目 config.xlsx，返回 61 条映射。Rust 共享 reader 导出同一工作表的 M/N 表头及空列，但 Rust 业务层把缺失单元格映射为空字符串，最终错误报告配置缺少规则。原 Python 使用 pandas.read_excel(dtype=object)，配置表其余列将 DataFrame 行延伸至 61 行；M/N 空值变为 NaN，Python _norm 直接 str(value).strip()，得到字面字符串 nan。因此原 Python 的 61 条规则为 nan→nan，批处理继续执行而非报错。
+
+实现：pytools-core/src/local_filename_map.rs 的 PT-4-8 配置转换对缺失、Empty 及零长度字符串映射为 nan，其他值沿用原转换；未修改共享 Excel reader、Cargo 文件或源 Python 项目。新增集成回归覆盖空源、空目标、空规则行及文件内容保留。
+
+基线修正：原 local_filename_map_48_python_baseline.json 声称空目标删除片段，与当前只读 PyCode 实际执行不符。用原函数重跑后将 prefix_.doc 修正为 prefix_nan.doc，统计仍是 ok=5、skip=5、rules=6。新增 pandas_empty_config_cells 基线：ok=2、skip=1、rules=4，最终文件名及内容与 Rust 回归一致。
+
+验证：
+- Windows 原生 cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- Windows 原生 cargo test --offline --locked -p pytools-core --test local_filename_map_48_parity -j 1：4/4 通过。
+- Windows 原生 cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- 原 PyCode 真实配置、临时不存在输入路径：Python 与 Rust CLI 均为 ok=0、skip=1、rules=61。此项只验证配置读取及缺失文件处理，不代表真实文件批处理验收。
+- 原 Python 函数在新增合成配置对拍中输出 ok=2、skip=1、rules=4；Rust 集成回归 4/4 通过。
+
+未执行：真实业务目录改名、原生文件选择器、非 UTF-8 路径跨平台、Linux/glibc 2.28 及麒麟/UOS deb 验收。用户暂时没有可提供的脱敏业务样本。
+
+风险/回滚：兼容的是当前 PyCode 对 Pandas NaN 的既有字符串化行为，包括字面 nan；如业务方未来要修正原 Python 配置空值语义，应另行明确变更合同。本次可通过回滚对应 PT-4-8 代码及基线提交撤销，不涉及共享能力。

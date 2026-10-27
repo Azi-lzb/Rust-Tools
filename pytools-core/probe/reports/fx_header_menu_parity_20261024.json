@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-7-4",
+  "status": "synthetic_candidate_verified",
+  "verified_at": "2026-10-24T23:30:14+08:00",
+  "platform": {
+    "os": "Windows 11 x64",
+    "rust_target": "x86_64-pc-windows-msvc",
+    "rustc": "1.99.1"
+  },
+  "fixture": {
+    "kind": "synthetic",
+    "format": "xlsx",
+    "path": "pytools-core/tests/fixtures/fx_header/source.xlsx"
+  },
+  "python_baseline": {
+    "source": "PyCode/core/feature_1_4_fx_header.py",
+    "report": "pytools-core/probe/reports/fx_header_python_baseline.json",
+    "ordinary_non_com_path": true,
+    "stats": {
+      "files": 1,
+      "saved_files": 1,
+      "fx_sheets": 2,
+      "modified_sheets": 1,
+      "failed_files": 0
+    }
+  },
+  "rust_route": {
+    "entrypoints": [
+      "pytools fx-header <xlsx>...",
+      "pytools menu -> 7 -> 4"
+    ],
+    "plan_builder": "pytools_core::fx_header::build_fx_header_plan",
+    "reader": "excel-reader::read_header_inventory",
+    "modifier": "ExcelModifier -> ooxml-patch",
+    "capability": "temporary fixture-scoped test capability; not a production registration",
+    "default_mode": "plan_only"
+  },
+  "checks": {
+    "direct_cli_plan_only_by_default": true,
+    "interactive_menu_plan_only_by_default": true,
+    "unverified_xls_extension_skipped": true,
+    "capability_gated_target_commit": true,
+    "committed_headers_match_python_baseline": true,
+    "file_and_sheet_counts_match_python_baseline": true,
+    "values_and_formula_text_preserved": true,
+    "merged_ranges_comments_conditional_formatting_and_data_validations_preserved": true,
+    "target_replacement_reopened_and_verified": true,
+    "temporary_backup_cleaned_after_success": true,
+    "developer_view_reports_actual_engine_and_commit_phase": true,
+    "off_view_saves_no_history_or_events": true
+  },
+  "differential": {
+    "observed_differences": [],
+    "scope_note": "Comparison uses the checked-in synthetic Python baseline and the ordinary non-COM Python path."
+  },
+  "tests": {
+    "command": "cargo test --offline --locked -p pytools-core --test fx_header_parity --test fx_header_menu_cli --test file_commit",
+    "fx_header_parity": "2 passed",
+    "fx_header_menu_cli": "4 passed",
+    "file_commit": "5 passed",
+    "result": "11 passed; 0 failed"
+  },
+  "not_verified": [
+    "real business workbook or real user configuration",
+    "native Windows file picker interaction",
+    "XLSM/VBA preservation",
+    "production Passed capability",
+    "Kylin V10 or UOS V20",
+    "glibc 2.28 packaging and offline deb delivery"
+  ]
+}

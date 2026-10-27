@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.batch_rename_33.real_config_smoke",
+  "status": "保留（窄范围真实配置 smoke test）",
+  "source_config": "read-only PyCode/config/config.xlsx; no copy committed",
+  "platform": "Windows 11 x64 with WSL Ubuntu x86_64; Rust 1.99.1",
+  "input": "one temporary synthetic file whose name includes a valid alias from the real configuration",
+  "result": {
+    "ok": 1,
+    "skip": 0,
+    "source_config_bytes_unchanged": true,
+    "renamed_file_bytes_unchanged": true,
+    "temporary_only": true
+  },
+  "scope_limit": "No original business file was renamed. This confirms one real configuration mapping and the filesystem rename path only; it does not establish real-data coverage, target Linux compatibility, or menu-level migration."
+}

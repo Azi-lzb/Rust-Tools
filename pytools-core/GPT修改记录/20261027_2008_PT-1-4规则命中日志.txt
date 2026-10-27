@@ -1,0 +1,19 @@
+时间：2026-10-27 20:08（Asia/Shanghai）
+执行者：Codex
+修改前 HEAD：a3f12e6；分支：codex/pytools-menu-entry
+WIP：保留修改中的 `pytools-core/MIGRATION_INVENTORY.md` 原有内容及未跟踪的 PT-2-3 手工冒烟记录；只在迁移清单末尾追加本项，没有覆盖或提交既有 WIP。
+
+目的：修正 PT-1-4 表头路径比对日志无法区分“规则未命中”和“命中且零差异”的问题。未改变重复列头自动添加位置后缀的行为，也未修改用户提供的两个工作簿或只读 Python 项目。
+
+修改文件：
+- `pytools-core/src/timeline_ops.rs`：开发者进度增加规则、规则-工作表匹配和未匹配计数；逐工作簿记录命中的规则/关键字与源、模板工作表对应关系；记录工作簿规则未命中、源工作表关键字未命中及模板工作表无法对应的原因。未执行比较的输入不再写成“通过”，汇总状态及整体状态反映未匹配情况。
+- `pytools-core/src/bin/pytools.rs`：未匹配输入使 CLI 运行历史状态记为 `partial`。
+- `pytools-core/tests/timeline_menu_cli.rs`：新增菜单回归，覆盖工作簿规则未命中、工作表关键字未命中及匹配成功但零差异。
+- `pytools-core/MIGRATION_INVENTORY.md`：追加本功能状态和验证范围。
+
+验证：`cargo fmt -p pytools-core` 已运行；`cargo check --offline --locked -p pytools-core --bin pytools --test timeline_menu_cli -j 1` 通过。定向 `cargo test` 首次尝试无法替换 F 盘被运行中菜单占用的 Debug `pytools.exe`；之后按用户要求停止隔离目标下的依赖编译，因此新增集成测试尚未执行。未构建 Release 包。用户将通过 `F:\PyToolsRustV2\run-pytools-dev.bat` 人工启动验证。
+
+未执行/已知限制：未用用户当前配置实测其规则匹配路径；未运行 Python 对拍、真实业务验收或 Linux/deb 验收。用户配置了 `log_view=off` 时不打印事件，但比对汇总仍会写出未匹配状态和原因。旧依赖弃用及既有未使用代码警告不在本次范围。
+
+删除清单：无。
+回滚：撤销本记录、本次 Rust 源码/测试变更及迁移清单末尾新增的 PT-1-4 段落；不得恢复整份迁移清单或删除原有 WIP/既有未跟踪记录。

@@ -1,0 +1,30 @@
+时间：2026-10-25 12:12（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：26d0d9e；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：补齐 PT-6-1 自 2026-10-24 起登记的完整 `compare_summary_tools.py` 组合对拍缺口（此前因所用 Python venv 缺少 `python_calamine` 未执行）；不修改业务代码、共享 crates、Cargo 配置或默认引擎。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_parity_20261025.json`（新增：合成段完整报告，含 NoCom 组合比较与全部既有探针）
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261025.json`（更新：当前 HEAD 26d0d9e Windows MSVC 真实样本四批复验）
+- `pytools-core/MIGRATION_INVENTORY.md`（PT-6-1 汇总区补一段，末尾新增日期化小节）
+- 本记录。
+
+实际过程与结果：
+- 解释器：只读 NoComPyTools 项目自带虚拟环境 `NoComPyTools/.venv`（Python 3.12.10、openpyxl 3.1.5、python-calamine 0.9.0），同进程导入 PyCode 与 nocompytools 两个基线模块；未安装依赖，未修改只读源项目，未动源树文件。
+- Rust CLI：Windows 原生 MSVC `target/debug/pytools.exe`（HEAD 26d0d9e，`cargo build --offline --locked -p pytools-core --bin pytools` 通过，仅既存警告）。
+- 合成段：全部断言通过（2 工作簿 19 行 PyCode/Rust 投影 exact、7 错误值 OOXML Patch 保留、.xls/.xlsb 过滤、VBA 启用 XLSM、偏移区域、合并批注、重复标记、`#DATA!` 文本化）；NoCom 组合比较按既有变体差异登记（PyCode 20 行 vs NoCom 19 行，差异字段与 2026-10-24 变体记录一致）。
+- 中断与补齐：主进程在合成报告写入后、真实样本段 Rust 批次中被会话中断终止；真实样本段以同一解释器与 CLI 单独运行现有 `compare_real_used_range_sample()` 补齐并通过：13 份只读 XLSX、96 张工作表、203,580 行四批完整投影 exact，输入前后 SHA-256 一致，批次事件 26/14/27/63 与保存历史一致，实际引擎 Calamine 与 rust_xlsxwriter，批次 2 的 1,212 个错误单元格由 OOXML Patch 保留。
+
+验证结果（Windows 原生）：
+- `cargo build --offline --locked -p pytools-core --bin pytools`：通过。
+- 机器报告两份如上；合成段 PyCode/Rust 差异字段为空；NoCom 差异为既有变体差异，非 Rust 失败。
+- `git diff --check`：通过。
+
+影响与未完成项：纯验证轮次，不改业务实现、路由或格式支持范围，不升级组件版本。NoCom 独有行为仍按待确认处理，不并入 PyCode 生产基线；原项目业务含 VBA 的 XLSM 样本、麒麟 V10/UOS V20 实机、glibc 2.28、deb 与离线交付仍未验收，PT-6-1 整体仍未完成最终验收。会话中断残留的临时输出与运行历史仅位于系统 TEMP，不进入版本控制。
+
+敏感内容检查：合成报告仅含合成样本差异坐标与合成值；真实样本报告仅记录来源相对路径、计数、维度、引擎与事件，不含单元格值。无真实业务数据、凭据或源文件内容进入提交。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销两份报告与迁移清单记录；本记录随同一提交回滚。
+【组件版本】：纯验证，不升级。

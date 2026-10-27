@@ -1,0 +1,34 @@
+时间：2026-10-22 13:42:40 UTC
+执行者：Codex
+修改前 commit：无；当前 workspace 文件均为未跟踪 WIP。
+修改后 commit：无；未提交、未推送。
+目的：核对并补齐 py_statistics_tools 的关键字筛选、列规格解析和路径标准化辅助逻辑。
+
+修改/新增文件：
+- pytools-core/src/path_map.rs
+- pytools-core/src/rule_engine.rs
+- pytools-core/tests/fixtures/path_map_cases.json
+- pytools-core/probe/path_map_baseline.py
+- pytools-core/probe/reports/path_map_baseline.json
+- pytools-core/probe/reports/path_map_parity.json
+- pytools-core/MIGRATION_INVENTORY.md
+- pytools-core/GPT修改记录/20261022_134240_path_map_rust对拍.txt
+
+变化摘要：
+- 增加 ColumnSpecValue 适配器，使 Rust 可接收缺失、文本、整数和浮点配置值；单列/多列解析继续由现有字符串解析器处理。
+- 为关键字 AND 匹配、中文/英文分隔符、列号/列字母、重复项消重、路径映射过滤和包含替换建立共享向量。
+- 对照基线发现 NaN 必须按 pandas.isna 语义视为缺失；Rust 初次测试暴露误将“NaN”解析为列字母的问题，已修复并重跑通过。
+- 更新 pytools 清单，但将状态限定在 helper 范围；配置工作簿加载与时序/宽表完整工作流仍未验证。
+
+测试与结果：
+- 原 Python 基线：源项目 .venv Python，-B 禁止写字节码；28/28 案例通过，覆盖两种关键字函数、单列/多列解析及路径标准化。
+- Rust：cargo fmt --all；cargo test -p pytools-core --offline；日期解析、path_map 与 rule_engine 共 3 项单测通过。path_map 的两项测试覆盖同一份 28 向量。
+- 未运行完整原项目 pytest、配置工作簿端到端、真实模板对拍或目标平台测试。
+
+已知问题：
+- Rust helper API 的输入模型不覆盖 Python 任意对象字符串化的全部类型；已覆盖源测试确认的缺失、文本、整数和浮点类型。
+- 列规格 helper 测试不等于 timeline/wide-summary 业务迁移完成。
+
+删除清单：无。
+回滚提示：只回退本记录列出的 helper、测试夹具、baseline 报告和库存变化；不要修改源项目或清理 target 缓存。
+组件版本：不升级。

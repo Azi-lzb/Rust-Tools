@@ -1,0 +1,27 @@
+时间：2026-10-25 15:20（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：55881c0；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：补齐宽表汇总尚未对拍覆盖的语义：多个 set 区域、set 锚点为空、重复列路径冲突（PyCode `保留首值`）。不改生产代码。
+
+修改文件：
+- `pytools-core/probe/compare_realistic_synthetic_suite.py`（新增 `make_set_conflict_workbook`/`make_set_conflict_config`/`run_set_conflict_case` 并接入 main；夹具目录创建与报告 datetime 序列化两处脚本问题修复）
+- `pytools-core/probe/reports/realistic_synthetic_suite_parity_20261025.json`（新增 `wide_summary_sets_and_conflicts` 段）
+- `pytools-core/MIGRATION_INVENTORY.md`（在现实合成套件小节末尾补一段）
+- 本记录。
+
+场景与结果（Windows 原生；Python 基线经 PyCode 配置加载器读同一配置簿）：
+- 单规则 `set区域=集团@B2;期间@B1`：双 set 列（集团/期间）顺序、表头位置与两侧输出一致。
+- 源簿二 set 锚点为空：set 列输出 None，两侧一致。
+- 冲突触发：因 PyCode 列头编号（`_1`/`_2`）发生在路径映射之前，配置两条列头精确映射 `存款_余额_1→公共存款`、`存款_余额_2→公共存款` 确定性制造重复列路径。输出仅一个 `公共存款` 列头（PyCode `col_order` 去重 / Rust `seen_columns` 去重），单元格保留首值（10.25 而非 999；PyCode `保留首值` 与 Rust `bucket.contains_key` 跳过语义吻合）。
+- 完整投影与有效样式精确一致；首次为该冲突路径建立对拍证据（此前 Rust 实现正确但无测试覆盖）。
+
+验证结果：套件 EXIT=0、全场景 exact（宽表 4 组、规则模式 2 组、set/冲突 1 组、批注汇总 1 组）；本轮无生产代码改动，未重跑全量 Rust 测试（生产代码与上次全绿一致）；`git diff --check` 通过。
+
+影响与未完成项：纯对拍证据补充。宽表真实输入与批注汇总真实模板仍缺；NoCom 变体与生产 capability 决策、main 最终打包与麒麟/UOS 实机验收等外部阻塞不变。
+
+敏感内容检查：全部样本为脚本生成的合成数据。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可撤销套件扩展、报告与清单记录。
+【组件版本】：纯验证，不升级。

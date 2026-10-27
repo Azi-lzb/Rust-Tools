@@ -1,0 +1,17 @@
+日期：2026-10-22
+
+变更：
+- 在 pytools-core/src/config.rs 中实现全局配置、单项全局值、时序提取规则和路径标准化映射的 xlsx 加载。
+- 配置 workbook 读取通过共享 excel-reader；列规格继续复用 pytools-core 的 Rust 解析器。
+- 增加 config_loader_cases.json、合成 xlsx fixture、Python 基线脚本和 Rust 对拍测试。
+- 更新 pytools-core/MIGRATION_INVENTORY.md，保留真实配置模板和完整工作流的未验证状态。
+
+对拍：
+- 原项目 PyCode/core/config_xlsx.py 通过 Python 基线脚本处理共享样例，结果状态为“保留”。
+- cargo test -p pytools-core --offline 中 config::tests::config_workbook_matches_original_python_loader_report 通过。
+- 全局路径和配置字段、两个启用规则（含非法 set 区域错误）、启用路径映射的归一化 JSON 完全相同。
+
+范围限制：
+- 本次只覆盖全局配置、时序规则、路径映射三个配置表的四个 loader API。
+- fixture 为合成数据；其他配置表、真实模板和业务菜单仍未验证。
+- 原始 Python 项目未修改；Python 仅作为测试基线。

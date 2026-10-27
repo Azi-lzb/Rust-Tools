@@ -1,0 +1,31 @@
+时间：2026-10-25 04:25（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：f67a9783309614d9fe75340e25f310ad776fb9d7；开始时分支 pytools-dev 与 origin/pytools-dev 同步。开始时保护已有 PT-4-1 未提交 WIP：batch_rename.rs、bin/pytools.rs、batch_rename_parity.rs、conversion_menu_cli.rs；另无 WIP 记录文件。
+修改后业务 commit：ae3e313（feat(pytools): add batch rename progress views）。本记录单独提交。
+
+目的：将批量重命名接入全局 user/developer/off 日志视图，并为 Rust 业务 API 提供进度、阶段、实际引擎和耗时事件。未更改原批量重命名匹配、冲突处理和配置语义。
+
+修改文件：
+- pytools-core/src/batch_rename.rs：新增 BatchRenameProgressEvent 与 run_batch_rename_with_progress；原 run_batch_rename 保持兼容并委托新入口。发出配置读取、逐项文件处理、任务结束或配置失败事件，事件摘要不包含输入路径和文件名。
+- pytools-core/src/bin/pytools.rs：交互菜单“转换工具→1”（主菜单 4→1）将全局 --log-view 传入真实执行；CLI 支持 --log-view user|developer|off。用户视图显示阶段、计数和耗时；开发者视图输出结构化事件并保存 JSON 历史；off 隐藏进度并不生成结构化历史。既有逐项 .log 文件继续写入。
+- pytools-core/tests/batch_rename_parity.rs：验证配置读取失败事件和输入保护。
+- pytools-core/tests/conversion_menu_cli.rs：通过真实 Rust 交互菜单入口覆盖三种日志视图、改名结果、引擎与耗时事件及路径/文件名脱敏。
+- pytools-core/MIGRATION_INVENTORY.md：记录语义化 API、兼容别名、菜单接线、日志行为、测试和未验收边界。
+- 本记录。
+
+真实入口与数据流：`pytools menu` → 主菜单 4（转换工具）→ 1（批量重命名）→ 已有文件选择/路径回退 → `run_batch_rename_with_progress`。配置由共享 excel-reader/Calamine 读取，改名由 Rust 文件系统操作完成。CLI 的 `rename-batch` 也支持 `--log-view`。开发者历史记录实际组件 Rust、Calamine、RustFilesystem 和各阶段/总耗时；不记录输入路径或文件名。`run_batch_rename_33` 保留为 deprecated 兼容别名，生产入口使用语义化 `run_batch_rename`。
+
+对拍与测试（Windows 原生）：
+- `cargo test --offline --locked -p pytools-core --test batch_rename_parity --test conversion_menu_cli -j 1`：batch_rename_parity 3/3、conversion_menu_cli 5/5 通过。业务对拍读取既有 Python 实跑基线 `probe/reports/batch_rename_python_baseline.json`，本轮未重新运行 Python；原匹配统计和输出不变。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `git diff --check`：通过。
+- 构建输出含既有 excel-editor 的 umya-spreadsheet 弃用警告和 pytools-core 的 batch_ops.rs、quick.rs 未使用导入警告；未改共享组件或无关警告。
+- 暂存内容路径检查及凭据模式扫描未发现额外文件或凭据。
+
+限制与未执行项：本轮日志及菜单对拍使用合成配置/临时文件；没有重新执行 Python 基线脚本，也没有执行 Python GUI 的原生文件选择器。真实业务目录/文件名覆盖率、竞争文件系统、麒麟 V10/UOS V20、glibc 2.28 和离线 deb 未验证。原 PT-4-1 迁移总体状态继续为“未验证”。未运行 workspace 全量测试或 Linux 构建。主菜单全局视图路由和测试用路径回退已验证，不代表原桌面选择器已验收。
+
+Git 同步：执行 `git fetch origin main pytools-dev`；origin/pytools-dev 无领先或落后提交。origin/main 有 3 个新提交，包含根 AGENTS.md/DEVELOPMENT_GOAL.md 的拆分规则更新及共享 excel-editor 校验修改。本功能不使用 ExcelModifier，未依赖该共享修复；按本轮目标未修改或合并 DEVELOPMENT_GOAL.md，也未更改共享 crate、Cargo 清单、Audit 或 Python 源目录。当前 main 更新留待涉及相应共享接口时安全同步。
+
+删除清单：无。
+回滚提示：`git revert ae3e313` 可撤销业务代码、测试和迁移清单更新；本记录单独提交。
+【组件版本】：pytools-core 0.1.0，不升级。

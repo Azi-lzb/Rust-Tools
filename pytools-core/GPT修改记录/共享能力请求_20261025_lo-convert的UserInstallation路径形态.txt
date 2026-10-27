@@ -1,0 +1,32 @@
+共享能力请求（pytools-dev → main）：lo-convert 转换路径的 UserInstallation 需为 file URI 并预建目录
+
+时间：2026-10-25 15:50（Asia/Shanghai）
+提出方：pytools-dev（ZCode）
+涉及组件：`sidecar/lo-convert/src/main.rs`（共享 sidecar，归 main 治理；pytools-dev 未做任何修改）
+
+一、涉及接口
+- `run_libreoffice(input, temp_dir, target)`（sidecar/lo-convert/src/main.rs，约 522-535 行）：
+  `-env:UserInstallation` 直接拼接 `profile.to_string_lossy()` 裸 POSIX 路径，且未 `create_dir_all(profile)`。
+- 对照：同文件 `run_libreoffice_recalculate`（约 258-267 行）写法正确——`fs::create_dir_all(&profile)` + `file_uri(&profile)?`。
+
+二、当前阻塞
+- PT-4-2/PT-4-3（Excel .xls→.xlsx、Word .doc→.docx 转换）经 `pytools convert-excel/convert-word` → lo-convert sidecar 的真实端到端验证被阻塞：LibreOffice 以 `com::sun::star::lang::WrappedTargetRuntimeException / Unspecified Application Error` 失败（退出码 1）。
+- 环境：WSL Ubuntu，`/usr/bin/soffice`（LibreOffice 随系统安装）；2.28 release `pytools`（HEAD 328532c）+ WSL 原生构建 `target/debug/lo-convert`，`PYTOOLS_LO_CONVERT` 指向 sidecar。
+- 失败可 100% 复现（见下）。业务管道本身工作正常：失败被逐文件记录、写运行历史、CLI 退出码 2，无静默回退。
+
+三、最小复现证据（同一 soffice、同一输入，仅 profile 参数形态不同）
+- A（sidecar 现状，裸路径）：
+  `soffice --headless --nologo --nodefault --nolockcheck '-env:UserInstallation=/tmp/lo-raw2' --convert-to 'xlsx:Calc MS Excel 2007 XML' --outdir /tmp/o_raw2 /tmp/src.xls`
+  → `Unspecified Application Error`（与 sidecar 内失败一致）。
+- B（期望形态，file URI + 预建目录）：
+  `mkdir -p /root/lo-probe/profile` 后
+  `soffice ... '-env:UserInstallation=file:///root/lo-probe/profile' --convert-to 'xlsx:Calc MS Excel 2007 XML' --outdir ... <input>`
+  → 转换成功；`.doc→.docx` 同理成功。
+- B 输出保真已验证：源 xlsx→（LO 造）.xls→（LO 转）.xlsx roundtrip 后 sheet 名与全部非空值（含日期）完全一致；.doc→.docx 保留全部中文文本。
+
+四、期望行为
+`run_libreoffice` 对齐 `run_libreoffice_recalculate`：先 `fs::create_dir_all(&profile)`，再以 `file_uri(&profile)` 形式传 `-env:UserInstallation`（输入路径参数维持现状即可，裸路径在正确 profile 下可用）。该修复同时让转换与重算两条路径行为一致。
+
+五、pytools-dev 侧后续
+- main 修复合入后，pytools-dev 将同步基线并重跑：4-2/4-3 真实 CDF `.xls`/`.doc` 输入的端到端转换验证（含 sheet/数据/文本保真断言与运行历史一致性），补记 PT-4-2/4-3 清单状态。
+- 在此之前不阻塞其他迁移任务；转换验证证据暂记"sidecar 缺陷阻塞，业务管道失败上报行为已验证"。

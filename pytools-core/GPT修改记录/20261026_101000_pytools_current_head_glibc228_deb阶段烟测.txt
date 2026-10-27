@@ -1,0 +1,24 @@
+时间：2026-10-26 10:10:00（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证提交：19404cba28b557b00e556b5975d924cb28cc7127（pytools-dev）。
+修改前 WIP：迁移清单修改、ZCode 交接文件及 PT-4-2/PT-6-2 两条未跟踪记录保留；未暂存或覆盖。
+
+## 验证范围
+
+复用现有 Ubuntu 24.04 WSL2 环境（宿主 glibc 2.39、Rust 1.99.1、cargo-zigbuild 0.24.0、Zig 0.17.0），离线构建当前 pytools-dev HEAD 的 x86_64-unknown-linux-gnu.2.28 release。Cargo 输出使用隔离的 /tmp/pytools-target-19404cba；deb 输出使用独立忽略目录 target/deb-validation-19404cba，未覆盖原 target/deb 中的同日制品。
+
+## 结果
+
+- objdump 确认最高 GLIBC 符号为 GLIBC_2.28。
+- deb 构建、dpkg-deb 元数据与文件清单验证通过；包依赖 libc6 (>= 2.28)、xdg-utils，未安装。
+- 解包后二进制 summary-used-range 合成 smoke 通过；读取引擎为 Calamine + OOXML error-token normalization，写入引擎为 rust_xlsxwriter。
+- 使用解包后的 deb 二进制运行 packaging/verify_target.sh：8/8 通过，ldd 检查 6 个动态库且无缺失。
+- 机器报告：pytools-core/probe/reports/current_head_glibc_2_28_deb_stage_19404cba_20261026.json。
+
+## 限制与未执行项
+
+此结果是在 glibc 2.39 WSL 宿主运行的 glibc 2.28 目标构建及阶段 smoke，不是 glibc 2.28、麒麟 V10 或统信 UOS V20 实机验收。未安装 deb、未测试离线部署、未使用真实业务数据；所有 fixture 均为合成数据。编译出现既有共享 crate 弃用警告、未使用导入警告及 Linux 上 Windows dialog_filter 未使用警告。
+
+## 版本与回滚
+
+未修改生产代码、共享 crate 或打包脚本。报告与记录可单独回滚；忽略的 deb、Cargo 输出及临时验证目录按本地构建产物保留。

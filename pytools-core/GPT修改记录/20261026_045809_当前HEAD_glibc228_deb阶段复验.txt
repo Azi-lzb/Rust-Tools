@@ -1,0 +1,33 @@
+时间：2026-10-26 04:58（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证源码 HEAD：676c039f7449decc92fd35fe207fedaec0cddd95
+提交：本记录生成时尚未提交，SHA 见本轮 Git 历史。
+WIP：保留已有 `pytools-core/MIGRATION_INVENTORY.md` 修改、`HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 转换失败记录及 PT-6-2 样本缺口记录；均未暂存或修改。
+
+【目的】
+将阶段级 glibc 2.28 Release/deb 证据推进到当前 PyTools HEAD。复用现有 Ubuntu WSL、Rust、cargo-zigbuild 和 Zig 环境；没有新建发行版、容器或安装依赖。
+
+【修改文件】
+- `pytools-core/probe/reports/pytools_glibc_2_28_deb_stage_20261026_676c039.json`：记录当前 HEAD 的构建、包和解包冒烟结果。
+- 本记录。
+
+【验证】
+- WSL Ubuntu 24.04 x86_64（宿主 glibc 2.39），Rust 1.99.1、cargo-zigbuild 0.24.0、Zig 0.17.0。
+- `TZ=Asia/Shanghai bash pytools-core/packaging/build_deb.sh`：`x86_64-unknown-linux-gnu.2.28` Release 构建通过；`objdump -T` 的最高 GLIBC 符号为 2.28。
+- 生成 `target/deb/pytools_0.1.0-20261026_amd64.deb`（5,202,054 字节）；`dpkg-deb --info/--contents` 通过，依赖为 `libc6 (>= 2.28), xdg-utils`。
+- 从 deb 解包后执行 `summary-used-range` 合成夹具通过：1 个输入、7 个 OOXML 错误单元格修补、8 个扩展错误 token 归一化；实际读取/写入引擎分别为 Calamine+OOXML token normalization 与 rust_xlsxwriter。未安装 deb。
+- WSL Ubuntu 检查前后保持停止状态；Windows 工作树没有因构建产生 tracked 源码修改。
+
+【未执行项与已知边界】
+- 目标二进制在 glibc 2.39 主机运行，不是 glibc 2.28 实机运行；未在麒麟 V10/UOS V20 安装，未验证离线部署及用户操作。
+- 使用合成夹具，不构成真实业务样本验收。阶段构建和解包冒烟不等于最终交付验收。
+- 构建产生共享 `excel-editor` 弃用 API、PyTools 未使用导入及 Windows 专用死代码警告；本轮未修改这些代码。
+- Release/deb 文件位于 Git 忽略的 `target/`，不纳入提交。
+
+【删除清单】
+无仓库文件删除。打包脚本自行清理其生成的临时 staging/smoke 目录。
+
+【回滚提示】
+如撤销本轮验证证据，仅回滚机器报告和本记录；不删除 `target/` 中现有构建制品，也不影响已有迁移实现与其他 WIP。
+
+【组件版本】不升级（仅阶段构建验证）。

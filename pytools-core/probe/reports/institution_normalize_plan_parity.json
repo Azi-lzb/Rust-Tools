@@ -1,0 +1,77 @@
+{
+  "baseline": "probe/reports/institution_normalize_baseline.json",
+  "fixture": "tests/fixtures/institution_normalize.xlsx (synthetic)",
+  "limitations": [
+    "synthetic XLSX fixture only",
+    "this test verifies planning parity, not engine execution or output preservation",
+    "the existing direct umya candidate remains until a complete inventory, routed backend, and validator are accepted"
+  ],
+  "output_created_by_planning": false,
+  "plan": {
+    "format": "xlsx",
+    "operations": [
+      {
+        "cell": "A2",
+        "operation": "set_cell_value",
+        "sheet": "报表分机构本外币",
+        "value": {
+          "type": "text",
+          "value": "Exact Standard"
+        }
+      },
+      {
+        "cell": "A3",
+        "operation": "set_cell_value",
+        "sheet": "报表分机构本外币",
+        "value": {
+          "type": "text",
+          "value": "Short Standard"
+        }
+      },
+      {
+        "cell": "B2",
+        "operation": "set_cell_value",
+        "sheet": "分机构-备用",
+        "value": {
+          "type": "text",
+          "value": "Branch Standard"
+        }
+      }
+    ],
+    "preserve": [
+      "cell_values_and_types",
+      "formula_text",
+      "comments_and_positions",
+      "styles",
+      "merged_ranges",
+      "defined_names",
+      "row_and_column_dimensions",
+      "page_settings",
+      "header_footer_text",
+      "relationships",
+      "unmodified_package_parts",
+      "sheet_identity_and_order"
+    ],
+    "request_id": "institution-normalize-plan-parity",
+    "workbook": {
+      "features_present": [
+        "comments",
+        "merged_cells",
+        "formulas"
+      ],
+      "format": "xlsx",
+      "inventory_complete": false
+    }
+  },
+  "routing_status": "not_eligible_without_complete_workbook_inventory",
+  "schema_version": 1,
+  "source_unchanged": true,
+  "stats": {
+    "branch_sheets": 3,
+    "mapped_rows": 3,
+    "mapped_sheets": 2,
+    "plan_operations": 3
+  },
+  "status": "passed",
+  "suite": "pytools.institution_normalize_plan_parity"
+}

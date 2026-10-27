@@ -1,0 +1,21 @@
+时间：2026-10-27
+修改前 HEAD：1b78daa
+修改前 WIP：当前 PyTools Worktree 中只有本项实现修改；未触碰 pytools-dev 另一 Worktree、Audit 或共享 crates。
+
+修改文件：
+- pytools-core/src/print_ops.rs：紧凑打印模式按值类型计算显示长度；仅数值零遵循隐藏零，文本零不再按数字解析而被忽略；增加局部类型单测。
+- pytools-core/tests/print_menu_cli.rs：增加 V2 配置菜单真实 CLI 计划回归，确认只含文本 `0` 的列会生成最小列宽操作。
+- pytools-core/MIGRATION_INVENTORY.md：登记业务修正及验证范围。
+
+目的：符合 V2 静态打印“数值 0 写空白、字符串 `0` 保留”的显示约定，防止紧凑列宽估算把文本零误认为数值零。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`
+- `cargo test --offline --locked -p pytools-core --lib static_print_autofit_distinguishes_numeric_zero_from_text_zero -j 1`（1/1）
+- `cargo test --offline --locked -p pytools-core --test print_menu_cli -j 1`（5/5）
+- `git diff --check`
+
+未执行：真实打印模板 Python/Rust 对拍、Excel GUI 保真、Windows 真实业务验收、Linux/deb 验收。新单测只验证本地的列宽业务决策；打印工作簿仍受现有 ExcelModifier capability 路由约束。
+
+回滚：只回滚本文件及 `print_ops.rs` 中本项辅助逻辑/测试和迁移清单附记；不涉及共享 Excel-Core 或原 Python 源项目。

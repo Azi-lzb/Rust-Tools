@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-7-6",
+  "operation": "append_existing_extraction_workbook",
+  "evidence_status": "synthetic_passed_not_production_acceptance",
+  "entry_point": "pytools menu → 7 → 6 (explicit append confirmation) → pytools extract-sheets --append-existing",
+  "cli_entry_point": "pytools extract-sheets --append-existing --config <xlsx> <source.xlsx>...",
+  "baseline": {
+    "function": "PyCode/core/feature_1_6_extract_sheets.py::run_extract_sheets",
+    "parameter": "append_existing=True",
+    "test": "PyCode/tests/test_extract_sheets_76.py::test_extract_sheets_append_existing_output_keeps_previous_sheets",
+    "test_result": "passed",
+    "scope": "area extraction; 1 passed"
+  },
+  "contract": {
+    "input_format": "xlsx",
+    "existing_output_format": "xlsx",
+    "output_kind": "edit_existing",
+    "data_owner": "rust",
+    "append_operation": "CreateSheet + ImportRange",
+    "formula_mode": "cached values for ordinary extraction; formula text is not copied",
+    "comments": "not copied into newly extracted sheets; existing target comments are preserved by the tested capability",
+    "existing_target_requires": [
+      "complete XLSX inventory",
+      "matching --capabilities",
+      "matching --platform"
+    ]
+  },
+  "interactive_menu": {
+    "append_is_opt_in": true,
+    "missing_capability_or_platform": "refused before source selection; existing output unchanged",
+    "matching_temporary_test_capability": "passed",
+    "existing_output_protection": "existing values, formula text, comments, and merged ranges preserved",
+    "new_sheet_values": "preserved",
+    "run_history_excludes_cell_values": true
+  },
+  "engines_observed": [
+    "calamine",
+    "rust_xlsxwriter",
+    "umya_spreadsheet",
+    "snapshot-checked filesystem replacement"
+  ],
+  "synthetic_cases": [
+    {
+      "case": "area extraction into existing result from a previous run",
+      "result": "passed",
+      "checks": [
+        "existing and appended sheet names/order",
+        "stored values and types",
+        "target bytes unchanged when capability is absent",
+        "target bytes unchanged when platform does not match",
+        "developer events and run history",
+        "run history excludes raw cell values"
+      ]
+    },
+    {
+      "case": "full-sheet extraction into an existing workbook",
+      "result": "passed",
+      "checks": [
+        "existing value, formula text, comment, merge, bold style, row height, and column width",
+        "new sheet stored values, merge, bold style, row height, and column width",
+        "ordinary extraction omits formula text and comments from the new sheet"
+      ]
+    }
+  ],
+  "test_capability": {
+    "temporary": true,
+    "engine": "umya_spreadsheet",
+    "operations": [
+      "CreateSheet",
+      "ImportRange"
+    ],
+    "production_capability_created": false,
+    "default_route_changed": false
+  },
+  "verification": {
+    "rust_test": "cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity",
+    "rust_result": "11 passed, 0 failed",
+    "menu_regression_test": "cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli",
+    "menu_regression_result": "16 passed, 0 failed",
+    "format_check": "cargo fmt --manifest-path pytools-core/Cargo.toml -- --check",
+    "format_result": "passed",
+    "diff_check": "git diff --check",
+    "diff_result": "passed",
+    "python_test_result": "1 passed, 8 deselected"
+  },
+  "limitations": [
+    "Synthetic XLSX fixtures only; no authorized real business workbook used.",
+    "The legacy Python append test covers area extraction only; no full-sheet Python output-file parity is claimed.",
+    "Interactive append was validated only with synthetic XLSX and a temporary test capability; no production capability is registered.",
+    "No production Passed capability has been registered.",
+    "Other Excel formats, Windows file dialog interaction, Kylin/UOS glibc 2.28, and offline deb validation remain unverified."
+  ]
+}

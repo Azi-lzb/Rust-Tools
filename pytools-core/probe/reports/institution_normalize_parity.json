@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "source_project": "py_statistics_tools",
+  "source_function": "PyCode.core.feature_1_2_normalize_institution._process_sheet",
+  "rust_function": "pytools_core::institution_normalize::run_normalize_institution",
+  "source_baseline": "probe/reports/institution_normalize_baseline.json",
+  "fixture": "tests/fixtures/institution_normalize.xlsx (synthetic)",
+  "source_python_version": "3.12.10",
+  "status": "保留",
+  "business_statistics": {
+    "files": {"status": "保留", "python": 1, "rust": 1},
+    "branch_sheets": {"status": "保留", "python": 3, "rust": 3},
+    "mapped_sheets": {"status": "保留", "python": 2, "rust": 2},
+    "mapped_rows": {"status": "保留", "python": 3, "rust": 3},
+    "failed_files": {"status": "保留", "python": 0, "rust": 0}
+  },
+  "rust_probe": {
+    "command": "cargo run -p probe --locked -- compare pytools-core/probe/reports/institution_normalize_rust_dump.json pytools-core/probe/reports/institution_normalize_baseline.json",
+    "status": "保留",
+    "metrics": {
+      "sheet_names": {"status": "保留", "matched": 4, "total": 4},
+      "values": {"status": "保留", "matched": 20, "total": 20},
+      "formula_text": {"status": "保留", "matched": 1, "total": 1},
+      "merged_ranges": {"status": "保留", "matched": 1, "total": 1},
+      "comments": {"status": "保留", "matched": 1, "total": 1},
+      "conditional_formatting": {"status": "不适用", "matched": 0, "total": 0},
+      "data_validations": {"status": "不适用", "matched": 0, "total": 0}
+    }
+  },
+  "openpyxl_preservation_check": {
+    "status": "保留",
+    "sheets_matched": 4,
+    "sheets_total": 4,
+    "properties_status": {
+      "sheet_order_and_visibility": "保留",
+      "cell_styles": "保留",
+      "comments_and_merged_ranges": "保留",
+      "row_heights_and_hidden_state": "保留",
+      "column_widths_and_hidden_state": "保留",
+      "page_setup_print_area_centering_header_footer": "保留"
+    },
+    "properties": [
+      "sheet order and visibility",
+      "cell styles",
+      "comments and merged ranges",
+      "row heights and hidden state",
+      "column widths and hidden state",
+      "page setup, print area, centering, and header/footer"
+    ]
+  },
+  "verification": {
+    "python_baseline": "python probe/institution_normalize_baseline.py --source-root <read-only pytools source>",
+    "rust_tests": "cargo test -p pytools-core --locked",
+    "rust_unit_test": "institution_normalize::tests::workbook_normalization_matches_python_baseline_and_preserves_fixture_metadata",
+    "result": "9 pytools-core tests passed; Rust probe comparison and openpyxl preservation check passed"
+  },
+  "limitations": [
+    "The result uses a synthetic xlsx fixture; real business templates have not been verified.",
+    "The candidate adapter currently accepts xlsx only; xlsm behavior is not implemented or verified.",
+    "The feature is not yet connected to configuration loading, menu/CLI dispatch, or source-file discovery.",
+    "Umya remains a candidate for this operation and is not approved as the workspace default editor.",
+    "Styles and dimensions were checked by openpyxl because the Rust dump schema does not expose them."
+  ]
+}

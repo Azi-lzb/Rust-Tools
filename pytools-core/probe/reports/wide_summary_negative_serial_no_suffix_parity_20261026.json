@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.wide_summary.negative_date_serial_no_suffix.parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_full_workbook_parity",
+  "branch": "pytools-dev",
+  "source_head": "334bbc0",
+  "release_binary_code_commit": "b0fe425",
+  "case": {
+    "feature_id": "PT-1-4",
+    "entry_route": "pytools menu -> 1 timeline -> 4 no-suffix -> confirm new target",
+    "input_excel_serial": -0.5,
+    "expected_datetime": "1899-12-29T12:00:00",
+    "input_kind": "synthetic XLSX"
+  },
+  "baseline": {
+    "implementation": "read-only PyCode from the original project",
+    "python": "3.12.10",
+    "openpyxl": "3.1.5"
+  },
+  "rust": {
+    "binary": "target/x86_64-unknown-linux-gnu/release/pytools",
+    "target": "x86_64-unknown-linux-gnu.2.28",
+    "execution_host": "Ubuntu 24.04 LTS WSL2 x86_64, host glibc 2.39",
+    "actual_engines": ["calamine", "rust_xlsxwriter"]
+  },
+  "comparison": {
+    "summary_full_workbook_projection": "exact",
+    "python_target_full_workbook_projection": "exact",
+    "rust_candidate_and_committed_target_projection": "exact",
+    "candidate_matches_committed_target_bytes": true,
+    "source_unchanged": true,
+    "config_unchanged": true,
+    "temporary_fixture_cleaned": true
+  },
+  "windows_native_validation": {
+    "cargo_fmt_pytools_core": "passed",
+    "timeline_menu_cli": "16 passed, 0 failed"
+  },
+  "limitations": [
+    "Synthetic fixture only; no real business sample was used.",
+    "The glibc 2.28-target binary ran on a glibc 2.39 WSL host; Kylin V10, UOS V20, glibc 2.28 runtime, and offline deb acceptance remain unverified."
+  ]
+}

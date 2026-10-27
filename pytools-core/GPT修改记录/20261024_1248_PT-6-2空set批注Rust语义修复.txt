@@ -1,0 +1,42 @@
+时间：2026-10-24 12:48（Asia/Shanghai）
+执行者：Codex PyTools 专属开发 Agent
+修改前 commit：ac6d947
+修改前 WIP：`git status --short --branch` 显示工作区干净；无 WIP 文件。
+修改后 commit：本记录随本轮提交固定，完整哈希见当前分支日志。
+【组件版本】不升级；未修改 Cargo manifest 或锁文件。
+
+## 修改目的
+
+对齐 PyCode `run_summary_by_comment` 对空 `set()` 批注的解析行为。原 Python 正则 `set[\(（]([^)）]+)[)）]` 要求括号中至少一个字符；Rust 原解析把空捕获作为空名称，造成多余的空表头和输出列。
+
+## 修改文件及内容
+
+- `pytools-core/src/summary_ops.rs`：忽略零长度 `set()` 捕获；保留 Python 对 `set( )` 的行为（捕获非空，随后裁剪为空字符串）。
+- `pytools-core/tests/summary_comments_cli.rs`：新增真实 `summary-comments` CLI 回归，用 Rust XLSX writer 生成带批注模板，校验不产生空集合列、行值和源文件不变。
+- `pytools-core/probe/compare_summary_comments_empty_set.py`：新增针对该边界的 PyCode/Rust CLI 全投影对拍入口，支持 Ubuntu WSL debug 与 Windows 原生 Rust CLI。
+- `pytools-core/probe/reports/summary_comments_empty_set_marker_parity_20261024.json`：保存合成对拍结果；仅含场景/计数/引擎，不含真实业务数据或凭据。
+- `pytools-core/probe/reports/summary_used_range_windows_native_20261024.json`：保存 PT-6-1 Windows 原生对拍的汇总计数、引擎和状态；不含源文件名、路径或单元格内容。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录问题原因、修复和验收边界。
+
+## 验证结果
+
+- Windows `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- WSL Ubuntu `cargo test --offline --locked -p pytools-core --lib comment_region_tests`：2/2 通过，覆盖 `set()`、`set( )` 与全角括号名称。
+- WSL Ubuntu `cargo test --offline --locked -p pytools-core --test summary_comments_cli`：4/4 通过，含新增 CLI 回归。
+- `compare_summary_comments_empty_set.py`：PyCode/Rust CLI 完整工作簿投影一致（值、类型、样式、维度、冻结窗格、页面设置），均为 2 行、5 列；模板和源簿修改前后大小/修改时间一致。
+- main 完成安装 Windows 11 SDK 后，使用 Windows 原生 Rust 1.99.1/MSVC x64 环境重跑：`cargo test --offline --locked -p pytools-core --lib comment_region_tests` 2/2、`--test summary_comments_cli` 4/4、`--test summary_used_range_error` 5/5，`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 均通过。
+- 设置 `PYTOOLS_RUST_CLI=target/debug/pytools.exe` 后，专用空 `set()` 对拍由 Windows 原生 MSVC CLI 复跑通过；更新后的机器结果记录 `rust_runtime.host=Windows native MSVC x86_64-pc-windows-msvc`。
+- 同一原生 CLI 运行 `compare_summary_tools.py`：PyCode/Rust 合成 XLSX、宏自由 XLSM、VBA 启用测试簿、错误 token、过滤、PT-6-2 批注汇总均对拍通过；13 份 PyTools XLSX（96 张表、203,580 行）分 4 批完整投影一致，开发者事件流和保存历史一致，源文件完整性检查通过。Windows 结果另存于 `summary_used_range_windows_native_20261024.json`；原有 WSL/glibc 报告保持不变。
+- `cargo test --offline --locked -p pytools-core -q`：未全通过。lib 测试为 29/30；唯一失败的既有 `workbook_extract::tests::workbook_extraction_matches_original_python_helper` 读取缺失夹具 `pytools-core/tests/fixtures/季度报表_县区报表_2024-12-31.xlsx`。专项批注单测和 CLI 集成测试均单独通过。
+- 首次原生链接尝试曾因 Windows SDK `kernel32.lib` 缺失报 LNK1181；已向 main 报告，main 完成 SDK 安装后原生测试及 CLI 对拍均通过。未因该环境问题修改任何共享组件。
+
+## 未执行项与已知问题
+
+- WSL 结果是 Ubuntu debug/Linux 阶段验证，不代表 glibc 2.28 release、麒麟/UOS 或 deb 验收；本轮未重建 glibc 2.28 release。
+- 尚未找到原 PyTools PT-6-2 真实批注区域业务模板；本次只补充合成语义边界，不将 PT-6-2 标记为整体完成。
+- 全量 PyTools 测试受上述既有缺失 fixture 影响；未补造或修改无关工作表提取 fixture。
+
+## 删除与回滚
+
+- 删除文件：无。
+- 回滚：回退本次提交即可撤销该 PT-6-2 语义修正、回归、探针及记录；未涉及共享 crates、根 Cargo 文件、Audit 或源 Python 项目。

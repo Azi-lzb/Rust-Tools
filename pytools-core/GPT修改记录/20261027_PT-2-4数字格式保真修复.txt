@@ -1,0 +1,21 @@
+功能：PT-2-4 V2 按配置删除重复生成结果工作簿
+
+修改：
+- pytools-core/src/dedup_ops.rs：使用共享 excel-reader 单元格数字格式 API，保留数值、整数和日期序列的数字格式；重复标记行在红色填充上叠加原数字格式；候选发布前核对输出每个数值单元格的格式。
+- pytools-core/tests/dedup_number_format_blocker.rs：解除旧共享能力阻塞用例的 ignore，覆盖删除行后上移的零填充数字格式及源文件字节不变。
+- pytools-core/tests/dedup_menu_cli.rs：将真实菜单回归输入改为零填充数值 ID，确认 `2→1` 红色整行标记及 `2→2` 删除后的上移记录均保留格式。
+- pytools-core/MIGRATION_INVENTORY.md：记录直接单元格样式已修复及行/列默认样式仍受共享 API 限制。
+
+验证（Windows 原生 Rust，构建与临时文件放在 F:\PyTools_Rust_本轮工作文件_20261026）：
+- cargo check --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- cargo test --offline --locked -p pytools-core --test dedup_number_format_blocker -j 1：1/1 通过。
+- cargo test --offline --locked -p pytools-core --test dedup_menu_cli -j 1：7/7 通过。
+- cargo test --offline --locked -p excel-reader -j 1：17 个单测、2 个集成测试通过。
+- cargo fmt -p pytools-core、git diff --check：通过。
+
+未验证/已知问题：
+- 交接样本缺失；尚无真实业务样本或 Python/Rust 输出对拍，也未做 Excel 人工打开、Linux/glibc 2.28 或 deb 验收。
+- excel-reader API 不展开行/列默认样式。数值格式若来自行/列默认样式，PyTools 当前无法辨别；PT-2-4 保持受阻，需 main 协调共享 API。
+- 本功能拒绝公式、错误、批注、合并、条件格式、数据验证、定义名称和未知 OOXML 部件的工作簿。
+
+回滚：仅回滚本记录对应的 PT-2-4 业务代码、回归用例和清单条目；保留从 main 安全 cherry-pick 的共享 API 提交及其他开发成果。

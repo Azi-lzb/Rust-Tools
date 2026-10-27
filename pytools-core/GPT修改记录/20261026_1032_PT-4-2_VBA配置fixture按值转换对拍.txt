@@ -1,0 +1,15 @@
+功能：PT-4-2 native XLSM 按值转换扩大值类型对拍
+基线：pytools-dev 已推送 HEAD 32a7eba。
+
+验证目的：当前真实用户业务样本暂缺；使用仓库已有只读 VBA 配置 fixture 扩展合成烟测之外的工作簿规模与日期/宏值路径覆盖，不将其当作用户业务模板验收。
+
+修改文件：
+- pytools-core/probe/compare_native_excel_value_conversion.py：运行 Rust `convert-excel --engine native` 实际 CLI，逐坐标比较 fixture 输入与输出值，日期对比使用源 workbook 1900 epoch serial；校验工作表顺序、开发者日志引擎与脱敏、源字节未变及 VBA 部件按合同移除。
+- pytools-core/probe/reports/native_excel_value_conversion_parity_20261026.json：附加完整 fixture 统计。
+- pytools-core/MIGRATION_INVENTORY.md：登记本项限定范围和未验证项。
+
+验证：`python pytools-core/probe/compare_native_excel_value_conversion.py` 通过。`tests/fixtures/vba_config/VbaV2.4.2.xlsm` 共 14 张表、39,015 个非空格（1,781 日期、4,775 数值、32,459 文本；0 公式）；输出值逐格一致，最大数值差为 0，意外/缺失单元格为 0。源含 `xl/vbaProject.bin`，输出不含；源文件字节不变。运行历史真实引擎为 `calamine + rust_xlsxwriter`，未记录源文件名。
+
+未完成：该仓库 fixture 不是用户真实业务模板且没有公式；旧 PyCode 保真转换结果对拍、公式缓存、错误值/空文本、1904 `.xls/.xlsb` epoch、真实业务输入、Windows 文件对话框、glibc 2.28、麒麟/UOS 与离线 deb 仍未验收。PT-4-2 整项继续保持未验收。
+
+回滚：仅回退本轮 probe、报告、迁移记录提交；保留之前两个 PT-4-2 失败关闭业务修复提交。

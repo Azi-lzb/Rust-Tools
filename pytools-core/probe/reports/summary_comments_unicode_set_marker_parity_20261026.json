@@ -1,0 +1,50 @@
+{
+  "feature": "PT-6-2",
+  "status": "passed_synthetic_python_rust_cli_parity",
+  "scenarios": [
+    "Unicode İ lowercasing before ASCII set marker",
+    "Python re.IGNORECASE long-s matching"
+  ],
+  "python_runtime": "3.12.10",
+  "rust_entry": "pytools summary-comments",
+  "cases": [
+    {
+      "marker": "İİset(区域)",
+      "summary_rows": 6,
+      "python_saved": true,
+      "rust_saved": true,
+      "workbook_projection": "exact",
+      "python_sheet_count": 1,
+      "rust_sheet_count": 1,
+      "python_dimensions": [
+        {
+          "name": "模板",
+          "rows": 7,
+          "columns": 6
+        }
+      ],
+      "template_and_source_unchanged": true
+    },
+    {
+      "marker": "ſet(区域)",
+      "summary_rows": 6,
+      "python_saved": true,
+      "rust_saved": true,
+      "workbook_projection": "exact",
+      "python_sheet_count": 1,
+      "rust_sheet_count": 1,
+      "python_dimensions": [
+        {
+          "name": "模板",
+          "rows": 7,
+          "columns": 6
+        }
+      ],
+      "template_and_source_unchanged": true
+    }
+  ],
+  "limitations": [
+    "Synthetic workbook only; no authorized real annotated template/source sample was available.",
+    "Does not complete PT-6-2 real-sample acceptance or target Linux/deb validation."
+  ]
+}

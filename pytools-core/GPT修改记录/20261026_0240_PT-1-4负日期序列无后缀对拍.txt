@@ -1,0 +1,25 @@
+时间：2026-10-26 02:40（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+验证代码基线：pytools-dev HEAD 334bbc0；glibc 2.28 目标 release 二进制基于 b0fe425（其后至 334bbc0 的提交仅记录验证）
+
+【目的】
+补齐 PT-1-4（行头不加后缀）负 Excel 日期序列的新目标菜单回归。PT-1-3/PT-1-4 生产逻辑不变，仅共享测试断言并增加 no-suffix 菜单选择 4 的覆盖。源 PyTools 项目保持只读。
+
+【修改文件】
+- `pytools-core/tests/timeline_menu_cli.rs`：复用 PT-1-3/1-4 菜单测试 helper；断言负序列保留、源与配置不变、目标写入成功及相应 PT 历史状态。
+- `pytools-core/probe/reports/wide_summary_negative_serial_no_suffix_parity_20261026.json`：记录 no-suffix 真实菜单入口的合成 Python/Rust 完整工作簿对拍。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充 PT-1-3/1-4 两种模式的负日期序列合成证据；真实样本及其他验收边界仍未通过。
+- 本记录。
+
+【验证】
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：16/16 通过，包含 PT-1-3 与 PT-1-4 负序列新目标回归。
+- 使用原项目只读 PyCode 基线与 `pytools menu -> 1 -> 4` 对拍，Rust 运行 glibc 2.28 目标 release 二进制。汇总与目标候选完整工作簿投影（值/类型、样式、维度、公式、合并、定义名称、冻结窗格）一致；`-0.5` 序列输出为 `1899-12-29T12:00:00`；Rust 候选与已提交目标字节一致；输入源与配置未变化；历史记录为 PT-1-4 succeeded，实际引擎为 Calamine 与 rust_xlsxwriter。临时样本自动清理。
+
+【未执行项与限制】
+- 本轮使用合成样本；PT-1-3/1-4 仍缺真实业务宽表样本，整体保持未验收。
+- glibc 2.28 目标二进制在 Ubuntu 24.04 WSL2（host glibc 2.39）运行；未在 glibc 2.28、麒麟 V10 或统信 UOS V20 实机运行，未完成离线 deb 安装验收。
+- 生产 ExcelModifier capability、其他时间/时长格式及 PT-1-2 排除状态均未变。
+
+【回滚提示】
+只需回滚本记录列出的测试、机器报告、迁移清单证据与本记录；未修改 PyTools 生产业务代码或共享 crates。

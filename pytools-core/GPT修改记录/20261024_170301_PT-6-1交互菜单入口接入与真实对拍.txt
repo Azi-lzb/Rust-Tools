@@ -1,0 +1,36 @@
+时间：2026-10-24 17:03:01（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：e960f598f4780e3ee8b09e881f63ee4e13144e6f
+提交后 commit：本条记录随 pytools-dev 本轮提交纳入版本控制（以提交历史为准）。
+WIP 状态：开始时分支 pytools-dev 与 origin/pytools-dev 同步，只有同一迁移任务尚未提交的 pytools-core/Cargo.toml 和 pytools-core/src/bin/pytools.rs；保留并完成。首次 Codex 工作目录处于 detached baseline，检查 worktree 后将所有实际操作限定到 pytools-dev worktree。未发现其他用户 WIP。
+
+目的：将已迁移的 PT-6-1 按使用区域汇总接入 PyCode 对应的菜单/文件选择/全局路径配置流程，并保持 PT-6-2 子菜单可用。只开放已接入的汇总菜单类别，不声称其他菜单组已经迁移。
+
+修改文件：
+- pytools-core/Cargo.toml：仅为本 crate 启用 Windows Common Dialog API 所需的 windows-sys feature；未改根 Cargo.toml/Cargo.lock。
+- pytools-core/src/bin/pytools.rs：无参数启动交互菜单，提供 menu/interactive 命令；读取现有全局配置，按 Python 菜单编号进入 6→1/2；从 Windows 原生文件对话框多选/单选，或从管道/非 Windows/弹窗不可用时使用分号路径输入；复用现有 summary-used-range 与 summary-comments CLI handler、配置输出/日志目录和运行日志；业务错误继续向外返回并使用既有非零退出/失败历史行为。
+- pytools-core/tests/summary_menu_cli.rs：新增三项真实 CLI 集成测试。
+- pytools-core/MIGRATION_INVENTORY.md：仅补充菜单接入范围和本轮证据。
+- 本记录。
+
+配置与业务影响：使用既有 全局配置 的“输出目录”和“日志目录”，未改变字段语义或默认引擎。PT-6-1/6-2 的业务实现由现有 Rust handler 执行；没有改动 Python 源项目或业务数据。本轮无 VBA 读写/复制；XLSX 汇总仍创建新 XLSX。
+
+验证结果：
+- Windows 11 原生：cargo fmt --check -p pytools-core 通过。
+- Windows 11 原生：cargo test --offline --locked -p pytools-core --test summary_menu_cli：3/3 通过（PT-6-1 配置目录/两文件菜单处理及输出保真；PT-6-2 模板与源文件选择；损坏输入返回失败并保存失败历史）。
+- Windows 11 原生：cargo test --offline --locked -p pytools-core --test summary_used_range_error：5/5 通过。
+- Windows 11 原生：cargo test --offline --locked -p pytools-core --test summary_comments_cli：4/4 通过。
+- WSL Linux：cargo check --offline --locked -p pytools-core --bin pytools 通过。仅做本次 Linux 条件编译检查，未重建 glibc 2.28 release 或 deb。
+- 原 PyCode 只读项目中的一个真实 XLSX 经新交互菜单路径与 Python 基线完整工作簿投影对拍：7,462 行精确一致；Calamine 读取、rust_xlsxwriter 写入；14 条开发者事件与运行历史一致；源文件指纹前后不变。对拍生成的 config、输出、日志及 Python runner 均位于系统临时目录，已自动清理。
+- git diff --check 通过。构建输出仅含既有共享 excel-editor deprecation 警告和 pytools-core unused import 警告。
+- 一次初次对拍尝试由 Python subprocess 按 Windows 本地代码页发送中文路径而失败；将测试管道编码明确设为 UTF-8 后重跑通过。未因此修改产品输入解码逻辑。
+
+未执行项与已知限制：
+- 使用管道测试了手工多路径回退；本轮没有对原生 Windows 文件对话框进行鼠标/桌面 UI 验收。
+- 交互菜单目前只开放已迁移的主菜单第 6 组；其他业务仍经现有 CLI/后续迁移，不能据此认定完整菜单已迁移。
+- 未运行全部 pytools-core 测试；本轮聚焦 PT-6-1、PT-6-2 回归。
+- 未在麒麟 V10/UOS V20 安装 deb，也未做目标平台离线交付验收；PT-6-1 整体仍有既有未验证项。
+
+删除清单：无。
+回滚：对本轮独立提交执行 git revert <commit>；无临时仓库文件需删除。
+【组件版本】：不升级，仍为 0.1.0。

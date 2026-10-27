@@ -1,0 +1,22 @@
+时间：2026-10-27（Asia/Shanghai）
+执行者：Codex
+目的：让日期型 Excel“数据日期”配置生成 Windows 可用的日期文件名，避免写入 `00:00:00` 中的非法冒号。
+
+变更：
+- `pytools-core/src/batch_rename.rs`：只规范“数据日期”的 Excel 日期序列、ISO 日期时间和常见斜杠日期；其他设置与无关文本不受影响。
+- `pytools-core/tests/batch_rename_parity.rs`：将日期序列案例改为断言实际重命名成功、文件名为 `2026-01-31 0008 测试银行 存款表.xlsx`，并验证输入内容完整保留。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充 V2 行为及仍待真实样本验收的状态。
+
+验证（Windows，Rust target 与测试临时文件均置于 F 盘）：
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1` 通过。
+- `cargo test --offline --locked -p pytools-core --lib batch_rename::tests -j 1`：5/5 通过。
+- `cargo test --offline --locked -p pytools-core --test batch_rename_parity -j 1`：4/4 通过（含日期型重命名、输入保护、Python 结果基线和 CLI 日志用例）。
+- `cargo fmt --manifest-path Cargo.toml -p pytools-core -- --check` 及 `git diff --check` 通过。
+
+后续补充：将同一日期规范扩展到常见 ISO 日期时间文本和 `YYYY/MM/DD` 文本，仅作用于“数据日期”；其他文本原样保留。新增单测覆盖两种文本形式及无关文本。补充后重命名单测仍 5/5、`batch_rename_parity` 仍 4/4，格式检查通过。
+
+F 盘正式入口冒烟：复制 `04-files/pt41-manual/config.xlsx` 和 `Bank-smoke-report.xlsx` 到 `actual/pt41-text-datetime-menu-20261027-1/`，仅将副本配置“数据日期”设为文本 `2026-01-31 00:00:00`。通过 `pytools.exe menu --config <副本配置> --log-view user` 输入 `4→1→1` 和副本文件路径，退出码 0，改名 1、跳过 0，输出名 `2026-01-31 B01 Example Bank Monthly.xlsx`，输出 3432 字节与输入完全一致；源样本未触碰。日志：`F:\PyToolsRustV2\manual-acceptance-20261027\logs\3_3_batch_rename_20261027_115755.log`。这是合成菜单验证，不是真实业务验收。
+
+未执行：Python/Rust 对拍（旧 Python 在此 Windows 日期时间文件名边界同样会失败；本次按 V2 可用性要求验证）、真实业务工作簿、完整 UI 复测、Linux/glibc/deb。PT-4-1 仍待 Windows 真实业务验收。
+
+回滚：回退本记录、迁移清单补充和上述两个 Rust 文件的本次修改即可；F 盘既有用户样本不变。

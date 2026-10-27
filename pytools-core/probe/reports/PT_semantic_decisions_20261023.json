@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "status": "未验证",
+  "real_samples": {"availability":"user_confirmed_none", "user_answer":"还没有样本", "gate":"第二阶段第1步等待真实样本；不进入生产能力登记"},
+  "decisions": [
+    {
+      "decision_id": "D01-existing-workbook-append",
+      "decision_state": "confirmed_by_user",
+      "feature_ids": ["PT-1-3", "PT-1-4", "PT-2-5", "PT-7-6"],
+      "excluded": ["PT-1-2"],
+      "source_contracts": ["时序/宽表重建替换一个目标sheet", "去重增量追加行", "提取新增sheet"],
+      "user_answer": "分别保留这三种旧行为",
+      "contract": "PT-1-3/PT-1-4只重建替换目标sheet并保留其他sheet；PT-2-5只去重追加新增行；PT-7-6只新增唯一命名sheet并保留既有sheet；不统一为整簿重建",
+      "implementation_status": "未验证",
+      "production_route_changed": false
+    },
+    {
+      "decision_id": "D02-row-structure-semantics",
+      "decision_state": "confirmed_by_user",
+      "feature_ids": ["PT-2-2", "PT-2-4", "PT-7-1", "PT-7-3"],
+      "user_answer": "按 Excel/COM 体验，让相关对象与引用随行调整",
+      "contract": "合并区域、批注和公式引用需要随删行/插行调整；不以普通Python未修正依赖的行为作为新验收目标",
+      "required_evidence": ["合并区域跨修改边界", "存活格与被删格批注", "本sheet及跨sheet公式引用", "定义名称及其他依赖引用", "未修改区域和失败恢复", "真实样本及目标平台"],
+      "status": "未验证",
+      "production_route_changed": false,
+      "capability_created": false
+    },
+    {
+      "decision_id": "D03-configured-print-target",
+      "decision_state": "confirmed_by_user",
+      "feature_ids": ["PT-3-3"],
+      "user_answer": "只允许输出到新文件，已有目标直接拒绝",
+      "contract": "output_kind=new_report；existing_target=reject；不清空、重写或覆盖既有目标；计划构建及最终提交均须拒绝已存在路径",
+      "implementation_status": "Rust CLI candidate implemented; synthetic execution parity passed for modes 1/2/3; production acceptance remains unverified",
+      "current_cli_contract_updated": true,
+      "evidence_report": "probe/reports/print_config_execution_parity_20261023.json",
+      "production_capability_created": false,
+      "production_route_changed": false
+    }
+  ]
+}

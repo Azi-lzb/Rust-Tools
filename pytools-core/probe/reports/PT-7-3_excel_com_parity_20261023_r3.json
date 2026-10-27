@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.pt_7_3.row_delete_excel_com_parity",
+  "date": "2026-10-23",
+  "feature_id": "PT-7-3",
+  "status": "failed",
+  "sample_kind": "synthetic_workbook_generated_by_excel_com",
+  "oracle": "Microsoft Excel COM 16.0",
+  "rust_engine": "umya_spreadsheet",
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "source_unchanged": false,
+  "semantic_equal": false,
+  "differences": [
+    "Rust CLI produced no PT-7-3 delete-row plan: {\"branch_sheets\":0,\"deleted_rows\":0,\"failed_files\":0,\"files\":0,\"foreign_empty\":true,\"items\":[],\"mode\":\"plan_only\",\"ok_files\":0,\"planned_branch_sheets\":0,\"planned_deleted_rows\":0,\"planned_files\":0}"
+  ],
+  "not_verified": [
+    "real pytools workbook/configuration",
+    "cross-sheet formula and defined-name updates",
+    "Kylin V10",
+    "UOS V20",
+    "glibc 2.28",
+    "offline deb packaging"
+  ],
+  "error": "Rust CLI produced no PT-7-3 delete-row plan: {\"branch_sheets\":0,\"deleted_rows\":0,\"failed_files\":0,\"files\":0,\"foreign_empty\":true,\"items\":[],\"mode\":\"plan_only\",\"ok_files\":0,\"planned_branch_sheets\":0,\"planned_deleted_rows\":0,\"planned_files\":0}"
+}

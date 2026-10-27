@@ -1,0 +1,26 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：5fb127a（与 origin/pytools-dev 同步）；工作区干净。当前 worktree 为 C:\Users\AZI\Desktop\VibeCode\pytools-dev，分支 pytools-dev。原 PyTools Python 源只读；本轮新增对拍文件仅在系统临时目录。
+
+目的：继续验证 PT-6-1 的真实输入格式合同。原 Python `run_summary_by_usedrange` 只支持 `.xlsx` / `.xlsm`，对 `.xls` / `.xlsb` 先过滤；确认 Rust CLI 在混合选择中维持相同业务行为，且不会把已跳过输入交给 reader。
+
+修改文件：
+- `pytools-core/tests/summary_used_range_error.rs`：在用户、开发者和 off 三种视图的真实 CLI 回归中加入无效 `.xls` / `.xlsb` 输入，断言仅有效 `.xlsx` 被读取，跳过事件不标记 reader 引擎，输出仍相同。
+- `pytools-core/probe/compare_summary_tools.py`：增加可单独调用的输入扩展名对拍，运行旧 PyCode `run_summary_by_usedrange` 与 Rust `summary-used-range` CLI，对输出、跳过文件名、事件引擎和输入前后指纹作断言；主合成对拍将结果写入 JSON 报告。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：写入本次过滤边界对拍结果和开发者日志阶段摘要。
+- `pytools-core/MIGRATION_INVENTORY.md`：明确 PT-6-1 的源输入合同及 `.xls/.xlsb` 处理状态。
+- 本修改记录。
+
+实际入口与结果：通过旧 PyCode 函数和 Rust `summary-used-range` CLI 分别处理相同临时输入：有效 `.xlsx` 与宏自由合成 `.xlsm`，以及内容故意不是 Excel 文件的 `.xls` / `.xlsb` 占位输入。两边均只汇总前两份工作簿，输出 19 行；工作表投影、值/类型、样式、公式、页面属性和尺寸完全一致。Rust 对两个占位文件发出 `input_filter/skipped` 事件，事件的 `actual_engine` 为空；Rust developer stderr 事件序号连续，且成功运行历史与事件流事件数一致。输入前后指纹相同。
+
+验证：
+- `cargo fmt -p pytools-core`：通过。
+- `cargo test --offline --locked -p pytools-core summary_used_range`（WSL）：3/3 通过。
+- `compare_used_range_extension_filter` 定向对拍（Windows Python baseline + WSL Rust CLI）：通过，JSON 摘要记录于 `probe/reports/summary_used_range_parity_20261024.json`。
+- `cargo check` 与完整 13 份真实 XLSX 对拍在前一 PT-6-1 日志提交中已通过；本轮未改汇总计算、reader、writer 或引擎路由。
+
+差异与边界：没有 Python/Rust 输出差异。占位 `.xls/.xlsb` 文件只用于验证按后缀过滤，不代表读取这两种格式；这是旧 Python 函数的明确支持范围，Rust 不扩大该功能范围。原项目没有真实 `.xlsm` 文件；宏自由合成 XLSM 通过，VBA 启用 XLSM 仍未验收。Windows 原生 Rust、麒麟/UOS、glibc 2.28 与 deb 也未验证。
+
+删除文件：无；临时输入和输出位于系统临时目录。
+回滚：可用 `git revert <本轮提交>` 撤回本轮修改。
+【组件版本】：不升级，当前 0.1.0。

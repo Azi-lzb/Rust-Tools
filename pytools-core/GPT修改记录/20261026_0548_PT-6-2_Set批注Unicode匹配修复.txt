@@ -1,0 +1,31 @@
+时间：2026-10-26 05:48（Asia/Shanghai）
+执行者：Codex
+修改前 commit：2612e4df36080b53dfbb89799fe21fb4dd5db454
+修改后 commit：待提交
+
+WIP 状态：修改前工作树已有 `pytools-core/MIGRATION_INVENTORY.md` 修改，以及未跟踪的交接报告、PT-4-2 转换失败记录和 PT-6-2 真实样本缺口记录。本轮未修改、暂存或丢弃这些既有成果。
+
+目的：修复 PT-6-2 模板 set 批注名称解析与 PyCode `re.IGNORECASE` 不一致的问题。原 Rust 代码先对整段 Unicode 文本执行小写转换，再把转换后字符串的字节偏移用于原字符串；前置字符 `İ` 小写后扩展为多字节序列，使后续 marker 偏移错位，可能导致错误结果或 UTF-8 切片 panic。另补齐 Python 正则对长 s（`ſ`）的大小写匹配行为。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：改为在原字符串的 UTF-8 字符边界上匹配 marker；只接受 Python `re.IGNORECASE` 对当前 ASCII marker 字母的等效大小写（含 `ſ` 对 `s`），并用安全字符串访问取名称，避免非法字节边界切片。新增两项单元回归。
+- `pytools-core/tests/summary_comments_cli.rs`：新增实际 `summary-comments` CLI 集成回归，验证 Unicode 前缀后的 set 名称、结果数据和源/模板输入不变。
+- `pytools-core/probe/compare_summary_comments_unicode_set_marker.py`：新增独立 Python/Rust 对拍脚本，覆盖 `İİset(区域)` 与 `ſet(区域)`。
+- `pytools-core/probe/reports/summary_comments_unicode_set_marker_parity_20261026.json`：记录对拍范围和机器结果，不包含业务样本内容。
+- 本记录。
+
+实现/迁移影响：真实产品入口仍为 `pytools summary-comments`；未改变命令、配置、输入输出合同或 Excel 引擎。原 Python 项目保持只读；未修改 Audit、共享 crate、根 Cargo 文件或真实业务数据。PT-6-2 仍因没有用户真实批注模板及匹配源工作簿而未完成真实样本验收，合成对拍不代表功能整体验收通过。
+
+实际验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml`：通过。
+- `cargo test --offline --locked -p pytools-core --lib comment_region_tests -j 1 --quiet`：9/9 通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli -j 1 --quiet`：7/7 通过，包含实际 CLI 路径。
+- Python 3.12.10 原 PyCode 与 Windows 原生 Rust CLI 对拍：两个合成批注场景的完整工作簿投影均精确一致；源工作簿和模板字节均保持不变。
+- `git diff --check`：通过。编译输出仅包含既有 excel-editor 弃用 API 及 PyTools 未使用导入警告。
+
+未执行及已知限制：无真实业务样本可用；本轮未执行 Linux/glibc 2.28、麒麟 V10/UOS V20、deb/离线交付验证。PT-6-2 仍需真实批注模板与匹配源工作簿完成验收。
+
+【组件版本】pytools-core 0.1.0；不升级。
+公共能力：未修改共享 crate 或公共能力，无需 main 协调。
+删除清单：无。
+回滚提示：只回滚本次 set 批注解析实现、回归测试、对拍脚本/报告及本记录；保留本记录列出的既有 MIGRATION_INVENTORY.md 与未跟踪 WIP。

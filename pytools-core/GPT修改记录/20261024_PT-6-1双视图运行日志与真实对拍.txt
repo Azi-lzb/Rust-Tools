@@ -1,0 +1,34 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：2286e677（pytools-dev 与 origin/pytools-dev 同步）；修改前工作树干净。当前目录为 C:\Users\AZI\Desktop\VibeCode\pytools-dev，分支 pytools-dev。本轮未修改 DEVELOPMENT_GOAL.md、AGENTS.md、workspace rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。源 Python 项目工作簿只读；临时对拍输出在系统临时目录。
+
+目的：继续 PT-6-1 按使用区域汇总，补齐真实 summary-used-range CLI 的普通用户/开发者双视图进度日志、结构化运行历史及无日志运行模式，并使用真实入口验证日志与汇总结果。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：为实际汇总流程增加可选进度回调和运行事件，记录范围扫描、Calamine 数据读取、行写入、新建工作簿、保存及 Excel 错误值 OOXML Patch 的阶段状态、实际引擎和耗时。未启用回调时不创建进度事件。
+- `pytools-core/src/bin/pytools.rs`：真实 `summary-used-range` CLI 增加 `--log-view user|developer|off` 与 `--log-dir`。默认用户视图仅输出易读进度提示；开发者视图输出逐行 JSON 事件；两种日志视图均写入 PT-6-1 JSON 运行历史。`off` 不输出进度日志且不创建历史文件。历史只记录汇总结果/路径、文件名、阶段状态和耗时，不保存单元格值。
+- `pytools-core/tests/summary_used_range_error.rs`：覆盖三种日志视图、连续事件序号、引擎和阶段耗时、成功/失败/跳过历史记录，以及三种模式生成工作簿的输出一致性和未知错误关闭行为。
+- `pytools-core/probe/compare_summary_tools.py`：真实 CLI 对拍运行时启用开发者日志，校验 stderr 事件序号连续、成功历史 JSON 与事件流一致，并在对拍报告中保存各批次的进度日志摘要。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`、`pytools-core/probe/reports/summary_used_range_real_parity_20261024.json`：重跑合成和真实 PyCode/Rust 对拍，记录进度日志验证及当前批次耗时。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-6-1 运行日志能力及仍未验收的格式/平台边界。
+- 本修改记录。
+
+真实入口与结果：通过 `pytools summary-used-range` 执行 Rust 汇总。用户、开发者、关闭三种模式在错误值 XLSX 夹具上生成的工作表数据一致；普通模式不暴露引擎名，开发者事件报告实际使用的范围扫描 reader、Calamine、rust_xlsxwriter 及必要时 OOXML Patch。开发者模式的 stderr JSON 与落盘历史事件数量相同；失败日志记录 `value_read` 与稳定错误类别，不记录 `#DATA!` 单元格文本；无输入时记录跳过且不伪报 reader/writer。
+
+通过 `compare_summary_tools.py` 再次与只读原 PyCode 对拍：合成按使用区域汇总为 19 行，7 种常见 Excel 错误类型保留，未知 `#DATA!` 按既有边界失败关闭。13 份原项目 XLSX 分 4 批，覆盖 96 张工作表和 203,580 行；值/类型、已填充样式、工作表维度、冻结窗格、表头、公式、合并、定义名称和页面属性均一致，源文件 SHA-256 前后相同。4 批真实 CLI 运行均验证连续开发者事件序号及历史 JSON 与事件流一致。
+
+验证：
+- `cargo fmt -p pytools-core` 与 `cargo fmt -p pytools-core -- --check`（WSL）：通过。
+- `cargo check --offline --locked -p pytools-core`（WSL）：通过；输出仅包含既有依赖弃用和其他模块未使用导入警告。
+- `cargo test --offline --locked -p pytools-core summary_used_range`（WSL）：3/3 通过。
+- `python pytools-core/probe/compare_summary_tools.py`：合成与 13 份真实 XLSX PyCode/Rust CLI 对拍通过；机器报告状态分别为 `passed_synthetic_cli_parity` 与 `passed_real_sample_cli_parity`。
+- 真实报告记录 Rust CLI 四批墙钟合计 337,058 ms（含 WSL/Cargo 启动），Python 合计 163,857 ms；最大批 Rust 核心阶段 read 208,880 ms、write 55,563 ms、total 264,496 ms。两种环境不用于性能比较或默认引擎调整；正式 peak RSS 未测。
+- `git diff --check`：提交前复核。
+
+对拍差异：本轮三种 CLI 日志模式的汇总输出无差异；13 份真实 XLSX 未发现 PyCode/Rust 输出差异。NoComPyTools 差异、未知 `#DATA!`、尚未覆盖格式和运行平台边界保持单独记录，本轮未调整生产默认。
+
+未执行项及限制：Windows 原生 Cargo 不可用，本轮 Rust 编译/测试经 WSL 执行；一般 XLSM（仅宏自由合成包已测）、XLS、XLSB、麒麟 V10、统信 V20、glibc 2.28、deb 和正式 peak RSS 均未验证。PT-6-1 整体仍未最终验收。
+
+删除文件：无。
+回滚：可用 `git revert <本轮提交>` 撤回本轮修改；原项目源工作簿未复制或修改。
+【组件版本】：不升级，当前 0.1.0。

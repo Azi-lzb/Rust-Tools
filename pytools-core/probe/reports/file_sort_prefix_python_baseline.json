@@ -1,0 +1,112 @@
+{
+  "source": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "operation": "_sort_prefix_digits/_sort_prefix_width/_normalize_sort_prefix/_load_file_sort_rules/_match_file_sort_rule/_strip_sort_prefix"
+  },
+  "sort_prefix_digits": [
+    "1",
+    "02",
+    "",
+    "0",
+    "1250",
+    "2",
+    "",
+    "2",
+    "٠٢"
+  ],
+  "sort_prefix_width": [
+    3,
+    2,
+    0,
+    4,
+    1,
+    2,
+    2
+  ],
+  "normalize_sort_prefix": [
+    "002",
+    "1",
+    "002",
+    "",
+    "000",
+    "002"
+  ],
+  "strip_sort_prefix": [
+    "old-name.xlsx",
+    "1234_old-name.xlsx",
+    "202506.xlsx",
+    "202506.xlsx",
+    "foo.tar.gz",
+    "0012_ab.xlsx",
+    "报告.xlsx",
+    "无前缀.xlsx"
+  ],
+  "rules": [
+    {
+      "row_no": 2,
+      "prefix": "001",
+      "keywords": [
+        "政策性银行",
+        "国开行",
+        "农发行"
+      ],
+      "keywords_text": "政策性银行;国开行;农发行",
+      "remark": "政策性银行"
+    },
+    {
+      "row_no": 3,
+      "prefix": "002",
+      "keywords": [
+        "工商银行",
+        "农业银行",
+        "中国银行",
+        "建设银行",
+        "交通银行"
+      ],
+      "keywords_text": "工商银行；农业银行,中国银行;建设银行;交通银行",
+      "remark": "国有银行"
+    },
+    {
+      "row_no": 4,
+      "prefix": "003",
+      "keywords": [
+        "招商银行",
+        "浦发银行",
+        "中信银行"
+      ],
+      "keywords_text": "招商银行;浦发银行;中信银行",
+      "remark": "股份制银行"
+    },
+    {
+      "row_no": 6,
+      "prefix": "004",
+      "keywords": [
+        "FOO",
+        "Quarterly"
+      ],
+      "keywords_text": "FOO;Quarterly",
+      "remark": "英文关键词"
+    }
+  ],
+  "matches": [
+    {
+      "row_no": 2,
+      "prefix": "001"
+    },
+    {
+      "row_no": 3,
+      "prefix": "002"
+    },
+    {
+      "row_no": 6,
+      "prefix": "004"
+    },
+    null
+  ],
+  "prefixed_names": [
+    "001_202506_国开行_贷款表.xlsx",
+    "002_1234_原始文件.xlsx",
+    "003_无前缀报告.xlsx"
+  ]
+}

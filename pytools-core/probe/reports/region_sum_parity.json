@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "operation": "pytools feature_1_5_region_sum_check::run_region_sum_check",
+  "status": "synthetic_candidate_and_cli_parity_passed",
+  "candidate": {
+    "api": "pytools_core::region_sum::run_region_sum_check",
+    "output_kind": "new_report",
+    "input_formats_tested": ["xlsx"],
+    "reader": "shared excel-reader backed by Rust calamine",
+    "writer": "shared excel-writer backed by rust_xlsxwriter",
+    "ooxml_patch": "clear_empty_formula_cache for the summary formula marker only",
+    "menu_or_cli_integrated": true,
+    "production_default": false,
+    "source_python_route_preserved": true
+  },
+  "cli_integration": {
+    "command": "pytools region-sum-check [--config <workbook.xlsx>] [--output-dir <dir>] [--log-dir <dir>] <source.xlsx>...",
+    "source_selection": "explicit workbook paths, matching the original multi-file selection flow",
+    "config": "optional global configuration; explicit output/log directories override configured paths",
+    "statistics_match": true,
+    "output_cell_values_match": true,
+    "output_formula_text_matches_after_openpyxl_prefix_normalization": true,
+    "input_workbook_bytes_unchanged": true
+  },
+  "python_baseline": {
+    "module": "PyCode/core/feature_1_5_region_sum_check.py",
+    "function": "run_region_sum_check",
+    "sha256": "78ABDA7379B4CC64F704E07B15426CB0A5D9D92ADFE94E747B982D3F7CCFD38C",
+    "logger_sha256": "F05B0E3B82D255D6AB6035AD9AF727157C3044E326307657AD3EA0BD094AEFF4",
+    "python_version": "3.12.10",
+    "openpyxl_version": "3.1.5",
+    "report": "probe/reports/region_sum_python_baseline.json",
+    "source_project_modified": false
+  },
+  "cases": {
+    "fixture_manifest": "tests/fixtures/region_sum/cases.json",
+    "fixture_files": [
+      "balanced.xlsx",
+      "mismatch.xlsx",
+      "no_target.xlsx",
+      "non_numeric_missing.xlsx",
+      "broken.xlsx"
+    ],
+    "case_count": 5,
+    "python_statistics": {
+      "files": 4,
+      "sheets": 3,
+      "errors": 1,
+      "failed_files": 1
+    },
+    "rust_statistics_match": true,
+    "result_sheet": "核对结果",
+    "result_bounds": [5, 6],
+    "cell_values_match": true,
+    "formula_text_matches_after_openpyxl_prefix_normalization": true,
+    "styles_match_in_data_only_view": true,
+    "column_widths_match": true,
+    "column_width_absolute_tolerance": 0.01,
+    "formula_marker": {
+      "coordinate_rule": "A{result_row_count + 2}",
+      "cache_is_empty": true,
+      "requires_narrow_ooxml_patch": true
+    },
+    "log_key_messages_asserted": true,
+    "input_workbook_bytes_unchanged": true
+  },
+  "safety_cases": {
+    "existing_output_and_log_preserved_on_name_collision": true,
+    "collision_output_uses_suffix": true,
+    "output_directory_failure_preserves_blocking_file": true,
+    "output_directory_failure_preserves_input_workbook": true
+  },
+  "verification": {
+    "python_baseline": "passed; 5 synthetic cases; statistics 4/3/1/1",
+    "region_sum_integration_tests": "5 passed, including direct product CLI invocation and configured output/log paths",
+    "workspace_tests": "cargo test --workspace --locked -q passed; 0 failures",
+    "workspace_check": "cargo check --workspace --locked passed",
+    "ooxml_patch_unit_tests": "2 passed",
+    "cargo_fmt_check": "passed",
+    "rust_environment": "WSL Ubuntu x86_64; rustc 1.99.1"
+  },
+  "unverified": [
+    "real business workbooks and real templates",
+    "XLS, XLSM, XLSB, XLT, XLTX, XLTM, CSV, and ET inputs",
+    "complete byte-for-byte or full-log equivalence",
+    "performance and peak memory at production scale",
+    "original interactive menu / GUI integration and complete user workflow",
+    "Windows-native Rust build and filesystem behavior",
+    "Kylin V10/UOS V20 x86_64 glibc 2.28 runtime and offline deb",
+    "the source feature's COM variant"
+  ],
+  "rollback": "The CLI command is a Rust candidate, not the original GUI menu or production default; keep the existing Python path until separate acceptance. Rust does not call Python. No source workbook is modified by this feature.",
+  "routing_decision": "candidate-only; no production default change"
+}

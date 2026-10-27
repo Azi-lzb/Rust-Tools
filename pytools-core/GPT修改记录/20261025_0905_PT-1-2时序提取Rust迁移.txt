@@ -1,0 +1,34 @@
+时间：2026-10-25 09:05（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：6f1fbc9e95646184406435a9a3786befe60d407f；分支 pytools-dev 与 origin/pytools-dev 同步，工作区仅含此前 PT-1-2 草稿改动。
+
+目的：继续迁移普通 PyCode `run_timeline_slim` 的时序提取主输出，接入 Rust CLI/交互菜单并完成合成 Python/Rust 对拍。
+
+修改文件：
+- pytools-core/src/timeline_extract.rs：新增 Rust 时序提取、并行读取、规则/路径映射复用、去重、七列输出、进度事件及目标写入 deferred 状态。
+- pytools-core/src/lib.rs：导出 timeline_extract 模块。
+- pytools-core/src/bin/pytools.rs：新增 `timeline-extract` 命令、真实菜单 1→2 路由及 PT-1-2 user/developer/off 运行记录。
+- pytools-core/src/summary_ops.rs：将已有 Python 浮点与日期序列文本 helper 标为 crate 内可见，供新提取模块复用；未改变原格式化逻辑。
+- pytools-core/probe/compare_timeline_extract.py：建立只读 PyCode 与 Windows Rust CLI/菜单合成对拍入口。
+- pytools-core/probe/reports/timeline_extract_parity_20261025.json：保存本次无原始单元格值的机器报告。
+- pytools-core/MIGRATION_INVENTORY.md：记录迁移证据和未验收边界。
+- 本记录。
+
+真实入口与行为：`pytools timeline-extract --config <配置簿> [--output-dir <目录>] [--log-dir <目录>] [--log-view user|developer|off] <源工作簿>...`；交互入口 `pytools menu → 1 → 2`。读取使用 `excel-reader`/Calamine；结果使用 `excel-writer`/rust_xlsxwriter。保留源顺序、按原规则命中策略处理、应用路径映射与行头后缀，并按 PyCode 的全局去重键输出七列工作簿。损坏输入在 continue 策略下记录失败并保留其他成功输入的结果。
+
+验证：
+- `cargo fmt -p pytools-core` 与最终 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过；`git diff --check`：通过。
+- `cargo check -p pytools-core --bin pytools`：通过。
+- `cargo build -q -p pytools-core --bin pytools`：通过。
+- PyTools 源项目 `.venv` Python 3.12.10 执行 `pytools-core/probe/compare_timeline_extract.py`：通过。2 个合成有效 XLSX、4 个匹配工作表、20 行输出与只读 PyCode 全工作簿投影完全一致，比较工作表名、单元格值/类型、表头粗体、格式、尺寸与冻结窗格；重复规则、行头后缀、路径映射，以及数值、文本、布尔和含毫秒日期值均匹配。类型覆盖期间发现并修正日期时间数字格式大小写/小时补零差异，最终 `differences` 为空。
+- 对拍加入 1 个损坏合成 XLSX；CLI 与菜单均保留 continue 行为并将一次失败记入进度。CLI developer 事件流与运行历史相同，记录实际 Calamine/rust_xlsxwriter 引擎及阶段耗时。
+- `fail_fast` 合成对拍以损坏文件作为首个输入；PyCode 和 Rust 均在首个错误处停止，未读取后续文件且不生成输出工作簿。
+- `pytools menu → 1 → 2` 使用手工分号路径回退通过；本轮没有直接操作 Windows 原生文件对话框。
+- 合成目标配置验证：结果将未验收的目标追加标记 deferred，既有目标簿未改变。目标追加与 D01 的既有确认合同不覆盖 PT-1-2，因此本轮未实现/执行目标追加，不能宣称 PT-1-2 完整迁移。
+
+差异与限制：主输出对拍无差异。原 Python 可选目标簿追加仍待 PT-1-2 单独确认语义及 ExcelModifier 路由后迁移；本轮只验证目标被明确延后且不被修改。真实业务工作簿、原生文件选择对话框、xlsm/xls、生产 capability、麒麟 V10/UOS V20、glibc 2.28 和 deb 离线交付未验证。
+
+敏感内容检查：仅用临时生成的合成工作簿及单元格内容；机器报告不含原始单元格值、用户文件路径或凭据。源 Python 工程只读且未修改。未修改 DEVELOPMENT_GOAL.md、共享 crates、根 Cargo 文件/Cargo.lock、Audit 或共同规则。
+
+提交与回滚：业务实现及本记录一并提交，commit ID 以 Git 历史为准；可使用 `git revert <commit>` 撤销本轮变更。未修改现有 /goal。
+【组件版本】：pytools-core 0.1.0，不升级。

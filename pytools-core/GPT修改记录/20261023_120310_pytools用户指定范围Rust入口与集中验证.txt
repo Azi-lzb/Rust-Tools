@@ -1,0 +1,40 @@
+时间：2026-10-23 12:03:10（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace main 无 commit，git ls-files 为 0，根目录现有文件均未跟踪。已先查看 git status、pytools-core 迁移清单和既有修改记录；未清理、覆盖或批量暂存这些内容。
+
+目的：根据用户选定的 pytools 功能范围集中编译和测试，并更新 pytools 迁移状态记录。此前已接入的 Rust CLI/候选模块包含：时序 1-1/1-3/1-4/1-5、去重六项、打印 3-1 至 3-4、转换与文件操作 4-1 至 4-10、配置 5-1/5-2、汇总 6-1/6-2、批处理 7-1 至 7-8、归档及快捷工具。排除时序 1-2、打印 3-5 PDF、4-11 Python 模式切换。
+
+本轮修改文件：
+- `crates/excel-editor/src/plan.rs`：让编辑执行报告可序列化；登记关系部件特性；支持计划中的日期时间单元格值。
+- `crates/excel-editor/src/umya_backend.rs`、`crates/excel-reader/src/lib.rs`、`crates/excel-writer/src/lib.rs`：补齐共享编辑/读取/写入 API 所需的能力。
+- `sidecar/lo-convert/src/main.rs`：转换候选输出增加工作表及单元格数据/公式校验，并保证失败时清理临时输出。
+- `pytools-core/src/`：修复去重日期归一与 1900/1904 日期系统转换、追加日期类型；修正时间序列、打印、汇总、配置管理、批处理与报告相关编译问题；CLI 保留机构标准化和外汇页眉计划的 JSON 摘要输出。
+- `pytools-core/examples/institution_normalize_probe.rs`：改用生产候选计划 API，移除对 test-only 原位修改函数的依赖。
+- `pytools-core/MIGRATION_INVENTORY.md`：新增本轮范围、验证边界与 Git 基线状态。
+- `pytools-core/probe/reports/pytools_batch_scope_20261023.json`：记录批量范围和集中验证结果。
+- 本记录。
+
+测试结果：
+- `cargo fmt --all`：通过。
+- `cargo check -p pytools-core --message-format short`：通过。
+- `cargo test --workspace`：通过，workspace 全部单元、集成和文档测试成功。
+- 只读源目录 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main\PyCode` 测试集：78/78 通过；测试使用禁写 pyc 和禁用 pytest 缓存的方式运行。
+- Rust CLI 只读打开源 `PyCode/config/config.xlsx`：通过，结果输出未打印配置值；`config-init` 新建临时配置并由 `config-view` 重读：通过。
+- Rust CLI 在临时文件上执行 `archive-date-preview` 与 `archive-date-copy`：通过；临时目录在验证后清理。
+- 当前编译仍报告 umya-spreadsheet 旧 getter 弃用和少量未使用项警告；不影响测试结果，本轮未做无关 API 清理。
+
+验收边界与未完成项：
+- 通过编译/测试不等于所有所选菜单功能已完成业务对拍。时序完整流程、去重六项、打印 3-1 至 3-4、配置管理、汇总、归档、快捷工具、格式转换，以及批处理 7-1/7-3/7-7/7-8 仍缺对应完整真实工作流对拍。逐项边界见 `MIGRATION_INVENTORY.md` 和机器报告。
+- 现有工作簿修改继续受精确 ExcelModifier 能力登记约束；部分 CLI 只生成计划，未登记到对应能力的修改不能执行。没有更改生产默认编辑路由。
+- 仅 3-3 有一项使用只读真实配置和临时合成文件的窄范围 smoke 证据；没有复制真实配置或真实业务工作簿到 fixtures，没有在真实文件上执行改写。
+- `.et/.xls/.doc` sidecar 转换的真实对象保留、Windows 原生 Rust、麒麟/UOS glibc 2.28、离线 deb 尚未验证。
+- 未在本轮修改 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 或 `C:\Users\AZI\Desktop\VibeCode\3.open-data-audit`。
+- Git 远端已配置，但 `git ls-remote origin` 未列出 refs；当前仓库没有 commit、没有 tracked files。未 stage/commit/push；需要先确认首次提交应纳入哪些用户现有文件，避免误纳入 workspace WIP。
+
+【组件版本】`pytools-core` 保持 `0.1.0`，不升级。
+
+删除清单：无。
+
+回滚：本轮没有 commit 可用于 git revert。若需撤销，应逐文件恢复上述本轮修改，不得重置或清理整个 workspace；删除本报告和本记录，并按需恢复迁移清单条目。源 Python 项目始终只读。

@@ -1,0 +1,24 @@
+时间：2026-10-25 07:04（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d18d0218d0c2a2f0c71032ed49b1bd1134ecff69；工作区干净，分支 `pytools-dev` 与 `origin/pytools-dev` 同步。原始 PyTools Python 项目只读。
+
+目的：将已迁移的 PT-7-6 显式追加既有输出簿能力接入真实交互入口 `pytools menu → 7 → 6`。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：工作表提取菜单增加显式追加确认；默认继续新建输出。确认追加但未提供 `--capabilities` 与 `--platform` 时，在选择源文件前停止；确认且具备能力参数时向既有 Rust CLI 传递 `--append-existing`。
+- `pytools-core/tests/sheet_extract_area_operation_parity.rs`：新增菜单端到端追加测试和缺 capability 拒绝断言；既有菜单测试明确选新建模式。
+- `pytools-core/probe/reports/sheet_extract_append_existing_parity_20261025.json`：记录菜单追加与拒绝路径证据。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-7-6 菜单入口、测试结果及限制。
+- 本记录。
+
+真实入口与保护：用户必须明确输入 y/yes/是 才进入追加模式。已有 XLSX 仍由现成 `ExcelEditPlan → ExcelModifier` 能力检查、目标快照验证和安全替换流程处理；没有临时或生产 capability 时不会选源或触碰输出。本次未修改共享 crate、Cargo 文件、Audit 或长期 Goal。
+
+验证（Windows 原生 Rust）：
+- `cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity -- --nocapture`：11/11 通过。
+- `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli -- --nocapture`：16/16 通过。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml`：通过。
+- 对拍保留既有只读 Python 区域追加测试基线 1/1；本轮未重新运行 Python 测试。新增菜单测试使用合成 XLSX 和测试临时 capability，验证缺能力时选源前拒绝、追加后旧簿值/公式/批注/合并与工作表顺序保留、新表值正确、源文件不变、开发者历史不含单元格值。
+
+限制与未执行项：没有真实业务工作簿或生产 Passed capability；整表 Python 输出簿级对拍限制沿用前次记录；本轮未手工操作 Windows 文件弹窗、未跑全量 PyTools/workspace 测试、WSL/Linux、麒麟/UOS、glibc 2.28 或 deb 验收。PT-7-6 整体仍为未验证。
+
+回滚提示：本记录与 PT-7-6 菜单代码、测试、机器报告及迁移清单更新一起纳入本轮 `pytools-dev` 功能提交；如需撤销该功能，可对该提交执行 `git revert <commit>`。

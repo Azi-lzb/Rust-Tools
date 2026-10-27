@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-8-2",
+  "status": "windows_synthetic_rust_native_dialog_and_business_parity_pass_with_python_dialog_order_unverified",
+  "validation_scope": {
+    "sample": "two synthetic files in a temporary directory",
+    "configuration": "synthetic global and archive type sheets",
+    "original_python_project": "read-only import for baseline",
+    "real_business_sample": false
+  },
+  "rust": {
+    "entry": "pytools menu → 8 → 2",
+    "native_multi_file_dialog": "passed",
+    "native_target_folder_dialog": "passed",
+    "stats": {
+      "files": 2,
+      "invalid": 0,
+      "planned": 2,
+      "rules": 3,
+      "skipped_extensions": 0
+    },
+    "run_history_status": "succeeded",
+    "run_history_events": 2,
+    "engines": [
+      "Rust std::fs",
+      "excel-reader/Calamine",
+      "excel-writer/rust_xlsxwriter"
+    ]
+  },
+  "python": {
+    "entry": "PyCode.core.convert_33_34_35_37.run_archive_by_type_preview",
+    "invocation": "same explicit input order returned by the Rust file dialog",
+    "stats": {
+      "files": 2,
+      "invalid": 0,
+      "planned": 2,
+      "rules": 3,
+      "skipped_extensions": 0
+    }
+  },
+  "comparison": {
+    "normalized_plan_rows_equal": true,
+    "plan_row_count": 2,
+    "preview_created_no_copies": true,
+    "target_directory_remained_empty": true,
+    "source_inputs_unchanged": true,
+    "global_and_archive_config_semantics_remained_valid_after_run": true
+  },
+  "observations": [
+    "An initial comparison passed a Unicode-sorted directory listing to Python and therefore used a different input order from the Windows dialog; after calling the Python business function with the exact Rust-selected order, the two normalized plan rows matched.",
+    "The Rust native multi-file picker returned two files and the native target-folder picker returned one directory.",
+    "The original Python Tk askopenfilenames dialog did not become observable in this desktop session; parity of the two UI pickers ordering is not established."
+  ],
+  "limitations": [
+    "Synthetic-only validation; the user has not provided an approved sanitized real sample.",
+    "Does not establish Python and Rust file-dialog ordering equivalence.",
+    "glibc 2.28, Kylin V10, UOS V20, and offline deb validation remain outstanding."
+  ]
+}

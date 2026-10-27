@@ -1,0 +1,25 @@
+时间：2026-10-26 12:39（本地时间）
+执行者：Codex
+修改前提交：a6a891f8062e7f723d7a79772df1cbee64e3c0f8
+修改后提交：本记录随功能 Git 提交保存
+WIP：开始时保留并复核两个未提交文件 `src/bin/pytools.rs`、`tests/timeline_menu_cli.rs`；仅在此基础上完成本项，不覆盖或清理其他文件。
+
+目的与变更
+
+- `src/bin/pytools.rs`：时序工具 1→5 菜单直接调用既有 `run_timeline_precheck` API，显示人类可读错误/警告与统计，验证失败后回到菜单。独立 `timeline-precheck` 命令仍保留 JSON 输出。
+- `tests/timeline_menu_cli.rs`：更新菜单预校验成功断言，新增成功和配置错误后仍返回菜单的实际 CLI 测试。
+- `MIGRATION_INVENTORY.md`：记录入口显示变化和验证范围，不提升业务验收状态。
+- 无代码删除、配置/VBA 迁移或组件版本变化；【组件版本】不升级，修改仅限 CLI 适配层。
+
+验证结果
+
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：27/27 通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过；测试与二进制构建输出使用 `F:\codex-build\pytools-pt15-test`，避免写满的 C 盘。
+- 直接运行 `F:\codex-build\pytools-pt15-test\debug\pytools.exe`，不带参数输入 0：显示旧式数字主菜单并正常退出。
+- 本轮未重跑 Python/Rust 预校验对拍；仅依赖既有合成配置对拍证据。未做真实报表样本验收、桌面文件弹窗验证或 Linux/发行版验证。
+
+回滚与安全
+
+- 无删除清单。回滚本项可通过后续 `git revert <本项提交>` 撤销；不要重置或清理其他开发成果。
+- 原 Python 项目、业务工作簿与共享 Excel-Core 未修改。预校验测试只在各自临时目录操作配置夹具。

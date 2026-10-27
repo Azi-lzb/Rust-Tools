@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.extract_python_rust_parity",
+  "status": "passed",
+  "feature_id": "PT-1-2",
+  "platform": "windows-x64-native",
+  "inputs": 3,
+  "valid_inputs": 2,
+  "matched_rule_sheets": 8,
+  "output_rows": 20,
+  "full_workbook_projection_equal": true,
+  "checked": [
+    "sheet name, cell values and types",
+    "numeric, text, boolean, and datetime extraction values",
+    "header bold and cell number formats",
+    "worksheet dimensions and freeze panes",
+    "duplicate-rule global deduplication",
+    "row suffix and path mapping",
+    "developer event stream and persisted history",
+    "omitted source paths recursively scan configured input directory and skip Excel lock files; full output matches PyCode",
+    "user view reports progress, hides engine names, and matches PyCode output",
+    "menu 1→2 manual multi-file selection and continue-on-error behavior",
+    "absent target is created through rust_xlsxwriter and matches the PyCode workbook",
+    "existing target append is plan-only by default and leaves the target untouched",
+    "confirmed menu target commit preserves unrelated data and matches PyCode",
+    "header-mismatched existing target is skipped without changing the target; summary still matches PyCode",
+    "unmodified worksheet formula, comment, fill, merge, dimensions and page settings are retained",
+    "menu target execution event matches persisted developer history",
+    "fail_fast stops at the first failed workbook and does not create output"
+  ],
+  "rust_engines": [
+    "calamine",
+    "rust_xlsxwriter"
+  ],
+  "user_view": {
+    "full_workbook_projection_equal": true,
+    "progress_reported": true,
+    "engine_names_hidden": true,
+    "actual_engines_in_history": [
+      "calamine",
+      "rust_xlsxwriter"
+    ]
+  },
+  "default_source_discovery": {
+    "full_workbook_projection_equal": true,
+    "total_files": 4,
+    "failed_files": 1,
+    "recursive_source_included": true,
+    "excel_lock_file_skipped": true,
+    "actual_engines_in_history": [
+      "calamine",
+      "rust_xlsxwriter"
+    ]
+  },
+  "elapsed_ms": 52,
+  "deferred_target_write_rules": 0,
+  "differences": [],
+  "notes": [
+    "Synthetic workbooks only; no source-project workbooks were modified.",
+    "Existing-target edit uses a temporary synthetic test capability; no production capability was registered."
+  ],
+  "manual_native_dialog_case": {
+    "entry": "pytools menu -> 1 -> 2",
+    "selector": "Windows native Open dialog",
+    "sample": "one temporary synthetic XLSX",
+    "matched_rule_sheets": 4,
+    "extracted_rows": 20,
+    "output_rows": 10,
+    "full_workbook_projection_equal_to_pycode": true,
+    "actual_rust_engines": [
+      "calamine",
+      "rust_xlsxwriter"
+    ]
+  }
+}

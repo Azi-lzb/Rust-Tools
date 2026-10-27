@@ -1,0 +1,42 @@
+日期：2026-10-23
+
+目的
+----
+将 pytools 4-10“取消文件排序前缀”实现为 Rust 候选 API，延续已验收的 4-9 helper 与端到端候选，不接入菜单/CLI，不替换旧 Python 功能。
+
+改动文件
+--------
+- pytools-core/src/file_sort_prefix.rs：新增 `run_remove_file_sort_prefix_410`、内容规格解析与名称清理、Calamine 内容读取、冲突安全改名、rust_xlsxwriter 报告写入和报告失败回滚。
+- pytools-core/tests/file_sort_prefix_remove_parity.rs：新增合成文件集、报告内容、文件字节保持、空输入报告和无规则拒绝的集成对拍。
+- pytools-core/tests/fixtures/file_sort_prefix_cases.json：补入 4-10 内容读取规格和文件/冲突/损坏/缺失案例。
+- pytools-core/probe/file_sort_prefix_remove_baseline.py：通过只读 Python 项目运行旧版 4-10，并在临时目录生成对拍输入。
+- pytools-core/probe/reports/file_sort_prefix_remove_python_baseline.json：保存旧 Python 基线结果。
+- pytools-core/probe/reports/file_sort_prefix_remove_parity.json：记录候选 API 的合同、结果、测试和限制。
+- pytools-core/MIGRATION_INVENTORY.md、根目录 PYTHON_EXCEL_OPERATION_INVENTORY.md、EXCEL_ENGINE_ARCHITECTURE.md：登记 4-10 候选状态、对拍结果及未验证范围。
+- 本记录。
+
+迁移行为
+--------
+- 配置仍从“文件排序配置”读取；没有有效规则时返回与源实现一致的错误。
+- 文件名直接以某个排序前缀加下划线开头时，直接移除排序前缀，不读取工作簿。
+- 排序前缀位于内容前缀之后时，按 `重命名配置!O:P:Q` 的唯一启用规格，用共享 Calamine reader 读取内容；仅当实际内容前缀与文件名前缀一致时移除排序段。内容配置缺失/无效、工作簿读取失败或内容不匹配时按源逻辑跳过内容分支。
+- 文件名冲突时增加 `_1` 等后缀，不覆盖已存在文件。报告生成失败时从记录的目标回滚本轮改名。
+- 以共享 rust_xlsxwriter 新建“取消文件排序前缀结果”报告。该 API 没有 COM/Office 依赖。
+
+对拍结果
+--------
+- Python 源模块 SHA-256：`F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`，与既有 4-9 基线记录一致；源项目未修改。
+- 4-10 合成基线：4 条有效规则、10 个输入路径、5 次改名、5 次跳过、0 次失败；Rust 行结果、报告字段和最终文件名集合与 Python 一致。空输入专项确认旧版输出保留空工作表且无表头，Rust 已对齐。
+- Rust 测试另验证冲突目标未覆盖、改名不改变输入文件字节、损坏 XLSX 内容读取时跳过、报告写入失败回滚和空规则拒绝。
+- pytools-core：21 项通过；workspace：40 项通过；`cargo fmt --all -- --check` 通过；doc-tests 0 项。
+- 只读 Python 源测试：`test_file_sort_prefix_49.py` 与 `test_convert_rename_edges.py` 共 23 项通过，1 个 pandas FutureWarning。
+
+未完成与风险
+------------
+- 候选 API 尚未接入产品菜单/CLI，不代表整个 4-10 功能已迁移或验收，也不改变生产路由。
+- 内容单元格只在合成 XLSX 上对拍；`.xls` 内容读取、`.xlt`、日期单元格、公式缓存值、多单元格规格和真实模板仍未验证。测试中的 `.xls` 是不含工作簿的文件名改名前缀样本，不证明 BIFF8 内容读取。
+- 尚未在真实目录、Windows 原生 Rust、麒麟 V10、统信 UOS、glibc 2.28 或离线 deb 上验证。硬链接不受支持的文件系统上会安全报告该次改名失败并保留源文件。
+
+回滚方式
+--------
+删除本轮新增的 4-10 API、集成测试、Python 基线脚本及两份 4-10 probe 报告；撤销 JSON fixture 和迁移清单中的 4-10 登记。不要改动已验收的 4-9 实现或原始 Python 项目。Cargo.toml、Cargo.lock 和依赖未变。

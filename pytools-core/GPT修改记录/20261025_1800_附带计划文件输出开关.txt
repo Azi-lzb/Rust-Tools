@@ -1,0 +1,30 @@
+时间：2026-10-25 18:00（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：6aee060；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：落实用户产品决策——候选副本是核心交付物；计划 JSON、capability 执行记录等是开发期审核用附带产物；实际使用应可选择不输出这些附带文件。
+
+修改文件：
+- `pytools-core/src/config.rs`（GlobalConfig 新增 `emit_plan_files`，`load_global` 解析全局配置键 `输出附带计划文件`，缺省 true）
+- `pytools-core/src/bin/pytools.rs`（新增 `plan_files_enabled` helper；接入六个计划落盘点：dedup-config-plan、dedup-append-plan、print-config-plan、village-split 批处理、宽表菜单目标追加计划、配置修复菜单）
+- `pytools-core/tests/plan_file_output_toggle.rs`（新增开关两端集成测试）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+行为：
+- 缺省（未配置该键）：与既有版本完全一致，计划照常落盘并出现在报告 plan_file。
+- 配置 `输出附带计划文件=否`：不创建计划目录、不落盘任何计划 JSON、各报告 plan_file=null、village-split 运行历史跳过 plan_persistence 事件（事件序号仍连续）、配置修复菜单提示"计划未落盘"；候选副本/目标工作簿等核心输出不变。
+- 运行历史 JSON 仍由 `--log-view off` 独立控制，两个开关互不影响。
+- 用法：在 pytools/config/config.xlsx 的"全局配置"页加一行 `输出附带计划文件` / `否` 即全局生效；config-init 模板未加该键（避免影响 5-1 既有对拍）。
+
+验证结果（Windows 原生）：
+- `cargo test --offline --locked -p pytools-core --test plan_file_output_toggle`：默认端产生计划文件且报告路径；禁用端输出树零 JSON、plan_file=null、candidate 仍产出——1/1 通过。
+- 全量 `cargo test --offline --locked -p pytools-core`：44 项结果全部 0 failed（含新增 1 项）；`cargo fmt --check`、`git diff --check` 通过。
+
+影响与未完成项：新增可选配置键，缺省行为零变化；不影响任何对拍基线（两侧夹具均未配置该键）。capability 机制本身不变（登记与执行证据链照旧），仅控制附带文件落盘。外部阻塞事项不变。
+
+敏感内容检查：测试全部合成数据。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可完整撤销开关与测试。
+【组件版本】：功能增强，产品/组件版本不升级（不写用户版更新日志）。

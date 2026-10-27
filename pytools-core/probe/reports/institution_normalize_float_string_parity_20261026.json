@@ -1,0 +1,28 @@
+{
+  "baseline": "PyCode/core/feature_1_2_normalize_institution.py::_process_sheet",
+  "case": {
+    "expected_mapped_rows": 1,
+    "input_kind": "synthetic XLSX numeric cell",
+    "mapping_match": "Python float scientific-notation string"
+  },
+  "comparison": {
+    "mapped_rows": "exact",
+    "planned_cell_update": "exact",
+    "source_and_configuration_unchanged": true
+  },
+  "limitations": [
+    "Synthetic XLSX only; no authorized real institution-normalization workbook was available.",
+    "This verifies planning semantics, not ExcelModifier execution or package preservation.",
+    "Production capability and target Linux/deb acceptance remain unverified."
+  ],
+  "rust_entry": "pytools institution-normalize --view developer",
+  "safety": {
+    "configuration_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_input_filenames_or_cell_values": false,
+    "source_unchanged": true
+  },
+  "schema_version": 1,
+  "status": "passed_synthetic_rust_cli_regression",
+  "suite": "pytools.PT-7-2.python_float_string_compatibility"
+}

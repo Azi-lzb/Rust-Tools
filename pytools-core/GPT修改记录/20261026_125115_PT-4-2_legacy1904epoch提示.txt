@@ -1,0 +1,23 @@
+时间：2026-10-26 12:51（本地时间）
+执行者：Codex
+修改前提交：c69d2ccdc1b90e8e4b1bfbbf5b59313e8d6ec418
+修改后提交：本记录随功能 Git 提交保存
+WIP：修改前 Worktree 干净；仅变更下列 PyTools 文件。
+
+目的与变化
+
+- `src/bin/pytools.rs`：原生值转换菜单和 `--help` 将 1904 日期系统拒绝范围从仅 XLSM 修正为 XLS/XLSM/XLSB。
+- `tests/conversion_menu_cli.rs`：添加帮助文本断言，并更新原生 XLS 菜单提示断言。
+- `MIGRATION_INVENTORY.md`：记录共享 reader epoch API 的当前覆盖和 legacy 1904 样本仍未验证的边界。
+- 当前分支已经包含共享 reader 提交 `040e774`；本次未修改共享 crate、Cargo 文件或 Excel 路由。未改变公式、业务计算、配置或组件版本；【组件版本】不升级。
+
+验证
+
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：10/10 通过。覆盖菜单确认后使用仓库 `.xls`（1900 epoch）夹具完成值转换、警告显示、`--help` 描述及原有文件操作菜单回归。
+- 未运行 Python/Rust 对拍、未使用真实业务工作簿。未找到正向 legacy `.xls/.xlsb` 1904 epoch 样本；既有 `.xlsm` 1904 失败关闭证据不外推至 BIFF 格式。
+- 源 Python 项目、真实输入工作簿和共享 crate 未修改。
+
+回滚与安全
+
+- 无文件删除；回滚本项使用 `git revert <本项提交>`。所有转换测试只在隔离临时目录处理夹具副本，原始夹具未改动。

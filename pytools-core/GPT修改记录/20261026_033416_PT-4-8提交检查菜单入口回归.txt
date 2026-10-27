@@ -1,0 +1,24 @@
+时间：2026-10-26 03:34:16（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：f8873d2c1cadab6bd01156be0dcb411ba91058d5
+分支：pytools-dev；开始时 HEAD 与 origin/pytools-dev 同步。开始前工作树已有 MIGRATION_INVENTORY.md 修改、HANDOFF_ZCODE_TO_CODEX.md 及 PT-4-2/PT-6-2 两份未跟踪记录，本次均原样保留。
+
+【目的】
+为 PT-4-8 提交检查日期关键词补充真实交互菜单入口的合成回归，确认菜单 pytools menu → 4 → 8 确实调用已对拍的业务逻辑。无业务实现或配置变更。
+
+【修改文件】
+- pytools-core/tests/submission_check_parity.rs：生成包含全局配置与 Excel 日期值的合成配置，从当前层目录选择路由执行；核对 Python 基线统计、输出中的日期字符串 2026-06-30 01:02:03.123000，并断言配置及输入文件未改变。
+- 本记录。
+
+【验证】
+- Windows 原生 cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- Windows 原生 cargo test --offline --locked -p pytools-core --test submission_check_parity -j 1：2/2 通过，包含直接 CLI 与 menu → 4 → 8 路由；菜单统计与既有只读 Python 基线一致，输出日期文本一致。
+- 首次执行仅因测试解析器把菜单 JSON 后续提示当作尾随字符而失败；测试读取改为解码首个 JSON 对象后重跑通过，未发现业务回归。
+- 编译仍输出既有 umya API 弃用与两个未使用导入警告。
+
+【未执行项及已知限制】
+用户目前没有脱敏业务样本，因此真实配置/目录验收仍未完成；本回归使用合成样本，不构成 PT-4-8 整体验收。未运行全量 workspace 测试、Linux/glibc 2.28、麒麟/UOS 或离线 deb 验证；本次不是 Windows 原生文件对话框 UI 测试。
+
+【组件版本】不升级：仅增加集成测试与修改记录。
+【删除清单】无。
+【回滚提示】可仅撤销本记录和 submission_check_parity.rs 新增的菜单回归；不要覆盖或丢弃开始前已有的迁移清单及未跟踪材料。

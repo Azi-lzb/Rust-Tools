@@ -1,0 +1,36 @@
+时间：2026-10-24 01:24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：473c75a。
+WIP 状态：开始时 pytools-dev 工作树干净；本轮只在 pytools-core 下修改。源 Python 项目只读。
+
+目的：继续 PT-6-1“按使用区域汇总”，保留 PyCode 输出中 Calamine 表示为 error 的 Excel 单元格，并加强实际 CLI 的业务保真对拍。
+
+修改文件：
+- pytools-core/Cargo.toml：将本功能 OOXML 定点补丁需要的既有 roxmltree、zip 依赖移入普通依赖；Cargo.lock 未变化。
+- pytools-core/src/summary_ops.rs：新增 PT-6-1 阶段执行摘要；错误单元格类型转换、namespace-aware 工作表定位与 XML 插入、回读校验；失败清理仅删除本次创建的输出；对齐 PyCode 日期格式和页面边距。
+- pytools-core/tests/summary_used_range_error.rs：真实 CLI 集成测试，验证 error 类型、引擎摘要、源文件未改变。
+- pytools-core/tests/fixtures/summary_used_range/error_value.xlsx：合成错误值夹具。
+- pytools-core/probe/compare_summary_tools.py：扩展真实 CLI 与 PyCode/NoComPyTools Python 基线的合成对拍。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：本轮机器报告。
+- pytools-core/MIGRATION_INVENTORY.md：记录 PT-6-1 增量和未验收边界。
+- 本修改记录。
+
+结果：真实 PyTools summary-used-range CLI 对两份合成 XLSX 输出 13 行；与 PyCode 基线的值/类型、已填充单元格样式、工作表维度、冻结窗格、表头、公式/合并/定义名称/打印区/页面设置一致；#DIV/0! 保持为 error 类型且回读验证通过。记录实际 reader 为 Calamine、writer 为 rust_xlsxwriter；仅新增工作簿中的 Excel 错误单元格使用 OOXML 定点补丁。未知错误类型失败关闭；失败清理不会删除并发创建的预置目标。
+
+NoComPyTools 对照在 汇总.rows/styles/types/values 有差异；NoCom 与 PyCode 输入格式范围不同，NoCom-only 的 XLS/XLSB 不纳入本轮生产能力结论。该差异待产品范围确认。
+
+验证：
+- cargo fmt -p pytools-core -- --check：通过。
+- patch_error_cells 输出所有权回归单测：1/1 通过；预置目标文件在补丁失败时保留。
+- cargo test -p pytools-core --test summary_used_range_error --offline --locked -q：1/1 通过。
+- python pytools-core/probe/compare_summary_tools.py：合成 CLI 对拍通过。
+- git diff --check：通过。
+- cargo test -p pytools-core --lib --offline --locked -q：未通过；26 个库测试中 25 个通过。唯一失败 workbook_extraction_matches_original_python_helper 因当前 checkout 缺少且 Git 未跟踪 pytools-core/tests/fixtures/季度报表_县区报表_2024-12-31.xlsx。未创建替代文件。此失败不在 PT-6-1 调用链中。
+- Linux 测试仅在 WSL 执行；未在 Windows 原生或麒麟/UOS 实机验证。未运行目标平台构建/deb 检查。
+- 未触及 audit-core/**、crates/**、根 Cargo.toml、Cargo.lock 或源 Python 项目。
+
+已知限制：本轮只有合成 XLSX；无授权真实汇总样本。XLSM/XLS/XLSB、真实业务输入/输出关系、目标 Linux/glibc/deb 均未验收。CLI 结构化 JSON 仅记录此功能引擎与耗时，不能视为普通用户/开发者双视图运行日志完成。PT-6-1 总体状态仍为未验证。PyCode 公式缓存语义、本轮仅覆盖缺失缓存公式；其他 Excel 错误类型和复杂 OOXML 样本未覆盖。
+
+回滚：通过 git revert <本轮提交> 回滚代码、合成夹具、probe 报告及迁移记录，不影响源 Python 项目。
+删除文件：无。
+【组件版本】：不升级，当前 0.1.0。

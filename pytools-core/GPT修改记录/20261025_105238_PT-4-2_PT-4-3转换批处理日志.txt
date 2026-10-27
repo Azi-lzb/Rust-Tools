@@ -1,0 +1,31 @@
+时间：2026-10-25 10:52:38（Asia/Shanghai）
+执行者：Codex
+分支：pytools-dev
+修改前 commit：cf17ca9
+修改后 commit：由本次提交记录标识
+WIP：开始时已确认位于 C:\Users\AZI\Desktop\VibeCode\pytools-dev 专属 worktree；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。其他目录为 detached 快照，未修改。
+
+目的：为 PT-4-2 Excel 和 PT-4-3 Word 批量转换补充逐文件进度、处理耗时、实际组件/引擎记录和脱敏错误状态，并从直接 CLI 与真实交互菜单入口提供 user/developer/off 三种日志视图。
+
+修改文件：
+- `pytools-core/src/conversion.rs`：为 Excel/Word 批处理 API 增加可选进度事件回调；记录输入扩展结果、逐文件开始/成功/失败、计数与耗时；区分 Rust 文件复制、native CSV/Excel 组件和 sidecar 实际引擎；事件不包含文件路径、名称或错误明细。
+- `pytools-core/src/bin/pytools.rs`：接通 `convert-excel`/`convert-word` 的 `--log-view`/`--log-dir`、developer JSON 历史和真实 `pytools menu` → 4→2/3 全局日志设置传递；更新对应 CLI 帮助。
+- `pytools-core/tests/conversion_menu_cli.rs`：覆盖真实菜单的 user/off 与 Word developer 日志、直接 native CSV CLI 的 engine/history 字段、脱敏历史、sidecar 缺失失败事件及输入不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录日志能力与验收边界，PT-4-2/PT-4-3 整体仍标为未验证。
+- 本文件：记录本次修改。
+
+配置及 VBA 影响：没有修改配置格式、业务默认引擎或 Excel 路由；菜单沿用现有全局日志目录和视图设置。未执行宏，未修改 VBA；未改 shared crates、根 Cargo 文件或 DEVELOPMENT_GOAL.md。
+
+测试结果：
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过；输出了既有共享 crate 弃用警告及 PyTools 内无关的未使用导入警告。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：8/8 通过。
+- `cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1`：6/6 通过。
+- `git diff --check`：通过。
+- 新测试经真实 `pytools` 可执行入口运行；CSV 输出还通过既有 native 转换候选的读回校验。Python 转换基线未重跑，因为本次没有改变转换业务逻辑。
+
+未执行项及已知问题：Windows 未发现可用 LibreOffice sidecar，故没有真实 `.xls`/`.et`/`.doc` sidecar 成功转换或对应 Python/Rust 结果对拍；转换的生产验收仍未完成。native `.xls` 的类型化空文本保真限制及 shared reader/writer 能力问题保持既有状态，本次未触碰公共 crate，也未登记生产能力。未在 WSL、麒麟 V10、UOS V20、glibc 2.28 或离线 deb 上验证；未手动操作系统文件对话框。日志写入性能未测量。
+
+删除清单：无。
+回滚提示：回滚本次提交即可撤销本轮转换事件、CLI/menu 日志接入、对应集成测试和记录；不要触碰只读源 PyTools、Audit、共享 crates、根 Cargo 文件或长期目标文件。
+[组件版本] pytools-core 0.1.0（保留当前 workspace crate 版本）。

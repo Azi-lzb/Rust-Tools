@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "feature_ids": ["PT-4-6", "PT-4-7"],
+  "evidence_status": "original_project_assets_parity_not_customer_acceptance",
+  "sample_classification": "read_only_source_project_xlsx_assets_not_authorized_customer_template",
+  "baseline": {
+    "project": "py_statistics_tools/PyCode",
+    "functions": [
+      "PyCode/core/convert_33_34_35_37.py::run_batch_rename_by_content_46",
+      "PyCode/core/convert_33_34_35_37.py::run_batch_unrename_by_content_47"
+    ],
+    "config": "PyCode/config/config.xlsx"
+  },
+  "rust_entry_points": [
+    "pytools rename-by-content --config <config.xlsx> <workbook.xlsx>...",
+    "pytools unrename-by-content --config <config.xlsx> <workbook.xlsx>..."
+  ],
+  "input": {
+    "format": "xlsx",
+    "workbook_count": 13,
+    "operation": "file rename only; workbook content is read but not written",
+    "isolation": "two independent directories of hard links under ignored target/"
+  },
+  "results": {
+    "PT-4-6": {
+      "python_function_completed": true,
+      "rust_cli_exit": 0,
+      "input_name_changes": 13,
+      "python_final_file_count": 13,
+      "rust_final_file_count": 13,
+      "final_filename_sets_equal": true,
+      "statistics_basis": "all 13 input basenames were replaced in both isolated directories; raw names were intentionally not retained"
+    },
+    "PT-4-7": {
+      "python_renamed": 13,
+      "python_skipped": 0,
+      "rust_renamed": 13,
+      "rust_skipped": 0,
+      "final_filename_sets_equal": true,
+      "final_names_match_original_input_set": true
+    }
+  },
+  "source_safety": {
+    "original_source_paths_remained_present": true,
+    "original_source_workbook_count_after_run": 13,
+    "original_source_workbook_content_written": false,
+    "raw_workbook_names_or_cell_values_retained_in_report": false
+  },
+  "verification": {
+    "rust_tests": {
+      "command": "cargo test --offline --locked -p pytools-core --test content_rename_46_parity --test content_unrename_47_parity",
+      "PT-4-6": "2 passed",
+      "PT-4-7": "4 passed"
+    }
+  },
+  "limitations": [
+    "These are source-project bundled assets, not an authorized customer business template.",
+    "Only XLSX was exercised; the legacy .xls/.xlt COM branches remain unmigrated.",
+    "This evidence does not validate the Windows native file picker, Kylin/UOS, glibc 2.28, or offline deb delivery."
+  ]
+}

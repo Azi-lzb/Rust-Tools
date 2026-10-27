@@ -1,0 +1,115 @@
+{
+  "status": "passed_real_business_vba_xlsm_parity",
+  "sample": {
+    "repository": "https://github.com/Azi-lzb/VBA_Excel_Tools",
+    "commit": "cea6dfa",
+    "file": "VbaV2.4.2.xlsm",
+    "origin_note": "user-provided VBA toolbox repo; workbook used read-only as PT-6-1 real business macro-enabled input",
+    "vba_project_bytes": 2338304
+  },
+  "summary_rows": 23975,
+  "pycode_dimensions": [
+    {
+      "name": "汇总",
+      "rows": 23976,
+      "columns": 19
+    }
+  ],
+  "rust_dimensions": [
+    {
+      "name": "汇总",
+      "rows": 23976,
+      "columns": 19
+    }
+  ],
+  "comparison": {
+    "cell_values_and_types": "exact",
+    "populated_cell_styles": "exact",
+    "worksheet_names_and_dimensions": "exact",
+    "freeze_panes_and_header_bold": "exact",
+    "formula_merge_name_and_page_properties": "exact"
+  },
+  "new_output_format": "xlsx",
+  "source_vba_copied_to_new_summary": false,
+  "source_sha256_before_after_equal": true,
+  "rust_execution": {
+    "reader_engine": "calamine",
+    "writer_engine": "rust_xlsxwriter",
+    "read_elapsed_ms": 4336,
+    "write_elapsed_ms": 2748,
+    "total_elapsed_ms": 7152
+  },
+  "progress_log": {
+    "view": "developer",
+    "status": "succeeded",
+    "event_stream_matches_saved_history": true,
+    "event_count": 15,
+    "phases": [
+      "extent_scan",
+      "output_save",
+      "output_workbook",
+      "row_write",
+      "run",
+      "value_read"
+    ],
+    "actual_engines": [
+      "calamine",
+      "excel-reader::read_xlsx_worksheet_extents",
+      "rust_xlsxwriter"
+    ],
+    "completed_stage_elapsed_ms": {
+      "extent_scan": 998,
+      "value_read": 3338,
+      "row_write": 847,
+      "output_save": 1814,
+      "output_workbook": 2748,
+      "run": 7152
+    },
+    "skipped_input_names": [],
+    "input_filter_events_have_no_engine": true
+  },
+  "limitations": [
+    "Single real macro-enabled toolbox workbook; not original-project report data and not a production default or format-wide acceptance.",
+    "Windows MSVC debug CLI; not a performance conclusion.",
+    "Report records dimensions, engines and events only; outputs were temporary."
+  ],
+  "current_head_revalidation": {
+    "head": "bbb87626f5d6df430390249ff39e49e00fc82347",
+    "status": "passed_current_head_real_macro_workbook_parity",
+    "host": "Windows 11 x64",
+    "rust_target": "x86_64-pc-windows-msvc",
+    "rustc": "1.99.1",
+    "entry_point": "pytools summary-used-range",
+    "input_fixture": "tests/fixtures/vba_config/VbaV2.4.2.xlsm",
+    "input_unchanged": true,
+    "output": {
+      "format": "xlsx",
+      "worksheet": "汇总",
+      "rows_including_header": 23976,
+      "columns": 19,
+      "vba_project_copied": false
+    },
+    "python_rust_projection": {
+      "status": "exact",
+      "fields": [
+        "cell values and types",
+        "populated cell styles",
+        "worksheet names and dimensions",
+        "freeze panes and header bold",
+        "formula, merge, defined-name and page properties"
+      ]
+    },
+    "runtime": {
+      "reader_engine": "calamine",
+      "extent_engine": "excel-reader::read_xlsx_worksheet_extents",
+      "writer_engine": "rust_xlsxwriter",
+      "total_elapsed_ms": 5063,
+      "developer_event_stream_matches_saved_history": true
+    },
+    "outputs_and_logs": "temporary only",
+    "limitations": [
+      "Single committed real macro-enabled workbook; not format-wide XLSM acceptance.",
+      "Windows MSVC CLI revalidation only; this does not establish Linux, glibc 2.28, Kylin/UOS, deb or offline-delivery acceptance."
+    ]
+  }
+}

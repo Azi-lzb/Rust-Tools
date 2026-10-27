@@ -1,0 +1,22 @@
+时间：2026-10-27 00:03:36 +08:00
+执行者：Codex
+修改前 commit：d6aa71894f90fee881c3dd6954a07458c08d13ff
+修改前 WIP：开始本功能时工作树干净；分支 codex/pytools-menu-entry 与 origin/codex/pytools-menu-entry 同步。本功能代码、记录和清单更新将在本地提交。
+
+目的：完成 PyTools Rust V2 去重菜单 2→1 的实际业务输出；按已迁移配置检测结果新建整行红色标记工作簿，不修改源文件。
+
+修改/新增文件：
+- 修改 pytools-core/src/dedup_ops.rs：增加纯数据 duplicate-check 候选 XLSX 生成、重开校验和非纯数据工作簿失败关闭。
+- 修改 pytools-core/src/bin/pytools.rs：V2 菜单 2→1 接入实际结果簿生成、失败状态和实际 writer/阶段日志。
+- 修改 pytools-core/tests/dedup_menu_cli.rs：覆盖菜单输出、值/类型和工作表投影、整行着色、源保护、公式/批注失败关闭及开发者日志。
+- 修改 pytools-core/MIGRATION_INVENTORY.md：记录 PT-2-3 生命周期及未验证范围。
+
+逻辑/配置/VBA 影响：菜单按功能 ID 分发未变；复用既有配置、复合键计划和共享 excel_writer facade，实际后端 rust_xlsxwriter；不修改配置字段、VBA 路径或共享 crate。输出为新文件；公式/缓存不参与计算，保持源工作簿只读；检查结果保留 Sheet 名与顺序、单元格值/类型，并标红重复的整行至实际数据列。公式、ISO 类型日期/时长、类型化错误、批注、合并、条件格式、数据验证、定义名称和未知 OOXML 特征均在创建结果文件前或保存前拒绝，防止静默丢失；源单元格格式/批注等对象不作保留承诺。
+
+测试：Windows 本机 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --test dedup_menu_cli -j 1` 均通过；集成测试 7/7 通过，包含合成公式及批注工作簿失败关闭、无输出和输入字节不变。测试输出/临时目录位于 F:\PyTools_Rust_本轮工作文件_20261026。`git diff --check` 通过。
+
+未执行项/已知问题：无授权真实业务样本，未做新 V2 输出模式的 Python/Rust 结果对拍；未人工用 Excel 打开或验收显示格式；未运行 Linux、glibc 2.28、麒麟/UOS、离线 deb 测试。仅对纯数据 XLSX 开放输出；PT-2-4 仍为计划模式。生命周期为“已实现，待 Windows 真实验收”。
+
+删除清单：无项目文件删除。
+回滚：单独回退本功能提交即可恢复为 PT-2-3 计划模式；不影响 PT-2-4/2-5/2-6。
+【组件版本】pytools-core 0.1.0，不升级。

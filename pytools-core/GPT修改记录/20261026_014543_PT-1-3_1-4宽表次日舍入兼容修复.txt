@@ -1,0 +1,34 @@
+时间：2026-10-26 01:45:43
+执行者：Codex
+修改前 commit：2e725a4（PT-1-3/1-4 子日时刻语义修复，已推送）
+修改后 commit：本次功能提交（最终 SHA 见 Git 历史）
+WIP：保留已有 HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 XLS 转换失败记录、PT-6-2 真实样本缺口记录及 MIGRATION_INVENTORY.md 中 PT-4-2 证据；它们不属于本次功能。
+
+【目的】
+复核子日时间对拍夹具时发现，原 fixture 在写入 datetime.time 午夜和跨日舍入值后，后续通用数据行赋值覆盖了 B6/B7；之前通过的 4 组合对拍因此没有覆盖所声称的边界。将边界值移到独立数据行，并在保存后检查 openpyxl 实际回读到的毫秒 time、午夜和次日 datetime，避免 fixture 覆盖造成假通过。修正 Rust 对 1900 日期系统中小于一天 serial 舍入到次日时的 epoch 投影：openpyxl 对 1900 epoch 输出 1900-01-01；1904 epoch 输出 1904-01-02。
+
+【修改文件】
+- pytools-core/src/timeline_ops.rs：将 1900 epoch 子日舍入边界从 1900-01-02 改为 Python/openpyxl 兼容的 1900-01-01；同步单测期望。
+- pytools-core/probe/compare_wide_summary.py：修正被覆盖的合成输入，增加保存后边界值类型/值断言。
+- pytools-core/probe/reports/wide_summary_subday_time_parity_20261026.json：更新四组合完整菜单对拍结果，现输出 6 行并确认边界均精确一致。
+- 本记录：记录缺陷发现、修复和验证。
+
+【验证】
+- Windows 原生 `cargo test --offline --locked -p pytools-core --lib wide_subday -j 1`：2/2 通过。
+- Windows 原生 `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过；仅有既有 excel-editor 弃用 API 和 PyTools unused-import 警告。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：14/14 通过。
+- 原 PyTools Python 3.12.10（openpyxl 3.1.5、pandas 2.2.3）与 Windows MSVC Rust CLI 跑 `compare_wide_summary.py --subday-time-only`：1900/1904 × 行头加/不加后缀 4/4 完整菜单对拍精确一致，包含毫秒、午夜、跨日舍入；输出簿和目标追加候选/提交结果均一致，源配置未变。
+- `compare_wide_summary.py --1904-date-only` 回归通过；Python probe 语法检查、`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 与 `git diff --check` 通过。
+
+【已知问题与未执行项】
+- 合成日历格式负 serial（-0.5）在 openpyxl 3.1.5 可投影为 1899-12-29 12:00:00；当前 Rust 新目标写入拒绝该 Excel epoch 前日期，错误为 `Date range error: Serial datetime '-0.5' outside converted Excel year range of 1900-9999`。这是共享 Excel-Editor 对 raw negative serial + number format 的能力缺口；已向 main 提供复现及请求评估，本轮未修改共享 crate。该异常日期未纳入通过对拍范围，生产样本未确认会出现。
+- 用户没有可用脱敏真实宽表样本；PT-1-3/1-4 仍未通过真实样本验收。其他时间/时长类型、生产 capability、Linux/glibc 2.28、麒麟 V10/UOS V20 与离线 deb 未验收。
+
+【删除清单】
+无。临时合成簿及输出由临时目录自动清理。已有交接及阻塞 WIP 未改动或删除。
+
+【回滚提示】
+如需回滚，只回滚本次 PT-1-3/1-4 子日舍入修正和夹具扩展提交；不要覆盖或清理其他 WIP。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

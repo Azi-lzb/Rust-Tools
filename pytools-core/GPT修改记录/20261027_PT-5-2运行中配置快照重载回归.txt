@@ -1,0 +1,15 @@
+功能：PT-5-2 运行中重载配置快照
+
+变更文件：
+- `pytools-core/tests/config_menu_cli.rs`：新增真实菜单进程集成用例，覆盖成功重载后使用新输出目录，以及随后重载损坏配置时保留最近一次成功快照；源工作簿字节保持不变。
+- `pytools-core/tests/summary_menu_cli.rs`：将菜单集成夹具改为配置模板实际使用的“键/值/备注”列布局，避免靠默认目录掩盖配置读取问题。
+- `pytools-core/MIGRATION_INVENTORY.md`：补记测试证据与未验收边界。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`
+- `cargo test --offline --locked -p pytools-core --test config_menu_cli --test summary_menu_cli -j 1`（15/15）
+- `git diff --check`
+
+性质与限制：Windows 合成配置/工作簿、真实 Rust CLI 交互测试；不构成旧 Python 对拍、真实用户配置或 Excel 手工验收。未执行 Linux/deb 验证。
+
+回滚：仅移除此测试及对应迁移记录，不改生产配置处理代码。

@@ -1,0 +1,20 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：475da0c
+修改后 commit：待提交
+修改前 WIP：工作树干净。
+
+目的：使新版文件菜单编号只负责交互选择；内部将选择映射为 `files.*` 语义 ID，再调用现有 Rust 文件处理 handler。菜单 4-2 的添加和清理仍分别连接既有排序前缀业务。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：以语义 ID 分发文件菜单操作；移除旧菜单数字桥接及已隐藏原生值转换的失效菜单筛选项。
+- pytools-core/MIGRATION_INVENTORY.md：记录接线变化与验证状态。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`cargo check --offline --locked -p pytools-core --bin pytools -j 1` 通过；`conversion_menu_cli` 10/10、`file_sort_prefix_operation_parity` 3/3、`file_sort_prefix_remove_parity` 6/6 通过。V2 文件菜单 CLI 测试实际执行了排序前缀添加与清理；源 Python 和真实业务文件均未修改。
+
+未执行项/已知问题：本轮未运行 Python/Rust 新对拍；既有测试对拍使用合成夹具。真实 Windows 人工文件选择、真实样本、Linux/glibc 2.28、麒麟/UOS 与离线 deb 未验证。迁移及真实验收状态不升级。
+
+删除清单：无。
+回滚提示：还原 `pytools.rs` 路由变更并撤销本记录及清单段落。
+【组件版本】pytools-core 0.1.0，不升级。

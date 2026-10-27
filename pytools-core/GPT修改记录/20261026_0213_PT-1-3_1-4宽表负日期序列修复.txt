@@ -1,0 +1,37 @@
+时间：2026-10-26 02:13（Asia/Shanghai）
+执行者：Codex
+修改前 commit：d287600（PT-7-5 缓存公式 CLI 对拍，已推送）
+修改后 commit：本次功能提交（最终 SHA 见 Git 历史）
+WIP：保留 HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 XLS 转换失败记录、PT-6-2 真实样本缺口记录，以及 MIGRATION_INVENTORY.md 中既有 PT-4-2 证据；这些内容不属于本次功能提交。
+
+【目的】
+修复 PT-1-3/PT-1-4 宽表目标追加遇到 Excel 日期系统负序列时的 Rust 与 PyCode 差异。rust_xlsxwriter 的 ExcelDateTime 转换拒绝小于 1900 epoch 的序列，而 PyCode/openpyxl 能将存储值 -0.5 按日期格式保留并读取为 1899-12-29 12:00。PyTools 追加载荷现对有限负序列直接写数值并套用原日期格式；非负序列继续走 ExcelDateTime。未修改共享 Excel crate。
+
+【修改文件】
+- pytools-core/src/dedup_ops.rs：负日期序列保留原始数值和格式，拒绝非有限序列。
+- pytools-core/tests/timeline_menu_cli.rs：新增真实交互菜单新目标负序列回归；既有目标替换回归源也包含负序列。
+- pytools-core/probe/reports/wide_summary_negative_serial_parity_20261026.json：记录 Python/Rust 合成菜单对拍及适用范围。
+- pytools-core/MIGRATION_INVENTORY.md：增加 PT-1-3/PT-1-4 负序列证据，明确仅合成样本，不提升真实验收状态。
+- 本记录：记录实现及验证。
+
+【验证】
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1`：15/15 通过。
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `git diff --check`：通过。
+- 使用原 PyTools Python 3.12.10（openpyxl 3.1.5、pandas 2.2.3）与 Windows MSVC Rust CLI，通过 `compare_wide_summary.py` 现有对拍辅助函数运行只读 PyCode 基线与 `pytools menu → 1 → 3 → 确认新目标`。合成输入 B5 原始序列为 -0.5、日期格式为 `yyyy-mm-dd`；Python 与 Rust 输出完整工作簿投影通过（结构、值/类型、公式、合并、定义名称、冻结窗格、有效样式；数值比较容差 1e-15），输出值均读为 1899-12-29 12:00:00，输入与配置不变。机器报告为 `probe/reports/wide_summary_negative_serial_parity_20261026.json`。
+- 真实交互菜单 Rust 回归还覆盖临时测试 capability 下既有目标替换分支的负序列源；该分支没有单独运行 Python 对拍。
+
+【未执行项与已知问题】
+- 用户目前没有脱敏真实宽表样本，PT-1-3/PT-1-4 仍未通过真实样本验收；报告仅为合成 XLSX 证据。
+- 未验证生产 capability、Windows 原生文件弹窗、真实模板完整保真、麒麟 V10/UOS V20、glibc 2.28 或离线 deb。
+- 既有目标写入仍受生产 ExcelModifier capability 门控；此修复不登记生产能力、不改变默认路由。
+- 未运行本次无关的 workspace 全量测试；当前功能级 `timeline_menu_cli` 套件和对拍已通过。
+
+【删除清单】
+无。合成输入、输出和临时目录已清理；原 Python 项目保持只读。
+
+【回滚提示】
+如需回滚，只回滚本次 PyTools 负序列兼容实现及对应集成测试/证据；不要清理或覆盖其他未提交 WIP。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

@@ -1,0 +1,17 @@
+功能：PT-4-2 原生 Excel 按值转换
+基线：pytools-dev HEAD 4c624c7；只修改 pytools-core。
+
+发现与目的：用隔离合成 XLSM（openpyxl iso_dates=True）复现到一个业务正确性缺陷：原 Rust 路径把 `datetime_iso` 日期单元格写成普通字符串；自校验因允许 DateTimeIso 与 Text 相等，仍把转换标记为成功。按值转换没有保留 Excel 日期单元格类型。
+
+修改文件：
+- pytools-core/src/conversion.rs：对 ISO-typed 日期/时长值增加写入前失败关闭校验，并收紧读回值校验，不再将普通文本视作 ISO 类型相等。
+- pytools-core/src/bin/pytools.rs：在 native 菜单确认文案中说明 ISO 日期/时长、错误值、空文本无法原样保留时会失败且不发布输出。
+- pytools-core/tests/conversion_menu_cli.rs：断言菜单包含该限制提示。
+- pytools-core/probe/compare_native_excel_value_conversion.py 与 probe/reports/native_excel_value_conversion_parity_20261026.json：保留原 XLS 值投影验证，并增加真实 CLI 对合成 ISO 日期 XLSM 的拒绝、无输出和源未变验证。
+- pytools-core/MIGRATION_INVENTORY.md：登记缺陷、修复和证据；该文件另含先前未提交的 PT-4-2 真实 XLS 失败记录，本次提交只包含本记录新增的独立 hunk。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过；`cargo test --offline --locked -p pytools-core --lib conversion::tests -j 1` 7/7；`cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1` 9/9。`python pytools-core/probe/compare_native_excel_value_conversion.py` 通过：合成 XLS 的 1 个文本与 1 个数值投影匹配；另一个 openpyxl ISO 日期 XLSM 经真实 Rust CLI 转换失败 1 个、未发布输出、源字节不变。报告标明只读 Python 输入、合成范围和未覆盖项。
+
+未执行/限制：未取得真实业务 XLS/XLSM 样本；未重跑失败的 sidecar/CDF 保真转换；未测试数值序列日期/时长、Windows 原生文件选择器、glibc 2.28、麒麟 V10、统信 UOS V20 或离线 deb。本次不能视作 PT-4-2 验收完成。未改共享 crates、根 Cargo 文件、原 Python 源项目、真实数据或 Audit。
+
+回滚：只回退本功能提交；迁移清单中本次独立修复记录与探针/报告随提交一并回退。不得使用 reset/clean，也不得连带回退工作树中此前未提交的迁移清单改动。

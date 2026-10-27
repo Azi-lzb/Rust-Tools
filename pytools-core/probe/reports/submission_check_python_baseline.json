@@ -1,0 +1,376 @@
+{
+  "baseline": "PyCode.run_submission_check_48 synthetic contract",
+  "python": "3.12.10",
+  "statistics": {
+    "rules": 4,
+    "files": 3,
+    "submitted": 2,
+    "missing": 2,
+    "unmatched": 1,
+    "multi": 1
+  },
+  "output_workbook": {
+    "sheets": [
+      {
+        "name": "检查结果",
+        "max_row": 5,
+        "max_column": 9,
+        "cells": {
+          "A1": {
+            "type": "string",
+            "value": "是否启用"
+          },
+          "B1": {
+            "type": "string",
+            "value": "日期关键词"
+          },
+          "C1": {
+            "type": "string",
+            "value": "县区关键词"
+          },
+          "D1": {
+            "type": "string",
+            "value": "机构关键词"
+          },
+          "E1": {
+            "type": "string",
+            "value": "备用关键词"
+          },
+          "F1": {
+            "type": "string",
+            "value": "命中次数"
+          },
+          "G1": {
+            "type": "string",
+            "value": "命中的文件名"
+          },
+          "H1": {
+            "type": "string",
+            "value": "备注"
+          },
+          "I1": {
+            "type": "string",
+            "value": "配置行"
+          },
+          "A2": {
+            "type": "string",
+            "value": "是"
+          },
+          "B2": {
+            "type": "string",
+            "value": "2026"
+          },
+          "C2": {
+            "type": "string",
+            "value": "Area"
+          },
+          "D2": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "F2": {
+            "type": "number",
+            "value": 2
+          },
+          "G2": {
+            "type": "string",
+            "value": "2026_Area_Bank_base.txt；2026_Area_Bank_multi.txt"
+          },
+          "H2": {
+            "type": "string",
+            "value": "base rule"
+          },
+          "I2": {
+            "type": "number",
+            "value": 2
+          },
+          "A3": {
+            "type": "string",
+            "value": "是"
+          },
+          "B3": {
+            "type": "string",
+            "value": "2026"
+          },
+          "C3": {
+            "type": "string",
+            "value": "Area"
+          },
+          "D3": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "E3": {
+            "type": "string",
+            "value": "multi"
+          },
+          "F3": {
+            "type": "number",
+            "value": 1
+          },
+          "G3": {
+            "type": "string",
+            "value": "2026_Area_Bank_multi.txt"
+          },
+          "H3": {
+            "type": "string",
+            "value": "second rule"
+          },
+          "I3": {
+            "type": "number",
+            "value": 3
+          },
+          "A4": {
+            "type": "string",
+            "value": "是"
+          },
+          "B4": {
+            "type": "string",
+            "value": "2026"
+          },
+          "C4": {
+            "type": "string",
+            "value": "Missing"
+          },
+          "D4": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "F4": {
+            "type": "number",
+            "value": 0
+          },
+          "H4": {
+            "type": "string",
+            "value": "missing rule"
+          },
+          "I4": {
+            "type": "number",
+            "value": 4
+          },
+          "A5": {
+            "type": "string",
+            "value": "是"
+          },
+          "B5": {
+            "type": "string",
+            "value": "2026-06-30 01:02:03.123000"
+          },
+          "C5": {
+            "type": "string",
+            "value": "Area"
+          },
+          "D5": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "F5": {
+            "type": "number",
+            "value": 0
+          },
+          "H5": {
+            "type": "string",
+            "value": "date keyword"
+          },
+          "I5": {
+            "type": "number",
+            "value": 6
+          }
+        },
+        "header_bold": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "name": "缺失清单",
+        "max_row": 3,
+        "max_column": 9,
+        "cells": {
+          "A1": {
+            "type": "string",
+            "value": "是否启用"
+          },
+          "B1": {
+            "type": "string",
+            "value": "日期关键词"
+          },
+          "C1": {
+            "type": "string",
+            "value": "县区关键词"
+          },
+          "D1": {
+            "type": "string",
+            "value": "机构关键词"
+          },
+          "E1": {
+            "type": "string",
+            "value": "备用关键词"
+          },
+          "F1": {
+            "type": "string",
+            "value": "命中次数"
+          },
+          "G1": {
+            "type": "string",
+            "value": "命中的文件名"
+          },
+          "H1": {
+            "type": "string",
+            "value": "备注"
+          },
+          "I1": {
+            "type": "string",
+            "value": "配置行"
+          },
+          "A2": {
+            "type": "string",
+            "value": "是"
+          },
+          "B2": {
+            "type": "string",
+            "value": "2026"
+          },
+          "C2": {
+            "type": "string",
+            "value": "Missing"
+          },
+          "D2": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "F2": {
+            "type": "number",
+            "value": 0
+          },
+          "H2": {
+            "type": "string",
+            "value": "missing rule"
+          },
+          "I2": {
+            "type": "number",
+            "value": 4
+          },
+          "A3": {
+            "type": "string",
+            "value": "是"
+          },
+          "B3": {
+            "type": "string",
+            "value": "2026-06-30 01:02:03.123000"
+          },
+          "C3": {
+            "type": "string",
+            "value": "Area"
+          },
+          "D3": {
+            "type": "string",
+            "value": "Bank"
+          },
+          "F3": {
+            "type": "number",
+            "value": 0
+          },
+          "H3": {
+            "type": "string",
+            "value": "date keyword"
+          },
+          "I3": {
+            "type": "number",
+            "value": 6
+          }
+        },
+        "header_bold": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "name": "未识别文件",
+        "max_row": 2,
+        "max_column": 3,
+        "cells": {
+          "A1": {
+            "type": "string",
+            "value": "文件名"
+          },
+          "B1": {
+            "type": "string",
+            "value": "源文件路径"
+          },
+          "C1": {
+            "type": "string",
+            "value": "备注"
+          },
+          "A2": {
+            "type": "string",
+            "value": "misc_submission.txt"
+          },
+          "B2": {
+            "type": "string",
+            "value": "<ROOT>\\sources\\misc_submission.txt"
+          },
+          "C2": {
+            "type": "string",
+            "value": "未命中任何启用配置"
+          }
+        },
+        "header_bold": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "name": "多重命中文件",
+        "max_row": 2,
+        "max_column": 3,
+        "cells": {
+          "A1": {
+            "type": "string",
+            "value": "文件名"
+          },
+          "B1": {
+            "type": "string",
+            "value": "源文件路径"
+          },
+          "C1": {
+            "type": "string",
+            "value": "命中配置"
+          },
+          "A2": {
+            "type": "string",
+            "value": "2026_Area_Bank_multi.txt"
+          },
+          "B2": {
+            "type": "string",
+            "value": "<ROOT>\\sources\\2026_Area_Bank_multi.txt"
+          },
+          "C2": {
+            "type": "string",
+            "value": "第2行(2026|Area|Bank|)；第3行(2026|Area|Bank|multi)"
+          }
+        },
+        "header_bold": [
+          true,
+          true,
+          true
+        ]
+      }
+    ]
+  }
+}

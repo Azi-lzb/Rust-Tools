@@ -1,0 +1,22 @@
+时间：2026-10-23 12:14（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：本 workspace 文件处于未跟踪状态；本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：补齐用户指定打印 3-1 至 3-4、配置 5-1/5-2 的 CLI 执行链：已有的打印/配置修复 ExcelEditPlan 可选择通过统一 ExcelModifier 执行；只读预校验/查看和配置初始化维持现有入口。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：`print-comment-plan`、`print-config-plan`、`config-repair-plan` 接受可选的 `--capabilities` 与 `--platform`；打印批注计划支持 `--plan-output`。只有用户显式提供能力清单时才尝试执行，否则保留计划输出流程。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录接线边界和未验收能力。
+- `pytools-core/probe/reports/print_config_execution_wiring_20261023.json`：机器状态摘要，不是对拍结果。
+- 本记录。
+
+技术边界：没有新增或默认启用 Excel 修改引擎；现有 `ExcelModifier` 必须按能力文件中的格式、操作、平台和保留证据路由。未加入 PDF、打印渲染、打印机输出或 Office 依赖。输入工作簿仍由计划输出为候选路径，源文件不被直接覆盖。
+
+实际验证：未编译、未运行测试、未做 Python 对拍。按用户希望先完成选定 pytools 实现批次再集中测试。WSL 启动返回当前本机状态错误，Windows PowerShell 未找到 cargo/rustfmt；此前 workspace 的测试结果发生在本轮这些代码改动之前，不能作为本改动验证。恢复工具链后先格式化和编译，再对拍 3-1 至 3-4 页面设置/复制保留及 5-1 配置修复。
+
+未完成项：打印配置、格式转换与真实模板对拍；页面设置和复制保真能力登记；配置修复结构和默认值行为；目标 Linux/deb。计划接线不代表菜单功能已验收。
+
+删除清单：无。
+回滚提示：本轮 workspace 无 Git 首次提交；撤销时按本记录恢复 `pytools-core/src/bin/pytools.rs` 对应 CLI 修改，并删除本记录与机器摘要。操作前需核对其他未跟踪 WIP。
+【组件版本】：不升级；现有版本 `0.1.0`。

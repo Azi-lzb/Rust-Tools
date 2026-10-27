@@ -1,0 +1,35 @@
+时间：2026-10-24（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：a376a76；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。origin/main 为 473c75a。源 Python 项目只读；未修改代码、配置、夹具或真实业务输入。
+
+目的：在 main 的共享编辑器修复合入后，使用当前 HEAD 继续验证 PT-6-1 的真实工作簿对拍，并记录当前 Windows 原生与 WSL Linux debug 证据。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：更新当前合成对拍运行耗时和 WSL Linux debug 运行视图；该报告状态仅表示合成 CLI 对拍通过。
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：记录当前 WSL Linux debug 的 13 份真实样本全量对拍，并补充当前 HEAD Windows 原生最大批次结果；报告不存单元格值。
+- pytools-core/MIGRATION_INVENTORY.md：记录验证范围、运行日志、实际引擎和剩余验收边界。
+- 本修改记录。
+
+真实入口与对拍：当前 HEAD a376a76 的真实样本 probe 由 Windows Python 3.12.10 执行 PyCode 基线，并通过 WSL Linux debug cargo run 启动真实 summary-used-range CLI。原 PyTools xlsx/ 的 13 份 XLSX 分 4 批，96 张工作表、203,580 行完整投影精确一致；值/类型、样式、工作表名称与维度、冻结窗格/表头加粗、公式/合并/定义名称/页面属性通过。四批 developer 事件数为 26、14、27、63，均与保存运行历史逐项匹配；输入前后 SHA-256 相同。实际引擎为 Calamine、excel-reader::read_xlsx_worksheet_extents、rust_xlsxwriter；含 Excel 错误值的批次另使用 OOXML Patch。该运行包含 cargo run debug，不作为 glibc 2.28 release 或目标发行版验收。
+
+同一 HEAD 另用 Windows 原生 target/debug/pytools.exe 对最大批次复验：4 份工作簿、188,365 行完整投影精确一致；63 条 developer 事件与保存历史匹配，输入前后 SHA-256 相同。Windows 原生结果只覆盖最大批次，不冒充四批全量重跑。两项对拍均未比较性能。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p excel-editor：18 项通过，4 项因隔离 openpyxl runtime 未配置而忽略。
+- cargo test --offline --locked -p pytools-core --test summary_used_range_error --test summary_comments_cli：9/9 通过。
+- cargo build --offline --locked -p pytools-core --bin pytools：通过。
+- 当前 HEAD WSL debug 13 份真实样本四批对拍：通过。
+- 当前 HEAD Windows 原生最大批次真实对拍：通过。
+- JSON 语法与 git diff --check：通过。
+
+未完成与已知问题：原项目没有业务含 VBA 的 XLSM 样本；麒麟 V10/UOS V20、deb 和离线交付仍未验收。此前独立 Windows 全量与 glibc 2.28 release 报告保留各自范围，不从本轮 WSL debug 结果外推。
+
+回滚：git revert <本轮提交> 可撤回本轮机器报告、迁移清单和记录；本轮未修改产品代码。
+
+增补复验（2026-10-24，分支 HEAD 19c96fc）：
+- Windows 原生 target/debug/pytools.exe 现已对原 PyTools xlsx/ 目录的 13 份 XLSX 分 4 批完整重跑，与 Windows Python/PyCode 基线完整投影精确一致：96 张工作表、203,580 行；值/类型、样式、工作表/维度、冻结窗格/表头加粗、公式/合并/名称/页面属性通过。
+- 四批 developer 事件数为 26、14、27、63，与保存运行历史逐项匹配；输入前后 SHA-256 相同。入口为真实 summary-used-range CLI；本次 Windows run 使用 Calamine 与 rust_xlsxwriter。详细机器摘要为 additional_current_head_windows_native_full_20261024。
+- 本次复跑更新了既有机器报告中的批次耗时和执行环境字段；新增加的全量摘要不含单元格值、路径或摘要指纹。正确性通过，不据此作跨平台性能结论。
+- 当前 HEAD 验证命令：cargo fmt --manifest-path pytools-core/Cargo.toml -- --check 通过；cargo test --offline --locked -p excel-editor 18 项通过、4 项因隔离 openpyxl runtime 未配置而忽略；cargo test --offline --locked -p pytools-core --test summary_used_range_error --test summary_comments_cli 9/9 通过；cargo build --offline --locked -p pytools-core --bin pytools 通过。
+- 仍未验证原项目业务含 VBA 的 XLSM 样本、麒麟 V10/UOS V20 实机、deb 与离线交付。未修改产品代码、共享 crate、根 Cargo 配置或 Audit。

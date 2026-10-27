@@ -1,0 +1,34 @@
+时间：2026-10-25（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：20354893586bba31abb8f0f9030ac4c396ad5067；分支 pytools-dev 与 origin/pytools-dev 同步。开始时保留 PT-7-6 未提交 WIP：pytools-core/src/bin/pytools.rs、pytools-core/src/sheet_extract.rs、pytools-core/tests/sheet_extract_area_operation_parity.rs。
+修改后业务 commit：1efd1c7（feat(pytools): support worksheet extraction append）。本记录单独提交。
+
+目的：迁移原 PyCode 工作表提取的 append_existing=True 行为，在真实 Rust CLI 暴露显式追加选项，并对追加既有 XLSX 的安全门控、输出结果及运行记录进行验证。
+
+修改文件：
+- pytools-core/src/sheet_extract.rs：已有目标仅允许 XLSX 且要求完整 inventory；记录 SHA-256 规划快照；以 ExcelEditPlan 的 CreateSheet + ImportRange 经 ExcelModifier 追加；校验新表并在目标快照未变化时安全替换。新建目标继续走原 create-only 流程。
+- pytools-core/src/bin/pytools.rs：extract-sheets 新增 --append-existing 选项，并将该选项传入核心执行入口。
+- pytools-core/tests/sheet_extract_area_operation_parity.rs：增加真实 CLI 合成测试，覆盖区域追加、整表追加、无 capability/平台不匹配的失败关闭、原目标保护、已知工作簿属性和运行历史隐私。
+- pytools-core/probe/reports/sheet_extract_append_existing_parity_20261025.json：增加机器可读对拍摘要，标明 synthetic_passed_not_production_acceptance。
+- pytools-core/MIGRATION_INVENTORY.md：修正追加未实现的过时描述，记录入口、数据流、验证和边界。
+- 本记录。
+
+真实入口与数据流：pytools extract-sheets --append-existing --config <配置簿> <源工作簿>...；Calamine 读取，rust_xlsxwriter 生成待追加工作表，ExcelModifier/umya_spreadsheet 执行 CreateSheet + ImportRange，Calamine 校验，快照检查后的文件替换提交。该参数仅接入直接 CLI，尚未接入交互菜单。业务与配置影响：只在显式追加且目标已存在时要求匹配 capability/platform；未改变默认路由，不注册生产 capability。
+
+对拍与测试（Windows 原生）：
+- PyCode 只读源测试 test_extract_sheets_append_existing_output_keeps_previous_sheets：1 passed，8 deselected。该 Python 测试只覆盖区域追加，验证此前表不丢失及工作表/值。
+- cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity：10 passed，0 failed。
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- git diff --check：通过。
+- Rust CLI 合成区域追加验证表名、顺序和值；缺少 capability 与平台不匹配时原目标字节不变。运行历史记录引擎和提交阶段且不包含测试单元格值。
+- 合成整表追加验证旧簿值、公式文本、批注、合并、粗体样式、行高和列宽；新表缓存值、合并、样式、行高和列宽。普通无批注版新表不保留公式文本或批注。
+- 迁移记录没有宣称整表 Python 文件级对拍通过：之前的 PyCode 整表 helper 生成簿样式重开异常仍按前次记录。
+- 构建输出包含共享 excel-editor 42 条现存 umya-spreadsheet 弃用警告和 pytools-core batch_ops.rs、quick.rs 两项未使用导入警告；本轮未改共享组件或清理无关警告。
+
+限制与未执行项：本轮仅用合成 XLSX；Python 基线测试不覆盖整表追加。没有真实业务工作簿、生产 Passed capability、非 XLSX 格式、交互菜单追加、Windows 原生文件弹窗、麒麟/UOS glibc 2.28 或 deb 验收。PT-7-6 整体验收仍为未验证。未运行 workspace 全量测试、Python 全套测试或 Linux 构建。
+
+Git 同步：已 fetch origin/main 与 origin/pytools-dev。origin/main 最新 ExcelModifier 提交与当前 pytools-dev 最新公共代码提交 patch-id 相同，相关 backend 文件内容一致；公共 Rust 代码无需另行同步。main 的根级文档和 DEVELOPMENT_GOAL.md 有后续说明变动；依本轮用户要求，未合并或修改 DEVELOPMENT_GOAL.md。未修改共享 crate、根 Cargo.toml、Cargo.lock、AGENTS.md、Rules、Audit 或 Python 源目录。
+
+删除清单：无。
+回滚提示：git revert 1efd1c7 可撤销业务实现、测试和机器报告；本记录由独立文档提交管理。
+【组件版本】：pytools-core 0.1.0，不升级。

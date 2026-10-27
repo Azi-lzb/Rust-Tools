@@ -1,0 +1,20 @@
+时间：2026-10-23（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：`pytools-core/GPT修改记录/` 未发现 WIP 文件；workspace `git ls-files` 为 0，既有内容整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：检查批注打印 3-1（保留源格式）与 3-2（快速复制）的 Rust `ExcelEditPlan` 是否表达旧 Python 输出语义。
+
+修改文件：
+- `pytools-core/probe/compare_print_comment_plans.py`
+- `pytools-core/probe/reports/print_comment_plan_parity_20261023.json`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- 本修改记录。
+
+验证：合成输入包含两个标记范围 `B2:D4`、`F2:G3`、合并格、单元格样式、区域批注、A1 打印方向标记和零值。Python 输出与 Rust 计划在输出表名/顺序、范围、A1 起点、完整/基础样式、批注保留、合并策略、hide-zero 和页面设置字段上相符。旧 Python 输出只写入临时目录，Rust 未修改工作簿。
+
+限制：Rust 仅构造计划，未通过 capability gate 执行 ImportRange/页面设置；实际后端保真未验收。合成 XLSX only；未验证真实模板、3-3 配置打印、XLSM、Windows 发布构建、麒麟/UOS 和 deb。
+
+回滚：删除新增 probe/报告/记录并恢复迁移清单的打印计划状态。workspace 无 Git 首次提交，不能通过 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

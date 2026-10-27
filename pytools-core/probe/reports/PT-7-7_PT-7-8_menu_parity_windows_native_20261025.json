@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "status": "passed_synthetic_windows_native_menu_and_plan_parity",
+  "recorded_at": "2026-10-25T01:06:13+08:00",
+  "implementation_commit": "da5f136",
+  "feature_ids": [
+    "PT-7-7",
+    "PT-7-8"
+  ],
+  "environment": {
+    "os": "Windows 11 x64",
+    "rustc": "1.99.1",
+    "cargo": "1.99.1",
+    "python_baseline": "3.12.10",
+    "openpyxl": "3.1.5"
+  },
+  "plan_parity": {
+    "PT-7-7": {
+      "case": "synthetic current/previous city-level workbooks",
+      "summary": "equal",
+      "workbook_value_projection": "equal"
+    },
+    "PT-7-8_normal": {
+      "case": "synthetic current/previous quarterly workbooks with two regions",
+      "summary": "equal",
+      "workbook_value_projection": "equal"
+    },
+    "PT-7-8_region_errors": {
+      "case": "synthetic missing prior region, duplicate institution, and missing area row",
+      "summary": "equal",
+      "error_contract": "equal",
+      "workbook_value_projection": "equal",
+      "overall_consistent": false
+    }
+  },
+  "menu_execution": {
+    "PT-7-7": {
+      "result": "passed",
+      "execution_engine": "umya_spreadsheet",
+      "read_engine": "calamine",
+      "target_commit": "safe replacement passed",
+      "preservation_checks": [
+        "cell values outside the planned update",
+        "formula text",
+        "cell style",
+        "merged ranges",
+        "comments",
+        "untouched worksheet"
+      ]
+    },
+    "PT-7-8": {
+      "result": "passed",
+      "execution_engine": "umya_spreadsheet",
+      "read_engine": "calamine",
+      "target_commit": "safe replacement passed",
+      "missing_region_error_retained": true,
+      "preservation_checks": [
+        "cell values outside the planned update",
+        "formula text",
+        "cell style",
+        "merged ranges",
+        "comments",
+        "unmodified region and worksheet"
+      ]
+    }
+  },
+  "tests": {
+    "batch_tools_menu_cli": "15 passed, 0 failed",
+    "rural_loan_regressions": "2 passed, 0 failed",
+    "cargo_fmt_check": "passed",
+    "git_diff_check": "passed"
+  },
+  "scope_limits": [
+    "All workbooks and temporary capabilities were synthetic.",
+    "No production Passed capability was registered and no default engine route was changed.",
+    "No real business workbook or authorized business sample was available.",
+    "Windows native file-dialog manual operation was not exercised.",
+    "Linux glibc 2.28 builds, target-system installation, and offline deb validation were not performed.",
+    "Production acceptance for PT-7-7 and PT-7-8 remains unverified."
+  ]
+}

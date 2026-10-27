@@ -1,0 +1,10 @@
+修改前检查：工作树干净；`pytools-core/GPT修改记录/` 未发现 WIP 文件。本轮仅补充现有 ET 阻塞的最小复现证据，没有修改 PyTools 代码、共享 crates、根 Cargo 文件或旧 Python 源项目。
+
+涉及文件：
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 `.xls` 内容改名为 `.et` 后的真实 CLI/COM 误报成功，并标明共享修复请求及验收状态。
+
+验证：用仓库合成夹具 `pytools-core/tests/fixtures/timeline/wide_summary_elapsed_duration.xls` 复制为 `F:\PyToolsRustV2\tmp\pt44-xls-mislabeled-as-et-20261027\source.et`，运行当前构建的 `pytools.exe convert-excel --to xlsx --engine com`。WPS COM 返回 `converted=1, failed=0`，生成 9,162-byte `source.xlsx`。输入副本和仓库夹具 SHA-256 均为 `5F5F3A3CBFB028458FC950222E20FAD4F67536A613CEE01FAF56F4025BBF842B`；临时 staging 已由产品清理。该样本是 XLS 误扩展名，不是合法 ET。
+
+处理：已向 main 请求在共享 `sidecar/lo-convert` 的 COM SaveAs 前核验 WPS 实际文件格式，并拒绝将非 ET 类型作为 ET 转换。PyTools 工作树不直接改共享代码。main 的回复和修复提交待后续核实后再安全同步；真实 ET、转换保真和目标平台验收仍未完成。
+
+回滚：本记录只新增迁移证据；若撤销记录，移除此条及对应库存段落即可。产品版本未变化。

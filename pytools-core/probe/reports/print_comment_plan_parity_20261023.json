@@ -1,0 +1,42 @@
+{
+  "status": "passed_plan_semantics_synthetic",
+  "scope": [
+    "3-1 keep-format print plan",
+    "3-2 fast print plan"
+  ],
+  "python": {
+    "keep": {
+      "sheets": 2,
+      "ranges": [
+        "B2:D4",
+        "F2:G3"
+      ],
+      "comments_copied": true
+    },
+    "fast": {
+      "sheets": 2,
+      "ranges": [
+        "B2:D4",
+        "F2:G3"
+      ],
+      "comments_copied": false,
+      "zero_hidden": true
+    }
+  },
+  "rust_plan": {
+    "keep_imports": 2,
+    "fast_imports": 2
+  },
+  "comparison": [
+    "marked ranges and order",
+    "output sheet names",
+    "style/comment/merge/zero policies",
+    "orientation, fit settings, paper size, print area and footer"
+  ],
+  "limitations": [
+    "Rust output was not applied: ImportRange and page-setting capabilities remain gated by registered ExcelModifier evidence.",
+    "Synthetic XLSX only; no real print template or XSLM was used.",
+    "This validates plan semantics, not backend output fidelity or print rendering.",
+    "Windows release build, Kylin/UOS and deb were not validated."
+  ]
+}

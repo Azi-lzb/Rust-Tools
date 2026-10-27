@@ -1,0 +1,22 @@
+时间：2026-10-27 00:31 +08:00
+执行者：Codex
+修改前 commit：ebc54d3
+修改后 commit：本记录随 PT-4-8 错误处理修复提交
+修改前 WIP：工作树干净；仅本轮 PT-4-8 修改处于未提交状态。原 Python 项目只读。
+
+目的：避免提交检查递归扫描目录或读取目录项失败后静默漏掉文件，并仍输出看似成功的报告。
+
+修改/新增文件：
+- `pytools-core/src/submission_check.rs`：使递归目录扫描返回并传播 I/O 错误；失败时通过现有进度/日志回调记录 `input_scan_failed`，停止后续报表生成；保留不存在顶层路径的过滤行为。新增扫描非目录时必须返回错误的单测。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录修复及状态仍待 Windows 真实验收。
+- `pytools-core/GPT修改记录/20261027_003126_PT-4-8提交检查扫描错误传播.txt`：本记录。
+
+逻辑/配置/VBA 影响：无配置字段、菜单入口、输出格式或 VBA 迁移范围变化；I/O 扫描失败不再可能被报告为成功。扫描失败发生在输出阶段前，不产生报告。
+
+测试：Windows 原生 `cargo fmt -p pytools-core`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --lib submission_check::tests -j 1`（1/1）、`cargo test --offline --locked -q -p pytools-core --test submission_check_parity -j 1`（4/4）、`git diff --check` 通过。构建产物和 TEMP 位于 F 盘工作专用目录。
+
+未执行项/已知问题：未模拟真实目录 ACL 拒绝或瞬时 I/O 故障；未使用用户真实目录或样本进行 Python/Rust 对拍；未做 Windows 人工操作、Linux/glibc 2.28、麒麟/UOS 或离线 deb 验收。原有合成对拍只验证正常路径，不代表业务真实验收。
+
+删除清单：无。
+回滚提示：回退本次功能提交会恢复扫描错误被忽略的旧行为；不影响其他 PT-4 文件操作入口。
+【组件版本】pytools-core 0.1.0，不升级。

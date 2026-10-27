@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.header_path_compare_python_rust_parity",
+  "date": "2026-10-23",
+  "status": "passed_synthetic_parity",
+  "source_python_files": [
+    "PyCode/core/compare_393.py",
+    "PyCode/core/config_xlsx.py",
+    "PyCode/core/io_excel.py"
+  ],
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "features": [
+      "matching source with no differences",
+      "position and path differences",
+      "workbook keyword non-match",
+      "template included among selected sources and skipped"
+    ]
+  },
+  "comparison": {
+    "worksheet_names": "exact",
+    "all_cells_and_python_types": "exact",
+    "difference_order": "exact",
+    "summary_counts": "numeric cell types and values exact"
+  },
+  "scenarios": {
+    "matching_source": {"status": "passed", "position_differences": 0, "path_differences": 0},
+    "changed_source": {"status": "passed", "position_differences": 2, "path_differences": 4},
+    "unmatched_source": {"status": "passed", "position_differences": 0, "path_differences": 0},
+    "same_as_template": "skipped by both implementations"
+  },
+  "changes": [
+    "Changed Rust summary count columns from text cells to numeric cells to match the pandas/openpyxl baseline."
+  ],
+  "limitations": [
+    "Synthetic XLSX only; no real business configuration or workbooks were available.",
+    "Formatting and preservation of unrelated OOXML parts were not compared.",
+    "XLS, XLSM, XLSB, CSV, ET, native Windows execution, Kylin/UOS, glibc 2.28 and deb packaging were not validated."
+  ]
+}

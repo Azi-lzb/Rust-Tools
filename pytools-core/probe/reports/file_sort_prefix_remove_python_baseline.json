@@ -1,0 +1,114 @@
+{
+  "source": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "operation": "run_remove_file_sort_prefix_410"
+  },
+  "stats": {
+    "rules": 4,
+    "files": 10,
+    "renamed": 5,
+    "skipped": 5,
+    "failed": 0
+  },
+  "rows": [
+    {
+      "source_file": "001_报表.xlsx",
+      "original_name": "001_报表.xlsx",
+      "new_name": "报表.xlsx",
+      "status": "已取消排序前缀",
+      "remark": ""
+    },
+    {
+      "source_file": "001_冲突.xlsx",
+      "original_name": "001_冲突.xlsx",
+      "new_name": "冲突_1.xlsx",
+      "status": "目标同名：已自动后缀",
+      "remark": ""
+    },
+    {
+      "source_file": "机构A_002_内容报告.xlsx",
+      "original_name": "机构A_002_内容报告.xlsx",
+      "new_name": "机构A_内容报告.xlsx",
+      "status": "已取消排序前缀（保留内容前缀）",
+      "remark": ""
+    },
+    {
+      "source_file": "机构A_001_内容冲突.xlsx",
+      "original_name": "机构A_001_内容冲突.xlsx",
+      "new_name": "机构A_内容冲突_1.xlsx",
+      "status": "目标同名：已自动后缀",
+      "remark": ""
+    },
+    {
+      "source_file": "机构B_001_不匹配.xlsx",
+      "original_name": "机构B_001_不匹配.xlsx",
+      "new_name": "",
+      "status": "跳过：无匹配排序前缀",
+      "remark": ""
+    },
+    {
+      "source_file": "未加前缀.xlsx",
+      "original_name": "未加前缀.xlsx",
+      "new_name": "",
+      "status": "跳过：无匹配排序前缀",
+      "remark": ""
+    },
+    {
+      "source_file": "missing.xlsx",
+      "original_name": "missing.xlsx",
+      "new_name": "",
+      "status": "跳过：非文件",
+      "remark": ""
+    },
+    {
+      "source_file": "not-a-file.xlsx",
+      "original_name": "not-a-file.xlsx",
+      "new_name": "",
+      "status": "跳过：非文件",
+      "remark": ""
+    },
+    {
+      "source_file": "机构A_001_损坏.xlsx",
+      "original_name": "机构A_001_损坏.xlsx",
+      "new_name": "",
+      "status": "跳过：无匹配排序前缀",
+      "remark": ""
+    },
+    {
+      "source_file": "001_损坏.xls",
+      "original_name": "001_损坏.xls",
+      "new_name": "损坏.xls",
+      "status": "已取消排序前缀",
+      "remark": ""
+    }
+  ],
+  "final_files": [
+    "冲突.xlsx",
+    "冲突_1.xlsx",
+    "报表.xlsx",
+    "损坏.xls",
+    "未加前缀.xlsx",
+    "机构A_001_损坏.xlsx",
+    "机构A_内容冲突.xlsx",
+    "机构A_内容冲突_1.xlsx",
+    "机构A_内容报告.xlsx",
+    "机构B_001_不匹配.xlsx"
+  ],
+  "empty_input": {
+    "stats": {
+      "rules": 4,
+      "files": 0,
+      "renamed": 0,
+      "skipped": 0,
+      "failed": 0
+    },
+    "report": {
+      "sheet_name": "取消文件排序前缀结果",
+      "max_row": 1,
+      "max_column": 1,
+      "cells": []
+    }
+  }
+}

@@ -1,0 +1,1145 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.dedup.comment_delete_excel_com_parity",
+  "date": "2026-10-23",
+  "feature_id": "PT-2-2",
+  "status": "passed_synthetic_com_parity",
+  "sample_kind": "synthetic_workbook_generated_by_excel_com",
+  "oracle": "Microsoft Excel COM 16.0",
+  "rust_engine": "umya_spreadsheet",
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "source_unchanged": true,
+  "semantic_equal": true,
+  "differences": [],
+  "not_verified": [
+    "real pytools workbook/configuration",
+    "Kylin V10",
+    "UOS V20",
+    "glibc 2.28",
+    "offline deb packaging"
+  ],
+  "execution": {
+    "attempts": [
+      {
+        "elapsed_ms": 333,
+        "engine": "umya_spreadsheet",
+        "message": "validated output published",
+        "outcome": "succeeded"
+      }
+    ],
+    "elapsed_ms": 337,
+    "engine": "umya_spreadsheet",
+    "input": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-2-2-com-35ac18372d704d01b96ca7b7f5eefd4e/source.xlsx",
+    "output": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-2-2-com-35ac18372d704d01b96ca7b7f5eefd4e/rust_candidate.xlsx",
+    "route_decisions": [
+      {
+        "eligible": true,
+        "engine": "umya_spreadsheet",
+        "rejected_reasons": []
+      }
+    ]
+  },
+  "plan_operations": [
+    {
+      "count": 1,
+      "first_row": 3,
+      "operation": "delete_rows",
+      "sheet": "Commented"
+    }
+  ],
+  "expected_projection": {
+    "sheets": [
+      "Refs",
+      "Commented"
+    ],
+    "cells": {
+      "A1": {
+        "value": "源数据",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B1": {
+        "value": "Key",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C1": {
+        "value": "Value",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H1": {
+        "value": 80.0,
+        "formula": "=SUM(C2:C4)",
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A2": {
+        "value": "first",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B2": {
+        "value": "dup",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C2": {
+        "value": 10.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E2": {
+        "value": "merged-marker",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A3": {
+        "value": "keep",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B3": {
+        "value": "keep",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C3": {
+        "value": 30.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 65280.0,
+        "bold": false
+      },
+      "D3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A4": {
+        "value": "tail",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B4": {
+        "value": "tail",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C4": {
+        "value": 40.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      }
+    },
+    "formulas": {
+      "Refs!A1": "=Commented!C3",
+      "Refs!A2": "=SUM(Commented!C2:C4)"
+    },
+    "comments": {
+      "A1": "本表为源数据",
+      "B1": "标识列",
+      "G3": "survivor-comment",
+      "G4": "tail-comment"
+    },
+    "merged_range": "E2:F4",
+    "defined_name": "=Commented!$C$2:$C$4",
+    "row_heights": {
+      "1": 13.9,
+      "2": 13.9,
+      "3": 24.0,
+      "4": 13.9,
+      "5": 13.9,
+      "6": 13.9
+    },
+    "column_widths": {
+      "A": 8.47,
+      "B": 8.47,
+      "C": 8.47,
+      "D": 8.47,
+      "E": 8.47,
+      "F": 8.47,
+      "G": 8.47,
+      "H": 8.47,
+      "I": 8.47,
+      "J": 8.47,
+      "K": 8.47,
+      "L": 8.47
+    },
+    "autofilter_range": "A1:C4"
+  },
+  "rust_projection": {
+    "sheets": [
+      "Refs",
+      "Commented"
+    ],
+    "cells": {
+      "A1": {
+        "value": "源数据",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B1": {
+        "value": "Key",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C1": {
+        "value": "Value",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H1": {
+        "value": 80.0,
+        "formula": "=SUM(C2:C4)",
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L1": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A2": {
+        "value": "first",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B2": {
+        "value": "dup",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C2": {
+        "value": 10.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E2": {
+        "value": "merged-marker",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L2": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A3": {
+        "value": "keep",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B3": {
+        "value": "keep",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C3": {
+        "value": 30.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 65280.0,
+        "bold": false
+      },
+      "D3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L3": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A4": {
+        "value": "tail",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B4": {
+        "value": "tail",
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C4": {
+        "value": 40.0,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L4": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L5": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "A6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "B6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "C6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "D6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "E6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "F6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "G6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "H6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "I6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "J6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "K6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      },
+      "L6": {
+        "value": null,
+        "formula": null,
+        "number_format": "G/通用格式",
+        "fill_color": 16777215.0,
+        "bold": false
+      }
+    },
+    "formulas": {
+      "Refs!A1": "=Commented!C3",
+      "Refs!A2": "=SUM(Commented!C2:C4)"
+    },
+    "comments": {
+      "A1": "本表为源数据",
+      "B1": "标识列",
+      "G3": "survivor-comment",
+      "G4": "tail-comment"
+    },
+    "merged_range": "E2:F4",
+    "defined_name": "=Commented!$C$2:$C$4",
+    "row_heights": {
+      "1": 13.9,
+      "2": 13.9,
+      "3": 24.0,
+      "4": 13.9,
+      "5": 13.9,
+      "6": 13.9
+    },
+    "column_widths": {
+      "A": 8.47,
+      "B": 8.47,
+      "C": 8.47,
+      "D": 8.47,
+      "E": 8.47,
+      "F": 8.47,
+      "G": 8.47,
+      "H": 8.47,
+      "I": 8.47,
+      "J": 8.47,
+      "K": 8.47,
+      "L": 8.47
+    },
+    "autofilter_range": "A1:C4"
+  }
+}

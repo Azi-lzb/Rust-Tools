@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.pt_7_3.row_delete_excel_com_parity",
+  "date": "2026-10-23",
+  "feature_id": "PT-7-3",
+  "status": "failed",
+  "sample_kind": "synthetic_workbook_generated_by_excel_com",
+  "oracle": "Microsoft Excel COM 16.0",
+  "rust_engine": "umya_spreadsheet",
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "source_unchanged": false,
+  "semantic_equal": false,
+  "differences": [
+    "抱歉，无法找到 C:\\Users\\AZI\\AppData\\Local\\Temp\\pt-7-3-com-6f7c24c7965b4b6f89bd043f3c316a2d\\rust_candidate.xlsx。是否可能被移动、重命名或删除?"
+  ],
+  "not_verified": [
+    "real pytools workbook/configuration",
+    "cross-sheet formula and defined-name updates",
+    "Kylin V10",
+    "UOS V20",
+    "glibc 2.28",
+    "offline deb packaging"
+  ],
+  "error": "抱歉，无法找到 C:\\Users\\AZI\\AppData\\Local\\Temp\\pt-7-3-com-6f7c24c7965b4b6f89bd043f3c316a2d\\rust_candidate.xlsx。是否可能被移动、重命名或删除?",
+  "error_stack": "at <ScriptBlock>, C:\\Users\\AZI\\Desktop\\VibeCode\\1.rust-workspace\\pytools-core\\probe\\compare_pt73_row_delete_excel_com.ps1: line 237\r\nat <ScriptBlock>, <No file>: line 2"
+}

@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.config_loader",
+  "source": "PyCode/core/config_xlsx.py",
+  "shared_vectors": "tests/fixtures/config_loader_cases.json",
+  "python_baseline": {
+    "status": "保留",
+    "passed": 1,
+    "total": 1
+  },
+  "result": {
+    "global": {
+      "input_dir": "$BASE/data/input",
+      "output_dir": "$BASE/output",
+      "log_dir": "$BASE/logs",
+      "error_policy": "abort",
+      "default_encoding": "gb18030",
+      "source_exts": [
+        ".xlsx",
+        ".xls",
+        ".csv"
+      ],
+      "timeline_rule_match_mode": "first_match"
+    },
+    "global_value_existing": "abort",
+    "global_value_missing": "fallback",
+    "timeline_rules": [
+      {
+        "enabled": true,
+        "name": "贷款明细",
+        "wb_keyword": "县区;报表",
+        "sheet_keyword": "数据",
+        "row_header_col": 1,
+        "col_header_row": 2,
+        "row_header_cols": [
+          1,
+          3
+        ],
+        "row_header_col_specified": true,
+        "col_header_rows": [
+          2,
+          3
+        ],
+        "required_col_headers": [
+          "余额",
+          "贷款金额"
+        ],
+        "required_row_headers": [
+          "乡镇",
+          "合计"
+        ],
+        "data_row_start": 4,
+        "data_row_end": 25,
+        "data_col_start": 2,
+        "data_col_end": 8,
+        "skip_keywords": [
+          "合计",
+          "注释"
+        ],
+        "target_wb_path": "reports/summary.xlsx",
+        "target_sheet": "汇总",
+        "target_write_enabled": false,
+        "set_items": [
+          [
+            "日期",
+            "B2"
+          ],
+          [
+            "机构",
+            "AA1"
+          ]
+        ],
+        "set_parse_error": "",
+        "target_dedup_cols": [
+          "编号",
+          "机构代码"
+        ],
+        "output_row_no": true
+      },
+      {
+        "enabled": true,
+        "name": "错误set规则",
+        "wb_keyword": "",
+        "sheet_keyword": "",
+        "row_header_col": 1,
+        "col_header_row": 1,
+        "row_header_cols": [],
+        "row_header_col_specified": false,
+        "col_header_rows": [
+          1
+        ],
+        "required_col_headers": [],
+        "required_row_headers": [],
+        "data_row_start": 0,
+        "data_row_end": null,
+        "data_col_start": 0,
+        "data_col_end": null,
+        "skip_keywords": [],
+        "target_wb_path": null,
+        "target_sheet": null,
+        "target_write_enabled": true,
+        "set_items": [],
+        "set_parse_error": "set区域项格式非法: 格式错误（应为 别名@地址）",
+        "target_dedup_cols": [],
+        "output_row_no": false
+      }
+    ],
+    "path_maps": [
+      {
+        "enabled": true,
+        "name": "村名统一",
+        "applicable_rule": "贷款明细",
+        "wb_keyword": "季度报表",
+        "sheet_keyword": "数据",
+        "target": "行头",
+        "match_mode": "包含",
+        "original": "旧村名",
+        "standard": "新村名"
+      }
+    ]
+  },
+  "limitations": [
+    "Covers global settings, timeline rules, and path maps only.",
+    "Uses a synthetic workbook generated from shared vectors; does not establish full workflow or real-template parity."
+  ]
+}

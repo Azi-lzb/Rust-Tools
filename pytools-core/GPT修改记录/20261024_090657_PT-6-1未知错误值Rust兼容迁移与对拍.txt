@@ -1,0 +1,53 @@
+时间：2026-10-24 09:29:21 中国标准时间
+执行者：Codex（pytools-dev）
+修改前 commit：544cbec（分支 pytools-dev；origin/pytools-dev 落后 3 个提交）。开始时工作树有本轮 PT-6-1 WIP：summary_ops.rs 与 summary_used_range_error.rs；未覆盖或清理该 WIP。没有发现无关用户修改。 本轮进行中，main 又将 d1c196e、f1e1267 两项共享/sidecar 提交同步到当前分支；保留且未修改，分支相对 origin/pytools-dev 随之领先 5 个提交。
+
+目的：完成 PT-6-1 对未知 XLSX 字面错误值 #DATA! 的 Rust 业务兼容，并用真实 CLI 与只读 PyCode 对拍。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：PT-6-1 显式调用共享 opt-in reader API；报告兼容归一化数量，并在开发者事件中记录实际读取引擎与阶段耗时。
+- pytools-core/tests/summary_used_range_error.rs：验证三视图 CLI 输出、归一化字符串类型、实际引擎、开发者日志脱敏和源夹具不变。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：保存 Windows 与 glibc 2.28 三视图的机器对拍结果，并保留接入 API 前的失败关闭记录作为历史。
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：保留既有 WSL/其他真实样本证据，并追加 API 接入后 13 份主样本回归结果。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-1 当前状态和兼容边界。
+- 本记录。
+
+共享协作：依赖 main 已同步到本分支的 excel-reader opt-in API（提交 7f598fb、ae9a187）；本轮未修改 crates/**、根 Cargo 配置、Cargo.lock、Audit、AGENTS.md、规则或 DEVELOPMENT_GOAL.md。共享 reader 默认 read_workbook 仍失败关闭；只登记本合成 XLSX t=e 字面 #DATA! 的窄兼容，不推断其他 token、格式或对象支持。
+
+业务数据流：真实 pytools summary-used-range CLI → 扩展范围扫描 → read_workbook_with_unknown_error_tokens_as_text（仅检测到该类字面错误 token 时在临时 XLSX 包中规范化为文本）→ Calamine 值读取 → Rust 按使用区域汇总 → rust_xlsxwriter 新建 XLSX → 现有输出校验。实际读取引擎报告为 calamine + OOXML error-token normalization，写入引擎为 rust_xlsxwriter。输出中的 #DATA! 类型为普通字符串 s，与 PyCode 行为一致。没有加入业务侧 OOXML 值 fallback。
+
+对拍与验证：
+- Windows 11 PowerShell 中直接运行 Windows GNU debug pytools CLI，并调用只读 PyCode.core.summary_321_322.run_summary_by_usedrange：user/developer/off 三视图均生成 1 行，完整工作簿投影一致；开发者 12 条事件含 1 条兼容事件，stderr 事件与历史 JSON 一致，历史日志不含单元格值；源夹具未变化。
+- WSL glibc 2.28 release pytools CLI：三视图均与 PyCode 完整工作簿投影一致，均生成 1 行；objdump -T 最高 GLIBC 符号为 GLIBC_2.28。开发者 12 条事件与历史记录匹配；off 未输出应用进度事件；源夹具未变化。
+- cargo fmt --check -p pytools-core 通过。
+- cargo test --offline --locked -p pytools-core --test summary_used_range_error：4/4 通过。构建输出包含既有 deprecation 与 unused import 警告，无失败。
+- main 同步后重新构建 Windows GNU debug CLI 与 glibc 2.28 release CLI；分别在 Windows PowerShell 和 WSL Ubuntu 上运行 Python/Rust 三视图完整对拍，均通过。
+- API 接入后重新用 Windows GNU debug CLI 对原 PyTools 13 份 XLSX、96 张工作表和 203,580 行按 4 批回归，4/4 完整投影一致；各批归一化计数为 0、reader 为 Calamine、writer 为 rust_xlsxwriter，开发者事件数 26/14/27/63 均与历史 JSON 匹配，源文件未变。
+
+未执行与限制：未在 Windows 原生 Cargo 工具链构建；未在麒麟 V10/UOS V20 实机安装 deb，也未做离线交付验收。PT-6-1 整体仍未完成最终验收。
+
+数据与清理：原始 Python 项目只读。本轮输入包含仓库内合成夹具和原 PyTools 项目只读的 13 份 XLSX；源文件及合成夹具执行前后未变化。最终成功对拍的临时输出及日志由验证脚本在系统 TEMP 自动清理；13 份主样本回归使用的 TemporaryDirectory 也已自动清理；早期失败脚本留下的三个短命名临时树仍在 TEMP（其中两树共含 10 个合成输出/日志文件，另一树为空），未进入仓库或提交。工作树内失败脚本意外生成的临时日志目录已移除。没有提交临时数据或凭据。
+
+回滚：对本功能提交执行 git revert。
+【组件版本】：不升级，当前 0.1.0。
+
+本轮追加验证（2026-10-24 10:25 中国标准时间）：
+- 当前分支已同步公共提交 `12fa8fe`、`6884bb5`、`aa2797d`、`9c869de`。在最新 HEAD 上通过 `cargo fmt --check -p pytools-core` 与 `cargo test --offline --locked -p pytools-core --test summary_used_range_error`（4/4）；并从 WSL 使用锁定离线依赖重建 Windows GNU debug CLI。
+- 完整 real-sample 探针运行于 `aa2797d` 构建的 Windows GNU debug CLI：合成 PT-6-1 的 19 行投影与 PyCode 精确一致，7 个常见 Excel 错误值仍由输出契约保持，字面 `#DATA!` 输出为字符串；13 份原 PyTools XLSX、96 张工作表、203,580 行按 4 批均完整投影一致。四批的 reader/writer 分别为 Calamine/rust_xlsxwriter；开发者事件数 26/14/27/63 均与保存历史逐项相同；输入文件前后指纹一致。完整机器结果见两份 `summary_used_range_*_20261024.json`。
+- 随后同步的 `9c869de` 只修改共享 `excel-editor` 工作表布局能力。其后针对最新 HEAD 再通过上述格式检查、4 项 PT-6-1 测试和 Windows GNU CLI 构建；未重跑全量读取对拍。该 commit 不改变本次汇总的 reader/writer 调用链。
+- 探针支持通过 `PYTOOLS_RUST_CLI` 指定本机 Rust CLI；本轮完整对拍使用当前重建的 Windows GNU 可执行文件，并按实际宿主更新报告。对该配置分别执行 `summary-used-range` 与 `summary-comments` 小型 CLI/PyCode 投影冒烟对拍，均通过。
+- 报告复核发现当前生成器曾把“接入 API 前行为”回退为当次成功结果，并丢掉已记录的跨平台 `#DATA!` 结果。本轮从 PT-6-1 提交 `fcae2e0` 的机器报告恢复失败关闭基线和 Windows/glibc 2.28 三视图记录；探针现只保留显式存档的旧基线，不再以当前结果代替缺失的历史值。JSON 与 Python 语法复核通过，未重跑完整业务对拍（本次只修复历史字段保存）。
+- 本轮尝试重建最新 `x86_64-unknown-linux-gnu.2.28` release，但 WSL 缺少 Zig（`cargo zigbuild` 报 `Failed to find zig`），因此没有更新最新 commit 的 GLIBC 符号或 release 运行证据；之前已有的 glibc 2.28 对拍仍保留为其原报告范围。麒麟 V10/UOS V20 实机、deb 安装和离线交付仍未验证。
+- 本轮只修改 pytools-core 的探针、PT-6-1 报告、迁移清单和本记录；未修改共享 crate、Cargo 文件、Audit 或 `DEVELOPMENT_GOAL.md`。Windows 临时输入/输出由 TemporaryDirectory 清理，未纳入仓库。
+
+追加验证（2026-10-24 10:42 中国标准时间）：
+- 当前 worktree 为本仓库的 `pytools-dev` checkout，分支 `pytools-dev`；验证开始时 HEAD 与 `origin/pytools-dev` 均为 `98a702f6c7b883bf7626639572cb196c2bb67734`，工作区干净。`DEVELOPMENT_GOAL.md` 未修改。
+- 从 Zig 官方下载页提供的 Linux x86_64 稳定版 Zig 0.17.0 临时工具链，成功执行 `cargo zigbuild --offline --locked -p pytools-core --bin pytools --release --target x86_64-unknown-linux-gnu.2.28`。`objdump -T` 确认生成的 ELF 最高 GLIBC 动态符号为 `GLIBC_2.28`。
+- 当前 release CLI 的 `cargo test --offline --locked -p pytools-core --test summary_used_range_error` 为 4/4 通过；构建仍有既有 deprecation 与 unused import 警告。
+- 刚重建的 glibc 2.28 release CLI 对 getting_data_error.xlsx 执行 user/developer/off 三视图，与 PyCode 完整投影均一致，均生成 1 行；developer 事件流和 JSON 历史一致且不泄漏 #DATA!，off 无进度输出，输入夹具未改变。
+- 使用 WSL Linux release CLI 直接跑 `summary-used-range`，并与只读 PyCode 输出做完整投影对拍：合成用例通过，13 份原项目 XLSX、96 张工作表、203,580 行分 4 批全部匹配；最大批 188,365 行。值/类型、样式、sheet 名与维度、冻结窗格、表头加粗及公式/合并/名称/页面设置一致；1,212 个受支持错误值保留；输入前后指纹相同。批次实际 reader/writer 为 Calamine/rust_xlsxwriter；最大批 reader/writer/run 阶段耗时记录于机器报告。此数据仅作当前样本的阶段诊断，不作性能比较。
+- WSL Python 不能载入 Windows `python-calamine` `.pyd`，本次不重跑 NoComPyTools 变体；原报告已有 NoComPyTools/PyCode 差异证据并予以保留。完整对拍仍以约定的 PyCode 行为为基线。
+- 对拍运行期的 Python runner、Zig 压缩包与 CLI 输出均在系统/WSL 临时目录，不进入版本库；原 Python 项目只读，13 份源工作簿未改变。
+- 修复 `compare_summary_tools.py` 对配置 CLI 的执行环境标签，支持 WSL Linux 明确报告；补上报告生成时从既有 cross-platform 容器回读历史三视图以及保留两个失败关闭历史字段的逻辑。已将本次真实 Linux host、目标 triple 和最高 GLIBC 符号回写机器报告。
+- 修改限于 `pytools-core/probe/compare_summary_tools.py`、两份 PT-6-1 probe JSON、`pytools-core/MIGRATION_INVENTORY.md` 和本记录；未改共享 crate、根 Cargo/Cargo.lock、Audit、规则或 `DEVELOPMENT_GOAL.md`。
+- 尚未在麒麟 V10/UOS V20 实机安装 deb 或完成离线交付验收，PT-6-1 最终平台验收仍未完成。

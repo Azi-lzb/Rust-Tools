@@ -1,0 +1,120 @@
+{
+  "result_items": [
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-1",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-6",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-7",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-8",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-9",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-4-10",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-8-1",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-8-2",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-8-3",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-8-4",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-8-5",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-7-4",
+      "comparison_status": "未验证"
+    },
+    {
+      "blockers": [
+        "缺少经批准的脱敏真实样本及独立基线/Rust运行产物"
+      ],
+      "status": "未验证",
+      "feature_id": "PT-7-5",
+      "comparison_status": "未验证"
+    }
+  ],
+  "stage": "第二阶段第1步：真实样本产物对拍准备/比较",
+  "comparison_contract": "类型与有序数组明确；跨实现浮点相对容差1e-15；空值/日期由产物生成器按功能合同归一；文件SHA只用于输入完整性/文件操作字节保留，不用于跨引擎工作簿逐格判等",
+  "schema_version": 1,
+  "manifest_sha256": "2E1382CD014A2D7A8FCC47B4148B24862077F70EA2AAC1FCBBEA3E7F88167A06",
+  "limitations": [
+    "本工具比较已独立捕获的运行产物，不代替端到端运行适配器",
+    "不读取或执行capability；不改变默认路由",
+    "无真实样本/目标平台验收时功能状态始终未验证"
+  ],
+  "status": "未验证",
+  "batch_id": "PT-real-sample-convergence-20261023",
+  "generated_at": "2026-10-23T15:56:12.0177835+08:00"
+}

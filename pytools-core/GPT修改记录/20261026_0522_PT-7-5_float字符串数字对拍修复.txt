@@ -1,0 +1,32 @@
+时间：2026-10-26 05:22（本地时间）
+执行者：Codex
+修改前 commit：60433a039c730a316f67ece2d8856575f48ca4fc
+修改后 commit：随本次 PT-7-5 修复提交；提交完成后在对话报告 SHA
+WIP：修改前工作树已有 MIGRATION_INVENTORY.md 修改，以及 HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 失败记录、PT-6-2 缺样本记录未跟踪。本次未修改、暂存或丢弃这些文件。
+
+目的：修复 PT-7-5 数值文本解析与 Python float(string) 的差异。Python 3.12.10 接受数字间的下划线，也接受 Unicode 15.0 十进制数字；Rust 原实现直接解析 f64，以上有效文本未被识别。
+
+修改文件：
+- pytools-core/src/region_sum.rs：按 Python 3.12 Unicode 15.0 十进制数字映射规范化数字，并只移除两侧均为十进制数字的下划线；增加有效/非法 ASCII、阿拉伯数字、全角数字及业务核对回归。
+- pytools-core/probe/generate_region_sum_fixtures.py：增加 ASCII 与阿拉伯数字文本的合成工作表。
+- pytools-core/tests/fixtures/region_sum/cases.json：更新合成场景统计。
+- pytools-core/tests/fixtures/region_sum/numeric_text_underscores.xlsx：新增合成夹具。
+- pytools-core/probe/reports/region_sum_python_baseline.json：用原 Python 只读基线更新结果与夹具摘要。
+- pytools-core/probe/reports/region_sum_numeric_text_parity_20261026.json：记录本次合成对拍范围与验证结果。
+- pytools-core/GPT修改记录/20261026_0522_PT-7-5_float字符串数字对拍修复.txt：本记录。
+
+组件版本：pytools-core 0.1.0，不升级。
+
+测试与证据：
+- 原 Python 项目保持只读。Python 3.12.10 / OpenPyXL 3.1.5 基线运行成功；统计为 files=5、sheets=5、errors=3、failed_files=1。ASCII 与阿拉伯数字文本均得到“金额: 1000.25 ≠ 999.00 (差1.25)”，格式错误文本被视为非数值。
+- Windows 原生 Cargo 定向测试：`cargo test --offline --locked -p pytools-core --lib --test region_sum_parity --test batch_tools_menu_cli -j 1 region_sum --quiet`，地区汇总单测 4/4、菜单 CLI 测试 2/2、基线对拍 5/5 通过。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml` 通过。编译输出包含既有共享 excel-editor 弃用 API 和 PyTools 未使用导入警告。
+- 既有夹具只被生成器重写了 ZIP 元数据；确认生成前干净后，已仅恢复这些本轮重写的原夹具，并在恢复后重跑 Python 基线。新增夹具保留。
+
+未执行及已知限制：
+- 当前没有可用真实业务样本；PT-7-5 仍未完成真实样本验收。未测试手工 Windows 文件选择器、Linux glibc 2.28、麒麟 V10/UOS V20 或离线 deb。
+- Unicode 十进制映射固定对应 Python 3.12 的 Unicode 15.0 数据库；未来 Python 更新 Unicode 数据时需复核。
+- 本轮只运行了地区汇总定向测试，未运行完整 pytools-core 套件。
+
+删除清单：无。
+回滚提示：回滚本次提交中的上述实现、合成夹具及报告即可；保留提交前已有 WIP 文件。

@@ -1,0 +1,11 @@
+[probe]
+project = "pytools"
+source_project = "C:/Users/AZI/Desktop/VibeCode/4.pytools-main"
+fixtures = "tests/fixtures"
+rust_dump_schema_version = 3
+reader_dump_report = "probe/reports/reader_dump.json"
+reader_compare_report = "probe/reports/reader_compare.json"
+writer_compare_report = "probe/reports/writer_compare.json"
+editor_compare_report = "probe/reports/editor_compare.json"
+conversion_report = "probe/reports/conversion_compare.json"
+summary_dir = "probe/reports"

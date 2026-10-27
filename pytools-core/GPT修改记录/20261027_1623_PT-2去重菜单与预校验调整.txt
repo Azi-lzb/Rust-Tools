@@ -1,0 +1,19 @@
+修改前 WIP：工作树已有未提交的 `pytools-core/MIGRATION_INVENTORY.md` 与未跟踪的 20261027 PT-2-3 手工冒烟记录；本轮保留并继续使用现有记录，不覆盖旧内容。原 Python 项目保持只读。
+
+变更：
+- `pytools-core/src/bin/pytools.rs`：菜单 2-3 改为直接读取启用的去重配置来源与目标，不再提示手选来源；菜单操作错误打印详细原因并返回主菜单，不因普通业务失败直接退出进程。既有目标缺 capability 时，子任务报告 `planned_only`，开发者运行历史汇总为 `blocked` 并记录 `excel_modifier_capability_required`。
+- `pytools-core/src/dedup_ops.rs`：2-4 对重复来源工作簿缓存已读取的工作表名，避免同一工作簿被每条配置重复读取；校验结果及配置启用规则不变。
+- `pytools-core/tests/dedup_menu_cli.rs`、`pytools-core/src/dedup_ops.rs`：新增菜单失败保持运行、按配置源追加及多任务预校验回归。
+- `pytools-core/MIGRATION_INVENTORY.md`：追加本轮行为和测试状态。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 通过。
+- 在 `F:\PyToolsRustV2\test-temp` 临时目录下运行 `cargo test --offline --locked -p pytools-core --lib --test dedup_menu_cli --test dedup_append_execution -j 1`：72 个单测、9 个菜单 CLI 测试、7 个追加执行测试通过。
+- 测试验证 2-1/2-2 遇到不支持公式/批注时仍显示错误、返回主菜单且保留源文件；2-3 不要求手选来源，使用配置中的来源，并验证缺少生产 capability 时的受阻历史；2-4 多任务校验结果正确。
+
+未执行：
+- 未生成 Release 构建或人工验收包；没有真实用户工作簿或旧 Python 对拍。
+- 既有目标的 2-3 仍依赖已验收的生产 `ImportRange` ExcelModifier capability/platform；当前没有生产 Passed 证据，未绕过门控，并已向 main 请求协调。
+- Excel 手工验收、Linux/glibc 2.28、麒麟/UOS 和离线 deb 未执行。
+
+回滚：若需撤销本轮代码，恢复上述 Rust 源码与测试文件的本轮改动；不删除预先存在的 WIP、输出文件或任何用户数据。

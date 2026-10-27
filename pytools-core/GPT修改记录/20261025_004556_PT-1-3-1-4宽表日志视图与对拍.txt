@@ -1,0 +1,30 @@
+时间：2026-10-25 00:45:56（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：3ff9514。继承已有未提交的 `pytools-core/src/bin/pytools.rs` 与 `pytools-core/src/timeline_ops.rs` PT-1-3/1-4 WIP；未覆盖或清理其他修改。
+修改后业务 commit：a31a1a3（`feat(pytools): add wide summary progress logging`）。本记录随后单独提交。
+
+目的：将 PT-1-3/1-4 宽表汇总接入现有 `user`、`developer`、`off` 日志视图及历史 JSON；保留旧业务 API 和单行 JSON CLI 输出；通过真实交互菜单和 Python/Rust 对拍验证。
+
+修改文件：
+- `pytools-core/src/timeline_ops.rs`：增加 `run_wide_summary_with_progress`、`WideSummaryProgress`、`WideSummaryRunEvent`，记录源读取、规则汇总和汇总写入的阶段事件、计数、耗时与实际引擎；保留 `run_wide_summary` 调用接口。
+- `pytools-core/src/bin/pytools.rs`：将全局日志视图和目录接入时序菜单 1-3/1-4；支持普通用户文本进度、开发者 JSON 事件与运行历史、off 无进度/无历史。用户视图错误消息隐藏内部错误链；开发者事件标记实际 Rust 组件；CLI stdout 保持单行 JSON。
+- `pytools-core/tests/timeline_menu_cli.rs`：覆盖真实菜单路由、三种日志视图、失败阶段和错误类型、用户视图错误脱敏、进度计数/耗时以及日志不含输入路径或单元格内容。
+- `pytools-core/probe/compare_wide_summary.py`：报告日期使用实际运行日。
+- `pytools-core/probe/reports/wide_summary_parity_20261023.json`、`wide_summary_existing_target_parity_20261023.json`：重跑后更新现有机器报告。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录本轮入口、行为、验证和未验收边界。
+- 本记录。
+
+真实入口与数据流：`pytools menu --log-view <user|developer|off>` → 时序工具 1 → 宽表汇总 3/4 → `run_wide_summary_with_progress`。源 XLSX 由共享 Calamine reader 读取，Rust 执行宽表规则汇总，rust_xlsxwriter 新建汇总簿；目标追加计划阶段继续通过既有 Calamine 读取和 ExcelEditPlan 计划逻辑，不在本流程隐式修改目标文件。日志按输入及阶段记录索引、数量、耗时与实际引擎，不写源路径或单元格内容。用户视图失败时保留非零退出码并输出友好提示；开发者视图保留错误阶段/类型和诊断链。
+
+验证结果（Windows 原生）：
+- `cargo check --manifest-path Cargo.toml -p pytools-core --bin pytools`：通过。
+- `cargo test --manifest-path Cargo.toml -p pytools-core --test timeline_menu_cli --test dedup_append_execution`：9/9 通过（3 + 6）。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`git diff --check`：通过。
+- 使用原 PyTools Python 3.12.10 venv 与只读 PyCode 基线运行 `pytools-core/probe/compare_wide_summary.py`：两种行头模式的汇总输出和既有目标替换共 4/4 合成场景通过；两个汇总工作簿各 36 个单元格且样式精确，两个目标替换样式精确，源输入和配置未变化。日志/报告日期为 2026-10-25。
+- 开发者/普通用户/off 菜单端到端测试确认事件视图和运行历史一致，日志未包含合成源路径及单元格值；off 未创建历史记录。
+
+未执行项与已知限制：没有可用脱敏真实业务样本；没有手动实测 Windows 原生文件选择弹窗；公式保留、生产 ExcelModifier capability、完整真实模板保真、麒麟/UOS glibc 2.28 和独立离线 deb 未验收。故 PT-1-3/1-4 整体状态仍为**未验证**。全量 `pytools-core` 测试未执行；共享 `excel-editor` 的 umya 弃用警告和既有 `batch_ops.rs`、`quick.rs` unused-import 警告仍存在。
+
+删除清单：无。
+回滚：`git revert a31a1a3` 撤回业务代码、测试、对拍报告和迁移清单；本记录由独立提交管理。未修改共享 crates、根 Cargo 配置、Cargo.lock、Audit、长期 Goal 或原 Python 源目录。
+【组件版本】：pytools-core 0.1.0，不升级。

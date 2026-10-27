@@ -1,0 +1,16 @@
+V2 菜单 4-5（PT-4-4）工作表改名另存副本
+
+修改范围：
+- 批量执行现将改名工作簿发布到每个源文件旁的 `PyTools_Sheet改名结果` 文件夹，原工作簿保持不变；结果重名时加 `_1` 等序号，不覆盖既有文件。
+- V2 菜单不再将每个 plan JSON 写入 output。确认执行需要启动时同时提供匹配的 `--capabilities` 与 `--platform`；未提供时明确阻塞且不产生计划/结果文件。取消操作同样不生成计划。
+- 递归输入跳过本功能生成的结果文件夹。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过；仅有既有依赖弃用/未使用警告。
+- `cargo test --offline --locked -p pytools-core --test sheet_rename_execution --test conversion_menu_cli -j 1`：sheet_rename_execution 3/3、conversion_menu_cli 13 通过 / 2 个外部引擎测试忽略。
+- 样本为合成 XLSX，测试用临时 Passed capability；源文件 SHA-256 保持不变，读取输出副本确认工作表名及投影与只读 Python 基线一致。
+
+限制/阻塞：产品启动路径尚无生产 Passed 的 `RenameSheet` capability；已请求 main 核实能力登记和应用启动配置来源。未验证真实业务工作簿、Windows 桌面实操或 Linux/deb；未构建 Release 包。
+
+回滚：回滚本记录及 PT-4-5 菜单/副本发布改动；不触碰源工作簿和其他工作树内容。

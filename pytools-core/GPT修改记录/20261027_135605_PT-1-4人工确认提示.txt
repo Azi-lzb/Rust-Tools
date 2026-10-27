@@ -1,0 +1,25 @@
+时间：2026-10-27 13:56:05（本地）
+执行者：Codex
+修改前 commit：1b64d1e
+修改后 commit：待本地提交
+WIP 状态：修改前工作树干净；仅修改 PyTools 1-4 用户提示和对应集成测试。
+
+目的：落实新版 1-4“候选映射由人工确认后才应用”的交互语义，告诉用户报告中的原始路径/标准路径需要核对，并明确报告生成不会更改配置或源工作簿。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：普通用户视图完成比对后显示人工核对与后续录入“路径标准化映射”的提示；developer/off 输出不变。
+- pytools-core/tests/timeline_menu_cli.rs：断言普通视图显示提示，且配置簿和源簿字节未变化。
+
+组件版本：不升级（只补充操作提示，不改变业务数据或配置格式）。
+
+测试：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli header_path_compare_menu_supports_user_developer_and_off_views -j 1 --quiet`：1/1 通过。
+- `git diff --check`：通过。
+- 测试目标与临时目录位于 `F:\PyToolsRustV2\cargo-target` 和 `F:\PyToolsRustV2\cargo-temp`。
+
+未执行：真实业务映射样本验收、Linux/glibc 2.28 与 deb 验收。
+
+已知问题：映射仍由用户确认后手动录入配置；本功能不会自动写入配置或源工作簿。此前未提供真实样本，因此用户业务路径仍待 Windows 人工验收。
+
+回滚：撤销上述 `pytools.rs` 提示和集成断言，并删除本记录文件即可；无需迁移或恢复用户数据。

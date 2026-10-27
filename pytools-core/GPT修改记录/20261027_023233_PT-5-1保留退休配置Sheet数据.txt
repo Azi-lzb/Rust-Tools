@@ -1,0 +1,23 @@
+时间：2026-10-27 02:32 +08:00
+执行者：Codex
+修改前 commit：0970c2c
+修改后 commit：待本记录随功能提交
+修改前 WIP：无；仅本轮 PT-5-1 修改。
+
+目的：遵守新版配置修复“不丢弃现有业务明细”的明确要求。
+
+旧 Python 对照：只读核对 `PyCode/core/config_init.py:313-318`，旧版会删除“校验规则生成配置”“校验规则映射表”。新版 Rust 不再在修复计划中删除它们，避免退休 Sheet 中已有明细随自动修复被丢弃；其余结构修复行为不变。
+
+修改文件：
+- `pytools-core/src/config_admin.rs`：移除上述两张 Sheet 的 `DeleteSheet` 计划。
+- `pytools-core/tests/config_menu_cli.rs`：将带有历史明细的退休 Sheet 放入合成配置，断言菜单计划没有删除操作、源配置不变且不生成候选。
+- `pytools-core/tests/config_repair_execution.rs`：更新隔离执行回归，预期两张 Sheet 和单元格内容保留。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记 V2 安全约束优先于旧版删除行为及未执行范围。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml`；`cargo test --offline --locked -p pytools-core --test config_menu_cli -j 1`：6/6 通过。此测试实际经过 7→1 配置菜单并确认计划/源文件安全。
+
+未执行/限制：`config_repair_execution` 是 Unix + ignored 测试，需隔离 openpyxl runtime；本轮未执行候选引擎修改。真实业务配置、Excel 打开/保真、Python/Rust 完整结果对拍、Linux/glibc/deb 与麒麟/UOS 未验证。对旧 Python 删除退休 Sheet 的语义有明确且有意的 V2 安全差异。组件版本不升级。
+
+删除清单：无。
+回滚提示：回退本提交恢复旧版删除退休配置 Sheet 的修复计划及原执行测试断言；此前已在菜单计划模式验证源文件只读。

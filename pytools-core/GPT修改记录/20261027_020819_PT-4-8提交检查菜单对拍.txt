@@ -1,0 +1,20 @@
+时间：2026-10-27 02:08 +08:00
+执行者：Codex
+修改前 commit：af30c33
+修改后 commit：本记录与实现随本次提交
+修改前 WIP：工作树干净；源 Python 项目只读。
+
+目的：为新版 A07 提交检查补齐真实 Rust 菜单入口的 AND/OR 合成回归，不改匹配算法。
+
+修改文件：
+- `pytools-core/tests/submission_check_parity.rs`：新增 `4→6→2` 菜单测试，断言统计、全称/简称 OR 命中、非空字段组 AND、未识别文件集合及配置/源文件不变；为菜单夹具补全全局路径配置。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充菜单测试证据，保留“待 Windows 真实验收”边界。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --test submission_check_parity -j 1`（6/6）通过；产物位于 `F:\PyTools_Rust_本轮工作文件_20261026\target`。`cargo fmt --all -- --check` 报告两处 Audit 格式差异，本轮未修改 Audit。目录枚举顺序不固定，菜单测试按结果集合断言。
+
+未执行/已知问题：未重新运行 Python；仅用合成配置和文件名，无真实业务样本，未进行 Windows 真实验收、工作簿保真、Linux/glibc 2.28、麒麟/UOS 或离线 deb 验收。PT-4-8 状态不升级。
+
+删除清单：无。
+回滚提示：回退本次提交移除该菜单回归及清单/记录更新，不改变业务实现。
+【组件版本】pytools-core 0.1.0，不升级。

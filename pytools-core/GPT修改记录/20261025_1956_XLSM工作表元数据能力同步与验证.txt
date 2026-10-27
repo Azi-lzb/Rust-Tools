@@ -1,0 +1,17 @@
+时间：2026-10-25 19:56（Asia/Shanghai）
+执行者：Codex（pytools-dev 审计）
+修改前 commit：506bb939fcb74321822f356f48c77644babbeaea；worktree C:\Users\AZI\Desktop\VibeCode\pytools-dev，分支 pytools-dev；修改前与 origin/pytools-dev 同步。
+WIP：仅保留用户指定未跟踪的 HANDOFF_ZCODE_TO_CODEX.md；未修改它、原 Python 项目或真实业务数据。
+
+目的：核实 main 新提供的 XLSM 元数据兼容修复是否适用于当前共享 reader，并安全同步、执行最小回归。
+
+同步提交：main 3e53e7e7d5f18bb2c8d152f7033bcd078bc875fa；本地 cherry-pick a469e419fcee9e4da5354382b7101177d8bfca50。修复将 read_xlsx_sheet_names_ooxml 的扩展名门从仅 .xlsx 调整为 .xlsx/.xlsm，保留对 BIFF .xls 的拒绝。同步前核实 main 提交父版本的 crates/excel-reader/src/lib.rs 与当前分支文件完全一致；无冲突，仅同步 main 已提交的共享变更及其记录文件。
+
+验证：cargo test --offline --locked -p excel-reader -j 1 通过；13 个单元测试、2 个集成测试均通过，其中包括合成 OOXML XLSM sheet-name 测试和 .xls 拒绝测试。
+
+适用性与边界：read_xlsx_sheet_names_ooxml 当前没有 PyTools 生产调用点，因此该提交扩展了共享 API 的格式能力，不改变现有 PT-6-1 生产读取路由。合成 XLSM 测试只验证最小 OOXML workbook.xml sheet 元数据；未用真实宏簿直接调用该 API，未验证宏项目、签名、批注/条件格式/数据验证等部件保留。已有 VBA XLSM 汇总对拍输出为新建 XLSX，按输出合同不复制 VBA，不扩大为通用 XLSM 保真结论。
+原 Python 源树和真实数据只读；无产品版本升级。
+删除清单：无。
+回滚提示：该共享代码提交来自 main，回滚需先与 main 协调；本次清单/记录可独立 revert。
+【组件版本】：不升级。
+修改后 commit：本记录创建时待提交，最终 SHA 见提交历史。

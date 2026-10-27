@@ -1,0 +1,29 @@
+PT-4-4 Office 转换失败反馈与菜单恢复
+
+时间：2026-10-27 16:52（Asia/Shanghai）
+执行者：Codex
+修改前 HEAD：c8bc01b5f55a08797b2ab6ffd6f14080a6fa9800
+WIP：保留已有 MIGRATION_INVENTORY.md 的未提交 22 行记录和未跟踪 PT-2-3 冒烟记录；未纳入本次修改。
+
+修改目的：转换失败时显示逐文件完整错误并返回文件处理菜单，避免交互程序退出后无法查看失败原因。直接 CLI 仍以失败退出。
+修改文件：
+- pytools-core/src/bin/pytools.rs：交互式 Excel/Word 转换捕获失败并继续显示菜单；打印失败输入路径和错误详情。
+- pytools-core/src/conversion.rs：失败详情保留 anyhow 完整错误链。
+- pytools-core/tests/conversion_menu_cli.rs：覆盖缺少外部 sidecar 时进程正常返回菜单、源文件保持不变并显示失败原因。
+- 本记录。
+
+验证：
+- `cargo build -p lo-convert --bin lo-convert`：通过 Debug 构建，输出在 F:\RustBuild\pytools\debug；未构建 Release 或人工验收包。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：13 通过，2 个需要已验证真实 ET/WPS COM 的测试忽略。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check` 与 `git diff --check`：通过。
+- 用 F:\PyToolsRustV2\test-temp\office-convert-repro-20261027 下副本运行当前 Debug sidecar：WPS KET 的 XLS→XLSX 和 DOC→DOCX 转换成功。
+- 用 F:\PyToolsRustV2\test-temp\office-et-repro-20261027 下副本运行当前 Debug sidecar：`ket-default-save.et` 被 KET 识别为 FileFormat 51（XLSX），`input.et` 被识别为 FileFormat 56（Excel 97）；因并非原生 ET 而拒绝。未更改该安全校验。合法 ET 真实样本仍未验证。
+
+未执行：未读取或修改原 Python 项目数据；未构建 Release/交付包；未做 Linux/deb 验证。当前主机复现的 XLS/DOC 成功不能替代用户失败文件的真实复现。
+
+已知问题：用户报告的失败文件和具体错误尚未取得；新版交互菜单现会保留逐文件错误，待统一构建后可据此确定用户文件失败原因。合法 ET 与格式转换完整保真仍待真实样本。
+
+组件版本：不升级（本次只修正失败提示和交互错误恢复，没有改变转换能力或配置合同）。
+删除清单：无。
+回滚：回滚本记录及上述转换错误处理代码和测试；不删除 F 盘复现目录，不触碰既有工作树 WIP。
+- 另使用 F:\RustBuild\pytools\debug\pytools.exe 的真实 V2 菜单 4→4，分别对隔离 `.xls` 与 `.doc` 样本执行转换；两次均由 WPS COM 报告 converted=1/failed=0，生成 `.xlsx`/`.docx` 后正常回到主菜单并退出。

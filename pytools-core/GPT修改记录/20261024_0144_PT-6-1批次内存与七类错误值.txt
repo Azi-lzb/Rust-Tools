@@ -1,0 +1,33 @@
+时间：2026-10-24 01:44（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：3823bdf；修改后 commit：本轮 PT-6-1 提交，编号见 Git 历史。
+WIP 状态：本轮开始时分支 pytools-dev 与 origin/pytools-dev 同步；继承的未提交改动仅有合成错误值 fixture 和对应 CLI 集成测试。本轮继续保护并完成该 WIP。未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo 配置及 Cargo.lock。
+
+目的：推进 PT-6-1 实际批次处理，避免同时持有所有源工作簿的完整 Calamine dump；将七种常见 Excel 错误值加入 PyCode/Rust 真实 CLI 合成对拍。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：范围预扫描仅读 worksheet extent 元数据并保存边界；写出阶段逐文件调用 Calamine 读取，每次只保留一个输入 WorkbookDump；校验范围扫描与值读取的工作表名称集合一致。read_elapsed 合计 extent 读取及 Calamine 读取；write_elapsed 从写入阶段扣除其中的 Calamine 读取时间；无输出时不报告未实际执行的读取/写入引擎。
+- pytools-core/probe/compare_summary_tools.py：合成输入增加 #DIV/0!、#N/A、#NAME?、#NULL!、#NUM!、#REF!、#VALUE!，并断言 Rust CLI 补丁数为 7。
+- pytools-core/tests/fixtures/summary_used_range/error_value.xlsx：将合成错误 fixture 扩为七种 Excel error 单元格。
+- pytools-core/tests/summary_used_range_error.rs：断言 CLI 输出的七种错误单元格类型和值。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：更新实际 Rust CLI 和 Python 对拍结果。
+- pytools-core/MIGRATION_INVENTORY.md：记录范围预扫描、逐工作簿读取和七类错误值证据；未声称 RSS 性能提升。
+- 本修改记录。
+
+测试与对拍：
+- Windows 原生 cargo 不可用（cargo 命令未找到）；按现有环境使用 WSL Cargo 1.99.1。
+- `wsl ... cargo test -p pytools-core --test summary_used_range_error --offline --locked -q`：通过，2/2（七类错误值保留及无输入可读工作簿时的引擎报告）。
+- `wsl ... cargo fmt -p pytools-core -- --check`：通过；修复局部 import 后已重新确认。
+- `python pytools-core/probe/compare_summary_tools.py`：通过；实际 Rust summary-used-range CLI 与只读 PyCode 基线在合成 XLSX 上对拍通过，覆盖 2 个工作簿、13 行、七种错误单元格及原有值/样式/公式缓存/合并/页面属性。
+- PyCode/Rust 的值和类型、已填充单元格样式、工作表维度、冻结窗格、表头加粗及公式/合并/定义名称/打印区/页面设置一致。NoComPyTools 对七种错误值均输出空值，且日期格式仍与 PyCode 不同；差异仅限合成输入。具体报告见 probe/reports/summary_used_range_parity_20261024.json。
+- `git diff --check`：通过（执行最终复核）。
+
+未执行项及限制：
+- 无授权真实 6-1 工作簿；本轮只有合成 XLSX。XLSM、XLS、XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28 和 deb 未验证。
+- 本轮只做结构性内存持有范围调整，没有 RSS 测量，不报告性能提升。
+- 完整 pytools-core 库测试有既知缺失 fixture `tests/fixtures/季度报表_县区报表_2024-12-31.xlsx`；本轮执行 PT-6-1 专项集成测试和真实 CLI 对拍，不生成伪造替代文件。
+- 双视图运行日志仍未实现；CLI execution JSON 记录实际引擎和阶段耗时。
+
+回滚：提交后使用 `git revert <本轮提交>` 回滚本轮 PT-6-1 代码、合成验证材料和记录，不影响前序已推送提交。
+删除文件：无。
+【组件版本】：不升级，当前 0.1.0。

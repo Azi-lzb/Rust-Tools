@@ -1,0 +1,29 @@
+时间：2026-10-24 03:11（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：8bf550d（与 origin/pytools-dev 同步）；工作树干净。已 fetch origin/main，main 仍为当前分支祖先；本轮不改 DEVELOPMENT_GOAL.md、AGENTS、Rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。原 Python 项目工作簿只读，所有对拍输出在系统临时目录。
+
+目的：继续 PT-6-1 按使用区域汇总的真实业务验证，将原 PyTools `xlsx/` 目录中其余 9 份 XLSX 加入实际 PyCode/Rust CLI 对拍，确认不同结构和大批次下的语义一致性。
+
+修改文件：
+- `pytools-core/probe/compare_summary_tools.py`：将 13 份原项目 XLSX 分成 4 批，复用 PyCode 的 `_used_bounds` 与实际 Rust `summary-used-range` CLI 对拍；报告只保存相对路径、范围统计、对象元数据、耗时与对拍结论，不保存源单元格值或输出簿。
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261024.json`：记录扩展后的真实对拍结果。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：重跑合成 PT-6-1/PT-6-2 probe 后的机器报告。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-6-1 真实对拍范围与边界状态。
+- 本修改记录。
+
+实际入口与结果：Windows 原生 Python 执行 PyCode `run_summary_by_usedrange`，WSL Linux 执行 Rust `summary-used-range` CLI；Rust 使用 Calamine、Rust 业务汇总、rust_xlsxwriter 及既有 OOXML 错误值补丁。13 份 XLSX、96 个工作表、203,580 行分 4 批；各批行数为 1,956、7,462、5,797、188,365。值/类型、已填充样式、工作表名/维度、冻结窗格、表头、公式、合并、定义名称和页面属性全部一致；源文件 SHA-256 前后相同。先前修复的宽报表合并子格 B1 行为保持一致；缺失 `<dimension>` 的 15 表样本、1,212 个受支持错误值也通过对拍。
+
+耗时仅作本次工作簿和环境诊断，不做性能比较或默认路由调整：最大批次 Rust read 219,151 ms、write 59,415 ms、内部 total 279,292 ms；4 批 Rust CLI 墙钟累计 347,861 ms（包括 WSL/Cargo 启动），Windows PyCode 批次累计 163,078 ms。运行期间一次 Rust 进程 RSS 采样约 0.96 GiB、Windows Python 工作集采样约 2.24 GiB；均非连续峰值测量，正式 peak RSS 未测。报告记录各批的实际引擎及阶段耗时。
+
+验证：
+- `python pytools-core/probe/compare_summary_tools.py`：通过合成端到端对拍、13 份真实业务工作簿对拍和报告写出。
+- 本轮没有修改 Rust 业务代码；同一 Rust 代码在本轮前已通过 `cargo fmt -p pytools-core -- --check`、`cargo test --offline --locked -p pytools-core --lib merged_cell_tests`（1/1）和 `cargo test --offline --locked -p pytools-core summary_used_range`（3/3）。
+- 机器报告 JSON 解析及 `git diff --check`：提交前复核。
+
+对拍差异：这 13 份 XLSX 未发现 PyCode/Rust 输出差异。NoComPyTools 的既有合成差异仍在合成报告中单独记录。
+
+未执行项及限制：Windows 无原生 Cargo，Rust CLI 经 WSL；`.xls`、`.xlsm`（尤其含 VBA）、`.xlsb`、目标 Kylin/UOS、glibc 2.28、deb 和正式 peak RSS 未验证。Calamine 对未知 `#DATA!` 仍失败关闭，未加普通值 OOXML 回退。此批次结果不登记生产 capability，也不改变后端默认。PT-6-1 整体仍未验收。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`；源工作簿未复制或修改。
+【组件版本】：不升级，当前 0.1.0。

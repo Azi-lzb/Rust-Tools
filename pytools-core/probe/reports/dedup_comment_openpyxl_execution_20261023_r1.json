@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.dedup_comment_openpyxl_cli_execution",
+  "date": "2026-10-23",
+  "status": "passed_synthetic_execution_not_production_accepted",
+  "feature_id": "PT-2-1",
+  "input": {
+    "kind": "generated_synthetic_xlsx",
+    "real_business_template": false,
+    "real_configuration": false,
+    "fixture_assertions": {
+      "duplicate_rows": 2,
+      "expected_marked_cells": ["A3", "B3", "C3", "A6", "B6", "C6"],
+      "blank_keys_ignored": true,
+      "source_and_key_comments_present": true,
+      "unmodified_bold_cells_present": true
+    }
+  },
+  "execution": {
+    "cli": "pytools dedup-comment-plan --action check",
+    "plan_only_without_capability": {
+      "status": "passed",
+      "execution": "plan_only",
+      "source_bytes_unchanged": true
+    },
+    "capability_gated_run": {
+      "status": "passed",
+      "engine": "openpyxl_worker",
+      "operation_count": 6,
+      "capability_evidence": "temporary test-only Passed record derived from this synthetic plan; removed with the test directory",
+      "production_capability_created": false,
+      "default_route_changed": false
+    },
+    "assertions": {
+      "all_expected_cells_have_red_fill": true,
+      "source_comments_and_positions_equal": true,
+      "non_target_styles_checked_by_rust_readback": true,
+      "source_bytes_unchanged_after_execution": true,
+      "output_created_at_candidate_path": true
+    }
+  },
+  "test_command": "RUST_WORKSPACE_OPENPYXL_PYTHON=<isolated-test-python> cargo test -p pytools-core --offline --test dedup_comment_openpyxl -- --ignored --nocapture",
+  "test_result": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "elapsed_seconds": 6.17
+  },
+  "python_semantic_baseline": {
+    "report": "probe/reports/dedup_parity_20261023.json",
+    "scenario": "2-1_comment_duplicate_check",
+    "status": "passed_plan_parity",
+    "python_duplicate_rows": 3,
+    "rust_plan_fill_cells": 8,
+    "comparison": "Rust fill-cell coordinates equal red-fill cells from the Python baseline workbook",
+    "same_input_as_cli_execution_fixture": false
+  },
+  "environment": {
+    "host": "Ubuntu on WSL2, x86_64",
+    "python_runtime": "isolated test runtime; not a packaged product runtime",
+    "target_linux_deb_validated": false,
+    "glibc_2_28_validated": false,
+    "kylin_v10_validated": false,
+    "uos_v20_validated": false
+  },
+  "limitations": [
+    "Synthetic workbook only; the real pytools template and configuration are unavailable.",
+    "This validates one capability-gated PT-2-1 operation batch, not all dedup operations or preservation requirements.",
+    "The temporary test capability is not evidence for production routing.",
+    "No target-platform binary or offline deb was tested."
+  ],
+  "overall_production_acceptance": "unverified"
+}

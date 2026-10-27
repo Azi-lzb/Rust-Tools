@@ -1,0 +1,32 @@
+时间：2026-10-25 08:30（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：7eb7df8；分支 pytools-dev 与 origin/pytools-dev 同步，工作区干净，无既有 WIP。
+本轮业务提交：962bf7c（fix(pytools): match Python scientific float headers）。
+
+目的：修复 PT-6-2 `summary-comments` 数值模板表头在 Python 科学计数法阈值及指数文本上的 Rust/Python 差异。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：为非整数型数值补 Python 风格浮点格式，覆盖科学计数法阈值和指数符号/补零。
+- pytools-core/tests/summary_comments_cli.rs：在真实 CLI 回归中增加 `1e-5`、`1e20`、`1e-4` 三个数值表头断言。
+- pytools-core/probe/compare_summary_comments_template_header.py：扩展只读 PyCode 与 Rust CLI 合成模板完整输出对拍。
+- pytools-core/probe/reports/summary_comments_template_header_parity_20261025.json：记录扩展后的对拍结果。
+- pytools-core/MIGRATION_INVENTORY.md：补入该数值表头边界证据和适用范围。
+- 本记录。
+
+真实入口与行为：`pytools menu` → 6 → 2 → `pytools summary-comments`。Rust 保留常规数值转换，并在浮点需要科学计数法时输出与 Python 一致的阈值、指数符号和至少两位指数数字；不改变 PT-6-2 区域提取、模板匹配和输出路由。输入/输出引擎为 Calamine/rust_xlsxwriter。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo build --offline --locked -q -p pytools-core --bin pytools`：通过。
+- `cargo test --offline --locked -p pytools-core --lib comment_region_tests`：3/3 通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli --test summary_menu_cli -j 1`：5/5 与 4/4 通过。
+- `py -3.12 -m py_compile pytools-core/probe/compare_summary_comments_template_header.py`：通过。
+- `py -3.12 pytools-core/probe/compare_summary_comments_template_header.py`：只读 PyCode 与 Windows 原生 Rust CLI 完整工作簿投影一致；3 行、1 个输出表、4×11，`different_fields` 为空；输入未变，输出仅在临时目录。
+
+限制与未执行项：证据使用合成 XLSX，不替代真实有效批注区域模板验收；未验证 Linux、麒麟 V10/UOS V20、glibc 2.28、离线 deb 或 workspace 全量测试。持续时间表头仍受共享 `excel-reader` 日期/持续时间类型信息缺口影响，已在库存标记为未验证，本轮不绕过共享 reader。PT-6-2 整体仍未通过生产验收。
+
+敏感内容检查：仅使用合成表头值；提交未包含真实业务数据、凭据或源项目文件。机器报告不含单元格原始值或输入文件名。未修改 DEVELOPMENT_GOAL.md、共享 crates、根 Cargo 文件、Audit 或原 Python 项目。
+
+删除清单：无。
+回滚提示：回滚业务提交 `962bf7c` 和本记录提交即可撤销本轮格式化实现及证据；其他迁移不受影响。
+【组件版本】：pytools-core 0.1.0，不升级。

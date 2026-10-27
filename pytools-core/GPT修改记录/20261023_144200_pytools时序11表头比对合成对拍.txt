@@ -1,0 +1,21 @@
+时间：2026-10-23 14:42（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：workspace `git ls-files` 为 0，既有内容整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：为时序菜单 1-1 建立合成 Python/Rust 端到端对拍，并修复输出类型差异。
+
+变更文件：
+- `pytools-core/src/timeline_ops.rs`：把“汇总”表中的位置/路径差异数量写为数值单元格。
+- `pytools-core/probe/compare_timeline_compare.py`：建立可复跑的合成 XLSX 端到端对拍脚本。
+- `pytools-core/probe/reports/timeline_compare_parity_20261023.json`：记录结果和边界。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记 1-1 专项证据与未验收范围。
+- 本记录。
+
+结果：对比了无差异源、位置和路径均有差异的源、关键字未命中的源、以及模板被选作源时的跳过行为。两张输出表的工作表名、单元格值与类型和行顺序一致。首轮对拍发现计数列从旧版 Excel 数值变成了 Rust 文本；已修正并复跑通过。`cargo fmt --all` 与该脚本触发的 `cargo run` 通过。
+
+限制：合成 XLSX only；没有真实业务配置/工作簿。未验证格式保留、其他输入格式、目标 Linux 与 deb。此结果不代表 1-1 真实业务验收，也不代表时序工具整体完成。
+
+回滚：代码只改 `timeline_ops.rs` 一处；其余为 probe、报告和清单/记录。workspace 无首次 Git 基线，不能用 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

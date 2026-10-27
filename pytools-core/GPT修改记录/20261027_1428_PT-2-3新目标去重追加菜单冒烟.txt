@@ -1,0 +1,22 @@
+时间：2026-10-27 14:27（Asia/Shanghai）
+执行者：Codex
+修改前 commit：1ee903a
+修改后 commit：未提交
+WIP：修改前工作树干净；仅写入本条现有迁移状态记录，不改业务代码、配置或样本。
+
+目的：保留 PT-2-3 去重追加新目标的 Windows 正式菜单冒烟结果，并清楚区分已有历史目标的共享编辑能力阻塞。
+
+修改文件：
+- `pytools-core/MIGRATION_INVENTORY.md`：追加一条简短的 PT-2-3 合成样本结果。
+- `pytools-core/GPT修改记录/20261027_1428_PT-2-3新目标去重追加菜单冒烟.txt`：本次变更记录。
+
+逻辑/配置/VBA：无业务逻辑或配置变化；无 VBA 变化。
+
+实际验证：Windows `pytools.exe menu → 2 → 3` 读取 F 盘样例并创建新目标；新增 2 行、跳过 1 条重复记录。使用 Rust `config-view` 读取结果，确认唯一记录为机构甲/A001/100、机构乙/B002/200；源文件未改变。构建已在本轮此前通过：`cargo build --offline --locked -p pytools-core --bin pytools -j 1`。
+
+未执行项和已知问题：未运行旧 Python 对拍或样式比较；无真实业务样本；已有目标追加仍因缺少生产 Passed `ImportRange` capability 而只生成计划，已向 main 请求核实；Linux/glibc/deb、麒麟/UOS 未验证。
+
+【组件版本】不升级（仅迁移状态留痕，业务代码未改）。
+
+删除清单：无。
+回滚提示：删除本记录，并撤销 `MIGRATION_INVENTORY.md` 末尾新增的 PT-2-3 段落即可；不影响业务代码或生成的 F 盘样例。

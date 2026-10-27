@@ -1,0 +1,25 @@
+时间：2026-10-25 19:03（Asia/Shanghai）
+执行者：Codex（pytools-dev 审计）
+修改前 commit：857fcadfdbbfbaf9cbead1345aadeda4dbdc30bf；worktree C:\Users\AZI\Desktop\VibeCode\pytools-dev，分支 pytools-dev；该提交尚未推送。
+WIP：仅 HANDOFF_ZCODE_TO_CODEX.md 按用户要求保持未跟踪。PT-6-1 审计修复与 sidecar 同步提交均已提交；未修改源 Python 项目或真实业务文件。
+
+目的：按用户已授权流程安全同步 main 的 lo-convert profile 修复并复验 PT-4-2/PT-4-3 真实格式输入端到端转换。
+
+同步的 main 提交：
+- 62bcac6 fix(lo-convert): encode isolated LibreOffice profile URI
+- 857fcad fix(lo-convert): isolate LibreOffice Word validation profile
+两提交分别将转换/重算和 Word 输出文本校验启动统一使用“预创建 isolated profile 目录 + file URI”参数。检查 sidecar 中全部三个 soffice 启动位置均调用共同 helper；没有自行编辑共享 crate/sidecar 源码。main 同步前后通过 Git commit 核实，非仅凭消息假设代码已同步。
+
+验证：
+- Windows：cargo test --offline --locked -p lo-convert -j 1；4/4 单测通过。唯一集成测试在本机未安装 soffice 时按测试设计提前返回，故不计为 Windows LO 端到端。
+- WSL Ubuntu，LibreOffice 24.2.7.2：cargo build --offline --locked --target-dir target/pt4-linux-audit -p lo-convert 与 cargo build --offline --locked --target-dir target/pt4-linux-audit -p pytools-core --bin pytools 通过。
+- WSL：cargo test --offline --locked --target-dir target/pt4-linux-audit -p lo-convert -j 1 通过：4/4 单测；LibreOffice 重算集成 1/1 实际执行并通过。
+- PT-4-2：真实产品入口 pytools convert-excel --engine lo 对 CDF source.xls 转成 source.xlsx，结果 converted=1/failed=0、actual_engine=LibreOffice。sidecar 比较源/输出工作表顺序/名称、数据格坐标和值、公式文本，numeric tolerance=1e-15；运行历史 succeeded。样本基线为此前 LO 从合成 source.xlsx 生成的 .xls，不是业务数据；源文件 SHA-256 前后相同。
+- PT-4-3：修复前 extract_word_text_lo 仍用裸 UserInstallation，第一次产品命令失败；向 main 报告后同步 857fcad，重建 sidecar，用同一真实入口与 notes.doc 再运行成功，输出 notes.docx，converted=1/failed=0，运行历史 succeeded 且 actual_engine=LibreOffice。sidecar 检查 DOCX 包及源/输出规范化文本；另用 Python 标准库 XML/ZIP 只作测试读取，与既有正确 DOCX 参考文本精确一致（26 字符）。源文件 SHA-256 前后相同。
+- 相关输出与日志位于 WSL /root/lo-probe/codex-f7a384a-*，没有复制进 Git；所用 CDF 内容为合成内容，不含真实业务数据。
+
+影响及边界：修复关闭的是 LO profile 参数导致的 sidecar 失败；这两例只证明真实 CDF 容器与当前 WSL LO 环境下端到端可用。XLS 转换校验不检查样式/全部 OOXML 部件；没有业务来源的真实 .xls/.doc 样本，没有麒麟/UOS、deb 安装或离线交付验收，PT-4-2/PT-4-3 仍保持未验收。无生产默认路由变更。
+删除清单：无。
+回滚提示：本地 Git 记录提交 62bcac6/857fcad 来自 main，若需回滚须先与 main 协调；本次记录和清单可由本提交单独 revert。
+【组件版本】：不升级。
+修改后 commit：本记录创建时待提交，最终 SHA 见提交历史。

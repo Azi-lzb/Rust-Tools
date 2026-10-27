@@ -1,0 +1,22 @@
+时间：2026-10-27 00:12:24 +08:00
+执行者：Codex
+修改前 commit：98bd577（PT-2-3 已提交并推送）
+修改前 WIP：工作树干净；当前分支 codex/pytools-menu-entry 与 origin/codex/pytools-menu-entry 同步。当前 PT-2-4 修改尚待提交。
+
+目的：将 V2 菜单 `2 → 2` 从仅生成计划推进为按配置复合键生成去重结果 XLSX；同时将 PT-2-3/PT-2-4 新文件生成统一改为临时候选、读回验证后安全发布。
+
+修改/新增文件：
+- 修改 pytools-core/src/dedup_ops.rs：新增配置删除结果写入入口；按计划中的顺序 DeleteRows 操作将原始行映射到新行号；共享纯数据写入与验证；拒绝公式、ISO 日期/时长、错误值、批注、合并、条件格式、数据验证、定义名称和未知 OOXML 部件；使用同目录临时候选，验证后经 file_commit 安全新建发布。
+- 修改 pytools-core/src/bin/pytools.rs：V2 删除菜单实际调用 Rust 删除结果工作簿；复用双视图日志并记录真实 rust_xlsxwriter 阶段；`committed_targets` 仅统计 execution=committed。
+- 修改 pytools-core/tests/dedup_menu_cli.rs：验证删除行及后续行上移、值/类型和 Sheet 保留、输入不变、临时候选清理；回归 PT-2-3/2-5 菜单与日志。
+- 修改 pytools-core/MIGRATION_INVENTORY.md：记录 PT-2-4 生命周期及未验收范围。
+
+逻辑/配置/VBA 影响：复用旧配置与 Rust 复合键计划；保留首次出现的记录、删除后续重复记录；不改配置字段、Python 源项目、共享 crate 或 Cargo 清单。新结果仅适用于纯数据 XLSX；输入文件不覆盖。纯数据输出不承诺源样式和非数据对象保真；发现未支持对象时停止。
+
+测试：Windows 原生 `cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1`、`cargo test --offline --locked -q -p pytools-core --test dedup_menu_cli -j 1` 均通过；集成测试 7/7。测试/临时目录在 F:\PyTools_Rust_本轮工作文件_20261026；`git diff --check` 通过。
+
+未执行项/已知问题：无可用真实业务样本，未运行本次 V2 新输出模式的 Python/Rust 端到端对拍；未人工使用 Excel 打开验收；未运行 Linux、glibc 2.28、麒麟/UOS 或 deb。合成测试不能视为 Windows 真实业务验收通过；PT-2-4 生命周期为“已实现，待 Windows 真实验收”。
+
+删除清单：无。
+回滚：单独回退 PT-2-4 提交可恢复该菜单到计划模式，并同时恢复此前 PT-2-3 的直接输出行为；不改 PT-2-5/2-6。
+【组件版本】pytools-core 0.1.0，不升级。

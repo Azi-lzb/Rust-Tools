@@ -1,0 +1,22 @@
+时间：2026-10-27 00:37 +08:00
+执行者：Codex
+修改前 commit：943f866
+修改后 commit：本记录随 PT-4-8 CLI 回归测试提交
+修改前 WIP：工作树干净；仅本轮测试与记录修改未提交。原 Python 项目只读。
+
+目的：在保留原有 Python/Rust 报表基线夹具及其源路径投影的前提下，覆盖提交检查 CLI 的递归目录输入。
+
+修改/新增文件：
+- `pytools-core/tests/submission_check_parity.rs`：保留原显式文件列表 Python 基线对拍；另将相同文件内容放入不同层级的合成目录，调用真实 `submission-check` CLI，并断言文件、提交、缺失、未匹配及多命中统计与显式输入一致，且报告已生成。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录该递归目录 CLI 冒烟范围。
+- `pytools-core/GPT修改记录/20261027_003700_PT-4-8递归目录CLI冒烟.txt`：本记录。
+
+逻辑/配置/VBA 影响：无业务算法、配置、输出格式或 VBA 变化；测试只新增临时目录输入方式。
+
+测试：Windows 原生 `cargo fmt -p pytools-core -- --check` 和 `cargo test --offline --locked -q -p pytools-core --test submission_check_parity -j 1`（4/4）通过。第一次把原对拍输入直接移入嵌套目录时，既有报告路径投影断言按设计发现路径差异；已保留原基线文件布局，并对独立嵌套副本只比较业务统计，最终回归通过。
+
+未执行项/已知问题：未新增 Python/Rust 嵌套目录输出路径逐格对拍；目录样例为合成文件，真实业务目录、权限拒绝和瞬时 I/O 故障仍未验收；Windows 人工操作及 Linux/glibc 2.28/麒麟/UOS/deb 未验证。
+
+删除清单：无。
+回滚提示：回退本提交会移除递归目录 CLI 回归断言，不影响 PT-4-8 业务实现或前一提交的错误传播修复。
+【组件版本】pytools-core 0.1.0，不升级。

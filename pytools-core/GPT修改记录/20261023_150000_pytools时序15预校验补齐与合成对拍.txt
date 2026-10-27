@@ -1,0 +1,21 @@
+时间：2026-10-23 15:00（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：workspace `git ls-files` 为 0，既有内容整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：补齐 pytools 时序菜单 1-5 的配置预校验语义，并用合成配置对拍旧实现。
+
+变更文件：
+- `pytools-core/src/timeline_ops.rs`：增加全局配置最小列数、所有存在配置表的必需列检查；细化启用规则、区间字段、目标写入和 set 区域验证；校验路径映射字段与其启用规则引用；输入目录按旧实现检查存在性。
+- `pytools-core/probe/compare_timeline_precheck.py`：新增三类合成配置对拍。
+- `pytools-core/probe/reports/timeline_precheck_parity_20261023.json`：机器报告。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记本项结果及边界。
+- 本记录。
+
+验证：`cargo fmt --all` 与 `cargo check -p pytools-core --message-format short` 通过；对拍三组错误/警告数分别为有效配置 0/0、规则映射错误 11/3、缺必需列 1/0，Rust 与旧 Python 一致。
+
+限制：合成配置 only；只比较错误/警告总数，不比较每条本地化文案；真实配置、非 XLSX、Windows 原生、麒麟/UOS、glibc 2.28 与 deb 未验证。
+
+回滚：恢复 `timeline_ops.rs` 并移除本轮新增 probe、机器报告及清单记录。workspace 无首次 Git 基线，不能用 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

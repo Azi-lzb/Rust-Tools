@@ -1,0 +1,27 @@
+时间：2026-10-25 07:57（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：0500b20；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。本轮证据提交：b5de3ed（test(pytools): record native dialog PT-6-1 parity）。本记录单独提交。
+
+目的：补记 PT-6-1 的 Windows 原生多选文件对话框实测与 PyCode/Rust 完整输出对拍。此前同一机器报告中的手工分号路径运行继续保留，并与本次原生对话框运行分开记录。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_menu_parity_20261025.json：保留原手工路径证据，添加 HEAD 0500b20 的原生 Win32 GetOpenFileNameW 多选运行记录、完整投影结果、实际引擎、运行历史计数及安全信息；不记录输入文件名或单元格值。
+- pytools-core/MIGRATION_INVENTORY.md：标明两种真实入口路径已实测，并记录本次 1,167 行对拍及机器报告位置。
+- 本记录。
+
+实际入口与结果：使用 Windows 原生 MSVC `target/debug/pytools.exe` 进入 `pytools menu → 6 → 1`，从 Win32 原生打开对话框多选 2 份原 PyTools 只读 XLSX。真实 Rust CLI 成功完成汇总并生成 1 个临时输出。Rust 与只读 PyCode 基线比较完整工作簿投影精确一致，1,167 行汇总（输出维度含标题行为 1,168×260）；比较字段覆盖工作表与维度、值和类型、非空单元格样式、冻结窗格、表头、合并、公式、定义名称和页面属性。16 条开发者事件与保存历史匹配；实际引擎为 Calamine、excel-reader::read_xlsx_worksheet_extents 与 rust_xlsxwriter，历史总耗时 1,094 ms。源文件未改变，输出仅写入临时目录。
+
+验证：
+- 原生 Windows 产品 CLI 经真实菜单及系统文件对话框执行：成功，选择 2 个输入，生成 1 个输出。
+- `pytools-core/probe/compare_summary_tools.py` 的 `python_used_range_only` 与 `projection_difference_fields` 只读基线对拍：完整投影 exact，差异字段为空；源输入前后检查一致。
+- Python/Rust 对拍报告 JSON 使用 PowerShell `ConvertFrom-Json` 解析：通过；核对报告分开的历史提交号、运行路由、样本数、行数、投影状态、事件数及源文件未改标记。
+- `git diff --check`：通过。
+- 本轮没有修改 Rust 业务代码，因此未另跑 Cargo 测试或格式化；本次依据是已完成的真实 CLI 与 Python 对拍，不以文档检查代替业务验证。
+
+影响与未完成项：未改配置、VBA 行为或产品版本。此证据只覆盖所选两份 XLSX 与 Windows MSVC 原生对话框路径；未据此扩展到其他格式或样本。原 PyTools 业务含 VBA 的 XLSM、完整 NoComPyTools 变体对拍、麒麟 V10/UOS V20 实机及离线 deb 最终验收仍未完成；PT-6-1 整体仍未最终验收。未在本轮重跑 glibc 2.28、目标发行版或 workspace 测试。
+
+敏感内容检查：提交内容仅为不含源文件名和单元格值的对拍摘要、迁移状态和本记录；未发现凭据、真实样本数据或不应公开的文件。原 Python 项目保持只读。
+
+删除清单：无项目文件删除。
+回滚提示：`git revert b5de3ed` 可移除本次机器报告和迁移清单证据；如需同时移除本记录，再单独撤销本记录提交。
+【组件版本】：纯验证记录，不升级。

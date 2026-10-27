@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "run_files": [
+    "cached_formula_total.xlsx"
+  ],
+  "expected_stats": {
+    "files": 1,
+    "sheets": 2,
+    "errors": 1,
+    "failed_files": 0
+  }
+}

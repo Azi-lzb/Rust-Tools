@@ -1,0 +1,27 @@
+时间：2026-10-27 11:21:30（Asia/Shanghai）
+执行者：Codex
+修改前 commit：f1b8e642e45ca3a675d8b7f853c931537601841e
+修改后 commit：由本记录所在提交确定
+WIP：修改前工作树干净。
+
+【组件版本】不升级（记录既有功能的合成菜单冒烟结果）
+
+目的与变更：
+- 在 pytools-core/MIGRATION_INVENTORY.md 记录 PT-2-3、PT-2-4 的 F 盘合成样本菜单冒烟，不提升为真实业务验收通过。
+- 更新 F:\PyToolsRustV2\manual-acceptance-20261027\README.txt，加入样本路径、预期值、菜单步骤和实际输出。
+- 未改 Rust 业务算法、共享 crates、Cargo 配置、Audit 或 Python 源项目。
+
+实际路径及结果：
+- 配置：F:\PyToolsRustV2\manual-acceptance-20261027\config.xlsx；预校验通过。
+- 输入：F:\PyToolsRustV2\manual-acceptance-20261027\02-dedup\dedup-source.xlsx，数据为 A001/100、B002/200、A001/999。
+- PT-2-3：正式菜单 2→1 成功；生成独立工作簿，检测 1 条重复；A4:C4 标记为红色。输出：F:\PyToolsRustV2\manual-acceptance-20261027\actual\dedup-config-check-20261027_111841_772929000\dedup-source_dedup-check_d10001ab.xlsx；运行记录：F:\PyToolsRustV2\manual-acceptance-20261027\logs\pytools-dedup-config_check-20261027_111841_933286800.json。
+- PT-2-4：正式菜单 2→2 退出码 0，报告删除 1 行；输出保留 A001/100、B002/200。输出：F:\PyToolsRustV2\manual-acceptance-20261027\actual\dedup-config-delete-20261027_111939_150339100\dedup-source_dedup-delete_d10001ab.xlsx。
+- 两个输出均以 OOXML 读取关键单元格值，且均写入独立路径；PT-2-4 执行前后源文件字节一致（3507 字节）。
+- cargo check --offline --locked -p pytools-core --bin pytools 通过；cargo test --offline --locked -p pytools-core --test dedup_menu_cli 7/7 通过。检查输出有既有 deprecated/unused 警告，不影响通过。
+
+未执行及已知边界：
+- 样本为合成数据，不是 Python/Rust 真实业务文件对拍；普通样式保真、复杂模板、真实 capability、Linux/deb 未验收。
+- 未运行完整工作区或 WSL 测试；本轮无代码改动。
+
+回滚：
+- 撤销迁移清单该段新增文字及本记录；F 盘样本与结果保留供用户人工验收。

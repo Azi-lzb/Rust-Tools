@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.interactive_menu_parity",
+  "date": "2026-10-24",
+  "status": "passed_synthetic_parity",
+  "environment": {
+    "platform": "Windows 11 x64",
+    "rust": "native cargo/rustc CLI",
+    "python": "3.12.10",
+    "sample_kind": "synthetic"
+  },
+  "entry": "pytools [menu] -> main category 1 -> operation 1/3/4/5",
+  "scenarios": {
+    "1-1_header_path_compare": {
+      "selected_sources": 5,
+      "matched_sources": 3,
+      "workbook_projection": "exact",
+      "effective_styles": "exact",
+      "style_mismatch_cells": 0
+    },
+    "1-3_wide_summary_with_row_suffix": {
+      "workbook_projection_and_effective_styles": "exact",
+      "target_append_plan": "generated",
+      "configured_target": "untouched"
+    },
+    "1-4_wide_summary_without_row_suffix": {
+      "workbook_projection_and_effective_styles": "exact",
+      "target_append_plan": "generated",
+      "configured_target": "untouched"
+    },
+    "1-5_timeline_precheck": {
+      "valid": {"errors": 0, "warnings": 0, "parity": "exact"},
+      "detailed_errors": {"errors": 11, "warnings": 3, "parity": "exact"},
+      "missing_required_column": {"errors": 1, "warnings": 0, "parity": "exact"}
+    }
+  },
+  "rust_integration_test": {
+    "target": "tests/timeline_menu_cli.rs",
+    "result": "passed",
+    "passed": 1,
+    "failed": 0
+  },
+  "limitations": [
+    "No sanitized real business workbook was available for this menu-route comparison.",
+    "The native file-dialog UI was not exercised; manual path selection was exercised through the real CLI.",
+    "Wide-summary target append remains plan-only in the menu until a matching production ExcelModifier capability is validated.",
+    "Structured user/developer/off event logging is not yet connected to these time-series handlers.",
+    "麒麟 V10, UOS V20, glibc 2.28, and deb validation remain unverified."
+  ]
+}

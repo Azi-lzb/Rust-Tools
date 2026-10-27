@@ -1,0 +1,38 @@
+PT-3-3 V2 静态打印菜单执行与缓存保护
+
+日期：2026-10-26 23:42 +08:00
+执行者：Codex
+分支：codex/pytools-menu-entry
+修改前 commit：052eea8
+修改后 commit：本功能提交生成后可由 git log 核实。
+修改前 WIP：PT-3-3 的 CLI/业务/集成测试修改未提交；其他修改不存在。
+
+目的
+
+让 V2 打印菜单从计划接入显式、能力门控的实际静态输出，并阻止没有可用公式缓存或含 Excel 错误值的工作簿被报告为成功。
+
+变更文件
+
+- `src/bin/pytools.rs`：菜单 `3→1` 在启动参数同时提供 capability/platform 时先询问用户确认，确认后传入既有计划执行入口；否则明确只生成计划、不创建打印工作簿。日志指标和摘要区分计划与实际执行。
+- `src/print_ops.rs`：构建静态打印计划前验证公式元数据、所选范围公式缓存及 Excel 错误值；静态输出使用缓存值、移除批注并隐藏数值零。
+- `tests/print_config_new_target.rs`：覆盖缓存公式转值、公式零/数值零/0.0001/字符串“0”、批注移除、无缓存前拒绝输出、源文件保护。
+- `tests/print_menu_cli.rs`：覆盖 V2 菜单确认后的真实 Rust 执行入口、临时测试 capability、输出及源文件保护。
+- `MIGRATION_INVENTORY.md`：记录实现状态及未验证范围；未将合成验证标为真实验收。
+- 本记录：修改留痕。
+
+验证
+
+- Windows 原生 `cargo fmt -p pytools-core -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过；输出包含共享 Excel-Editor 弃用 API 及既有 PyTools unused/dead-code 警告，本轮未修改共享代码。
+- `cargo test --offline --locked -p pytools-core --lib static_print_rejects_excel_error_cells_in_selected_ranges -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test print_config_new_target --test print_menu_cli -j 1`：3 + 4 项通过。
+- 编译、测试和临时文件位于 `F:\PyTools_Rust_本轮工作文件_20261026\target` 与 `...\test-tmp`。
+
+结果范围与未验证项
+
+- 测试 capability 仅供合成夹具使用，没有创建生产 Passed capability，也未改变生产默认引擎路由。
+- 未使用真实打印模板/用户数据；未对 V2 新语义执行 Python/Rust 对拍。既有旧版模式 1/2/3 合成对拍仍限其原输出契约，不外推到新增 V2 静态打印行为。
+- 未验证公式缓存新鲜度、其他 OOXML 部件保真、Windows 用户人工操作、Linux/麒麟/UOS/glibc 2.28 或 deb。
+- 无配置或 VBA 迁移影响；未删除文件；原 Python 仓库、Audit、共享 crates、根 Cargo 清单/锁文件及原 pytools-dev 工作树未修改。无须请求 main 修改共享能力。
+- 组件版本：`pytools-core 0.1.0`，未升级。
+- 回滚提示：仅回滚本功能提交；不要移除已有 PT-6-2 提交或用户的其他工作。

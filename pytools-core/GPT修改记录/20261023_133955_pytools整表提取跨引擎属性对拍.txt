@@ -1,0 +1,31 @@
+时间：2026-10-23 13:39:55（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：均无；workspace `main` 没有 HEAD。修改前后 WIP 均未 stage，整个 workspace 仍为未跟踪文件；原始 pytools 源目录没有被本轮写入。
+
+修改目的：为 7-6 普通版整表提取候选补充一次 openpyxl/Rust 语义属性对拍，并消除 umya 在导入单元格时写出的额外默认 A 列宽记录。
+
+修改文件：
+- `crates/excel-editor/src/umya_backend.rs`：导入单元格后清除本次新生成的纯默认列维度；保留目标原有维度、源中显式复制的维度及具有隐藏/样式/自动宽度等属性的维度。
+- `crates/excel-editor/tests/import_range.rs`：支持从临时目录加载对拍夹具；普通单测与 openpyxl 目标夹具分别断言各自适用的列维度行为。
+- `pytools-core/probe/compare_full_sheet_import.py`：创建带公式缓存、样式、合并和行列维度的合成源簿，调用旧 Python helper 生成旧版候选，并逐项比较源工作表属性与 Rust 候选。
+- `pytools-core/probe/reports/sheet_extract_full_import_parity_20261023.json`：保存属性对拍结果。
+- `pytools-core/probe/reports/sheet_extract_full_import_20261023.json`、`pytools-core/MIGRATION_INVENTORY.md`：登记后续对拍结果和旧 helper 的样式读取问题。
+- 本记录文件。
+
+对拍结果：同一个 openpyxl 生成的 XLSX 上，Rust 输出相对源工作表属性 0 项差异，比较值（data_only）、单元格样式、合并、行列尺寸/隐藏/outline、批注单元格位置；源文件 SHA-256 前后相同。报告为 `probe/reports/sheet_extract_full_import_parity_20261023.json`。
+
+重要基线问题：旧 `_copy_full_sheet_with_style` 生成的跨簿副本在该带样式样本上可读取工作表内容，但访问其 `cell.font` 时 openpyxl 抛 `IndexError: list index out of range`。因此旧生成副本不能作为该项样式的有效 oracle；本报告比较旧函数声明要复制的源工作表属性，不宣称完整文件字节/OOXML 包逐项等价。该问题只在本合成样本观察到，待更多源模板确认。
+
+测试结果：
+- `cargo fmt --all`：通过。
+- `cargo test -p excel-editor --test import_range -- --nocapture`：跨引擎夹具 1/1 通过。
+- `python -B pytools-core/probe/compare_full_sheet_import.py ...`：退出码 0，0 项属性差异，源哈希未变化。
+- `cargo test --workspace --quiet`：通过。一次先行运行失败是因测试断言把 Umya 构造目标簿与 openpyxl 构造目标簿的初始默认列维度混为一谈；已按夹具路径区分，最终全量运行通过。umya 已弃用 API 警告及已有未使用项警告仍存在。
+- 只读原项目 `PyCode/tests` 先前通过 78/78，3 条 pandas FutureWarning；禁用字节码与 pytest 缓存。
+
+未完成与风险：仍只有一个合成 XLSX；未验真实业务模板、完整 package 部件、外部关系、追加输出、非 XLSX 和目标 Linux/deb。未注册生产 capability，未改变默认路由。旧 Python helper 的生成副本样式索引问题未在 workspace 源项目中修改。
+
+配置/VBA 影响：无配置或 VBA 变化；未知 OOXML 部件仍由候选拒绝。
+删除清单：无。
+回滚提示：workspace 尚无 Git 基线且全部文件未跟踪；如回滚，仅按上述文件审阅，不要对整个仓库执行 `clean` 或 `reset`。
+【组件版本】pytools-core、excel-editor 不升级版本；只更新未提升为默认路由的候选实现和对拍记录。

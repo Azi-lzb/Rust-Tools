@@ -1,0 +1,21 @@
+时间：2026-10-25 21:43:40（本机时区）
+执行者：Codex（pytools-dev）
+基线 HEAD：12acbf59da3f1e901879803a1f4f78c8395cd835；分支：pytools-dev。
+目的：使主菜单的 user/developer/off 日志视图覆盖 PT-2-1 至 PT-2-6 去重菜单入口，并保留 plan-only 安全行为。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：向去重菜单传递 log view；user 视图显示业务计数与总耗时；developer 视图写入脱敏结构化 JSON 运行历史；off 禁止进度和历史。将四个去重计划/预校验函数拆分为返回 JSON 的内部函数，菜单与原 CLI 共用计算结果及原 JSON 契约。记录实际 Calamine/OOXML 组件；计划模式显式标记 ExcelModifier/writer 未调用。
+- `pytools-core/tests/dedup_menu_cli.rs`：覆盖六项 user 菜单结果、PT-2-1 developer 历史字段/隐私/off 行为及源文件保持。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记本功能和验证边界。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test dedup_menu_cli --test dedup_comment_delete_umya --test dedup_append_execution -j 1`：10 项通过、0 失败。
+- `git diff --check`：通过。
+- 未重跑 Python/Rust 业务对拍；没有修改去重计算、Excel 输出或修改路由，既有 `probe/reports/dedup_parity_20261023.json` 继续作为底层业务语义证据。Windows、Linux、真实业务工作簿及目标实机未由本轮重新验收。
+
+WIP 保护：既有未提交 PT-4-2 `MIGRATION_INVENTORY.md` 末尾记录、`HANDOFF_ZCODE_TO_CODEX.md` 和 `20261025_2040_PT-4-2真实XLS转换保真失败记录.txt` 保持原样，不属于本次功能提交；原 Python 项目、真实业务输入、共享 crates、根 Cargo 配置、Cargo.lock、Audit 和 DEVELOPMENT_GOAL.md 未修改。
+
+已知限制：历史只记录合并的 `workbook_read_and_plan` 或配置预校验阶段耗时，不伪造内部子阶段拆分。该功能只改善去重菜单日志，不代表 PT-2 真实工作簿、生产 ExcelModifier capability 或目标系统验收完成。
+
+回滚：通过 Git revert 本功能提交可撤回菜单日志接线、运行历史与对应测试；不触及既有 WIP。

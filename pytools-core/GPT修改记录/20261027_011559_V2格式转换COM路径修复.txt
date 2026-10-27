@@ -1,0 +1,29 @@
+时间：2026-10-27 01:15 +08:00
+执行者：Codex
+修改前 commit：db48528
+修改后 commit：本记录随 V2 Office 转换修复提交
+修改前 WIP：工作树干净；原 Python 项目只读。
+
+目的：修复新版文件处理菜单实际调用 Office COM 转换时，Word COM 属性类型不兼容及中文工作路径解码错误。
+
+修改文件：
+- sidecar/lo-convert/src/main.rs：Word DisplayAlerts 改用 wdAlertsNone=0，并同步修正 DOCX 文本验收阶段的 Word COM 设置；COM PowerShell 脚本统一写为带 BOM UTF-8。新增两项定点单测。
+- pytools-core/MIGRATION_INVENTORY.md：记录 V2 菜单转换端到端证据、失败测试和未验收范围。
+- 本记录。
+
+复现与修复：Windows Word COM 实际激活后，将 Boolean 赋给 DisplayAlerts 报 WdAlertLevel 转换错误。随后用已有 .xls 夹具及 F 盘中文临时路径运行 Rust 转换，发现无 BOM PowerShell 脚本将路径解码错误；加 BOM 后通过。
+
+验证：
+- cargo fmt --manifest-path sidecar/lo-convert/Cargo.toml
+- cargo test --offline --locked -p lo-convert -j 1：6/6 单测、1/1 集成测试通过。
+- cargo build --offline --locked -p lo-convert -p pytools-core --bins -j 1 通过（有既存 deprecation/unused/dead-code warnings）。
+- Windows Rust 菜单 4→4→1 以真实 Excel COM 转换现有 .xls 夹具，sidecar 读回工作表顺序/名称、值与公式文本通过，输入字节不变。
+- Windows Rust 菜单 4→4→2 以 Word COM 转换临时 Word 生成的 .doc，DOCX 包结构和正文文本校验通过。
+- git diff --check 通过。
+- cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1：2/10 通过、8 项失败。多项失败源于测试仍输入旧文件菜单编号；一项报告系统找不到文件。本轮未改写其他旧序列，且现行 V2 Excel/Word 转换菜单均已独立实测。
+
+未执行项/已知问题：无 ET 样本，未验收 WPS/ET 真实兼容、用户真实 Word 文档的表格/图片/分页等保留、旧 Python 与 Rust 输出对拍、Linux/LibreOffice、glibc 2.28、麒麟/UOS 或离线 deb。转换功能不因本轮冒烟升级为业务验收通过。未请求 main 修改共享能力。
+
+删除清单：无。
+回滚提示：回退本提交会恢复 Word COM Boolean 属性赋值与无 BOM 脚本写入，中文路径转换和 Word DOCX 转换可能再次失败；不影响源业务文件。
+【组件版本】pytools-core 0.1.0，不升级。

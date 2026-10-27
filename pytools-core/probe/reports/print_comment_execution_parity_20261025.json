@@ -1,0 +1,566 @@
+{
+  "status": "passed_synthetic_python_rust_execution_parity",
+  "scope": [
+    "PT-3-1 keep-format print",
+    "PT-3-2 fast print"
+  ],
+  "sample": "synthetic XLSX only",
+  "engine": "ExcelModifier -> UmyaSpreadsheet using temporary test-only capability",
+  "float_comparison": "recursive relative and absolute tolerance 1e-15, per rules/13 §9.1",
+  "column_dimension_comparison": "expand OOXML min/max spans into per-column effective width and hidden state",
+  "source_unchanged": true,
+  "comparison": [
+    "worksheet order, identity, dimensions and values/types",
+    "font, fill, border, alignment, number format and protection",
+    "comments, merged ranges, row/column dimensions",
+    "orientation, fit settings, scale, paper size, print area, centering and footer"
+  ],
+  "modes": {
+    "keep": {
+      "engine": "umya_spreadsheet",
+      "sheet_count": 2,
+      "projection": [
+        {
+          "name": "Marked_1",
+          "max_row": 3,
+          "max_column": 3,
+          "print_area": "'Marked_1'!$A$1:$C$3",
+          "orientation": "landscape",
+          "fit_to_width": 1,
+          "fit_to_height": 0,
+          "paper_size": 9,
+          "footer": "第 1 页 / 共 2 页",
+          "comments": {
+            "A1": "打印区域 1",
+            "C3": "打印区域#1"
+          },
+          "zero_cell": 0,
+          "cells": {
+            "A1": {
+              "value": 0,
+              "type": "n",
+              "bold": true,
+              "italic": false,
+              "font_name": null,
+              "font_size": null,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": {
+                "text": "打印区域 1",
+                "author": "probe"
+              }
+            },
+            "B1": {
+              "value": "A",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "C1": {
+              "value": "B",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "A2": {
+              "value": 2,
+              "type": "n",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B2": {
+              "value": "C",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": "solid",
+              "fill_rgb": "00FFCC00",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "A3": {
+              "value": 3,
+              "type": "n",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B3": {
+              "value": "E",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "C3": {
+              "value": "F",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": "thin",
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": {
+                "text": "打印区域#1",
+                "author": "probe"
+              }
+            }
+          },
+          "merges": [
+            "B2:C2"
+          ],
+          "row_heights": {
+            "1": 22.0
+          },
+          "column_dimensions": {
+            "A": {
+              "width": 14.0,
+              "hidden": false
+            },
+            "B": {
+              "width": 13.0,
+              "hidden": false
+            },
+            "C": {
+              "width": 13.0,
+              "hidden": false
+            }
+          },
+          "page": {
+            "orientation": "landscape",
+            "fit_to_page": true,
+            "fit_to_width": 1,
+            "fit_to_height": 0,
+            "scale": null,
+            "paper_size": 9,
+            "print_area": "'Marked_1'!$A$1:$C$3",
+            "center_horizontal": false,
+            "center_vertical": false,
+            "footer_center": "第 1 页 / 共 2 页"
+          }
+        },
+        {
+          "name": "Marked_2",
+          "max_row": 2,
+          "max_column": 2,
+          "print_area": "'Marked_2'!$A$1:$B$2",
+          "orientation": "landscape",
+          "fit_to_width": 1,
+          "fit_to_height": 0,
+          "paper_size": 9,
+          "footer": "第 2 页 / 共 2 页",
+          "comments": {
+            "A1": "打印区域 2",
+            "B2": "打印区域#2"
+          },
+          "zero_cell": "second",
+          "cells": {
+            "A1": {
+              "value": "second",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": {
+                "text": "打印区域 2",
+                "author": "probe"
+              }
+            },
+            "B2": {
+              "value": "block",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": {
+                "text": "打印区域#2",
+                "author": "probe"
+              }
+            }
+          },
+          "merges": [],
+          "row_heights": {
+            "1": 22.0
+          },
+          "column_dimensions": {
+            "A": {
+              "width": 13.0,
+              "hidden": false
+            },
+            "B": {
+              "width": 13.0,
+              "hidden": false
+            }
+          },
+          "page": {
+            "orientation": "landscape",
+            "fit_to_page": true,
+            "fit_to_width": 1,
+            "fit_to_height": 0,
+            "scale": null,
+            "paper_size": 9,
+            "print_area": "'Marked_2'!$A$1:$B$2",
+            "center_horizontal": false,
+            "center_vertical": false,
+            "footer_center": "第 2 页 / 共 2 页"
+          }
+        }
+      ]
+    },
+    "fast": {
+      "engine": "umya_spreadsheet",
+      "sheet_count": 2,
+      "projection": [
+        {
+          "name": "Marked_1",
+          "max_row": 3,
+          "max_column": 3,
+          "print_area": "'Marked_1'!$A$1:$C$3",
+          "orientation": "landscape",
+          "fit_to_width": 1,
+          "fit_to_height": 0,
+          "paper_size": 9,
+          "footer": "第 1 页 / 共 2 页",
+          "comments": {},
+          "zero_cell": null,
+          "cells": {
+            "A1": {
+              "value": null,
+              "type": "n",
+              "bold": true,
+              "italic": false,
+              "font_name": null,
+              "font_size": null,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B1": {
+              "value": "A",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "C1": {
+              "value": "B",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "A2": {
+              "value": 2,
+              "type": "n",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B2": {
+              "value": "C",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": "solid",
+              "fill_rgb": "00FFCC00",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "A3": {
+              "value": 3,
+              "type": "n",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B3": {
+              "value": "E",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "C3": {
+              "value": "F",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            }
+          },
+          "merges": [
+            "B2:C2"
+          ],
+          "row_heights": {},
+          "column_dimensions": {},
+          "page": {
+            "orientation": "landscape",
+            "fit_to_page": true,
+            "fit_to_width": 1,
+            "fit_to_height": 0,
+            "scale": null,
+            "paper_size": 9,
+            "print_area": "'Marked_1'!$A$1:$C$3",
+            "center_horizontal": false,
+            "center_vertical": false,
+            "footer_center": "第 1 页 / 共 2 页"
+          }
+        },
+        {
+          "name": "Marked_2",
+          "max_row": 2,
+          "max_column": 2,
+          "print_area": "'Marked_2'!$A$1:$B$2",
+          "orientation": "landscape",
+          "fit_to_width": 1,
+          "fit_to_height": 0,
+          "paper_size": 9,
+          "footer": "第 2 页 / 共 2 页",
+          "comments": {},
+          "zero_cell": "second",
+          "cells": {
+            "A1": {
+              "value": "second",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            },
+            "B2": {
+              "value": "block",
+              "type": "s",
+              "bold": false,
+              "italic": false,
+              "font_name": "Calibri",
+              "font_size": 11.0,
+              "fill_type": null,
+              "fill_rgb": "00000000",
+              "border_top_style": null,
+              "border_bottom_style": null,
+              "alignment_horizontal": null,
+              "alignment_vertical": null,
+              "alignment_wrap_text": null,
+              "number_format": "General",
+              "protection_locked": true,
+              "comment": null
+            }
+          },
+          "merges": [],
+          "row_heights": {},
+          "column_dimensions": {},
+          "page": {
+            "orientation": "landscape",
+            "fit_to_page": true,
+            "fit_to_width": 1,
+            "fit_to_height": 0,
+            "scale": null,
+            "paper_size": 9,
+            "print_area": "'Marked_2'!$A$1:$B$2",
+            "center_horizontal": false,
+            "center_vertical": false,
+            "footer_center": "第 2 页 / 共 2 页"
+          }
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Capability evidence was temporary and was not registered for production routing.",
+    "This evaluates only the Umya modifier candidate for a newly generated workbook; it does not compare or select the rust_xlsxwriter new-workbook path.",
+    "No real PyTools print template, Windows native Rust build, Kylin/UOS, glibc 2.28 or offline deb was validated.",
+    "No PDF rendering was performed; PDF export remains out of scope."
+  ]
+}

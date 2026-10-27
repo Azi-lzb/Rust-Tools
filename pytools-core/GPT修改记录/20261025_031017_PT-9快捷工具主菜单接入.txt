@@ -1,0 +1,24 @@
+时间：2026-10-25 03:10（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+修改前 commit：8811245（pytools-dev；含从 main 安全同步的共享 openpyxl 校验修复）
+WIP 情况：开始时 pytools-dev 工作树干净；只包含本次 PT-9 入口所需改动。
+
+修改目的：为已经实现的快捷工具业务补齐与旧 PyCode 相同的主菜单第 9 类入口。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：增加主菜单“9 快捷工具”及其 1–3 子菜单；连接打开配置、打开最新 output 文件、打开 output 文件夹的既有 Rust 函数；保持操作结果后返回主菜单，并按 Python 用户界面语义显示成功、未找到或失败信息。
+- pytools-core/tests/quick_menu_cli.rs：通过真实 Rust CLI 菜单进程测试三项路由；用隔离失败条件避免启动桌面应用。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-9 菜单状态、验证范围和未完成验收项。
+- 本记录。
+
+真实入口与处理：无参数启动或 `pytools menu` → 主菜单 9 → 快捷工具 1–3 → 既有 `pytools-core::quick` Rust 业务实现。未改变 `open_config`、`open_latest_output`、`open_output_directory` 的行为和系统 opener 路由。
+
+测试与对拍：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test quick_menu_cli --test archive_menu_cli --test config_menu_cli -j 1`：4/4 通过（快捷菜单 1、归档菜单 1、配置菜单 2）。
+- 新测试覆盖主菜单 9→1/2/3、配置不存在、output 无最新文件、output 目录父路径不可创建及执行后返回主菜单；没有调用 Windows Explorer。
+- 菜单文本和选择分发按只读 `PyCode/main.py` 的 `QUICK_MENU` 与 `q1/q2/q3` 路由实现。既有直接 CLI 假 `xdg-open` 结果见 `pytools-core/probe/reports/quick_tools_parity_20261023.json`；本轮未重复运行 Python 对拍。
+
+未执行项和已知问题：没有启动真实桌面应用；真实配置/output 目录和文件、旧 Windows `os.startfile`、Windows 桌面交互、麒麟 V10/UOS V20、glibc 2.28、deb 和离线交付未验收。PT-9 整体状态仍为未验证。
+
+回滚信息：本项改动可由对应提交整体 revert；不涉及用户业务文件、公共 crate、根 Cargo 文件或 `DEVELOPMENT_GOAL.md`。

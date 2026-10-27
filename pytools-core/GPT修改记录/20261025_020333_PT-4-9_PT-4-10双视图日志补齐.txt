@@ -1,0 +1,27 @@
+目标
+补齐文件排序前缀添加（PT-4-9）与取消（PT-4-10）在真实 CLI/交互入口中的普通用户、开发者及 off 运行日志，并保留既有文件处理与报表行为。
+
+修改文件
+- pytools-core/src/file_sort_prefix.rs：为两项 Rust 业务流程增加进度事件，覆盖配置读取、输出目录准备、文件处理、报表写入和任务摘要；标记真实 Calamine、RustFilesystem 与 rust_xlsxwriter 使用情况。PT-4-10 内容前缀分支记录实际调用 Calamine 的文件阶段。
+- pytools-core/src/bin/pytools.rs：接入直接 CLI 与类别 4 的菜单第 9/10 项；支持 --log-view user|developer|off，输出逐阶段耗时和累计耗时，写开发者结构化历史并保留原详细日志；更新命令帮助。
+- pytools-core/tests/conversion_menu_cli.rs：覆盖菜单 user/developer/off 视图、敏感路径不进入普通用户消息或结构化历史、阶段/总耗时和实际引擎。
+- pytools-core/tests/file_sort_prefix_remove_parity.rs：校验 PT-4-10 内容前缀读取报告 Calamine，并校验输出目录失败的阶段、错误类型与实际引擎。
+- pytools-core/MIGRATION_INVENTORY.md：补充本次证据及未验收边界。
+
+真实入口
+- 直接命令：pytools file-sort-prefix、pytools remove-file-sort-prefix。
+- 交互菜单：pytools menu → 类别 4（转换工具）→ 9 添加前缀 / 10 取消前缀；沿用主菜单日志视图。
+
+验证与对拍
+- Windows 原生 cargo fmt --manifest-path pytools-core/Cargo.toml 通过。
+- cargo test --offline --locked -p pytools-core --test conversion_menu_cli --test file_sort_prefix_operation_parity --test file_sort_prefix_remove_parity -q：2/2、3/3、6/6 通过。
+- pytools --help 已确认两条命令显示 --log-view user|developer|off。
+- 既有只读 PyCode 基线对拍测试通过，文件统计、最终目录集合和 XLSX 报表语义无差异；新日志只扩展 Rust 运行记录，不改变业务结果。
+
+未执行与已知问题
+- 本轮未重新运行 Python 基线脚本；对拍来自已保存的 Python 基线报告/夹具。
+- 没有可用真实业务目录样本；桌面文件选择器手工验收、Linux/glibc 2.28、麒麟 V10、统信 UOS V20 和 deb 未验证。PT-4-9/PT-4-10 整体迁移状态不变，仍未验收。
+- 日志性能开销未测量。构建仍显示共享 excel-editor 的既有弃用警告，以及 batch_ops.rs、quick.rs 的既有未使用导入警告；本轮未改共享 crate。
+
+回滚
+回退本提交可移除本轮进度回调、视图选项和测试；原 run_file_sort_prefix / run_remove_file_sort_prefix API 与 CLI 默认业务路径保留。

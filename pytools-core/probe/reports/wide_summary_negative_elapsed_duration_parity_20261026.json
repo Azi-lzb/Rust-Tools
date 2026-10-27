@@ -1,0 +1,1476 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_negative_elapsed_duration_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_python_rust_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "rust_entry": "pytools menu -> 1 timeline -> 3/4 wide summary -> confirm",
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "elapsed_number_format": "[h]:mm:ss.000",
+    "cases": [
+      "negative_multiday",
+      "negative_half_day",
+      "negative_one_and_half_days",
+      "negative_half_millisecond_tie",
+      "negative_one_and_half_millisecond_tie"
+    ],
+    "date_systems": [
+      "1900",
+      "1904"
+    ],
+    "row_modes": [
+      "no_suffix",
+      "row_suffix"
+    ]
+  },
+  "comparison": {
+    "summary_values_types_and_effective_styles": "exact",
+    "new_target_values_types_and_effective_styles": "exact",
+    "source_and_configuration_unchanged": true
+  },
+  "summary_results": [
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_multiday"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 26,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 18,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_multiday"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 47,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 30,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_day"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_day"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_days"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 26,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 18,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_days"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 40,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 23,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_millisecond_tie"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 44,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 19,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_millisecond_tie"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 40,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 15,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_millisecond_tie"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1900",
+      "calendar_date_projection": null,
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 3
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 9
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 81,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 45,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 35,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_millisecond_tie"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 27,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_multiday"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 27,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_multiday"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 43,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_day"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_day"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 41,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 23,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_days"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 42,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 18,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_days"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 40,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 23,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_millisecond_tie"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 45,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 26,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 18,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_half_millisecond_tie"
+    },
+    {
+      "row_suffix": false,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 1
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 3
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 2,
+        "duplicate_rows_filtered": 1,
+        "elapsed_ms": 44,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 25,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 17,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_millisecond_tie"
+    },
+    {
+      "row_suffix": true,
+      "elapsed_duration": true,
+      "elapsed_formula": false,
+      "elapsed_number_format": null,
+      "cached_formula_value_projected": false,
+      "time_only_value": false,
+      "source_date_system": "1904",
+      "calendar_date_projection": {
+        "phase": "calendar_date_projection",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms_recorded": true
+      },
+      "subday_time_normalization": null,
+      "elapsed_duration_normalization": {
+        "phase": "elapsed_duration_normalization",
+        "status": "completed",
+        "actual_engine": "pytools-core",
+        "stage_elapsed_ms": 2
+      },
+      "blank_data_date_format": "not_applicable",
+      "summary_status": "passed",
+      "target_append_status": "passed",
+      "summary_sheet_names": [
+        "WideRule"
+      ],
+      "summary_dimensions": [
+        [
+          4,
+          9
+        ]
+      ],
+      "summary_cell_count": 36,
+      "summary_effective_styles": "exact",
+      "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+      "source_read_history": {
+        "phase": "source_read",
+        "status": "completed",
+        "actual_engine": "calamine",
+        "stage_elapsed_ms": 4
+      },
+      "target_commit_operation": "created",
+      "target_candidate_matches_committed_bytes": true,
+      "target_execution_history": {
+        "phase": "target_append_execute",
+        "status": "succeeded",
+        "actual_engine": "rust_xlsxwriter",
+        "stage_elapsed_ms_recorded": true
+      },
+      "target_execution_summary": {
+        "appended_rows": 3,
+        "duplicate_rows_filtered": 0,
+        "elapsed_ms": 41,
+        "function": "append_target_execute",
+        "stages": [
+          {
+            "elapsed_ms": 24,
+            "engine": "rust_xlsxwriter",
+            "name": "new_workbook_write_and_reopen",
+            "status": "succeeded"
+          },
+          {
+            "elapsed_ms": 16,
+            "name": "target_commit",
+            "status": "succeeded"
+          }
+        ],
+        "status": "succeeded",
+        "task_skipped_count": 0,
+        "task_success_count": 1
+      },
+      "negative_duration_case": "negative_one_and_half_millisecond_tie"
+    }
+  ],
+  "safety": {
+    "source_unchanged": true,
+    "configuration_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_input_filenames_or_business_cell_values": false
+  },
+  "limitations": [
+    "Synthetic XLSX only; no sanitized real wide-summary workbook was available.",
+    "This case does not validate other Excel formats or production edit capabilities.",
+    "Linux target systems and offline deb acceptance were not tested."
+  ]
+}

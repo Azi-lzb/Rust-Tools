@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.PT-7-1.real_menu_python_rust_parity",
+  "date": "2026-10-24",
+  "platform": "Windows native",
+  "sample_kind": "synthetic",
+  "status": "passed_synthetic_menu_execution_parity",
+  "python_version": "3.12.10",
+  "openpyxl_version": "3.1.5",
+  "python": {
+    "files": 1,
+    "branch_sheets": 6,
+    "filled_sheets": 3,
+    "skipped_sheets": 3,
+    "failed_files": 0
+  },
+  "rust": {
+    "feature_id": "PT-7-1",
+    "files": 1,
+    "matched_sheets": 3,
+    "changed_cells": 60,
+    "failed_files": 0,
+    "engine": "umya_spreadsheet",
+    "status": "committed"
+  },
+  "output_projection_equal": true,
+  "projection_differences": [],
+  "current_and_previous_unchanged": true,
+  "target_committed": true,
+  "report_contains_raw_cells": false,
+  "rust_stderr_nonempty": true
+}

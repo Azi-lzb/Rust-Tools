@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "passed_synthetic_windows_native_python_rust_parity",
+  "recorded_at": "2026-10-25T01:14:00+08:00",
+  "implementation_commit": "c8dbfe5",
+  "feature_id": "PT-6-2",
+  "entrypoint": "pytools summary-comments",
+  "environment": {
+    "host": "Windows 11 x64",
+    "rustc": "1.99.1",
+    "cargo": "1.99.1",
+    "python": "3.12.10",
+    "openpyxl": "3.1.5",
+    "rust_executable": "target/debug/pytools.exe"
+  },
+  "cases": [
+    {
+      "case": "standard row and column comment regions",
+      "fixture": "synthetic source and comment template",
+      "output_rows": 6,
+      "projection": "exact"
+    },
+    {
+      "case": "duplicate row region boundaries",
+      "fixture": "synthetic source and duplicate-marker comment template",
+      "output_rows": 6,
+      "projection": "exact",
+      "marker_rule": "last matching start/end marker in row-major order"
+    },
+    {
+      "case": "merged non-anchor source cell",
+      "fixture": "tests/fixtures/summary_comments/merged_children_source.xlsx",
+      "output_rows": 3,
+      "projection": "exact",
+      "merge_anchor_values": "preserved"
+    }
+  ],
+  "compared_projection_fields": [
+    "cell values and types",
+    "worksheet names and dimensions",
+    "styles and header boldness",
+    "freeze panes",
+    "merged ranges",
+    "formula text",
+    "defined names",
+    "print area and page setup",
+    "page margins and centering"
+  ],
+  "scope_limits": [
+    "The three input scenarios were synthetic or existing synthetic fixtures; no real PT-6-2 business template was found.",
+    "The original PyCode baseline was read-only.",
+    "The native menu and CLI tests were run separately from this Python/Rust CLI output comparison.",
+    "Windows native file dialogs were not manually operated.",
+    "Production acceptance,麒麟 V10/UOS V20 installation, glibc 2.28, and offline deb validation remain outstanding."
+  ]
+}

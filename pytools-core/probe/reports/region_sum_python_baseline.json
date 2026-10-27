@@ -1,0 +1,753 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.region_sum_check",
+  "source": "PyCode/core/feature_1_5_region_sum_check.py::run_region_sum_check",
+  "source_python_version": "3.12.10",
+  "source_sha256": {
+    "feature_1_5_region_sum_check.py": "78ABDA7379B4CC64F704E07B15426CB0A5D9D92ADFE94E747B982D3F7CCFD38C",
+    "logger.py": "F05B0E3B82D255D6AB6035AD9AF727157C3044E326307657AD3EA0BD094AEFF4"
+  },
+  "fixtures": [
+    "balanced.xlsx",
+    "mismatch.xlsx",
+    "no_target.xlsx",
+    "non_numeric_missing.xlsx",
+    "numeric_text_underscores.xlsx",
+    "unicode_math_digits.xlsx",
+    "broken.xlsx"
+  ],
+  "fixture_sha256": {
+    "balanced.xlsx": "4AD24DF9F438B78F2AB78704B970E1C6D631BDB39EB36F5E9C429E31CD48B337",
+    "mismatch.xlsx": "75A5D2399D46DCF54608383F57BD633D775C9211FD603C2D3C876CB9969AFACC",
+    "no_target.xlsx": "43300263EBF8E0175A8F7A582659363F95D6680AF63B48F81298589F82EB54B5",
+    "non_numeric_missing.xlsx": "0DA87F8C4C1B37BE48BFBDDD3300BEFB27E1A6CE48935245064B84C2A437EBA8",
+    "numeric_text_underscores.xlsx": "CBB860A2169771EF27F85CE3298B4A1AF2FF8BE93B3F31C6E933C32AEDA9B2BA",
+    "unicode_math_digits.xlsx": "F3340E492767F73701E45E300BE28D5CB54B27B3C69A933CFF29C855033A6837",
+    "broken.xlsx": "2F66DC481A54C04E20E01BF7A084EB9F2B95F856219A0F1607B9DF45294CC47C"
+  },
+  "scope": "Synthetic XLSX inputs; normal non-COM implementation only.",
+  "python_baseline": {
+    "status": "保留",
+    "case_count": 7
+  },
+  "statistics": {
+    "files": 6,
+    "sheets": 10,
+    "errors": 8,
+    "failed_files": 1
+  },
+  "output_workbook": {
+    "sheet_name": "核对结果",
+    "max_row": 12,
+    "max_column": 6,
+    "cells": {
+      "A1": {
+        "type": "string",
+        "value": "序号"
+      },
+      "B1": {
+        "type": "string",
+        "value": "文件名"
+      },
+      "C1": {
+        "type": "string",
+        "value": "工作表名"
+      },
+      "D1": {
+        "type": "string",
+        "value": "核对状态"
+      },
+      "E1": {
+        "type": "string",
+        "value": "错误数量"
+      },
+      "F1": {
+        "type": "string",
+        "value": "错误信息"
+      },
+      "A2": {
+        "type": "integer",
+        "value": 1
+      },
+      "B2": {
+        "type": "string",
+        "value": "balanced.xlsx"
+      },
+      "C2": {
+        "type": "string",
+        "value": "本期分地区"
+      },
+      "D2": {
+        "type": "string",
+        "value": "正确"
+      },
+      "E2": {
+        "type": "integer",
+        "value": 0
+      },
+      "F2": {
+        "type": "string",
+        "value": "核对通过"
+      },
+      "A3": {
+        "type": "integer",
+        "value": 2
+      },
+      "B3": {
+        "type": "string",
+        "value": "mismatch.xlsx"
+      },
+      "C3": {
+        "type": "string",
+        "value": "分地区汇总"
+      },
+      "D3": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E3": {
+        "type": "integer",
+        "value": 1
+      },
+      "F3": {
+        "type": "string",
+        "value": "金额: 100.00 ≠ 90.00 (差10.00); 未找到: 惠东县, 龙门县, 惠州市本部, 大亚湾"
+      },
+      "A4": {
+        "type": "integer",
+        "value": 3
+      },
+      "B4": {
+        "type": "string",
+        "value": "non_numeric_missing.xlsx"
+      },
+      "C4": {
+        "type": "string",
+        "value": "年度分地区"
+      },
+      "D4": {
+        "type": "string",
+        "value": "正确"
+      },
+      "E4": {
+        "type": "integer",
+        "value": 0
+      },
+      "F4": {
+        "type": "string",
+        "value": "核对通过"
+      },
+      "A5": {
+        "type": "integer",
+        "value": 4
+      },
+      "B5": {
+        "type": "string",
+        "value": "numeric_text_underscores.xlsx"
+      },
+      "C5": {
+        "type": "string",
+        "value": "本期分地区"
+      },
+      "D5": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E5": {
+        "type": "integer",
+        "value": 1
+      },
+      "F5": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A6": {
+        "type": "integer",
+        "value": 5
+      },
+      "B6": {
+        "type": "string",
+        "value": "numeric_text_underscores.xlsx"
+      },
+      "C6": {
+        "type": "string",
+        "value": "年度分地区"
+      },
+      "D6": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E6": {
+        "type": "integer",
+        "value": 1
+      },
+      "F6": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A7": {
+        "type": "integer",
+        "value": 6
+      },
+      "B7": {
+        "type": "string",
+        "value": "unicode_math_digits.xlsx"
+      },
+      "C7": {
+        "type": "string",
+        "value": "分地区数学数字1"
+      },
+      "D7": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E7": {
+        "type": "integer",
+        "value": 1
+      },
+      "F7": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A8": {
+        "type": "integer",
+        "value": 7
+      },
+      "B8": {
+        "type": "string",
+        "value": "unicode_math_digits.xlsx"
+      },
+      "C8": {
+        "type": "string",
+        "value": "分地区数学数字2"
+      },
+      "D8": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E8": {
+        "type": "integer",
+        "value": 1
+      },
+      "F8": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A9": {
+        "type": "integer",
+        "value": 8
+      },
+      "B9": {
+        "type": "string",
+        "value": "unicode_math_digits.xlsx"
+      },
+      "C9": {
+        "type": "string",
+        "value": "分地区数学数字3"
+      },
+      "D9": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E9": {
+        "type": "integer",
+        "value": 1
+      },
+      "F9": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A10": {
+        "type": "integer",
+        "value": 9
+      },
+      "B10": {
+        "type": "string",
+        "value": "unicode_math_digits.xlsx"
+      },
+      "C10": {
+        "type": "string",
+        "value": "分地区数学数字4"
+      },
+      "D10": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E10": {
+        "type": "integer",
+        "value": 1
+      },
+      "F10": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "A11": {
+        "type": "integer",
+        "value": 10
+      },
+      "B11": {
+        "type": "string",
+        "value": "unicode_math_digits.xlsx"
+      },
+      "C11": {
+        "type": "string",
+        "value": "分地区数学数字5"
+      },
+      "D11": {
+        "type": "string",
+        "value": "错误"
+      },
+      "E11": {
+        "type": "integer",
+        "value": 1
+      },
+      "F11": {
+        "type": "string",
+        "value": "金额: 1000.25 ≠ 999.00 (差1.25)"
+      },
+      "B12": {
+        "type": "string",
+        "value": "已检查文件数: 6"
+      },
+      "C12": {
+        "type": "string",
+        "value": "已检查工作表数: 10"
+      },
+      "D12": {
+        "type": "string",
+        "value": "发现错误总数: 8"
+      }
+    },
+    "formulas": {
+      "A12": "=== 统计汇总 ==="
+    },
+    "column_widths": {
+      "A": 18.0,
+      "B": 31.0,
+      "C": 20.0,
+      "D": 17.0,
+      "E": 10.0,
+      "F": 77.0
+    },
+    "styles": {
+      "A1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "B1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "C1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "D1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "E1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "F1": {
+        "bold": true,
+        "font_color": null,
+        "fill_color": "C8DCF0",
+        "horizontal_alignment": "center"
+      },
+      "A2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "B2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "C2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "D2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "E2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "F2": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "A3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F3": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "B4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "C4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "D4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "E4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "F4": {
+        "bold": false,
+        "font_color": "006400",
+        "fill_color": "C8FFC8",
+        "horizontal_alignment": null
+      },
+      "A5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F5": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F6": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F7": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F8": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F9": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F10": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "A11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "C11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "D11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "E11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "F11": {
+        "bold": false,
+        "font_color": "C00000",
+        "fill_color": "FFC8C8",
+        "horizontal_alignment": null
+      },
+      "B12": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      },
+      "C12": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      },
+      "D12": {
+        "bold": false,
+        "font_color": null,
+        "fill_color": null,
+        "horizontal_alignment": null
+      }
+    }
+  },
+  "limitations": [
+    "No real business workbook, XLSM/XLT input, target Linux platform, or menu/CLI integration was tested.",
+    "The source feature's COM variant is outside this migration slice; no Office engine is used."
+  ]
+}

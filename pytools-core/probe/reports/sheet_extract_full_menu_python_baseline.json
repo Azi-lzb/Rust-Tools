@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "status": "partial",
+  "suite": "pytools.sheet_extract.full_sheet_menu_python_baseline",
+  "baseline": "PyCode/core/feature_1_6_extract_sheets.py::_copy_full_sheet_with_style",
+  "formula_mode": "data_only",
+  "ordinary_comment_variant": "comments are not copied",
+  "source_tree_modified": false,
+  "fixture": "tests/fixtures/sheet_extract_full_menu/source.xlsx",
+  "expected": "tests/fixtures/sheet_extract_full_menu/python_expected.xlsx",
+  "limitations": [
+    "The legacy helper copies private style arrays across workbooks; openpyxl cannot read the emitted style table (IndexError).",
+    "Value, merge, comment, and row/column dimension behavior is captured from the helper output; Rust style checks use source-workbook properties because the Python output style table is unreadable."
+  ],
+  "worksheet": {
+    "name": "报表",
+    "sheet": "报表",
+    "max_row": 8,
+    "max_column": 5,
+    "non_empty_cells": 8,
+    "merged_ranges": [
+      "A1:C1"
+    ],
+    "comment_copied": false,
+    "extended_row_dimension": {
+      "row": 12,
+      "height": 26.0,
+      "hidden": true,
+      "outline_level": 1
+    },
+    "extended_column_dimension": {
+      "column": "G",
+      "width": 20.0,
+      "hidden": true,
+      "outline_level": 2
+    },
+    "values": [
+      [
+        {
+          "type": "string",
+          "value": "汇总标题"
+        },
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        {
+          "type": "string",
+          "value": "项目"
+        },
+        {
+          "type": "string",
+          "value": "金额"
+        },
+        {
+          "type": "string",
+          "value": "比例"
+        },
+        null,
+        null
+      ],
+      [
+        {
+          "type": "string",
+          "value": "贷款"
+        },
+        {
+          "type": "number",
+          "value": 1250.5
+        },
+        {
+          "type": "number",
+          "value": 0.25
+        },
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        {
+          "type": "string",
+          "value": "备注位置"
+        },
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "style_checks": {
+      "python_output": null,
+      "python_output_read_error": "IndexError: list index out of range",
+      "source_workbook_expected": {
+        "A1_bold": true,
+        "A1_fill": "FFD9EAF7",
+        "B3_number_format": "#,##0.00",
+        "C3_number_format": "0.0%",
+        "E8_fill": "FFE2F0D9"
+      }
+    }
+  }
+}

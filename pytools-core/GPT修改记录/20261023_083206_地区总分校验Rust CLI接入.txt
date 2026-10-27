@@ -1,0 +1,38 @@
+时间：2026-10-23 08:32:06（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace 中现有文件均未跟踪；保留既有 Rust 候选与 probe 证据，未重置、清理或覆盖其他工作。
+
+目的：将已与 Python 普通非 COM 实现对拍的地区总分校验从孤立 Rust API 接入 `pytools` 可执行 CLI，使用户可以直接调用 Rust 业务实现。该命令不是原交互 GUI 菜单迁移完成或生产默认路由验收。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：新增 `region-sum-check` 子命令。接受显式输入工作簿列表；可用 `--config` 读取全局输出/日志目录，并用 `--output-dir`、`--log-dir` 覆盖；无配置时默认 `./output`、`./logs`。stdout 输出 JSON 统计及结果/日志路径。
+- `pytools-core/src/region_sum.rs`：更新模块说明，记录 CLI 入口。
+- `pytools-core/tests/region_sum_parity.rs`：增加产品二进制集成测试，启动真实 `pytools` CLI，使用合成配置与输入，比较 Python 基线统计、输出值和公式，并检查输入字节不变；另验证配置路径与显式目录覆盖。
+- `pytools-core/probe/reports/region_sum_python_baseline.json`：重跑只读 Python 基线，记录当前源代码和夹具 SHA-256。
+- `pytools-core/probe/reports/region_sum_parity.json`：登记 CLI 命令、集成测试和当前未验证边界。
+- `pytools-core/README.md`、`pytools-core/MIGRATION_INVENTORY.md`：更新命令用法、迁移入口和残余风险。
+- `EXCEL_ENGINE_ARCHITECTURE.md`、`PYTHON_EXCEL_OPERATION_INVENTORY.md`：同步 CLI 集成状态，保留原 GUI 菜单/真实模板未验收说明。
+- 本记录。
+
+迁移范围：
+- Rust CLI 调用现有 `region_sum::run_region_sum_check`，规则仍在 Rust 中执行：读取 `分地区` 工作表，核对惠州市合计与已找到的地区行，按绝对/相对容差生成错误详情和结果 XLSX，并写运行日志。
+- 普通非 COM 功能使用共享 Calamine reader 和 rust_xlsxwriter writer；保持汇总标记公式空缓存所需的局部 OOXML 补丁范围不变。
+- COM 变体、原 GUI 菜单、目录选择体验、XLS、CSV、真实 XLSM/XLT、目标平台与 deb 未迁移或未验证。Python 原路径保留。
+
+对拍及验证：
+- 只读 Python 基线：`C:\Users\AZI\Desktop\VibeCode\4.pytools-main\.venv\Scripts\python.exe pytools-core/probe/region_sum_baseline.py --source-root C:\Users\AZI\Desktop\VibeCode\4.pytools-main`，通过。5 个合成 XLSX 输入的统计为 files=4、sheets=3、errors=1、failed_files=1；源函数 SHA-256 `78ABDA7379B4CC64F704E07B15426CB0A5D9D92ADFE94E747B982D3F7CCFD38C`，logger SHA-256 `F05B0E3B82D255D6AB6035AD9AF727157C3044E326307657AD3EA0BD094AEFF4`。
+- `cargo test -p pytools-core --test region_sum_parity --locked -- --nocapture`：5/5 通过，含既有完整结果簿/安全测试、新增 CLI 基线测试及配置目录测试。CLI 结果统计、输出单元格和公式文本与基线一致；源输入字节保持。
+- `cargo fmt --all -- --check`：通过。
+- `cargo test --workspace --locked -q`：通过，0 失败。
+- `cargo check --workspace --locked`：通过。
+- Python 项目源目录只读，未修改；未新增 Cargo 依赖或修改默认引擎路由。
+
+未完成与已知风险：
+- 仅合成 XLSX 样本；无法由此证明真实业务簿、文件保真、生产规模性能或峰值内存。
+- 命令接受显式文件路径，尚未接入原 Python GUI/菜单/文件选择器，也不处理目录发现。
+- 仅移植普通非 COM 路径；不提供 Office/COM 旁路。超出已验收输入的格式仍不得宣称支持。
+- 未在 Windows 原生 Rust、麒麟 V10、统信 UOS/glibc 2.28 构建/运行，未打离线 deb。
+
+回滚：从 `pytools.rs` 移除 `region-sum-check` dispatch/handler，从测试中移除对应 CLI 集成用例，并还原模块说明、迁移台账、README、parity 报告和本记录。保留既有 `region_sum` 候选逻辑/既有测试，除非另行决定撤回；不得修改原始 Python 项目或清理其他 WIP。

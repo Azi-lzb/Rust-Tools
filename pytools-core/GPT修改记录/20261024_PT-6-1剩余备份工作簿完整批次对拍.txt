@@ -1,0 +1,27 @@
+PT-6-1 剩余备份工作簿完整批次对拍
+
+执行者：Codex（pytools-dev）
+日期：2026-10-24
+修改前 commit：0914f35；分支 pytools-dev 与 origin/pytools-dev 同步。检查 origin/main 为 473c75a，属于当前分支祖先；相关规则、目标文件及共享 crate 无新增变化。原 Python 项目保持只读。
+
+目的：扩展 PT-6-1 在原 PyTools 真实 XLSX 上的全工作簿投影对拍，覆盖此前没有运行的备份目录样本。
+
+修改文件：
+- pytools-core/probe/compare_summary_backup_assets.py：运行剩余 51 份 XLSX 的只读 PyCode 基线和真实 Rust CLI 对拍，每批 3 份，验证完整输出投影、开发者事件流/历史一致性及源文件大小和修改时间。
+- pytools-core/probe/reports/summary_used_range_backup_assets_20261024.json：记录 17 批的计数、通过状态、投影范围和实际执行组件，不写入源文件名、路径或单元格内容。
+- pytools-core/MIGRATION_INVENTORY.md：追加本次 PT-6-1 真实样本证据。
+- 本修改记录。
+
+真实入口与结果：Windows Python 3.12 调用只读 PyCode run_summary_by_usedrange；WSL Rust CLI 运行 pytools summary-used-range。51 份工作簿共输出 1,016,511 行，17/17 批完整投影一致，包含值/行、类型、样式、工作表维度、冻结窗格、表头、合并、公式、定义名称、打印区域、页面设置、页边距和居中属性。实际记录的组件为 Calamine、excel-reader::read_xlsx_worksheet_extents、rust_xlsxwriter。开发者视图累计 549 条事件，所有批次的事件流与保存历史一致。源文件合计 84,340,966 字节，测试前后文件大小和修改时间未变；输出只写入临时目录，没有复制源工作簿到仓库。
+
+验证：
+- Windows Python 3.12 执行 python pytools-core/probe/compare_summary_backup_assets.py：退出码 0；状态 passed_real_backup_full_projection；51/51 输入，17/17 批，失败组 0。
+- 完整工作簿投影及 549 条开发者事件历史一致性：通过。
+- 源文件大小和修改时间前后检查：通过。
+- git diff --check：在文件编辑完成后执行。
+- 本轮没有改 Rust 生产代码；未重跑 cargo 单元/集成测试，Cargo.lock 未改。
+- 首轮验证会话因输出通道无响应而中止；第二轮隔离 stderr、将脱敏批次摘要重定向到临时文件后完成。中止轮没有生成报告或修改源文件。
+
+差异与范围：51 份样本没有 Python/Rust 输出差异。本报告扩展的是 PyCode 所属 xlsx/备份/目录样本和本次工作簿投影合同，不代表未知 Excel 错误值、其他格式或目标系统已验收。既有 #DATA! 在 Calamine 0.37 中仍不受支持，Rust 按当前 reader 边界失败关闭；没有新增 OOXML 普通值回退。麒麟 V10/UOS V20、glibc 2.28、deb 与原项目未来真实 XLSM 样本仍未验证；PT-6-1 整体未完成最终验收。
+
+回滚提示：仅回退本记录列出的 probe、报告与清单追加段；不回退此前已验收的 PyTools 生产实现，不修改原 Python 项目或共享 crate。

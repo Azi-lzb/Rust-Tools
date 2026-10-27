@@ -1,0 +1,62 @@
+{
+  "source": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "operation": "run_batch_unrename_by_content_47"
+  },
+  "operation47": {
+    "stats": {
+      "ok": 8,
+      "skip": 5,
+      "spec": "sheet1@A1;sheet2@A2",
+      "config_row": 2,
+      "config_remark": "4-7 对拍"
+    },
+    "final_entries": [
+      "001_sorted.xlsx",
+      "A_B_corrupt.xlsx",
+      "A_B_unverified.xlsb",
+      "B_missing_sheet.xlsx",
+      "C_D_no_match.xlsx",
+      "anyorder.xlsx",
+      "collision.xlsx",
+      "collision_1.xlsx",
+      "directory.xlsx",
+      "macroless.xlsm",
+      "partial.xlsx",
+      "repeat.xlsx",
+      "single.xlsx"
+    ],
+    "original_bytes_sha256": {
+      "001_A_B_sorted.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "A_B_A_B_repeat.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "A_B_collision.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "A_B_corrupt.xlsx": "56350315477F320310F3217786FD5244FB9D97DE269A323A4775BDF6564F48AD",
+      "A_B_macroless.xlsm": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "A_B_missing_sheet.xlsx": "01CA6920BC9F8EC61CE20FEF1DE13C50C4AC4A8181D827678F03EBECECB7E88F",
+      "A_B_single.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "A_B_unverified.xlsb": "56350315477F320310F3217786FD5244FB9D97DE269A323A4775BDF6564F48AD",
+      "A_partial.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "B_A_B_anyorder.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC",
+      "C_D_no_match.xlsx": "73571F36A02A9A59DEA69C531132274FAB11850406715CCA7A492EAF1D3AB9DC"
+    }
+  },
+  "legacy_without_sort_sheet": {
+    "stats": {
+      "ok": 1,
+      "skip": 1,
+      "spec": "sheet1@A1;sheet2@A2",
+      "config_row": 2,
+      "config_remark": "4-7 对拍"
+    },
+    "final_entries": [
+      "001_A_B_legacy_sorted.xlsx",
+      "legacy.xlsx"
+    ],
+    "original_bytes_sha256": {
+      "001_A_B_legacy_sorted.xlsx": "50A7B74716E695312ED5BB32912C1F620F480B341C62B9D0569C6F374396497D",
+      "A_B_legacy.xlsx": "50A7B74716E695312ED5BB32912C1F620F480B341C62B9D0569C6F374396497D"
+    }
+  }
+}

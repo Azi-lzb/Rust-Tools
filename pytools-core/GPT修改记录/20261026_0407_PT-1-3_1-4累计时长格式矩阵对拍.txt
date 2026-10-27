@@ -1,0 +1,25 @@
+日期：2026-10-26 04:07（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：f99b2916764643b5b6ab9d53674edf444e6e501f；`origin/pytools-dev` 同步。
+工作树已有 `MIGRATION_INVENTORY.md` 修改、交接文件、PT-4-2/PT-6-2 旧记录；均保留且不纳入本次提交。
+
+【目的】
+补充 PT-1-3/1-4 累计时长格式边界对拍。上一项修复的主完整对拍覆盖 `[h]:mm:ss.000`；本次用不同累计单位及颜色标记格式验证现有 Rust 时长识别，并用不带累计单位的 `[Red]h:mm:ss` 作负对照。
+
+【修改文件】
+- `pytools-core/probe/compare_wide_summary.py`：probe 支持传入累计时长格式，新增 `--elapsed-duration-formats` 场景，调用真实 Rust 菜单并覆盖摘要/目标追加流程。
+- `pytools-core/probe/reports/wide_summary_elapsed_duration_formats_20261026.json`：记录格式分类和逐例对拍结果。
+- 本记录。
+
+【验证】
+- 使用只读 PyTools Python venv（openpyxl 3.1.5）运行 `compare_wide_summary.py --elapsed-duration-formats`：退出码 0。
+- 7 种格式 × 行后缀/无后缀 × 新建目标/已有目标替换，共 28 个 Rust CLI 对拍通过；摘要/目标输出值、类型及有效格式与 PyCode 一致，原输入和配置未修改。openpyxl 将前 6 种识别为 timedelta，将 `[Red]h:mm:ss` 识别为非 timedelta；Rust 输出与对应基线一致。
+- probe 运行同时检查目标工作表有效格式及未触及工作表哨兵；已有目标路径的执行仍使用临时测试 capability，不产生生产能力登记。
+
+【限制】
+- 本轮仅扩展对拍场景，无 Rust 生产代码、迁移清单或配置变更；证据仍为合成 XLSX，不构成 PT-1-3/1-4 真实样本验收。
+- 真实样本、Linux/glibc 2.28、麒麟 V10/UOS V20 与离线 deb 仍未验收；本轮未运行 Rust 单测，因为未修改 Rust 代码。
+
+【组件版本】不升级。
+【删除清单】无。
+【回滚提示】只撤销本次 probe 场景、机器报告和本记录；保留已有 PT-1-3/1-4 实现与工作树中的其他 WIP。

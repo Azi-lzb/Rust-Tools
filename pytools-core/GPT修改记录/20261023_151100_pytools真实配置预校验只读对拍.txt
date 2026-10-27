@@ -1,0 +1,12 @@
+时间：2026-10-23 15:11（Asia/Shanghai）
+执行者：Codex
+原始配置路径：`C:\Users\AZI\Desktop\VibeCode\4.pytools-main\PyCode\config\config.xlsx`
+原始配置 SHA-256：`e000c784e85b63b4fc19fd45684aa8729dbd032238d78321fdc9fb4c33cee716`
+
+只读基线：未改动原始配置或源项目。为避免旧预校验按配置创建原始输出目录，将配置复制到临时目录，仅把副本的输入、输出、日志目录值重定向到临时目录，然后分别运行 Python `run_precheck` 与 Rust `timeline-precheck`。
+
+结果：Python 0 错误/0 警告；Rust 0 错误/0 警告。机器报告为 `pytools-core/probe/reports/timeline_precheck_real_config_20261023.json`。
+
+限制：该项只验证真实配置的预校验；原始配置保存副本由 openpyxl 完成，不是保真测试。真实业务工作簿不可用，故没有做时序 1-1/1-3/1-4 工作簿业务对拍。无目标 Linux/deb 验收。
+
+workspace 尚无 Git 首次提交且全文件未跟踪；本轮未 stage/commit/push。

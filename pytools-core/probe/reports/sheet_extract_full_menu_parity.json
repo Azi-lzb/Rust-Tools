@@ -1,0 +1,61 @@
+{
+  "baseline": "PyCode/core/feature_1_6_extract_sheets.py::_copy_full_sheet_with_style",
+  "baseline_style_limitation": [
+    "The legacy helper copies private style arrays across workbooks; openpyxl cannot read the emitted style table (IndexError).",
+    "Value, merge, comment, and row/column dimension behavior is captured from the helper output; Rust style checks use source-workbook properties because the Python output style table is unreadable."
+  ],
+  "checks": {
+    "developer_events_and_history": "passed",
+    "history_excludes_cell_values": "passed",
+    "menu_task_loading_and_source_selection": "passed",
+    "ordinary_extraction_drops_comments": "passed",
+    "production_capability_created": false,
+    "python_helper_output_style_reopen": "IndexError: list index out of range",
+    "python_helper_values_types_extent_merges_and_dimensions": "matched",
+    "rust_output_styles_against_source_properties": "matched",
+    "source_bytes": "preserved"
+  },
+  "entry_point": "pytools menu -> 7 -> 6",
+  "input_format": "xlsx",
+  "result": {
+    "actual_engines": [
+      "calamine",
+      "rust_xlsxwriter",
+      "umya_spreadsheet"
+    ],
+    "cell_extent": [
+      8,
+      5
+    ],
+    "compared_value_cells": 40,
+    "copied_comments": false,
+    "extended_column_dimension": {
+      "column": "G",
+      "hidden": true,
+      "outline_level": 2,
+      "width": 20.0
+    },
+    "extended_row_dimension": {
+      "height": 26.0,
+      "hidden": true,
+      "outline_level": 1,
+      "row": 12
+    },
+    "extracted_sheets": 1,
+    "failed_files": 0,
+    "files": 1,
+    "merged_ranges": [
+      "A1:C1"
+    ],
+    "output_files": 1,
+    "sheet": "报表"
+  },
+  "schema_version": 1,
+  "status": "partial",
+  "suite": "pytools.sheet_extract.full_sheet_menu_parity",
+  "temporary_test_capability": {
+    "engine": "umya_spreadsheet",
+    "platform": "synthetic-pt-7-6-full-sheet-menu",
+    "production_capability_created": false
+  }
+}

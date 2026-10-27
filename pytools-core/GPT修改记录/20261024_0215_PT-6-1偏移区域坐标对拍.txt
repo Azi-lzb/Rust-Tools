@@ -1,0 +1,24 @@
+时间：2026-10-24 02:15（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：1ffd0ee（已推送至 origin/pytools-dev）；修改后 commit：本轮提交，编号见 Git 历史。
+WIP 状态：开始时 pytools-dev 工作树干净且与 origin/pytools-dev 同步；已 fetch origin/main，main 没有新规则或共享能力提交。本轮只修改 pytools-core/**，不修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。源 Python 项目保持只读。
+
+目的：补测 PT-6-1 源 worksheet used range 从非首行、非首列开始时，输出应保持原始行号，并将源值映射到其对应列；此前夹具主要从 A 列开始。
+
+修改文件：
+- pytools-core/probe/compare_summary_tools.py：在第二个合成 XLSM 中增加 `Offset!D5:F6` 数据；对 Rust CLI 输出的 `A19:C20/G19/I20` 坐标和值作显式断言，并保持与 PyCode 完整投影对拍。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录 19 行对拍和偏移区投影坐标。
+- pytools-core/MIGRATION_INVENTORY.md：更新行数、输出尺寸及偏移区域证据。
+- 本修改记录。
+
+验证与对拍：
+- `python pytools-core/probe/compare_summary_tools.py`：通过；实际 Rust `summary-used-range` CLI 与只读 PyCode 在两个合成输入（XLSX 和无 VBA 的 macro-enabled XLSM）共 19 行结果完全一致。值/类型、已填充单元格样式、工作表顺序和尺寸、冻结窗格、表头、公式/合并/定义名称/打印区及页面设置一致。
+- 偏移坐标断言通过：源 `D5` 的字符串落在汇总 `G19`，源行号 5 写入 `C19`；源 `F6` 的数值落在 `I20`，源行号 6 写入 `C20`；左侧缺失源列与 Python 输出空白一致。
+- 同轮隐藏、veryHidden、空表、格式扩展区、合并范围、日期/布尔/错误值和公式缓存等既有对拍均通过。NoComPyTools 输出 18 行并跳过空表，差异保留在报告中。
+- `git diff --check`：通过。工作簿由 probe 在临时目录生成，不含真实业务文件或凭据。
+
+未执行项及限制：无授权真实汇总工作簿；含 VBA 的 XLSM、XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28 与 deb 未验证。本轮没有 Rust 源码变化；实际 CLI 由 probe 调用并验证。PT-6-1 整体仍未验收。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`，回滚偏移区域合成对拍、报告与状态记录。
+【组件版本】：不升级，当前 0.1.0。

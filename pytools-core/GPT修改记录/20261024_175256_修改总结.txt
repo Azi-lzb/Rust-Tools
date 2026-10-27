@@ -1,0 +1,45 @@
+时间：2026-10-24 17:52（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+修改前 commit：71cb67d（pytools-dev）
+修改后 commit：本记录与代码一并提交；写记录时提交尚未创建
+WIP 情况：开始时保留了上一轮未提交的 pytools-core/Cargo.toml、src/bin/pytools.rs 和 tests/conversion_menu_cli.rs；本轮在此基础上扩展，未丢弃或覆盖其他工作。
+
+修改目的：接入 PT-4 转换/文件命名交互菜单并补齐提交检查 Python/Rust 报表对拍；按命名核查结论将相关 Rust API 改为业务语义名称，同时保留弃用旧名映射。
+
+修改文件：
+- pytools-core/Cargo.toml
+- pytools-core/src/bin/pytools.rs
+- pytools-core/src/batch_rename.rs
+- pytools-core/src/file_sort_prefix.rs
+- pytools-core/src/local_filename_map.rs
+- pytools-core/src/submission_check.rs
+- pytools-core/tests/conversion_menu_cli.rs
+- pytools-core/tests/submission_check_parity.rs
+- pytools-core/tests/batch_rename_parity.rs
+- pytools-core/tests/content_rename_46_parity.rs
+- pytools-core/tests/content_unrename_47_parity.rs
+- pytools-core/tests/file_sort_prefix_operation_parity.rs
+- pytools-core/tests/file_sort_prefix_remove_parity.rs
+- pytools-core/tests/local_filename_map_48_parity.rs
+- pytools-core/probe/submission_check_baseline.py
+- pytools-core/probe/reports/submission_check_python_baseline.json
+- pytools-core/MIGRATION_INVENTORY.md
+- 本记录
+
+逻辑和接口变化：主菜单新增类别 4，连接 4-1 至 4-10 的 Rust 文件操作处理器；为 Windows 文件输入增加业务过滤和目录选择对话框，支持当前层、递归和手工路径。Sheet 改名维持 plan-only。提交检查报表恢复 Python 多命中规则详情、数字单元格类型及加粗表头。Rust API 的主要名称改为 run_batch_rename、run_content_prefix_rename_xlsx_candidate、run_content_prefix_unrename_xlsx_candidate、run_local_filename_map_candidate、run_file_sort_prefix、run_remove_file_sort_prefix；旧数字名称保留为 deprecated 委托别名。CLI 命令、菜单序号及 Excel 配置格式未改。未修改 DEVELOPMENT_GOAL.md、共享 crates、workspace 根 Cargo 文件或 audit-core。源 Python 项目只读。
+
+测试和对拍：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo check --offline --locked -p pytools-core --bin pytools：通过。
+- 最后补入目录弹窗的 OLE STA 初始化前，12 个关联 Windows 原生集成测试目标：28/28 通过（批量重命名、内容前缀添加/取消、转换菜单、提交检查、文件排序前缀添加/取消、局部映射、Sheet 改名及 timeline/dedup/print 菜单回归）。
+- OLE STA 初始化加入后，`cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`cargo check --offline --locked -p pytools-core --bin pytools` 通过；`conversion_menu_cli` 与 `submission_check_parity` 当前代码 2/2 通过。默认调试配置下 MSVC 链接曾报 PDB LNK1318 LIMIT，随后用 F 盘独立目标目录、关闭该验证构建调试符号后通过。
+- cargo test --offline --locked -p pytools-core --lib conversion::tests：4/4 通过。
+- Python 3.12.10 只读 PyCode 基线与 Rust submission-check CLI 对拍：统计、四张表顺序、值/类型、尺寸和表头加粗一致；含一个缺失规则、一个未识别文件和一个多重命中文件。
+- 缺失 sidecar 的菜单错误路径：Excel .xls 与 Word .doc 均明确要求外部引擎，未生成输出且源文件字节不变。
+
+未执行项和已知问题：未运行全量 cargo test；同格式复制和缺 sidecar 错误路径不证明真实 .xls/.et/.doc 转换成功。真实业务样本、用户手动操作 Windows 原生文件/目录对话框、实际转换 sidecar、生产 capability、Linux/麒麟/UOS、glibc 2.28 与 deb 未验证。编译警告来自现有共享 excel-editor 弃用 API 和 pytools-core 中无关既有 unused imports。
+
+删除清单：无。
+配置/VBA 迁移影响：Excel 配置字段和工作表名不变；没有复制或修改任何 VBA 内容，菜单转换测试只覆盖合成同格式路径及缺失引擎失败行为。
+组件版本：不升级；保持 pytools-core Cargo.toml 现有 0.1.0，遵循 workspace 版本治理。
+回滚提示：可 revert 本次独立提交；不要回退其父提交或其他工作树修改。

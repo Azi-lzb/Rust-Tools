@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.date_parse",
+  "baseline": "original PyCode.core.date_parse",
+  "status": "保留",
+  "passed": 22,
+  "total": 22,
+  "cases": [
+    {
+      "id": "empty_none",
+      "operation": "normalize",
+      "actual": null,
+      "expected": null,
+      "status": "保留"
+    },
+    {
+      "id": "empty_string",
+      "operation": "normalize",
+      "actual": null,
+      "expected": null,
+      "status": "保留"
+    },
+    {
+      "id": "compact_ymd",
+      "operation": "normalize",
+      "actual": "2026-01-01",
+      "expected": "2026-01-01",
+      "status": "保留"
+    },
+    {
+      "id": "dot_ymd",
+      "operation": "normalize",
+      "actual": "2026-01-01",
+      "expected": "2026-01-01",
+      "status": "保留"
+    },
+    {
+      "id": "hyphen_ymd",
+      "operation": "normalize",
+      "actual": "2026-04-09",
+      "expected": "2026-04-09",
+      "status": "保留"
+    },
+    {
+      "id": "chinese_ymd_with_month_marker",
+      "operation": "normalize",
+      "actual": "2026-01-01",
+      "expected": "2026-01-01",
+      "status": "保留"
+    },
+    {
+      "id": "year_month_marker",
+      "operation": "normalize",
+      "actual": "2026-04-30",
+      "expected": "2026-04-30",
+      "status": "保留"
+    },
+    {
+      "id": "dot_year_month",
+      "operation": "normalize",
+      "actual": "2026-04-30",
+      "expected": "2026-04-30",
+      "status": "保留"
+    },
+    {
+      "id": "hyphen_year_month",
+      "operation": "normalize",
+      "actual": "2026-04-30",
+      "expected": "2026-04-30",
+      "status": "保留"
+    },
+    {
+      "id": "compact_year_month",
+      "operation": "normalize",
+      "actual": "2026-04-30",
+      "expected": "2026-04-30",
+      "status": "保留"
+    },
+    {
+      "id": "leap_month_end",
+      "operation": "normalize",
+      "actual": "2024-02-29",
+      "expected": "2024-02-29",
+      "status": "保留"
+    },
+    {
+      "id": "common_month_end",
+      "operation": "normalize",
+      "actual": "2026-02-28",
+      "expected": "2026-02-28",
+      "status": "保留"
+    },
+    {
+      "id": "invalid_month",
+      "operation": "normalize",
+      "actual": null,
+      "expected": null,
+      "status": "保留"
+    },
+    {
+      "id": "invalid_day",
+      "operation": "normalize",
+      "actual": null,
+      "expected": null,
+      "status": "保留"
+    },
+    {
+      "id": "date_object",
+      "operation": "normalize",
+      "actual": "2026-02-03",
+      "expected": "2026-02-03",
+      "status": "保留"
+    },
+    {
+      "id": "datetime_object",
+      "operation": "normalize",
+      "actual": "2026-02-03",
+      "expected": "2026-02-03",
+      "status": "保留"
+    },
+    {
+      "id": "filename_month_end",
+      "operation": "parse",
+      "actual": {
+        "date": "2026-04-30",
+        "source": "文件名"
+      },
+      "expected": {
+        "date": "2026-04-30",
+        "source": "文件名"
+      },
+      "status": "保留"
+    },
+    {
+      "id": "filename_wins",
+      "operation": "parse",
+      "actual": {
+        "date": "2024-02-29",
+        "source": "文件名"
+      },
+      "expected": {
+        "date": "2024-02-29",
+        "source": "文件名"
+      },
+      "status": "保留"
+    },
+    {
+      "id": "invalid_filename_falls_back_to_a1",
+      "operation": "parse",
+      "actual": {
+        "date": "2026-04-30",
+        "source": "A1"
+      },
+      "expected": {
+        "date": "2026-04-30",
+        "source": "A1"
+      },
+      "status": "保留"
+    },
+    {
+      "id": "invalid_full_date_falls_back_to_a1",
+      "operation": "parse",
+      "actual": {
+        "date": "2026-03-31",
+        "source": "A1"
+      },
+      "expected": {
+        "date": "2026-03-31",
+        "source": "A1"
+      },
+      "status": "保留"
+    },
+    {
+      "id": "chinese_full_date",
+      "operation": "parse",
+      "actual": {
+        "date": "2026-02-28",
+        "source": "文件名"
+      },
+      "expected": {
+        "date": "2026-02-28",
+        "source": "文件名"
+      },
+      "status": "保留"
+    },
+    {
+      "id": "no_date",
+      "operation": "parse",
+      "actual": {
+        "date": null,
+        "source": null
+      },
+      "expected": {
+        "date": null,
+        "source": null
+      },
+      "status": "保留"
+    }
+  ]
+}

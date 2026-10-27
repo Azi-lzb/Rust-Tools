@@ -1,0 +1,22 @@
+时间：2026-10-27 02:22 +08:00
+执行者：Codex
+修改前 commit：0846d46
+修改后 commit：本记录及回归随本次提交
+修改前 WIP：仅有本轮 PT-2-4 集成测试修改；原 Python 项目只读。
+
+目的：验证 main 提供的共享 reader fail-closed 修复在 PyTools 删除重复流程中的错误传播与输出安全。
+
+修改文件：
+- `pytools-core/tests/dedup_number_format_blocker.rs`：新增 row/column 默认格式继承 XLSX 的最小 OOXML 夹具；确认 PyTools 拒绝未解析格式，不发布输出且不改源。保留直接单元格 `000000` 保真回归。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录共享修复与本地验证；PT-2-4 对 row/column 继承格式仍标记“受阻”。
+- 本记录。
+
+共享变更：安全 cherry-pick main 提交 `134b2c339b4605102864898ab1db415a58f64754`，本地提交为 `0846d4654d04f5dc2f05f3a6465a565b035c5958`。reader 对无显式 cell `s` 且存在 row/column 默认样式的目标坐标报错，不再默认报告 General；不解析继承优先级。
+
+验证：Windows 原生 `cargo fmt -p pytools-core -- --check`；共享继承样式单测 1/1；`cargo test --offline --locked -p pytools-core --test dedup_number_format_blocker` 2/2；`cargo test --offline --locked -p pytools-core --test dedup_menu_cli` 7/7。产物使用工作树 `.cargo/config.toml` 指定的 `F:\RustBuild\pytools`。
+
+结论/未验证：PyTools 直接格式路径保留 `000000`；row/column 继承格式明确失败，源文件不变且无输出。PT-2-4 仍受此类输入阻塞。未运行 Python、真实业务样本、Excel 手工验收、Linux/glibc 2.28、麒麟/UOS 或 deb 验收。
+
+删除清单：无。
+回滚提示：回退本提交移除继承样式的 PyTools 失败关闭回归及清单记录；共享 reader 修复保留于前置提交 `0846d46`。
+【组件版本】pytools-core 0.1.0，不升级。

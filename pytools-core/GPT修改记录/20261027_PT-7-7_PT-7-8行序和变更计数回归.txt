@@ -1,0 +1,21 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：5ab6ccb
+修改后 commit：待提交
+修改前 WIP：工作树干净；本轮仅修改 PyTools 涉农贷款批处理、对应回归及迁移状态记录。
+
+目的：按旧 Python 工作表行序稳定生成 PT-7-7/PT-7-8 机构操作及未匹配列表，并修正 PT-7-8 将未匹配机构误计入 changed_cells 的报告值。
+
+修改文件：
+- pytools-core/src/batch_ops.rs：新增按源行序遍历机构的辅助函数；摘要和 ExcelEditPlan 操作保持 Python 插入顺序；changed_cells 改为实际计划操作数。
+- pytools-core/tests/rural_loan_regressions.rs：覆盖两项功能的列表/编辑行序以及季度 changed_cells 与操作数一致。
+- pytools-core/MIGRATION_INVENTORY.md：记录本轮回归和验收状态未变化。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml`；`cargo check --offline --locked -p pytools-core -j 1` 通过；`cargo test --offline --locked -p pytools-core --test rural_loan_regressions -j 1` 4/4 通过；`batch_tools_menu_cli::interactive_quarterly_rural_loan_menu_executes_capability_and_safely_replaces_current_workbook` 1/1 通过。编译与冒烟继续显示既有共享 Excel-Core 弃用 API、PyTools unused import/dead-code 警告。
+
+未执行项/已知问题：本轮未运行 Python 解释器或真实业务工作簿；已有合成 Python/Rust 对拍证据未重跑。真实模板、桌面文件弹窗、生产 capability、麒麟/UOS、glibc 2.28 和离线 deb 未验证；PT-7-7/PT-7-8 产品验收状态仍为未验证。不更改 Excel-Core 路由，不请求 main 修改共享能力。
+
+删除清单：无。
+回滚提示：回退本轮提交将恢复 HashMap 非稳定遍历及季度 changed_cells 将未匹配行计入的行为。
+【组件版本】pytools-core 0.1.0，不升级。

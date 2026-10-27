@@ -1,0 +1,31 @@
+时间：2026-10-24 23:58:43（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：c787ee4dac424b8ccd97414583a31051cf4e785d；分支 `pytools-dev` 与 `origin/pytools-dev` 同步。修改时保护并延续 PT-7-6 已有未提交工作；未执行 reset、clean 或覆盖既有成果。
+修改后业务 commit：9b5a2e0（`feat(pytools): integrate PT-7-6 sheet extraction menu`）。本记录作为后续单独记录提交纳入版本控制。
+
+目的：把普通无批注版工作表提取接入真实产品菜单 7→6，补齐进度/引擎/耗时运行记录，并以既有只读 Python 基线验证该入口。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：新增菜单 7→6；加载启用任务，无任务时中止；整表任务缺 ExcelModifier capability/platform 时先中止；多选后只将 `.xlsx` 传给候选；`extract-sheets` 支持 user/developer/off 视图及 PT-7-6 运行历史。
+- `pytools-core/src/sheet_extract.rs`：保留既有 API 并新增可选进度回调；逐阶段记录 Calamine、rust_xlsxwriter 或 ExcelModifier 实际引擎、状态和耗时；候选入口显式拒绝未验收格式。
+- `pytools-core/src/summary_ops.rs`：给共享 PyTools 运行进度结构增加默认省略的 `processed_sheets` 统计。
+- `pytools-core/tests/sheet_extract_area_operation_parity.rs`：增加真实菜单 CLI 对拍、无任务/整表 capability 门控、user/developer/off 视图测试；校验输出值/类型、表名、尺寸、输入字节、阶段事件、实际引擎及历史不含抽样单元格值。
+- `pytools-core/tests/batch_tools_menu_cli.rs`：更新 PT-7-3 对主菜单接入范围的旧断言。
+- `pytools-core/probe/reports/sheet_extract_menu_parity.json`：保存菜单入口的合成对拍摘要，不含单元格内容。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录入口、引擎、对拍结果和未验收边界。
+- 本记录。
+
+真实入口与数据流：`pytools menu --config <配置簿> --log-view <视图>` → 主菜单 7 → 批处理菜单 6 → `load_extract_tasks` 与多文件选择/格式过滤 → `run_extract_sheets_candidate_with_progress` → 共享 `excel-reader`/Calamine 读取区域值 → `rust_xlsxwriter` 新建输出簿 → Calamine 重开校验 → 不覆盖目标的安全提交。整表模式仍需匹配的 ExcelModifier capability/platform；本轮没有执行整表修改。
+
+验证结果（Windows 原生 Rust 工具链）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --quiet --manifest-path Cargo.toml -p pytools-core --test sheet_extract_area_operation_parity --test batch_tools_menu_cli`：工作表提取 7/7、批处理菜单 10/10 通过。
+- 两个有效合成 XLSX、一个损坏 XLSX 与一个占位 `.xls` 经菜单入口处理：`.xls` 在读入前跳过，损坏 XLSX 记为部分失败；4 张输出表的 44 个投影单元格、类型、表名和尺寸与只读 PyCode JSON 基线一致，源文件字节不变。
+- 开发者事件和运行历史记录 Calamine/rust_xlsxwriter 与阶段耗时；历史不含单元格值。user/developer/off 视图和无任务/缺 capability 提前中止均有菜单集成回归。
+- `git diff --check`：通过。既有 `excel-editor` 弃用 API 与 `batch_ops.rs`/`quick.rs` 未使用导入警告未在本次改动。
+
+未执行项与已知边界：对拍仅使用合成 XLSX；区域候选按旧实现读取存储值，不保留公式文本；Windows 原生文件弹窗未手工操作；真实业务模板、整表 capability 执行、其他输入格式、麒麟/UOS、glibc 2.28 与 deb 均未验证。PT-7-6 完整功能和生产验收仍为未验证，未登记生产 capability，未改变 ExcelModifier 默认路由。未运行 workspace 全量测试或 Python 源项目测试。
+
+删除清单：无。
+回滚：`git revert 9b5a2e0` 撤回本轮业务提交；本记录由后续单独记录提交管理。
+【组件版本】：不升级，当前 0.1.0。

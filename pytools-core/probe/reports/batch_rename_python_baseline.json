@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.batch_rename_33",
+  "source": "PyCode/core/convert_33_34_35_37.py::run_batch_rename_33",
+  "config_fixture": "tests/fixtures/batch_rename_config.xlsx",
+  "config_sha256_before": "0b2c9f704bb5d011fa0293b84f1cba5b9b405667da98f45bda7d83db959bfa25",
+  "config_sha256_after": "0b2c9f704bb5d011fa0293b84f1cba5b9b405667da98f45bda7d83db959bfa25",
+  "python_baseline": {
+    "status": "保留",
+    "python": "3.12.10",
+    "passed": 1,
+    "total": 1
+  },
+  "result": {
+    "ok": 3,
+    "skip": 4,
+    "entries": [
+      {
+        "name": "2026-01-31 0003 丙银行 存款表",
+        "kind": "directory"
+      },
+      {
+        "name": "2026-01-31 0008 短名优先银行 存款表.xlsx",
+        "kind": "file"
+      },
+      {
+        "name": "2026-01-31 0008 短名优先银行 存款表_1.xlsx",
+        "kind": "file"
+      },
+      {
+        "name": "2026-01-31 0008 短名优先银行 存款表_2.xlsx",
+        "kind": "file"
+      },
+      {
+        "name": "2026-01-31 A01 英文银行 存款表.xlsm",
+        "kind": "file"
+      },
+      {
+        "name": "UNKNOWN.csv",
+        "kind": "file"
+      },
+      {
+        "name": "乙行.xls",
+        "kind": "file"
+      }
+    ],
+    "renamed_directory_marker": "marker",
+    "reserved_collision_content": "reserved-one"
+  }
+}

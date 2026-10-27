@@ -1,0 +1,29 @@
+时间：2026-10-26 04:35:11（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 HEAD：9020c6270902809f2bb7320517407b03831e0074
+WIP：保留已有 MIGRATION_INVENTORY.md 修改、HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 转换失败记录和 PT-6-2 时长语义缺口记录；本次未修改这些文件。
+
+【目的】
+补上默认配置路径在实际 Rust 菜单启动流程中的回归覆盖。Rust 菜单未提供 `--config` 时，应从可执行文件所在目录读取 `config/config.xlsx`；启动时的当前工作目录不应改变配置位置。该路径与 PyCode 冻结打包模式的 `_app_base_dir()` 规则一致。
+
+【修改文件】
+- pytools-core/tests/config_menu_cli.rs：新增集成测试，将实际 CLI 可执行文件复制到临时安装目录，从另一临时目录启动 `pytools menu`（不传 `--config`），通过菜单初始化配置并断言配置只创建在可执行文件旁的 `config/config.xlsx`。
+- 本记录：记录本次测试变更与验证。
+
+【验证】
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 `cargo test --manifest-path pytools-core/Cargo.toml --offline --locked -p pytools-core --test config_menu_cli default_menu_configuration_is_created_beside_executable_not_working_directory -j 1`：1/1 通过。实际复制并运行 CLI，启动目录与安装目录不同，配置在安装目录下创建并被 `excel-reader` 重新读取，共 11 张工作表。
+- 本次只补入口行为测试；没有声称 PT-5 的真实业务样本或 Excel 全保真验收，也没有运行 Python/Rust 数据对拍。
+
+【未执行项与已知问题】
+- 本次未运行整个 workspace 或 Linux/glibc 2.28/麒麟/UOS/deb 验收。
+- 命令输出包含已有 `umya-spreadsheet` 弃用警告及 PyTools unused-import 警告；本次未处理。
+
+【删除清单】
+无。测试临时安装目录由集成测试清理。
+
+【回滚提示】
+撤销本次功能提交即可移除该回归测试及记录；不涉及产品运行代码。
+
+【组件版本】
+pytools-core 0.1.0，未升级。

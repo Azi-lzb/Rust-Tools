@@ -1,0 +1,24 @@
+时间：2026-10-24 05:53:12 中国标准时间
+执行者：Codex（pytools-dev）
+修改前 commit：e49e837a59cec8f05f2485523d0bce0ab9dbf8a6；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。origin/main：473c75a4c93cd4875e37f31c53e567120cb9d040。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+目的：继续 PT-6-1 的 Linux 阶段验证，将最大真实备份簿交给 WSL musl release CLI，与原 PyCode 进行完整输出对拍。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：记录 musl release 对最大备份簿的真实 CLI 对拍、引擎和日志一致性。
+- pytools-core/MIGRATION_INVENTORY.md：追加 WSL musl 阶段证据及其平台边界。
+- 本修改记录。
+
+业务入口与结果：x86_64-unknown-linux-musl release static PIE pytools summary-used-range → Calamine 读取 → Rust 汇总 → rust_xlsxwriter 输出。使用原 PyTools xlsx/备份/ 最大 XLSX（3,800,854 字节，39,171 行），与只读 Windows PyCode run_summary_by_usedrange 的完整工作簿投影完全一致。实际引擎为 Calamine/rust_xlsxwriter；developer 18 条 stderr 事件与保存的运行历史 JSON 完全一致。源簿大小/修改时间未变，输出和日志仅在临时目录，已清理。
+
+验证：
+- wsl.exe 启动 target/x86_64-unknown-linux-musl/release/pytools summary-used-range，developer 视图：成功；39,171 行完整投影与 PyCode 一致。
+- 输出引擎与运行历史校验：通过；源资产元数据前后不变。
+- 报告 JSON 及内容断言、git diff --check：提交前复验。
+- 本轮无 Rust 代码变化，未重复 cargo test；前一验证提交中的 summary_used_range_error 集成测试 4/4 通过。
+- 该验证运行于 WSL musl，不代表麒麟 V10/UOS V20 实机、glibc 2.28、deb 安装或离线交付验收；PT-6-1 整体仍未完成。
+
+差异与已知问题：本样本无输出差异。未将源工作簿、输出工作簿或凭据加入仓库。
+删除清单：无。
+回滚：可通过 git revert <本轮提交> 撤回本次 PT-6-1 Linux 阶段证据。
+【组件版本】：不升级，本轮未改变业务行为。

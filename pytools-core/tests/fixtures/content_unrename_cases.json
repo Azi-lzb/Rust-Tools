@@ -1,0 +1,47 @@
+{
+  "operation47": {
+    "content_spec": "sheet1@A1;sheet2@A2",
+    "sort_rows": [
+      {"enabled": "Y", "sort_prefix": "001", "keywords": "single", "remark": "排序前缀一"},
+      {"enabled": "是", "sort_prefix": "012", "keywords": "multiple", "remark": "排序前缀二"}
+    ],
+    "input_names": [
+      "A_B_single.xlsx",
+      "A_B_A_B_repeat.xlsx",
+      "B_A_B_anyorder.xlsx",
+      "A_partial.xlsx",
+      "001_A_B_sorted.xlsx",
+      "A_B_collision.xlsx",
+      "C_D_no_match.xlsx",
+      "missing.xlsx",
+      "directory.xlsx",
+      "A_B_corrupt.xlsx",
+      "A_B_missing_sheet.xlsx",
+      "A_B_macroless.xlsm",
+      "A_B_unverified.xlsb"
+    ],
+    "existing_names": ["collision.xlsx"],
+    "missing_names": ["missing.xlsx"],
+    "directory_names": ["directory.xlsx"],
+    "corrupt_names": ["A_B_corrupt.xlsx", "A_B_unverified.xlsb"],
+    "workbooks": {
+      "A_B_single.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_B_A_B_repeat.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "B_A_B_anyorder.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_partial.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "001_A_B_sorted.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_B_collision.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "C_D_no_match.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_B_missing_sheet.xlsx": {"sheet1": {"A1": "A"}},
+      "A_B_macroless.xlsm": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}}
+    }
+  },
+  "legacy_without_sort_sheet": {
+    "content_spec": "sheet1@A1;sheet2@A2",
+    "input_names": ["A_B_legacy.xlsx", "001_A_B_legacy_sorted.xlsx"],
+    "workbooks": {
+      "A_B_legacy.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "001_A_B_legacy_sorted.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}}
+    }
+  }
+}

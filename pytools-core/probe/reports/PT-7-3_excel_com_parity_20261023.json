@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.pt_7_3.row_delete_excel_com_parity",
+  "date": "2026-10-23",
+  "feature_id": "PT-7-3",
+  "status": "failed",
+  "sample_kind": "synthetic_workbook_generated_by_excel_com",
+  "oracle": "Microsoft Excel COM 16.0",
+  "rust_engine": "umya_spreadsheet",
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "source_unchanged": false,
+  "semantic_equal": false,
+  "differences": [
+    "WSL command failed (1): w\u0000s\u0000l\u0000:\u0000 \u0000�hKm0R \u0000l\u0000o\u0000c\u0000a\u0000l\u0000h\u0000o\u0000s\u0000t\u0000 \u0000�N\u0006tM�n\f�FO*g\\��P0R \u0000W\u0000S\u0000L\u0000\u00020N\u0000A\u0000T\u0000 \u0000!j\u000f_\u000bN�v \u0000W\u0000S\u0000L\u0000 \u0000\nN/e\u0001c \u0000l\u0000o\u0000c\u0000a\u0000l\u0000h\u0000o\u0000s\u0000t\u0000 \u0000�N\u0006t\u00020\n\u0000\n\u0000bash: line 1: cd: /mnt/c/Users\\AZI\\Desktop\\VibeCode\\1.rust-workspace: No such file or directory"
+  ],
+  "not_verified": [
+    "real pytools workbook/configuration",
+    "cross-sheet formula and defined-name updates",
+    "Kylin V10",
+    "UOS V20",
+    "glibc 2.28",
+    "offline deb packaging"
+  ],
+  "error": "WSL command failed (1): w\u0000s\u0000l\u0000:\u0000 \u0000�hKm0R \u0000l\u0000o\u0000c\u0000a\u0000l\u0000h\u0000o\u0000s\u0000t\u0000 \u0000�N\u0006tM�n\f�FO*g\\��P0R \u0000W\u0000S\u0000L\u0000\u00020N\u0000A\u0000T\u0000 \u0000!j\u000f_\u000bN�v \u0000W\u0000S\u0000L\u0000 \u0000\nN/e\u0001c \u0000l\u0000o\u0000c\u0000a\u0000l\u0000h\u0000o\u0000s\u0000t\u0000 \u0000�N\u0006t\u00020\n\u0000\n\u0000bash: line 1: cd: /mnt/c/Users\\AZI\\Desktop\\VibeCode\\1.rust-workspace: No such file or directory"
+}

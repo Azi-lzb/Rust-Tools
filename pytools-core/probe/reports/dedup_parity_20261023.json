@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.dedup_python_rust_parity",
+  "date": "2026-10-23",
+  "status": "passed_synthetic_semantic_parity",
+  "source": "PyCode/core/dedup_311.py",
+  "scenarios": {
+    "2-1_comment_duplicate_check": {
+      "status": "passed_plan_parity",
+      "python_duplicate_rows": 3,
+      "rust_plan_fill_cells": 8,
+      "comparison": "Rust fill-cell coordinates equal red-fill cells from the Python baseline workbook"
+    },
+    "2-2_comment_duplicate_delete": {
+      "status": "passed_plan_semantics",
+      "python_deleted_rows": 3,
+      "comparison": "Applying Rust DeleteRows operations to a temporary copy produces the same workbook cell projection as Python"
+    },
+    "2-3_config_duplicate_check": {
+      "status": "passed_plan_parity",
+      "python_duplicate_rows": 5,
+      "merged_tasks": 1,
+      "comparison": "Rust fill-cell coordinates equal red-fill cells from the Python baseline workbook"
+    },
+    "2-4_config_duplicate_delete": {
+      "status": "passed_plan_semantics",
+      "python_deleted_rows": 4,
+      "merged_tasks": 1,
+      "comparison": "Applying Rust DeleteRows operations to a temporary copy produces the same workbook cell projection as Python"
+    },
+    "2-5_config_append_new_target": {
+      "status": "passed_candidate_output_parity",
+      "python_appended_rows": 7,
+      "rust_appended_rows": 7,
+      "python_duplicate_rows_filtered": 7,
+      "rust_duplicate_rows_filtered": 7,
+      "target_sheets": ["Append", "OtherAppend"],
+      "existing_target_modified": false,
+      "comparison": "Candidate workbook sheet names and cell values equal Python output projection"
+    },
+    "2-6_config_precheck": {
+      "status": "passed_count_parity",
+      "python_counts": {"ok": 4, "warn": 1, "fail": 2},
+      "rust_counts": {"ok": 4, "warn": 1, "fail": 2}
+    }
+  },
+  "cross_task_append_regression": {
+    "status": "fixed_and_passed",
+    "case": "A later task uses a different key-column selector on a target sheet already appended by an earlier task",
+    "result": "Rust now includes earlier accepted rows in new selector caches and updates cached selectors after each append task"
+  },
+  "safety_and_limitations": [
+    "Synthetic XLSX fixtures only; no real dedup template or real business workbook was used.",
+    "Comment marking and deletion were compared as plans; deletion operations were applied by the probe to a temporary copy, not through a production ExcelModifier capability.",
+    "The append test created a new candidate workbook. Existing-target modification was not executed and remains gated by registered ExcelModifier capability evidence.",
+    "Operation logging, failure recovery, XLS/XLSM/XLSB, Windows native release behavior, Kylin/UOS, glibc 2.28 and deb packaging were not validated."
+  ]
+}

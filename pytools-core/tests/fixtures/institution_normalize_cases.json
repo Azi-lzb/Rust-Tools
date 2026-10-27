@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "mapping": [
+    ["AB", "Short Standard"],
+    ["ABC Bank", "Exact Standard"],
+    ["branch", "Branch Standard"]
+  ],
+  "sheets": [
+    {
+      "name": "报表分机构本外币",
+      "rows": [
+        ["机构", "说明", "合并标题", null, "批注保留", null],
+        ["ABC Bank", "保持原值", null, null, null, "=SUM(1,2)"],
+        [" abc bank office ", "保持原值", null, null, null, null],
+        ["Unmapped", "保持原值", null, null, null, null],
+        ["   ", "空白行", null, null, null, null]
+      ]
+    },
+    {
+      "name": "分机构-备用",
+      "rows": [
+        ["", "机构名称"],
+        [null, "Branch Office"],
+        [null, "unchanged"],
+        [null, "   "]
+      ]
+    },
+    {
+      "name": "分机构-空表",
+      "rows": [["机构", "说明"]]
+    },
+    {
+      "name": "汇总",
+      "rows": [["机构"], ["ABC Bank"]]
+    }
+  ],
+  "comments": [
+    {"sheet": "报表分机构本外币", "cell": "E1", "text": "保留批注", "author": "probe"}
+  ],
+  "merges": [
+    {"sheet": "报表分机构本外币", "range": "C1:D1"}
+  ],
+  "style_cells": [
+    {"sheet": "报表分机构本外币", "cell": "A2", "fill": "FFFF00"}
+  ],
+  "column_widths": [
+    {"sheet": "报表分机构本外币", "column": "A", "width": 24}
+  ],
+  "row_heights": [
+    {"sheet": "报表分机构本外币", "row": 2, "height": 25}
+  ]
+}

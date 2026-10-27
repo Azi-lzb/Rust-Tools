@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.conversion.native_excel_value_only",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_and_repository_fixture_python_rust_value_projection",
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "rust_entry": "Windows-native pytools convert-excel --engine native",
+    "python_baseline": "xlrd 2.0.2 source reader + openpyxl 3.1.5 output reader"
+  },
+  "input": {
+    "format": "xls",
+    "kind": "synthetic smoke workbook",
+    "fixture": "pytools-core/tests/fixtures/timeline/wide_summary_legacy.xls"
+  },
+  "output": {
+    "format": "xlsx",
+    "requested_engine": "native",
+    "actual_engine": "calamine + rust_xlsxwriter",
+    "actual_components": [
+      "Rust",
+      "pytools-core::conversion",
+      "excel-reader/calamine",
+      "excel-writer/rust_xlsxwriter"
+    ],
+    "run_history_redacted": true,
+    "source_unchanged": true
+  },
+  "comparison": {
+    "scope": "Python xlrd source values compared with the Rust-generated XLSX reopened by openpyxl; this does not compare the legacy PyCode fidelity-conversion result.",
+    "worksheet_names_and_order_equal": true,
+    "nonempty_cell_coordinates_equal": true,
+    "text_values_equal": true,
+    "numeric_values_equal": true,
+    "worksheets": 1,
+    "nonempty_cells": 2,
+    "text_cells": 1,
+    "numeric_cells": 1,
+    "numeric_type_projection": "XLS integer storage is read by xlrd as NUMBER and emitted by Rust as an XLSX numeric cell; values compare exactly."
+  },
+  "type_guard": {
+    "input": "synthetic .xlsm containing an ISO-typed Excel date generated with openpyxl iso_dates=True",
+    "rust_result": "conversion refused before publishing because rust_xlsxwriter output would change the cell type to text",
+    "converted": 0,
+    "failed": 1,
+    "output_published": false,
+    "source_unchanged": true
+  },
+  "error_value_guard": {
+    "input": "synthetic .xlsm containing a typed #N/A error cell at 错误!A1",
+    "rust_result": "conversion refused before publishing because the writer cannot preserve a typed Excel error",
+    "converted": 0,
+    "failed": 1,
+    "error_location_reported": true,
+    "output_published": false,
+    "source_unchanged": true
+  },
+  "numeric_serial_values": {
+    "date_system": "1900",
+    "cells": {
+      "A1": {
+        "python_expected_serial": 45351.520833333336,
+        "rust_output_number": 45351.52083333334,
+        "output_type": "number"
+      },
+      "A2": {
+        "python_expected_serial": 0.5208333333333334,
+        "rust_output_number": 0.5208333333333334,
+        "output_type": "number"
+      },
+      "A3": {
+        "python_expected_serial": 1.09375,
+        "rust_output_number": 1.09375,
+        "output_type": "number"
+      }
+    },
+    "boolean_cells": {
+      "B1": {
+        "python_value": true,
+        "rust_value": true,
+        "output_type": "boolean"
+      },
+      "B2": {
+        "python_value": false,
+        "rust_value": false,
+        "output_type": "boolean"
+      }
+    },
+    "formula_cells": {
+      "C1": {
+        "python_formula_text": "=SUM(A1,A2)",
+        "rust_formula_text": "=SUM(A1,A2)",
+        "output_type": "formula",
+        "cache_parity": "not tested; native value-only conversion does not preserve formula caches"
+      }
+    },
+    "formatting_dropped": true,
+    "source_unchanged": true
+  },
+  "date_epoch_guard": {
+    "input": "synthetic XLSM with 1904 epoch, typed date serial 43889 and formula text",
+    "rust_result": "conversion refused because the new-workbook writer cannot preserve the source epoch",
+    "converted": 0,
+    "failed": 1,
+    "output_published": false,
+    "source_unchanged": true
+  },
+  "repository_vba_fixture_projection": {
+    "fixture": "pytools-core/tests/fixtures/vba_config/VbaV2.4.2.xlsm",
+    "kind": "repository VBA config fixture; not a real user business template",
+    "actual_engine": "calamine + rust_xlsxwriter",
+    "actual_components": [
+      "Rust",
+      "pytools-core::conversion",
+      "excel-reader/calamine",
+      "excel-writer/rust_xlsxwriter"
+    ],
+    "source_has_vba": true,
+    "output_has_vba": false,
+    "formatting_dropped": true,
+    "source_unchanged": true,
+    "worksheets": 14,
+    "source_nonempty_cells": 39015,
+    "output_nonempty_cells": 39015,
+    "date_cells": 1781,
+    "formula_cells": 0,
+    "boolean_cells": 0,
+    "numeric_cells": 4775,
+    "text_cells": 32459,
+    "max_numeric_abs_diff": 0.0,
+    "mismatches": 0,
+    "unexpected_output_cells": 0
+  },
+  "unverified": [
+    "Real business XLS workbooks and configurations.",
+    "Formula cache parity against legacy XLS conversion, 1904 epoch detection for legacy .xls/.xlsb inputs, and empty-string cells.",
+    "Styles, comments, merged regions, dimensions, names, print settings, validations, conditional formatting, drawings and macros are intentionally not preserved by this value-only route.",
+    "Windows desktop file dialog, glibc 2.28, Kylin V10/UOS V20 and offline deb delivery."
+  ]
+}

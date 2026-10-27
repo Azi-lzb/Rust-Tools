@@ -1,0 +1,22 @@
+时间：2026-10-24 08:33:27（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d763a5585072a7c41e9f60634c04e6d3a3720d35；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无未提交用户 WIP。origin/main 为 473c75a，无需同步的共享 reader 更新。
+修改后 commit：本轮提交（提交号见本文件所在 Git commit）。
+
+目的：验证 PT-6-1 glibc 2.28 release CLI 在原 PyTools 13 份主业务 XLSX 上的完整输出和开发者日志。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：增加 glibc release 主样本运行结果。
+- pytools-core/MIGRATION_INVENTORY.md：记录 13 份主样本的目标二进制对拍范围与状态。
+- 本修改记录。
+
+业务入口：使用已验证的 target/x86_64-unknown-linux-gnu/release/pytools 运行 summary-used-range；在现有 compare_real_used_range_sample 比较器中把 CLI 调用指向 release 二进制，PyCode 基线保持原入口。4 个真实样本批次分别包含 4/1/4/4 个工作簿。
+
+结果：13 份工作簿、96 张工作表、203,580 行；4/4 批完整工作簿投影精确一致，字段包括值/类型、样式、名称/维度、冻结窗格/表头、公式/合并/定义名称/页面属性。developer 事件 26/14/27/63 条，保存事件历史全部匹配。引擎为 Calamine、excel-reader::read_xlsx_worksheet_extents、OOXML Patch 和 rust_xlsxwriter。现有 probe 对源文件前后做指纹比较，13 份均未变化。未记录性能结论。
+
+未发现 PyCode/Rust 差异。产物运行于 WSL 的 glibc 2.28 目标 ABI，不代表麒麟 V10/UOS V20 实机或 deb 验收。生产 Rust 业务逻辑和默认路由未改变；DEVELOPMENT_GOAL.md、AGENTS.md、共享 crates、根 Cargo 配置、Cargo.lock 和 Audit 未修改。未知 #DATA! token 仍按 main 确认的 reader 边界失败关闭。
+
+未执行：麒麟 V10/UOS V20 实机和 deb 安装；PT-6-1 最终验收仍未完成。
+删除清单：无仓库文件删除；对拍输出、日志和临时报告位于临时目录并已清理。
+回滚：可使用 git revert <本轮提交> 撤回报告、清单和记录。
+【组件版本】：不升级，当前 0.1.0。

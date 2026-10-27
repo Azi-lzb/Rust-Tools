@@ -1,0 +1,500 @@
+{
+  "default_route_changed": false,
+  "executed_engine": "openpyxl_worker",
+  "execution": {
+    "branch_sheets": 3,
+    "completed_files": 1,
+    "configuration_elapsed_ms": 62,
+    "elapsed_ms": 5179,
+    "events": [
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "phase": "configuration_read",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 1,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.044706475+00:00",
+        "user_message": "正在读取机构映射配置。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "elapsed_ms": 62,
+        "phase": "configuration_read",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 2,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:18.118512630+00:00",
+        "user_message": "机构映射配置已读取，共 3 条有效映射。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 3,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.119501902+00:00",
+        "user_message": "正在处理 1/1：source.xlsx"
+      },
+      {
+        "components": [
+          "Rust",
+          "sha2"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "source_fingerprint",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 4,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.123923025+00:00",
+        "user_message": "正在校验源文件：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "sha2"
+        ],
+        "elapsed_ms": 6,
+        "file_name": "source.xlsx",
+        "phase": "source_fingerprint",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 5,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:18.127803843+00:00",
+        "user_message": "源文件安全检查完成：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 6,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.130064227+00:00",
+        "user_message": "正在检查工作簿结构：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "elapsed_ms": 12,
+        "file_name": "source.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 7,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:18.140067521+00:00",
+        "user_message": "工作簿结构检查完成：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 8,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.140193121+00:00",
+        "user_message": "正在按映射规则检查工作表：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "elapsed_ms": 18,
+        "file_name": "source.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 9,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:18.158970326+00:00",
+        "user_message": "映射规则检查完成：source.xlsx，命中 3 行。"
+      },
+      {
+        "components": [
+          "Rust",
+          "sha2"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "source_stability_check",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 10,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.159110717+00:00",
+        "user_message": "正在确认源文件未变化：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "sha2"
+        ],
+        "elapsed_ms": 0,
+        "file_name": "source.xlsx",
+        "phase": "source_stability_check",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 11,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:18.159553297+00:00",
+        "user_message": "源文件一致性检查通过：source.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "ExcelModifier"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "engine_execution",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 12,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:18.160679990+00:00",
+        "user_message": "正在按已登记能力修改工作簿：source.xlsx。"
+      },
+      {
+        "actual_engine": "openpyxl_worker",
+        "components": [
+          "Rust",
+          "ExcelModifier",
+          "openpyxl_worker",
+          "Python"
+        ],
+        "elapsed_ms": 5015,
+        "file_name": "source.xlsx",
+        "phase": "engine_execution",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 13,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:23.177950013+00:00",
+        "user_message": "工作簿修改引擎已执行：source.xlsx。"
+      },
+      {
+        "actual_engine": "openpyxl_worker",
+        "components": [
+          "Rust",
+          "file_commit"
+        ],
+        "file_name": "source.xlsx",
+        "phase": "safe_commit",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 14,
+        "status": "started",
+        "timestamp": "2026-10-23T15:58:23.178073793+00:00",
+        "user_message": "正在验证修改结果并安全提交：source.xlsx。"
+      },
+      {
+        "actual_engine": "openpyxl_worker",
+        "components": [
+          "Rust",
+          "file_commit"
+        ],
+        "elapsed_ms": 44,
+        "file_name": "source.xlsx",
+        "phase": "safe_commit",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 1
+        },
+        "sequence": 15,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:23.222330994+00:00",
+        "user_message": "修改结果已通过验证并安全提交：source.xlsx。"
+      },
+      {
+        "actual_engine": "openpyxl_worker",
+        "components": [
+          "Rust",
+          "openpyxl_worker",
+          "Python"
+        ],
+        "elapsed_ms": 5102,
+        "file_name": "source.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 1,
+          "processed_files": 1,
+          "total_files": 1
+        },
+        "sequence": 16,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:23.222563728+00:00",
+        "user_message": "完成 1/1：source.xlsx，修改 3 行。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "elapsed_ms": 5179,
+        "phase": "task",
+        "progress": {
+          "completed_files": 1,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 1,
+          "processed_files": 1,
+          "total_files": 1
+        },
+        "sequence": 17,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:58:23.222639870+00:00",
+        "user_message": "处理结束：成功 1 个，失败 0 个，修改 1 个文件。"
+      }
+    ],
+    "failed_files": 0,
+    "feature_id": "PT-7-2",
+    "files": [
+      {
+        "actual_engine": "openpyxl_worker",
+        "branch_sheets": 3,
+        "cleanup_warning": null,
+        "diagnostic": null,
+        "error_stage": null,
+        "error_type": null,
+        "execution": {
+          "attempts": [
+            {
+              "elapsed_ms": 4993,
+              "engine": "openpyxl_worker",
+              "message": "validated output published",
+              "outcome": "succeeded"
+            }
+          ],
+          "elapsed_ms": 4996,
+          "engine": "openpyxl_worker",
+          "input": "/tmp/pytools-pt-7-2-openpyxl-2545-1792771097864533246/source.xlsx",
+          "output": "/tmp/pytools-pt-7-2-openpyxl-2545-1792771097864533246/.pytools-institution-normalize-pytools-pt-7-2-2549-1792771098041957976-1-0.xlsx",
+          "route_decisions": [
+            {
+              "eligible": true,
+              "engine": "openpyxl_worker",
+              "rejected_reasons": []
+            }
+          ]
+        },
+        "file_name": "source.xlsx",
+        "mapped_rows": 3,
+        "mapped_sheets": 2,
+        "operation_count": 3,
+        "plan_path": null,
+        "route_diagnostic": null,
+        "stage_components": {
+          "engine_execution": [
+            "Rust",
+            "ExcelModifier",
+            "openpyxl_worker",
+            "Python"
+          ],
+          "plan_build": [
+            "Rust",
+            "calamine"
+          ],
+          "profile_inspection": [
+            "Rust",
+            "zip",
+            "roxmltree"
+          ],
+          "safe_commit": [
+            "Rust",
+            "file_commit"
+          ],
+          "source_fingerprint": [
+            "Rust",
+            "sha2"
+          ],
+          "source_stability_check": [
+            "Rust",
+            "sha2"
+          ]
+        },
+        "status": "applied",
+        "timings": {
+          "engine_execution_ms": 5015,
+          "plan_build_ms": 18,
+          "plan_persistence_ms": 0,
+          "profile_inspection_ms": 12,
+          "safe_commit_ms": 44,
+          "source_fingerprint_ms": 6,
+          "source_stability_check_ms": 0,
+          "total_ms": 5102
+        },
+        "user_message": "完成 1/1：source.xlsx，修改 3 行。"
+      }
+    ],
+    "mapped_rows": 3,
+    "mapped_sheets": 2,
+    "mapping_empty": false,
+    "mode": "apply",
+    "modified_files": 1,
+    "product": "pytools",
+    "run_id": "pytools-pt-7-2-2549-1792771098041957976",
+    "schema_version": 1,
+    "started_at": "2026-10-23T15:58:18.039926067+00:00",
+    "status": "completed",
+    "total_inputs": 1
+  },
+  "fixture": "tests/fixtures/institution_normalize.xlsx (synthetic)",
+  "limitations": [
+    "synthetic fixture only; no authorized real business sample",
+    "temporary test capability covers this fixture and test platform only",
+    "PT-7-2 remains unverified for production",
+    "Windows-native worker, target Linux glibc 2.28, and deb packaging are not verified"
+  ],
+  "openpyxl_version": "3.1.5",
+  "preservation": {
+    "after": "source.xlsx",
+    "before": "before.xlsx",
+    "checked": [
+      "sheet order and visibility",
+      "cell styles",
+      "comments and merged ranges",
+      "row heights and hidden state",
+      "column widths and hidden state",
+      "page setup, print area, centering, and header/footer"
+    ],
+    "failures": [],
+    "matched_sheets": 4,
+    "schema_version": 1,
+    "status": "保留",
+    "suite": "pytools.institution_normalize_preservation",
+    "total_sheets": 4
+  },
+  "production_capability_created": false,
+  "python_baseline": "probe/reports/institution_normalize_baseline.json",
+  "python_openpyxl_is_also_used_for_independent_fixture_metadata_checks": true,
+  "python_version": "3.12.3",
+  "python_worker_is_product_engine": true,
+  "schema_version": 1,
+  "source_sha256_after": "94d1d06a89155370b40f5410f40a33b04ba95a0a014ec11a24652f3340bbe025",
+  "source_sha256_before": "111841b24577cfe63c599010a55bb32a41b521a6db88d6f88388fc99918588f8",
+  "stats": {
+    "branch_sheets": 3,
+    "failed_files": 0,
+    "mapped_rows": 3,
+    "mapped_sheets": 2,
+    "modified_files": 1
+  },
+  "status": "synthetic_passed_not_production_acceptance",
+  "suite": "pytools.PT-7-2.openpyxl-worker",
+  "temporary_test_capability": true
+}

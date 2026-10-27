@@ -1,0 +1,22 @@
+时间：2026-10-27 13:45:23 +08:00
+执行者：Codex
+修改前 HEAD：aa46a22f5ed3e7ed966c6b0b84412a911d481ad2；分支：codex/pytools-menu-entry
+修改前状态：工作树干净；本轮仅修改 PyTools 配置菜单和对应集成测试；无既有 WIP；所有 Cargo 临时输出使用 F 盘。
+
+目的：修正 PT-5-2 配置重载失败时的状态处理。此前虽然不一定覆盖 `GlobalConfig`，但会设置 `config_error`，使依赖配置的菜单全部被禁用，实际未能继续使用上次成功配置。
+修改文件：
+- pytools-core/src/bin/pytools.rs：成功读取后才替换整份 `GlobalConfig`；文件损坏、全局配置缺失或文件不存在时保留最后一次成功状态，不设置错误门控；状态消息说明继续使用缓存配置。
+- pytools-core/tests/config_menu_cli.rs：通过真实菜单进程覆盖重载成功、损坏文件、可读工作簿缺少全局配置表，并断言打印菜单仍可进入、后续汇总使用新加载输出目录且源文件不变。
+- pytools-core/MIGRATION_INVENTORY.md：记录行为及合成配置样本测试范围。
+- 本记录。
+
+逻辑/配置/VBA：不修改配置格式、工作簿内容或 VBA；错误重载不改变内存中上次成功配置。pytools-core 继续使用 0.1.0。
+
+验证：
+- `cargo test --offline --locked -p pytools-core --test config_menu_cli -j 1`：8/8 通过。测试运行 Rust 菜单入口，使用合成配置工作簿；成功重载后分别注入损坏文件、有效 OOXML 但缺少“全局配置”工作表的文件，两个失败场景下打印子菜单仍可进入，后续输出仍写入上次成功配置指定的目录，源 XLSX 字节未变。
+- `rustfmt --check pytools-core/src/bin/pytools.rs pytools-core/tests/config_menu_cli.rs`：通过。
+- `git diff --check`：代码改动通过；清单和记录写入后再次复核。
+
+未执行：真实业务配置文件与 Python/Rust 文件输出对拍、Linux/deb、麒麟/UOS 验收。测试配置为合成样本，不等于真实业务验收。
+已知限制：构建输出有共享 `excel-editor` 弃用 API 警告及 PyTools 既有未使用导入/死代码警告，本次未修改共享 crate。
+删除清单：无。回滚：仅反向恢复本次 `pytools.rs`、`config_menu_cli.rs`、迁移清单及本记录对应改动；不影响其他工作树。

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.real_rules_synthetic_wide_parity",
+  "date": "2026-10-25",
+  "status": "passed_exact",
+  "config_source": {
+    "workbook": "tests/fixtures/vba_config/VbaV2.4.2.xlsm",
+    "origin": "https://github.com/Azi-lzb/VBA_Excel_Tools cea6dfa",
+    "note": "real 15 timeline rules and 146 path maps via a bridge config; global sheet synthetic"
+  },
+  "sources": "synthetic workbooks crafted to hit 中外资本外币分地区 / 普惠分地区 / 分地区统计研究调研问卷",
+  "modes": [
+    {
+      "row_suffix": false,
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "中外资本外币分地区",
+        "普惠分地区",
+        "分地区统计研究调研问卷"
+      ],
+      "dimensions": [
+        [
+          9,
+          8
+        ],
+        [
+          7,
+          5
+        ],
+        [
+          4,
+          6
+        ]
+      ]
+    },
+    {
+      "row_suffix": true,
+      "python_rust_summary": "exact",
+      "sheet_names": [
+        "中外资本外币分地区",
+        "普惠分地区",
+        "分地区统计研究调研问卷"
+      ],
+      "dimensions": [
+        [
+          9,
+          8
+        ],
+        [
+          7,
+          5
+        ],
+        [
+          4,
+          6
+        ]
+      ]
+    }
+  ],
+  "short_data_before_configured_start": [
+    {
+      "row_suffix": false,
+      "configured_data_rows": "40-66",
+      "source_last_row": 39,
+      "python_rust_output_projection": "both skipped output",
+      "rust_panicked_or_failed": false
+    },
+    {
+      "row_suffix": true,
+      "configured_data_rows": "40-66",
+      "source_last_row": 39,
+      "python_rust_output_projection": "both skipped output",
+      "rust_panicked_or_failed": false
+    }
+  ],
+  "limitations": [
+    "Rules are real business configuration; source workbooks are synthetic.",
+    "Not real-sample acceptance; outputs were temporary."
+  ]
+}

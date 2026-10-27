@@ -1,0 +1,20 @@
+时间：2026-10-27 02:26 +08:00
+执行者：Codex
+修改前 commit：5b27363
+修改后 commit：待本记录随功能提交
+修改前 WIP：无；仅修改本条 PT-6-2 功能。
+
+目的：满足新版需求 A10，让表结构区域不匹配报告可追溯到全部差异坐标。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：汇总并按行列顺序报告单元格、公式和合并区域差异；最多展示 20 项并报告剩余数量。结构失败仍跳过整份源工作簿。
+- `pytools-core/tests/summary_menu_cli.rs`：扩展真实交互菜单集成夹具，结构区域 A1:B1 有两个差异时验证两坐标和总数均出现在跳过原因；保留输出与源文件安全断言。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 A10 合成入口验证和未完成的真实模板验收状态。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml`；`cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1`：7/7 通过，包含 `1→3` 命名区域汇总菜单入口及独立 CLI。测试构建输出含共享 `excel-editor` 已有弃用警告，与本改动无关。
+
+未执行/限制：没有原 PyTools 命名区域旧实现可作 Python 对拍基线；用户暂无真实模板，故真实模板对拍、Excel 打开/保真、Windows 人工验收、Linux/glibc/deb、麒麟/UOS 均未执行。合成夹具通过，不代表业务验收通过。无配置或业务输出契约变化；组件版本不升级。
+
+删除清单：无。
+回滚提示：回退本提交可恢复“报告首个结构差异”的既有诊断逻辑，并同步移除该集成断言、清单和记录；不影响其他汇总逻辑。

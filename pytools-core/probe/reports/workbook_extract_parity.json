@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.workbook_extract",
+  "source": "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/core/rule_engine.py::extract_cells",
+  "shared_vectors": "tests/fixtures/workbook_extract_cases.json",
+  "workbook_fixture": "tests/fixtures/季度报表_县区报表_2024-12-31.xlsx",
+  "python_baseline_report": "probe/reports/workbook_extract_baseline.json",
+  "python_baseline": {
+    "status": "保留",
+    "passed": 6,
+    "total": 6
+  },
+  "rust": {
+    "command": "cargo test -p pytools-core --locked",
+    "test": "workbook_extract::tests::workbook_extraction_matches_original_python_helper",
+    "status": "保留",
+    "passed": 6,
+    "total": 6
+  },
+  "comparison": "All six extracted cells match across source file name, sheet, rule, parsed date, mapped row path, merged and disambiguated column path, value type/value, and cell address.",
+  "limitations": [
+    "Covers one synthetic xlsx worksheet, one merge, and one extraction rule only.",
+    "Batch discovery, CSV, result workbook writing, target append, date-serial A1 fallback, xlsb merge regions, and real templates remain unverified."
+  ]
+}

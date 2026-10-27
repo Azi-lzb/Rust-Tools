@@ -1,0 +1,34 @@
+时间：2026-10-25 00:25:45（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：8de5fba；当时分支领先 origin/pytools-dev 2 个提交，PT-7-6 整表提取代码、测试及合成材料已有未提交 WIP，均在原位继承。
+修改后业务 commit：6436f04（`feat(pytools): verify full-sheet extraction menu`）。本记录随后单独提交。
+
+目的：补齐普通无批注版 PT-7-6 整表任务经过真实 `pytools menu` → 7→6 入口的合成端到端对拍，并修复 staged workbook 对带样式空白单元格尺寸的错误校验。
+
+修改文件：
+- `pytools-core/src/sheet_extract.rs`：staged workbook 的存储范围改用共享 OOXML worksheet extent reader 验证；值、类型和非空格仍由 Calamine 校验，避免 Calamine 非空值范围漏掉带样式空白 E8。
+- `pytools-core/tests/sheet_extract_area_operation_parity.rs`：添加整表菜单端到端测试，使用 fixture-scoped 临时 ImportRange capability；比较菜单统计、40 个值/类型坐标、工作表名/范围、合并、选定样式属性、行列尺寸/隐藏/outline、普通版批注丢弃、源文件不变、实际引擎事件和不含单元格数据的运行历史。
+- `pytools-core/probe/create_sheet_extract_full_menu_baseline.py`：用合成 XLSX 调用只读 PyCode helper 生成 Python 预期输出；禁用 Python 字节码写入。
+- `pytools-core/tests/fixtures/sheet_extract_full_menu/source.xlsx`、`python_expected.xlsx`：合成输入和 Python helper 输出，不含业务数据。
+- `pytools-core/probe/reports/sheet_extract_full_menu_python_baseline.json`、`sheet_extract_full_menu_parity.json`：记录基线限制与候选对拍结果，状态为 `partial`。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充本次证据和未验收边界。
+- 本记录。
+
+业务与配置影响：没有改变菜单合同或生产路由。测试在临时目录生成仅匹配本合成 XLSX 和 `ImportRange` 操作的 capability；没有登记生产 Passed capability，也没有将 umya 设为默认引擎。迁移仍遵循普通无批注版，不迁入 COM 批注功能。旧 Python helper 跨工作簿复制私有 style 数组后，openpyxl 重开样式时报 `IndexError: list index out of range`；因此 Python 输出样式没有被宣称通过，Rust 样式逐项对照合成源工作簿的显式属性。
+
+真实入口与实现路径：管道向 `pytools menu --config ... --log-view developer --capabilities <临时文件> --platform <fixture 平台>` 输入 7→6 和合成源路径；读取经共享 `excel-reader`/Calamine，整表修改经 ExcelModifier 选择 `umya_spreadsheet`，骨架输出由 `rust_xlsxwriter` 生成，之后校验并安全提交到新目标。运行历史记录实际引擎与阶段事件，不写单元格值。
+
+验证结果（Windows 原生）：
+- `cargo test --manifest-path Cargo.toml -p pytools-core --test sheet_extract_area_operation_parity -- --nocapture`：8/8 通过。
+- `cargo test --manifest-path Cargo.toml -p pytools-core --test batch_tools_menu_cli`：10/10 通过。
+- `cargo test --manifest-path Cargo.toml -p excel-editor --lib detects_stored_content_in_merged_non_anchor_cells`：1/1 通过。
+- `cargo test --manifest-path Cargo.toml -p excel-editor --test import_range`：1/1 通过。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`、`git diff --check`：通过。
+- Python 基线使用 openpyxl 3.1.5。值/类型投影、8×5 存储范围、A1:C1 合并、行 12、列 G 与批注行为可比；Python helper 的样式输出无法重开，报告明确为 partial。Rust 对选定的粗体、填充色和数字格式按源簿属性校验通过。
+- Python 源目录保持只读；基线后确认对应 `__pycache__` 字节码文件不存在。
+
+未执行项与已知问题：没有运行 workspace 全量测试或旧 Python 项目全量测试；没有人工操作 Windows 原生文件选择弹窗；没有真实业务模板、真实 production capability、其他格式、麒麟/UOS glibc 2.28 或 deb 验收。PT-7-6 完整业务功能与生产验收仍为未验证。构建保留共享 excel-editor 的 42 个现存 umya 弃用警告，以及 pytools-core 中 `batch_ops.rs`、`quick.rs` 的未使用导入警告。
+
+删除清单：无。
+回滚：`git revert 6436f04` 撤回本次业务实现、测试和证据；本记录使用独立提交管理。
+【组件版本】：pytools-core 0.1.0，不升级。

@@ -1,0 +1,30 @@
+修改时间：2026-10-24 17:17:22 +08:00
+执行者：Codex
+修改前提交：e6c9496（pytools-dev）
+修改前 WIP：仅有本轮待完成的 pytools.rs 菜单改动和 timeline_menu_cli.rs 新集成测试；无用户既有未提交改动。
+
+目的：将已迁移的 PT-1 时序业务处理接入真实增量交互菜单，并用 PyCode 合成基线对拍菜单所走的实际入口。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：主菜单新增时序类别 1，接入 1-1、1-3、1-4、1-5；子菜单传递配置路径并调用既有 Rust CLI 处理函数。
+- pytools-core/tests/timeline_menu_cli.rs：新增真实 pytools menu 进程集成测试，覆盖模板/源文件选择、两种宽表汇总和预校验。
+- pytools-core/probe/reports/timeline_menu_parity_20261024.json：保存脱敏的合成菜单对拍摘要。
+- pytools-core/MIGRATION_INVENTORY.md：登记入口及验证边界。
+- 本修改记录。
+
+配置与 VBA 影响：不改变配置格式和 VBA 行为。不复制或修改源工作簿。宽表目标追加在菜单中只生成计划，未执行目标写入；计划执行仍要求匹配的 ExcelModifier capability。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli：1/1 通过。
+- cargo test --offline --locked -p pytools-core timeline：1 个匹配单测通过；其余测试按名称过滤，未执行。
+- Windows 原生 CLI / PyCode 合成菜单对拍：1-1 选五个源（其中三个匹配），输出工作簿结构、值/类型和有效样式精确一致；1-3、1-4 两种宽表输出及有效样式精确一致，均生成目标追加计划且配置目标未改写；1-5 有效配置、详细错误、缺必需列三场景计数完全一致。摘要在上述 JSON 报告。
+- 执行中首次调用系统 Python 缺少 pandas，未产生项目文件改动；改用只读源项目的 Python 3.12.10 venv 后完成对拍。
+
+未执行项与已知问题：没有可用的已授权真实业务工作簿；没有测试 Win32 原生文件弹窗；宽表目标写入尚无生产 Passed capability；时间序列处理的结构化 user/developer/off 日志尚未接入；未做 WSL/Linux、麒麟/UOS、glibc 2.28 或 deb 验收；未运行完整 pytools-core 测试套件。cargo 命令报告的共享 excel-editor 弃用告警和 pytools-core 既有未使用导入告警未在本轮修改。
+
+敏感内容检查：提交范围只含 Rust 源码、合成集成测试、脱敏 JSON 摘要和本记录；不含业务工作簿、凭据或用户数据。
+
+删除清单：无。
+回滚：git revert <本次提交> 可完整撤回菜单入口、测试和对应迁移证据。
+【组件版本】pytools-core 0.1.0（未变更）。

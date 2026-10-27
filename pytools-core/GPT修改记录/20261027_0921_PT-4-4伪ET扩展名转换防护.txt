@@ -1,0 +1,20 @@
+修改前检查：当前工作树无未提交改动；`pytools-core/GPT修改记录/` 未发现 WIP 文件或本功能进行中记录。旧 Python 项目只读。本次没有修改共享 Excel-Core、Cargo 清单或锁文件。
+
+修改文件：
+- `pytools-core/src/conversion.rs`：在 `.et` 转换调用外部 sidecar 前识别标准 OOXML Excel 工作簿内容，拒绝伪装为 `.et` 的 XLSX/XLSM/XLSB/Excel 模板。
+- `pytools-core/tests/conversion_menu_cli.rs`：通过真实产品 CLI 增加扩展名伪装负向回归，验证失败报告、无输出和源文件字节保持不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录本次证据及 ET 仍未真实验收的状态。
+
+目的：修复将普通 XLSX 仅改名为 `.et` 后被产品报告转换成功的问题。检查内容仅拒绝明确识别出的标准 OOXML Excel 包，不实现 ET reader，不替代或修改共享转换 sidecar。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli conversion_cli_rejects_xlsx_payload_mislabeled_as_et -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：11/11 通过。
+- `git diff --check`：通过。
+- 构建和 Cargo 临时目录使用 `F:\PyToolsRustV2\cargo-target` 与 `F:\PyToolsRustV2\tmp`。
+
+未执行及已知限制：没有合法 ET 或用户真实业务样本，未运行 Python 业务对拍，未验证 ET 转换后数据/格式/公式保真，也未运行 Linux、glibc 2.28、麒麟/UOS 或 deb 验收。测试仅使用仓库合成 XLSX 副本验证错误扩展名拒绝，不代表 ET 正向能力通过。测试输出和输入保存在 F 盘本轮专用临时目录，完成后清理。
+
+回滚：使用 `git revert` 撤销本功能提交；本次未升级 crate 版本。

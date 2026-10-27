@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "batch_id": "PT-real-sample-convergence-20261023",
+  "status": "未验证",
+  "features": [
+    {"feature_id":"PT-4-1","command":"rename-batch","required_result_fields":["stats","filesystem_entries","config_integrity"],"cases":[]},
+    {"feature_id":"PT-4-6","command":"rename-by-content","required_result_fields":["stats","filesystem_entries","config_integrity"],"cases":[]},
+    {"feature_id":"PT-4-7","command":"unrename-by-content","required_result_fields":["stats","filesystem_entries","config_integrity"],"cases":[]},
+    {"feature_id":"PT-4-8","command":"rename-local-map","required_result_fields":["stats","filesystem_entries","config_integrity"],"cases":[]},
+    {"feature_id":"PT-4-9","command":"file-sort-prefix","required_result_fields":["stats","filesystem_entries","workbook_projection","config_integrity"],"cases":[]},
+    {"feature_id":"PT-4-10","command":"remove-file-sort-prefix","required_result_fields":["stats","filesystem_entries","workbook_projection","config_integrity"],"cases":[]},
+    {"feature_id":"PT-8-1","command":"archive-date-preview","required_result_fields":["stats","filesystem_entries","workbook_projection"],"cases":[]},
+    {"feature_id":"PT-8-2","command":"archive-type-preview","required_result_fields":["stats","filesystem_entries","workbook_projection","config_integrity"],"cases":[]},
+    {"feature_id":"PT-8-3","command":"archive-execute-plan","required_result_fields":["stats","filesystem_entries","workbook_projection"],"cases":[]},
+    {"feature_id":"PT-8-4","command":"archive-date-copy","required_result_fields":["stats","filesystem_entries","workbook_projection"],"cases":[]},
+    {"feature_id":"PT-8-5","command":"archive-type-copy","required_result_fields":["stats","filesystem_entries","workbook_projection","config_integrity"],"cases":[]},
+    {"feature_id":"PT-7-4","command":"fx-header-plan","required_result_fields":["stats","headers","preservation","patch_scope"],"cases":[]},
+    {"feature_id":"PT-7-5","command":"region-sum-check","required_result_fields":["stats","workbook_projection","preservation"],"cases":[]}
+  ]
+}

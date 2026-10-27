@@ -1,0 +1,24 @@
+时间：2026-10-24 05:48:05 中国标准时间
+执行者：Codex（pytools-dev）
+修改前 commit：5540de8e1d48a6195ef45c3a1b22c7a48bf14885；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。origin/main：473c75a4c93cd4875e37f31c53e567120cb9d040。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+目的：继续 PT-6-1 按使用区域汇总验收，单独对拍原 PyTools 最大备份 XLSX 负载，验证真实 Windows 目标 CLI 的业务输出及三种日志视图。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：新增最大备份簿的输入大小、行数、三视图、引擎和事件历史对拍结果；不包含工作簿名称或单元格数据。
+- pytools-core/MIGRATION_INVENTORY.md：追加最大真实样本的 PT-6-1 对拍范围和验收边界。
+- 本修改记录。
+
+数据流与结果：Windows GNU 目标 CLI summary-used-range → Calamine 读取 → Rust 汇总 → rust_xlsxwriter 输出。原 PyTools xlsx/备份/ 中最大 XLSX（3,800,854 字节）输出 39,171 行。Windows PowerShell 实际入口在 user/developer/off 三种视图下均与只读 PyCode run_summary_by_usedrange 完整工作簿投影一致，实际引擎为 Calamine/rust_xlsxwriter。developer 18 条事件与历史 JSON 完全一致；user 历史状态 succeeded；off 未写运行记录。源文件大小/修改时间未变，临时输出随对拍清理。
+
+验证：
+- Windows GNU 目标 pytools.exe summary-used-range 与原 PyCode 对拍：三视图完整投影均精确一致，39,171 行。
+- developer 事件/历史 JSON 一致；user/off 历史行为符合各视图预期。
+- 原 PyTools .venv 的 Python JSON 解析及本报告断言：提交前复验；git diff --check：提交前复验。
+- 首次 harness 错将 CLI 扁平 JSON 假设为嵌套 summary 字段，解析中止；改用 CLI 实际字段后完整重跑通过，无产品代码变化。
+- 本轮未改 Rust 代码，未重复 cargo test；上一提交中 summary_used_range_error 4/4 通过。Windows 原生 Cargo、麒麟 V10/UOS V20 实机、glibc 2.28 和 deb 仍未在本轮验证。PT-6-1 不据此标记完成。
+
+差异与已知问题：最大样本无输出差异。没有将源工作簿加入仓库，报告和记录不包含源业务内容或凭据。
+删除清单：无。
+回滚：可通过 git revert <本轮提交> 撤回本次 PT-6-1 证据与清单更新。
+【组件版本】：不升级，本轮未改变业务行为。

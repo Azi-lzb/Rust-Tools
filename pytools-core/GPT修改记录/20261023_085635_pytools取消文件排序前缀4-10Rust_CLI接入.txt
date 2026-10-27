@@ -1,0 +1,36 @@
+时间：2026-10-23 08:56:35（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace 当前为未跟踪初始化状态；保留既有工作，不清理、不重置、不覆盖其他 WIP。
+
+目的：把已有的 pytools 操作 4-10 Rust 业务候选接入 `pytools` 可执行 CLI，覆盖移除排序前缀、内容前缀保留判断、结果 XLSX 和日志输出，并验证空输入时生成 Python 兼容空报告。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：新增 `remove-file-sort-prefix` 子命令；解析配置、输出目录、日志目录和显式文件路径；允许空文件列表；输出 JSON 统计、结果路径和日志路径；写时间戳成功/失败日志到文件及 stderr。
+- `pytools-core/tests/file_sort_prefix_remove_parity.rs`：新增完整 4-10 CLI 基线测试和空输入 CLI 测试，覆盖报告单元格、最终文件集合、改名文件字节、日志及空报告。
+- `pytools-core/probe/reports/file_sort_prefix_remove_parity.json`：登记 CLI 状态、用法、当前 Rust 测试结果和限制。
+- `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/README.md`：加入命令入口、行为和未验收项。
+- `PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：同步 4-10 CLI 迁移状态和证据。
+- 本记录。
+
+迁移范围：
+- 用法：`pytools remove-file-sort-prefix --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [<file>...]`。
+- 调用既有 Rust `run_remove_file_sort_prefix_410`，从配置读取排序规则；直接匹配排序前缀时不打开目标工作簿；若排序前缀位于内容前缀之后，读取配置指定的内容格，并仅在内容前缀匹配时移除排序片段。
+- 报表由共享 `excel-writer`/rust_xlsxwriter 写入；目标文件不覆盖，报告失败时回滚已完成的改名。空文件列表保留原行为，输出不含表头/数据行的报告工作表。
+- `.xls/.xlt` 内容读取旧 COM 分支不迁入主路径；candidate 对这些输入/分支未宣称支持。CLI 不接入原 GUI 菜单，不改变生产默认路由。
+
+对拍及验证：
+- 只读 Python 基线：`probe/reports/file_sort_prefix_remove_python_baseline.json`，函数 `PyCode/core/convert_33_34_35_37.py::run_remove_file_sort_prefix_410`。本轮再次核对源文件 SHA-256 为 `F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`，与既有报告一致；原 Python 项目未修改，本轮未重跑 Python 测试。
+- 既有合成基线主场景有 10 个文件/路径、4 条规则、5 次改名、5 次跳过、0 次失败；API 和 CLI 的行数据、结果表、最终文件集合与基线一致。CLI 测试检查每个报告表格字段、改名后输入字节、成功日志条目和日志路径。
+- 空输入 CLI 场景返回 rules=4、files/renamed/skipped/failed=0，结果工作簿存在指定 sheet 且无单元格，日志为空；与既有 Python 空报告基线一致。
+- `cargo test -p pytools-core --test file_sort_prefix_remove_parity --locked -- --nocapture`：5/5 通过。
+- WSL Ubuntu 执行 `cargo fmt --all -- --check` 通过；`cargo test --workspace --locked` 为 118 passed、0 failed，其中 pytools-core 为 46 passed；`cargo check --workspace --locked` 通过。
+
+未完成与已知风险：
+- 原 GUI 菜单/dispatcher、真实业务配置和目录、文件权限/占用异常、Windows 原生 Rust、麒麟 V10/UOS V20/glibc 2.28、离线 deb 均未验收。
+- `.xls/.xlt` 内容单元格读取、日期/公式缓存值、多单元格规格及非 UTF-8/不同文件系统行为未验收。旧 Python logger 的逐字时间戳、并发、重复运行和失败日志行为未逐项对拍；当前 CLI 合成测试覆盖成功日志和空输入日志。
+- 本轮不代表整个文件命名菜单、pytools 产品或两个项目已完成迁移；Python 原路径保留。
+- 未改依赖、构建配置或默认引擎路由；未运行 Python 测试，不修改 Python 源目录。
+
+回滚：从 `pytools.rs` 移除 `remove-file-sort-prefix` dispatch/handler/helper；移除 4-10 集成测试中的两个 CLI 测试；恢复 probe 报告、README、迁移台账、操作清单、引擎架构状态和本记录。保留原有 `run_remove_file_sort_prefix_410` Rust API、Python 基线和其他 WIP；不得清理或修改源 Python 项目。

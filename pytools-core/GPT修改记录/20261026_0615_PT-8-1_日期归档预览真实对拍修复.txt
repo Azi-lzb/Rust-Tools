@@ -1,0 +1,28 @@
+【修改时间】2026-10-26 06:15（Asia/Shanghai）
+【执行者】Codex
+【分支】pytools-dev
+【修改前 commit】4734096489778a73c2694a6f25a4dc61c14345fe
+【修改后 commit】本次独立功能提交；SHA 见 Git 历史及本轮报告
+【WIP】保留既有未提交的 MIGRATION_INVENTORY.md、HANDOFF_ZCODE_TO_CODEX.md 和 PT-4-2/PT-6-2 记录；未暂存、覆盖或纳入本功能提交。
+【目的】完成 PT-8-1 日期归档预览在原项目现有只读目录上的独立 Python/Rust 对拍，并修复真实发现的计划顺序与重复目标路径差异。
+【修改文件】
+- pytools-core/src/archive_ops.rs
+- pytools-core/tests/archive_parity.rs
+- pytools-core/probe/reports/archive_date_real_parity_20261026.json
+- 本记录
+【实现变化】
+- Windows 按原 Python Path 的大小写不敏感排序顺序生成计划；非 Windows 保留本机 Path 顺序。
+- Windows 计划目标冲突键采用大小写不敏感比较，非 Windows 保持大小写敏感。
+- 冲突后缀按 stem、编号、最终扩展名拼接，避免多个点号时 set_extension 截掉 stem 内容。
+【真实入口】archive-date-preview CLI；Python 基线为 PyCode.core.convert_33_34_35_37.run_archive_by_date_preview。
+【测试与对拍】
+- Windows 原生 cargo fmt --check -p pytools-core：通过。
+- cargo test --offline --locked -p pytools-core --test archive_parity：5/5 通过，包含路径大小写顺序、大小写冲突、stem 内多点号、既有归档对拍和 CLI 筛选配置测试。
+- cargo build --offline --locked -p pytools-core --bin pytools：通过；有既存 shared-crate 弃用 API 及 PyTools 无关 import 警告。
+- 使用原项目 xlsx 目录 149 个文件及原 config.xlsx 只读运行 Python/Rust 预览；149 条计划行、75 条未识别日期，统计、顺序、分类、目标路径和备注逐行一致。工作簿均可读取，sheet 名及 150×8 维度一致，样式无差异。
+- 147 个空备注单元格的 OOXML 类型标记不同；二者均读作空值，非空单元格类型无差异。严格逐对象类型验收仍需决定空备注的合同口径。
+- 原项目文件和配置的大小及修改时间前后不变；预览没有写入源目录，输出仅放在临时目录。
+【未执行/限制】未在 glibc 2.28、麒麟 V10、统信 UOS V20 或 deb 上验证；未验证归档复制/计划执行功能。PT-8-1 的本次 Windows 真实输入对拍通过，不代表目标系统最终验收。
+【公共能力请求】无；未修改共享 crates、根 Cargo 文件、audit-core 或原 Python 项目。
+【组件版本】不升级。
+【回滚】只回退本记录所列的两个 Rust 文件及本记录/报告；不触碰工作区既有 WIP。

@@ -1,0 +1,23 @@
+{
+  "baseline": "probe/reports/sheet_extract_area_python_baseline.json",
+  "checks": {
+    "cell_values_and_types": "preserved",
+    "input_bytes": "preserved",
+    "statistics": "preserved",
+    "worksheet_dimensions": "preserved",
+    "worksheet_names": "preserved"
+  },
+  "compared_cells": 44,
+  "numeric_comparison": "relative tolerance <= 1e-15",
+  "rust_operation": "run_extract_sheets_area_candidate",
+  "schema_version": 1,
+  "stats": {
+    "extracted_sheets": 4,
+    "failed_files": 1,
+    "files": 2,
+    "output_files": 1
+  },
+  "status": "passed",
+  "suite": "pytools.sheet_extract_area_parity",
+  "worksheet_count": 4
+}

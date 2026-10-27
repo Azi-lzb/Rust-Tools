@@ -1,0 +1,15 @@
+功能：PT-4-2 native Excel 按值转换正向类型对拍
+基线：pytools-dev HEAD 4b4a573；仅修改 pytools-core。
+
+目的：既有转换单测覆盖布尔值写出和公式数量校验，但 PT-4-2 正向真实 CLI 探针此前没有覆盖成功转换的布尔值及公式文本。补充隔离合成 XLSM，以确认真实 CLI 正向路径输出的单元格类型与文本。
+
+修改文件：
+- `pytools-core/probe/compare_native_excel_value_conversion.py`：合成 1900 日期系统 XLSM 增加 true/false 布尔值及 `=SUM(A1,A2)` 公式；读取 Rust 输出并断言布尔单元格类型/值及公式类型/文本。
+- `pytools-core/probe/reports/native_excel_value_conversion_parity_20261026.json`：记录成功值、类型和公式文本对拍结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记限定范围及未验证项；该文件另含先前未提交修改，本提交只包含本轮新增结尾 hunk。
+
+验证：`py -3.12 pytools-core/probe/compare_native_excel_value_conversion.py` 通过。真实入口为 Windows 原生 `pytools convert-excel --engine native`，历史记录引擎为 `calamine + rust_xlsxwriter`。A1/A2/A3 日期、时间及 26 小时 15 分时长以 1900 serial 数值输出；B1/B2 true/false 保留为布尔类型；C1 公式类型和 `=SUM(A1,A2)` 文本一致；所有源文件未变。探针同时重跑既有 `.xls` 值 smoke、ISO typed 日期和 1904 `.xlsm` 拒绝、仓库 VBA 配置 fixture 逐格值投影。
+
+限制：本轮未修改 Rust 生产代码，故未重复运行 Cargo 测试。公式缓存未断言，不证明与 PyCode 旧保真转换的公式缓存一致；无用户真实业务样本；错误值、空文本、legacy `.xls/.xlsb` 的 1904 epoch、真实业务转换结果、Windows 文件选择器、glibc 2.28、麒麟/UOS 与离线 deb 仍未验收。PT-4-2 整体状态保持未验收。
+
+回滚：仅回退本轮 probe、机器报告及迁移记录新增 hunk；保留既有产品失败关闭修复和其他未提交迁移记录。

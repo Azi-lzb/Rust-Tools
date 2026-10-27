@@ -1,0 +1,21 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：456af2e
+修改后 commit：待提交
+修改前 WIP：工作树干净；本轮仅修改 PyTools 涉农贷款业务、对应回归及迁移状态记录。
+
+目的：复现并修复 PT-7-7/PT-7-8 对本期与上期公式单元格的读取差异。旧 Python 将本期按公式文本读取、上期按 `data_only=True` 读取；Rust/Calamine 原先两期都使用公式缓存。
+
+修改文件：
+- `pytools-core/src/batch_ops.rs`：增加依赖公式元数据的数值读取模式；当前工作簿公式按旧 Python `_to_num` 结果 0 处理，上期工作簿继续使用缓存值。用于机构数值和本期地区总计，不改其他批处理读取行为。
+- `pytools-core/tests/rural_loan_regressions.rs`：增加真实业务计划 API 回归，使用非零公式缓存验证 PT-7-7/PT-7-8 的差额与总计，且输入文件字节不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 Python 读取模式、Rust 修复、测试证据及剩余验收状态。
+- 本记录。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`；`cargo check --offline --locked -p pytools-core --bin pytools -j 1`；`cargo test --offline --locked -p pytools-core --test rural_loan_regressions -j 1`（5/5）；`batch_tools_menu_cli::interactive_rural_loan_menu_plans_city_adjustment_and_writes_user_history` 1/1；`batch_tools_menu_cli::interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view` 1/1 均通过。测试临时产物位于 `F:\PyToolsRustV2\` 子目录。只读调用旧 Python `_to_num("=1+1")` 返回 `0.0`。
+
+未执行项/已知问题：未运行旧 Python 完整业务函数对同一工作簿的端到端对拍，未使用真实业务工作簿，Excel 手工保真、生产 capability、麒麟/UOS、glibc 2.28 和离线 deb 未验证。PT-7-7/PT-7-8 状态不提升，仍待 Windows 真实验收。未修改共享 Excel-Core。
+
+删除清单：无。
+回滚提示：回退本提交会恢复将本期公式缓存用于贷款差额及总分校验的行为。
+【组件版本】pytools-core 0.1.0，不升级。

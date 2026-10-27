@@ -1,0 +1,25 @@
+时间：2026-10-26 07:10（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+记录时 HEAD：140a3b1；分支 pytools-dev；开始时与 origin/pytools-dev 同步。
+
+目的：将 PT-1-3/1-4 累计时长的负序列边界对拍固化到现有 probe。此项不改变生产 Rust 业务代码或 Excel 引擎路由。
+
+修改文件：
+- `pytools-core/probe/compare_wide_summary.py`：允许合成输入指定累计时长序列，并增加 `--negative-elapsed-duration` 对拍入口。
+- `pytools-core/probe/reports/wide_summary_negative_elapsed_duration_parity_20261026.json`：记录机器对拍结果。
+- 本记录。
+
+验证：使用 Windows 原生 Rust CLI、PyCode 只读基线和现有真实菜单 `pytools menu → 1 → 3/4`，对 `[h]:mm:ss.000` 下 5 类负序列（负多日、负半天、负 1.5 天及负半毫秒/1.5 毫秒 ties-to-even）分别运行行头加后缀与不加后缀，共 10 例。汇总和新目标追加的值/类型及有效样式全部精确一致；源簿和配置未变，输出仅在临时目录，报告未包含文件名或业务单元格值。各例开发者历史均记录 `source_read` / `elapsed_duration_normalization` / `target_append_execute` 阶段、实际引擎 Calamine / pytools-core / rust_xlsxwriter 和耗时。
+
+实际命令：
+`$env:PYTOOLS_RUST_CLI='C:\Users\AZI\Desktop\VibeCode\pytools-dev\target\debug\pytools.exe'; $env:PYTHONDONTWRITEBYTECODE='1'; & 'C:\Users\AZI\Desktop\VibeCode\4.pytools-main\NoComPyTools\.venv\Scripts\python.exe' pytools-core/probe/compare_wide_summary.py --negative-elapsed-duration`
+
+限制：输入为合成 XLSX，无脱敏真实宽表样本；真实业务验收、XLS/XLSM 等其他格式、生产修改 capability、Linux/glibc 2.28、麒麟 V10/UOS V20 和离线 deb 未验证。本轮未运行 Cargo 测试，因为没有修改 Rust 源码。
+
+风险与回滚：仅增补测试探针与机器证据，不改变产品行为。需要撤回时仅回滚本记录列出的 probe、报告和记录文件。原有未提交 `MIGRATION_INVENTORY.md` 及其他 WIP 未修改、未暂存。
+
+补充验证（2026-10-26 07:13，Windows 原生）：
+- 将同一对拍扩展为 5 类负序列 × 1900/1904 日期系统 × 2 种行头模式，共 20 例。1904 样本在汇总范围外加入一个日历日期，以触发并核验 1904 日历日期投影；负时长单元格仍使用 `[h]:mm:ss.000`。
+- 20 例汇总及目标追加的值、类型、有效样式均与 Python 精确一致；1904 日历日期投影事件均实际由 Calamine 完成。source_read、elapsed_duration_normalization、target_append_execute 的引擎和阶段耗时均有记录，实际引擎为 Calamine、pytools-core、rust_xlsxwriter。
+- 报告断言输入和配置未修改、输出仅在临时目录，且没有输入文件名或业务单元格值；结果仍是合成对拍，不代表真实样本验收。用户目前没有可提供的脱敏真实样本，PT-1-3/1-4 的真实样本验收仍未闭合。
+- 报告文件已更新为 20 例。本次仍未修改生产 Rust 代码；没有运行 Cargo 或 Linux 验证。

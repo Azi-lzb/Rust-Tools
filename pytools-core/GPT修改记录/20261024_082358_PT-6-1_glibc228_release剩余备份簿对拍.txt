@@ -1,0 +1,22 @@
+时间：2026-10-24 08:23:58（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：6f36a569a36bf120984d5cce83c84df0cdf4db30；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无未提交用户 WIP。origin/main 为 473c75a，无需同步的共享 reader 更新。
+修改后 commit：本轮提交（提交号见本文件所在 Git commit）。
+
+目的：把 PT-6-1 glibc 2.28 release 阶段验证扩展到剩余真实备份工作簿批次。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_backup_assets_20261024.json：新增 glibc 2.28 release 平台验证汇总。
+- pytools-core/MIGRATION_INVENTORY.md：记录 release 二进制的 51 簿完整对拍及边界。
+- 本修改记录。
+
+业务入口与验证：在 Windows Python 对拍 runner 中将 compare_summary_backup_assets.py 的 Rust CLI 调用指向 WSL release 产物 target/x86_64-unknown-linux-gnu/release/pytools，执行真实 summary-used-range 入口。对原 PyTools 只读 xlsx/备份/ 中此前已测端点以外的 51 份 XLSX，按原 17 批、每批最多 3 份对照 PyCode run_summary_by_usedrange。
+
+结果：17/17 批通过，0 个失败组；共 1,016,511 行。值/行、类型、样式、维度、冻结窗格、表头、合并、公式、定义名称、打印区、页面设置、页边距及居中属性完整投影相同。每批开发者事件流与保存历史匹配。51 份源文件共 84,340,966 字节，测试前后大小和修改时间未变；输出、日志和临时汇总报告均在系统临时目录。本记录不增加性能结论。
+
+无 PyCode/Rust 差异。验证覆盖 WSL 上的 glibc 2.28 release ABI 目标，不代表麒麟 V10/UOS V20 实机或 deb 验收。生产 Rust 逻辑和引擎路由未改变；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、共享 crates、根 Cargo 配置、Cargo.lock 或 Audit。#DATA! 未知错误 token 仍按 main 确认的 reader 边界失败关闭。
+
+未执行：麒麟 V10/UOS V20 实机和 deb 安装；PT-6-1 最终验收仍待完成。
+删除清单：无仓库文件删除；所有临时输出及日志已由临时目录清理。
+回滚：可使用 git revert <本轮提交> 撤回本轮报告、清单和记录。
+【组件版本】：不升级，当前 0.1.0。

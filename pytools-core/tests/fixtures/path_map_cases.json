@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "keywords": [
+    {"id":"empty_keywords","source":"anything","keywords":"","expected":true},
+    {"id":"empty_tokens","source":"anything","keywords":" ;；，, ","expected":true},
+    {"id":"unicode_separators_and_case","source":"Monthly Report 2026","keywords":"monthly；report,2026","expected":true},
+    {"id":"and_requires_all","source":"Monthly Report","keywords":"monthly;balance","expected":false},
+    {"id":"required_in_empty_source","source":"","keywords":"required","expected":false}
+  ],
+  "columns_single": [
+    {"id":"missing","value":null,"expected":0},
+    {"id":"nan","value":{"kind":"nan"},"expected":0},
+    {"id":"blank","value":" ","expected":0},
+    {"id":"numeric_text","value":"3","expected":3},
+    {"id":"integer_value","value":{"kind":"integer","value":3},"expected":3},
+    {"id":"integral_float","value":{"kind":"number","value":2.0},"expected":2},
+    {"id":"fractional_float_truncates","value":{"kind":"number","value":2.8},"expected":2},
+    {"id":"decimal_text","value":"2.0","expected":2},
+    {"id":"column_letters","value":"AB","expected":28},
+    {"id":"three_letter_column","value":"AAA","expected":703},
+    {"id":"invalid_cell_address","value":"A1","expected":0}
+  ],
+  "columns_multiple": [
+    {"id":"missing","value":null,"expected":[]},
+    {"id":"nan","value":{"kind":"nan"},"expected":[]},
+    {"id":"blank","value":"","expected":[]},
+    {"id":"numeric_value","value":{"kind":"integer","value":3},"expected":[3]},
+    {"id":"mixed_delimiters_and_deduplicate","value":"A,C;3，AA,A","expected":[1,3,27]},
+    {"id":"empty_tokens","value":"A,,B","expected":[1,2]},
+    {"id":"invalid_specs","value":"A1,0,-1","expected":[]}
+  ],
+  "standardize": [
+    {
+      "id":"filters_and_contains_replaces_all",
+      "path":"机构/旧路径/旧路径",
+      "target":"行头",
+      "rule_name":"rule",
+      "workbook_name":"2026银行.xlsx",
+      "sheet_name":"利润表",
+      "maps":[
+        {"applicable_rule":"other"},
+        {"target":"列头"},
+        {"wb_keyword":"另一个文件"},
+        {"sheet_keyword":"资产负债"},
+        {"match_mode":"包含","original":"旧路径","standard":"标准"}
+      ],
+      "expected":"机构/标准/标准"
+    },
+    {
+      "id":"both_target_exact",
+      "path":"旧路径",
+      "target":"列头",
+      "rule_name":"rule",
+      "workbook_name":"book.xlsx",
+      "sheet_name":"表",
+      "maps":[{"original":"旧路径","standard":"新路径"}],
+      "expected":"新路径"
+    },
+    {
+      "id":"exact_mismatch",
+      "path":"old",
+      "target":"行头",
+      "rule_name":"rule",
+      "workbook_name":"book.xlsx",
+      "sheet_name":"表",
+      "maps":[{"original":"旧路径","standard":"新路径"}],
+      "expected":"old"
+    },
+    {
+      "id":"empty_path",
+      "path":"",
+      "target":"行头",
+      "rule_name":"rule",
+      "workbook_name":"book.xlsx",
+      "sheet_name":"表",
+      "maps":[{"original":"旧路径","standard":"新路径"}],
+      "expected":""
+    },
+    {
+      "id":"unknown_mode_uses_exact",
+      "path":"旧路径",
+      "target":"行头",
+      "rule_name":"rule",
+      "workbook_name":"book.xlsx",
+      "sheet_name":"表",
+      "maps":[{"match_mode":"other","original":"旧路径","standard":"标准"}],
+      "expected":"标准"
+    }
+  ]
+}

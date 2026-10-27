@@ -1,0 +1,41 @@
+时间：2026-10-22 22:35:54（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 未提交）
+修改后 commit：无（workspace 未提交）
+WIP 状态：修改前检查 workspace git status；迁移文件仍为未跟踪状态。本次仅在 pytools-core 中增量新增模块、夹具、对拍和清单记录，不覆盖或清理既有 WIP。
+
+目的：将 PyCode 普通版工作表提取使用的纯规则逻辑迁移到 Rust，为后续完整源文件读取、整表复制和结果簿写入工作流提供业务层核心。
+
+修改/新增文件：
+- 修改 `pytools-core/src/lib.rs`：导出 `sheet_extract` 模块。
+- 新增 `pytools-core/src/sheet_extract.rs`：实现工作簿/工作表关键字匹配、精确表名优先、区域索引解析、单元格/行/列区域选取、多区域拼接、空行列压缩、工作表名称和输出路径规则。
+- 新增 `pytools-core/tests/fixtures/sheet_extract_cases.json`：11 组共享合成向量，覆盖源项目 helper 边界和输出命名后缀。
+- 新增 `pytools-core/probe/sheet_extract_baseline.py`：运行只读源项目 helper 生成基线，并设置 `sys.dont_write_bytecode` 防止向源目录写 `.pyc`。
+- 新增 `pytools-core/probe/reports/sheet_extract_python_baseline.json`、`sheet_extract_parity.json`：旧实现基线与逐项状态报告。
+- 新增 `pytools-core/tests/sheet_extract_parity.rs`：Rust 对同一向量结果与 Python JSON 逐项比较。
+- 修改 `pytools-core/MIGRATION_INVENTORY.md`：记录局部规则迁移并明确文件工作流仍未验证。
+
+逻辑覆盖：
+- 保留 AND 关键词组内 OR 选项、排除规则、精确拼接表名优先和工作表原顺序。
+- 支持整表标记、A1 单元格范围、行/列范围、逆序边界、分号多区域、横向拼接、纵向追加和空行列压缩。
+- 保留冲突工作表名称去重策略及 `.xlsx` 后缀规范化；额外对拍了 dotfile 和尾随点文件名。
+
+测试与对拍：
+- Python：`<pytools-main>/.venv/Scripts/python.exe probe/sheet_extract_baseline.py --source-root <pytools-main>`，通过，11/11 组。
+- Rust：`cargo fmt --all && cargo test -p pytools-core --locked`，通过；9 项单测及 2 项对拍集成测试通过。
+- 对拍覆盖 11 个结果组；首轮后补充了过长列字母和文件名点号边界，最终 Rust/Python 结果一致。
+
+范围限制与未执行项：
+- 未迁移完整 `run_extract_sheets`：源文件发现、工作簿 I/O、整表样式/合并/行列尺寸复制、输出工作簿新建/追加、失败统计和日志均未实现或对拍。
+- 未验证真实模板、xls/xlsm/xlsb/csv、性能和目标 Linux 行为；菜单级工作表提取状态仍为未验证。
+- 源 Python 项目未修改；产品/组件版本未升级。
+
+【组件版本】
+系统：不适用（pytools-core 迁移基线尚未建立业务组件版本）
+影响功能：不升级
+影响配置：无
+未修改的相关组件：全部
+版本升级原因：迁移中的纯规则模块和对拍基线，未发布业务版本。
+
+删除清单：无。
+回滚提示：可单独回退本记录列出的 Rust 模块、测试、fixture、probe、报告和清单更新；不要删除其他未跟踪文件。

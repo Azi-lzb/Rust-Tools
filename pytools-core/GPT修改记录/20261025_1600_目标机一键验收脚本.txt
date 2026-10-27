@@ -1,0 +1,31 @@
+时间：2026-10-25 16:00（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：e52c33a；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：按用户指示——"麒麟/UOS 验收在 WSL 测试，通过即暂定通过，实机由用户复核；提供一键测试 sh 供目标机直接运行"——交付目标机一键验收脚本并以 WSL 双二进制验证。
+
+修改文件：
+- `pytools-core/packaging/verify_target.sh`（新增：自包含一键验收脚本，内嵌 5 个合成夹具 base64）
+- `pytools-core/packaging/target_fixtures/`（新增：夹具源文件入库——wide_config/wide_source 为新生成；error_token_matrix/comment_template/merged_children_source 复制自 tests/fixtures）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+脚本设计：
+- POSIX sh、零目标机依赖（无 Python/网络/Office/jq/binutils 要求）；夹具经 base64 释放到 mktemp 工作目录。
+- 二进制定位：`$PYTOOLS_BIN` > 脚本同目录/当前目录 `pytools` > `/usr/bin/pytools`（deb 安装后免配置）。
+- 启动检查：宿主内核/glibc 打印、`ldd` 缺失库即停。
+- 五项测试：T1 config-view；T2 summary-used-range（错误值夹具 + 输出存在 + 运行历史 `succeeded`）；T3 summary-comments；T4 wide-summary（规则命中 + 输出 xlsx 存在）；T5 交互菜单冒烟（`printf '0\n'`）。
+- 输出：逐项 PASS/FAIL（失败附输出尾部）、汇总行、`RESULT.txt` 与工作目录保留；退出码=整体结果；明确打印"暂定通过、终验需实机与真实业务簿"。
+
+WSL 验证结果：
+- `x86_64-unknown-linux-gnu.2.28` release（HEAD 328532c）：5/5 PASS（PROVISIONAL_PASS）。
+- deb 制品 `pytools_0.1.0-20261025_amd64.deb` 解包二进制：5/5 PASS。
+- 开发中修正脚本一处断言（CLI 尾部 JSON 为紧凑无空格格式，`"output":"` 匹配），属脚本问题非产品缺陷；修正后两轮全绿。
+
+影响与未完成项：纯验证交付，不改业务代码。WSL 结果按用户口径登记为麒麟 V10/UOS V20 暂定通过；实机复核由用户执行 `sh verify_target.sh`（或 `PYTOOLS_BIN=... sh verify_target.sh`）。真实业务样本、NoCom/capability 决策、main 最终打包与 lo-convert 修复等阻塞不变。
+
+敏感内容检查：夹具全部为合成数据；脚本可自由分发到目标机。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可撤销脚本、夹具与记录。
+【组件版本】：纯验证交付，不升级。

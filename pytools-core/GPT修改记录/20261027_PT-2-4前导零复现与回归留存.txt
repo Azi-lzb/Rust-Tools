@@ -1,0 +1,22 @@
+时间：2026-10-27
+执行者：Codex
+修改前 commit：e56177e
+修改后 commit：待提交
+修改前 WIP：工作树干净；本轮在 F 盘临时目录运行合成复现，随后保留一条 ignored 修复后回归。
+
+目的：把 PT-2-4 前导零格式问题从代码路径推断升级为合成工作簿实测，并保留修复后应满足的回归断言。
+
+复现：纯 XLSX 的 A2 存储数值 123，数字格式 `000000`，B 列两条记录使用同一复合键；源 A2 格式读回为 `000000`，通过 `build_config_duplicate_plan` + `write_config_duplicate_delete_candidate` 重建后，候选 A2 的格式不再为 `000000`。一次性复现命令 `cargo test --offline --locked -p pytools-core --test tmp_number_format_repro -- --nocapture` 1/1 通过（测试断言当前格式损失）。夹具及工作簿位于 F 盘 Cargo 临时目录，测试结束自动删除。
+
+修改文件：
+- pytools-core/tests/dedup_number_format_blocker.rs：保留最小修复后预期测试，断言输出保留 `000000`；因 Excel-Core API 缺失暂标 ignored，待同步共享能力后移除 ignore 并执行。
+- pytools-core/MIGRATION_INVENTORY.md：记录实测复现、测试位置及仍受阻状态。
+- 本记录。
+
+验证：`cargo fmt --manifest-path pytools-core/Cargo.toml` 通过；`cargo test --offline --locked -p pytools-core --test dedup_number_format_blocker -j 1` 编译通过，默认结果为 0 passed、1 ignored（仅编译，不作为功能通过）。一次性失败行为复现如上。未运行 Python/Rust 全量对拍、真实业务样本或平台验收。
+
+协调：number-format reader API 请求已发送并由 main 收到；本轮未修改共享 crate，也未同步 main 代码。后续必须核实实际 Git 变更后再接入。
+
+删除清单：无。
+回滚提示：回退本提交会移除 PT-2-4 的实测阻塞证据及修复后回归断言。
+【组件版本】pytools-core 0.1.0，不升级。

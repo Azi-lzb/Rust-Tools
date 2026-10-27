@@ -1,0 +1,20 @@
+时间：2026-10-25 07:18（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：0e3a749087024ebcbde98422df2b5a87008105e2；工作区干净，分支 `pytools-dev` 与 `origin/pytools-dev` 同步。原始 PyTools 项目保持只读。
+
+目的：用原项目随附 `.xlsx` 工作簿和原配置，验证 PT-4-6 内容前缀添加与 PT-4-7 内容前缀取消的 Python/Rust 文件名结果。
+
+修改文件：
+- `pytools-core/probe/reports/content_prefix_project_asset_parity_20261025.json`：新增不含工作簿名和单元格值的机器对拍摘要。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 PT-4-6/4-7 样本分类、入口和验收限制，并移除过时的“尚未接入交互菜单”描述。
+- 本记录。
+
+真实入口与对拍：Rust 经 `pytools rename-by-content`、`pytools unrename-by-content` 处理；Python 基线调用只读源函数 `run_batch_rename_by_content_46` 和 `run_batch_unrename_by_content_47`。输入为原项目 `xlsx/` 中 13 份随附工作簿和只读 `PyCode/config/config.xlsx`。为避免改动源目录，Python 与 Rust 分别在 workspace `target/` 下的隔离硬链接目录执行；源目录原文件名仍完整存在。PT-4-6 两端均替换 13 个输入名，输出文件数均为 13，最终名称集合一致；PT-4-7 两端均改名 13、跳过 0，名称集合一致并恢复到原输入文件名集合。报告不保存这些文件名、前缀或单元格值。4-6 首轮子进程文本解码使用 Windows GBK 导致 JSON 摘要未捕获；子进程返回成功，文件系统结果集合复核一致。4-7 随后以 UTF-8 字节读取成功取得完整统计。
+
+验证（Windows 原生 Rust）：
+- `cargo test --offline --locked -p pytools-core --test content_rename_46_parity --test content_unrename_47_parity`：PT-4-6 2/2、PT-4-7 4/4 通过。
+- 对拍只验证原项目随附资产，不代表授权客户模板验收；没有读写 Excel 工作簿内容之外的输出契约，业务操作仅更改隔离硬链接目录项。
+
+限制与未执行项：这些资产不是授权客户业务模板；本轮只覆盖 `.xlsx`，未覆盖 `.xls/.xlt` COM 路径、真实宏、数字/日期/公式缓存边界、Windows 桌面文件弹窗、麒麟/UOS、glibc 2.28 或 deb。未运行全量 PyTools/workspace 测试；PT-4-6/4-7 最终验收仍为未验证。
+
+回滚提示：本记录与本轮机器报告及迁移清单更新一起纳入一个本地证据提交；如需撤销该证据提交，可执行 `git revert <commit>`。本轮不含产品代码、用户文件、凭据或共享组件。

@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.region_sum.unicode15_math_decimal_text_parity",
+  "date": "2026-10-26",
+  "status": "synthetic_python_rust_parity_passed",
+  "baseline": "PyCode/core/feature_1_5_region_sum_check.py::_to_num_or_none",
+  "python_version": "3.12.10",
+  "unicode_database": "15.0.0",
+  "rust_entry": "Windows-native pytools CLI region-sum-check",
+  "fixture": "pytools-core/tests/fixtures/region_sum/unicode_math_digits.xlsx",
+  "fixture_sha256": "F3340E492767F73701E45E300BE28D5CB54B27B3C69A933CFF29C855033A6837",
+  "unicode_decimal_zeroes": [
+    "U+0030",
+    "U+0660",
+    "U+06F0",
+    "U+07C0",
+    "U+0966",
+    "U+09E6",
+    "U+0A66",
+    "U+0AE6",
+    "U+0B66",
+    "U+0BE6",
+    "U+0C66",
+    "U+0CE6",
+    "U+0D66",
+    "U+0DE6",
+    "U+0E50",
+    "U+0ED0",
+    "U+0F20",
+    "U+1040",
+    "U+1090",
+    "U+17E0",
+    "U+1810",
+    "U+1946",
+    "U+19D0",
+    "U+1A80",
+    "U+1A90",
+    "U+1B50",
+    "U+1BB0",
+    "U+1C40",
+    "U+1C50",
+    "U+A620",
+    "U+A8D0",
+    "U+A900",
+    "U+A9D0",
+    "U+A9F0",
+    "U+AA50",
+    "U+ABF0",
+    "U+FF10",
+    "U+104A0",
+    "U+10D30",
+    "U+11066",
+    "U+110F0",
+    "U+11136",
+    "U+111D0",
+    "U+112F0",
+    "U+11450",
+    "U+114D0",
+    "U+11650",
+    "U+116C0",
+    "U+11730",
+    "U+118E0",
+    "U+11950",
+    "U+11C50",
+    "U+11D50",
+    "U+11DA0",
+    "U+11F50",
+    "U+16A60",
+    "U+16AC0",
+    "U+16B50",
+    "U+1D7CE",
+    "U+1D7D8",
+    "U+1D7E2",
+    "U+1D7EC",
+    "U+1D7F6",
+    "U+1E140",
+    "U+1E2F0",
+    "U+1E4F0",
+    "U+1E950",
+    "U+1FBF0"
+  ],
+  "table_check": {
+    "rust_zero_count": 68,
+    "python_unicode_decimal_zero_count": 68,
+    "exactly_matches_python_unicode_database": true
+  },
+  "python_float_inputs": [
+    {
+      "sheet": "分地区数学数字1",
+      "python_value": "𝟏_𝟎𝟎𝟎.𝟐𝟓",
+      "parsed_float": 1000.25
+    },
+    {
+      "sheet": "分地区数学数字2",
+      "python_value": "𝟙_𝟘𝟘𝟘.𝟚𝟝",
+      "parsed_float": 1000.25
+    },
+    {
+      "sheet": "分地区数学数字3",
+      "python_value": "𝟣_𝟢𝟢𝟢.𝟤𝟧",
+      "parsed_float": 1000.25
+    },
+    {
+      "sheet": "分地区数学数字4",
+      "python_value": "𝟭_𝟬𝟬𝟬.𝟮𝟱",
+      "parsed_float": 1000.25
+    },
+    {
+      "sheet": "分地区数学数字5",
+      "python_value": "𝟷_𝟶𝟶𝟶.𝟸𝟻",
+      "parsed_float": 1000.25
+    }
+  ],
+  "workflow_statistics": {
+    "files": 6,
+    "sheets": 10,
+    "errors": 8,
+    "failed_files": 1
+  },
+  "rust_validation": {
+    "format_check": "passed",
+    "region_sum_unit_tests": "4 passed",
+    "region_sum_parity_integration_tests": "7 passed",
+    "workflow_output_projection": "matches Python baseline for values, types, formulas, dimensions, styles, and column widths",
+    "input_fixtures_unchanged": true
+  },
+  "limitations": [
+    "Synthetic fixture only; no real business sample was available.",
+    "Windows native CLI and Python/Rust parity were tested; glibc 2.28, Kylin V10/UOS V20, and offline deb delivery were not tested in this change.",
+    "The table is pinned to the Python 3.12.10 Unicode 15.0.0 baseline."
+  ]
+}

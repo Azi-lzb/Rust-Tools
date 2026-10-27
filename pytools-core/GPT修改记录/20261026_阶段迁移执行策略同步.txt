@@ -1,0 +1,15 @@
+日期：2026-10-26
+执行者：Codex（pytools-dev）
+修改前 HEAD：656a035；分支 pytools-dev；origin/pytools-dev 同步。工作树已有 `MIGRATION_INVENTORY.md` 修改及 handoff/历史记录未跟踪文件，均保留。
+
+目的：按用户决定把 PyTools 执行阶段切换为“先完成可运行迁移、再集中 Windows 真实验收、后集中 Linux/deb 验收”，并同步 Excel-Core 优先级、统一功能生命周期状态。
+
+修改文件：
+- `pytools-core/AGENTS.md`：补充四阶段执行顺序、逐功能最低质量门槛、公共能力阻塞处置及不重复全量 WSL 的要求；不改变业务范围，PT-1-2 仍排除。
+- `pytools-core/MIGRATION_INVENTORY.md`：增加与 Excel 对象保留状态区分的六种生命周期标签；保留原逐功能证据和现有 WIP，不回溯重写整张表。
+
+验证：`git diff --check` 通过。仅修改开发规范与状态口径，未运行 Cargo、业务对拍或 WSL 测试。
+
+未完成/限制：这是执行策略同步，不构成任何功能验收。当前真实样本及目标平台状态沿用清单既有记录；根级 `DEVELOPMENT_GOAL.md`、`AGENTS.md` 和 workspace rules 由 main 维护，本轮已向 main 报告 §8.3/§8.4 与新阶段顺序的冲突。
+
+回滚：仅回退本记录及上述两个文件新增的策略段/状态说明；不得丢弃 `MIGRATION_INVENTORY.md` 既有工作树修改或其他未跟踪成果。

@@ -1,0 +1,29 @@
+时间：2026-10-25 07:33（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：bfa2cf0；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无既有用户 WIP。本轮业务提交：2107c59（feat(pytools): add content prefix progress views）。本记录单独提交。
+
+目的：为 PT-4-6 按内容添加文件名前缀、PT-4-7 取消内容前缀接入 user/developer/off 运行日志；保持原改名、跳过、冲突后缀和报告业务行为。
+
+修改文件：
+- pytools-core/src/file_sort_prefix.rs：保留旧 API 并委托新增 progress API；按阶段、逐文件发事件，包含实际 Calamine/RustFilesystem 引擎、数量、错误类型与耗时。提取逐文件处理 helper，原业务决策不变。
+- pytools-core/src/bin/pytools.rs：将类别 4 菜单 4→5、4→6 接入全局日志视图；两个 CLI 接受 `--log-dir`、`--log-view user|developer|off`。user 显示进度与耗时；developer 输出结构化事件并写 `.run.json` 历史；off 不输出进度也不写历史。原 JSON 报告字段保持不变，仅 developer 视图增加历史路径/写入警告字段。
+- pytools-core/tests/content_rename_46_parity.rs：为并行测试临时目录加原子序号，避免 Windows 目录名碰撞。
+- pytools-core/tests/conversion_menu_cli.rs：新增真实 Rust 菜单三视图用例，核对增删结果、输入簿字节未变、阶段/引擎/耗时、off 行为与历史脱敏。
+- pytools-core/MIGRATION_INVENTORY.md：更正 4-6/4-7 菜单接入状态并记录日志和本轮验证边界。
+- 本记录。
+
+真实入口和数据流：`pytools menu` → 主菜单 4（转换工具）→ 5/6；直接 CLI 为 `rename-by-content` / `unrename-by-content`。配置及内容单元格由共享 excel-reader/Calamine 读取，文件名由 Rust 文件系统改动，工作簿不保存。开发者历史记录阶段、实际引擎和耗时，不记录输入文件路径/文件名；菜单沿用用户全局日志视图。未改 Excel 配置、VBA 或只读 Python 源项目。
+
+验证（Windows 原生 MSVC）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test content_rename_46_parity --test content_unrename_47_parity --test conversion_menu_cli -j 1`：2/2、4/4、6/6，共 12/12 通过；测试对照既有 Python 基线的业务结果。原 Python 对拍脚本本轮未重跑；新增日志文本未与 Python logger 逐字对拍。
+- `git diff --check` 与 staged diff 检查通过。编译只有既有 excel-editor 42 项弃用警告和 pytools-core 两项未使用导入警告。
+- WSL 当前缺少 `cargo-zigbuild` 和 Zig，本轮未执行 glibc 2.28 Linux 构建；也未跑 workspace 全量测试。
+
+限制与已知问题：测试输入为合成工作簿，不代表真实业务目录、真实 `.xlsm`、跨平台文件系统或麒麟 V10/UOS V20 验收。Linux/glibc 2.28、deb 及真实样本仍未验证。业务结果和文件字节对拍通过，但日志文字/并发时序没有与 Python logger 完整比较。
+
+敏感内容检查：提交只包含 PyTools Rust 业务代码、合成测试和迁移清单；未发现凭据、敏感业务样本或不应公开文件。新历史日志路径和测试确认均不包含输入文件名/路径。
+
+删除清单：无。
+回滚提示：`git revert 2107c59` 可撤销业务代码、测试和迁移清单更新；保留本记录作为修改证据。
+【组件版本】：pytools-core 0.1.0，不升级。

@@ -1,0 +1,34 @@
+时间：2026-10-27 14:14:03（本地）
+执行者：Codex
+修改前 commit：0072644
+修改后 commit：待本地提交
+WIP 状态：本项开始前工作树干净；修改限于 PyTools PT-7-6 配置目标工作表与对应 CLI/配置测试。
+
+目的：补齐 V2 PT-7-6 的目标工作表配置。旧配置仅指定输出目录/文件名，结果表名固定沿用源 Sheet 名；新增可选“目标工作表”，供用户按配置指定提取结果表名，同时保留旧配置行为。
+
+修改文件：
+- pytools-core/src/config.rs：读取可选目标工作表。
+- pytools-core/src/config_admin.rs：在新建配置模板中提供目标工作表字段及用途说明。
+- pytools-core/src/sheet_extract.rs：提取结果使用指定 Sheet 名；字段为空时沿用源 Sheet 名。重名时按序号创建新表，不覆盖既有表；名称冲突比较不区分大小写。
+- pytools-core/tests/sheet_extract_area_operation_parity.rs：新增真实 V2 菜单用例，验证目标文件、目标 Sheet、输出值和输入源保护；原默认命名回归保持通过。
+- pytools-core/tests/sheet_extract_parity.rs：覆盖 Excel 不区分大小写的表名冲突。
+- pytools-core/tests/config_task_loader_parity.rs：旧配置基线中空的新字段不改变原有对拍结构。
+- pytools-core/MIGRATION_INVENTORY.md：记录功能范围、验证及剩余验收状态。
+
+组件版本：不升级（新增可选配置列，不改变旧配置的默认行为）。
+
+测试：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1 --quiet`：通过。
+- `cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity interactive_menu_writes_area_extraction_to_configured_target_sheet -j 1 --quiet`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test sheet_extract_area_operation_parity interactive_menu_routes_area_extraction_matches_python_and_records_engines -j 1 --quiet`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test sheet_extract_parity -j 1 --quiet`：通过。
+- `cargo test --offline --locked -p pytools-core --test config_task_loader_parity -j 1 --quiet`：通过。
+- `git diff --check`：通过。
+- Cargo 构建和临时测试目录位于 `F:\PyToolsRustV2\cargo-target` 与 `F:\PyToolsRustV2\cargo-temp`。
+
+未执行：真实业务模板、Excel 人工打开、现有目标簿重名追加运行、Linux/glibc 2.28、麒麟/UOS 与 deb 验收。新目标重名时仅追加序号，不覆写已有表；本项不实现向既有目标表的单元格覆写。
+
+已知问题：旧 Python 提取流程没有显式目标工作表配置；新版字段是可选扩展，旧配置保持源表命名。真实模板及用户操作仍待 Windows 验收。
+
+回滚：撤销本记录、迁移清单、配置字段及目标 Sheet 名选择逻辑；无需迁移或恢复用户数据。

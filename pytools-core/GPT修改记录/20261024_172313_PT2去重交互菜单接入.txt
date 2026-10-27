@@ -1,0 +1,28 @@
+修改时间：2026-10-24 17:23:13 +08:00
+执行者：Codex
+修改前提交：cf27469（pytools-dev）
+修改前 WIP：仅有本轮去重菜单和集成测试改动；上一个 PT-1 提交已推送，工作树当时干净。
+
+目的：将已有 Rust 去重业务 CLI 的六项工作流接入实际交互菜单，并保持写入类动作的 ExcelModifier capability 安全边界。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：主菜单新增类别 2；接入批注检查/删除、配置检查/删除/追加、配置预校验；检查动作按 PyCode 行为创建红色标记编辑计划，删除和追加动作生成计划，不隐式执行；菜单计划按操作写入唯一子目录，避免同秒重跑互相覆盖。
+- pytools-core/tests/dedup_menu_cli.rs：新增真实 pytools menu 子进程集成测试，覆盖六项入口、计划产物及源/目标未被改写。
+- pytools-core/MIGRATION_INVENTORY.md：登记菜单入口、业务语义和验收边界。
+- 本修改记录。
+
+配置与 VBA 影响：不更改配置格式或 VBA 行为。配置仍由当前工作簿读取。菜单不传入生产 capability，所有编辑动作均保留为计划；追加目标也不在菜单里直接发布。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --test dedup_menu_cli：1/1 通过，六项入口均经真实 Windows 原生 CLI 菜单进程覆盖。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli：1/1 通过，确认新增类别未破坏 PT-1 菜单。
+- 底层去重语义已有合成 PyCode/Rust 对拍，机器报告 probe/reports/dedup_parity_20261023.json 状态为 passed_synthetic_semantic_parity；本轮未重复运行该 probe。
+
+未执行项与已知问题：无可用的已授权真实业务工作簿；没有生产 Passed capability；未将 plan apply 接入菜单；时序/去重处理的结构化 user/developer/off 日志尚未接入；未做 WSL/Linux、麒麟/UOS、glibc 2.28 或 deb 验收；未运行完整 pytools-core 测试套件。cargo 输出的共享 excel-editor 弃用告警和 pytools-core 既有未使用导入告警未在本轮修改。
+
+敏感内容检查：提交范围仅含 Rust 源码、合成集成测试、迁移状态及本记录；不含业务工作簿、凭据或用户数据。
+
+删除清单：无。
+回滚：git revert <本次提交> 可完整撤回去重菜单入口、测试和迁移留痕。
+【组件版本】pytools-core 0.1.0（未变更）。

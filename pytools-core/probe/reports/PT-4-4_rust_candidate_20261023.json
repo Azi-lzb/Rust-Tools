@@ -1,0 +1,62 @@
+{
+  "capability_scope": "temporary test-only Passed capability; not production registration",
+  "comparison_note": "Print-area sheet quoting is normalized because quoted and unquoted simple sheet names are equivalent OOXML references.",
+  "comparison_status": "passed_synthetic_projection",
+  "engine": "umya_spreadsheet",
+  "input_sha256_before": "ce07e553f8031604cc0a5dd55de2a2aae252ec7bf73bcd008657384c4c3f26ef",
+  "output_sha256_after": "0c56853489ef6eca11ba009bf1d16e28e49bb7604505e42d0ee37086cf895fac",
+  "python_baseline_report": "pytools-core/probe/reports/PT-4-4_python_baseline_20261023.json",
+  "rust_cli_result": {
+    "elapsed_ms": 302,
+    "files": [
+      {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 50,
+          "operation": "replaced",
+          "sha256_after": "0c56853489ef6eca11ba009bf1d16e28e49bb7604505e42d0ee37086cf895fac",
+          "sha256_before": "ce07e553f8031604cc0a5dd55de2a2aae252ec7bf73bcd008657384c4c3f26ef",
+          "target": "/tmp/pytools-pt44-execution-1014-0/input.xlsx"
+        },
+        "commit_ms": 50,
+        "editing_ms": 122,
+        "elapsed_ms": 203,
+        "execution": {
+          "attempts": [
+            {
+              "elapsed_ms": 114,
+              "engine": "umya_spreadsheet",
+              "message": "validated output published",
+              "outcome": "succeeded"
+            }
+          ],
+          "elapsed_ms": 117,
+          "engine": "umya_spreadsheet",
+          "input": "/tmp/pytools-pt44-execution-1014-0/input.xlsx",
+          "output": "/tmp/pytools-pt44-execution-1014-0/.pytools-sheet-rename-1018-0.xlsx",
+          "route_decisions": [
+            {
+              "eligible": true,
+              "engine": "umya_spreadsheet",
+              "rejected_reasons": []
+            }
+          ]
+        },
+        "input": "/tmp/pytools-pt44-execution-1014-0/input.xlsx",
+        "planning_ms": 30,
+        "reason": null,
+        "renamed": 5,
+        "skipped": 5,
+        "status": "renamed"
+      }
+    ],
+    "files_scanned": 1,
+    "rename_ok": 5,
+    "skip": 5,
+    "workbooks": 1
+  },
+  "sample_class": "synthetic",
+  "scope_limit": "No real business workbook, XLSM, Windows-native Rust, target Linux, or deb validation.",
+  "suite": "pytools.pt_4_4_sheet_rename_candidate"
+}

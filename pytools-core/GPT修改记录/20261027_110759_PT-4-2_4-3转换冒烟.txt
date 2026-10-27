@@ -1,0 +1,40 @@
+时间：2026-10-27 11:07（Asia/Shanghai）
+执行者：Codex
+修改前 commit：1a71137
+修改后 commit：待提交
+WIP：修改前当前 codex/pytools-menu-entry 工作树干净；本轮仅补充现有转换验收记录。
+
+【组件版本】不升级（仅验收证据）
+
+目的：
+以新版内容优先标准，补记 Windows 合成 .xls→.xlsx 与 .doc→.docx 正向 CLI 冒烟；ET 不做虚假通过声明。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md
+- F:\PyToolsRustV2\manual-acceptance-20261027\README.txt（不纳入 Git）
+- F 盘新增合成 XLS/DOC 输入、转换输出及运行记录（不纳入 Git）
+
+PT-4-2 结果：
+- WPS 从 summary-north.xlsx 另存 XLS，重新打开确认 FileFormat=56、Data 工作表、2×2。
+- 正式 Rust convert-excel CLI 使用 Windows Office/WPS COM，退出码 0，报告 1 成功、0 失败。
+- WPS 重开 XLSX 输出确认 FileFormat=51；Data!A1:B2 文本/数值类型和值一致：名称、金额、东区、120。
+
+PT-4-3 结果：
+- WPS Writer 创建 DOC，重新打开确认 SaveFormat=0、正文包含三段合成文本。
+- 正式 Rust convert-word CLI 使用 Windows Office/WPS COM，退出码 0，报告 1 成功、0 失败；转换侧车验证 DOCX package 与文本内容。
+- WPS 重开 DOCX 报告 Open XML SaveFormat=12；归一尾部段落标记后正文与输入一致。
+
+运行日志：
+- PT-4-2：F:\PyToolsRustV2\manual-acceptance-20261027\logs\PT-4-2_conversion_20261027_110301_1793070181834796800.json
+- PT-4-3：F:\PyToolsRustV2\manual-acceptance-20261027\logs\PT-4-3_conversion_20261027_110729_1793070449055433400.json
+
+未执行项及限制：
+- 合成样本，不代表真实业务文件；未运行旧 Python 对拍、排版/对象全量对拍或格式细节验收。
+- ET 正向仍未验证。WPS SaveAs 65521 探针重开为 FileFormat=56，误标文件已移除。
+- Linux/glibc 2.28、麒麟/UOS/deb 未验证；真实 .xls/.doc 样本仍待用户业务验收。
+- 状态保持“已实现，待 Windows 真实验收”。
+
+回滚：
+- 回退本记录和迁移清单新增段落/状态摘要即可；F 盘合成样本可独立保留或由用户清理。未改源 Python、共享 crate 或其他工作树。
+正式菜单实测：4→4→1 的 XLS 输出为 F:\PyToolsRustV2\manual-acceptance-20261027\04-files\xlsx\pt44-native-xls-smoke-20261027.xlsx；4→4→2 的 DOC 输出为 F:\PyToolsRustV2\manual-acceptance-20261027\04-files\docx\pt43-native-doc-smoke-20261027.docx。两次菜单均退出码 0、成功 1 失败 0。
+conversion_menu_cli：11 passed，2 ignored。

@@ -1,0 +1,33 @@
+时间：2026-10-25 08:18（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d5f4ae2；分支 pytools-dev 与 origin/pytools-dev 同步。开始时已有仅涉及本 PT-6-2 合成数值/日期表头用例的两处 WIP（CLI 测试和对拍 probe），本轮将其完成；无其他 WIP。本轮业务提交：e5e8bf4。本记录单独提交。
+
+目的：修复 PT-6-2 summary-comments 对数值及日期模板表头的 Python/Rust 字符串转换差异，并保持真实模板读取组件可追踪。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：表头从带类型的单元格值执行 Python 字符串语义转换；整数值不再错误显示为带 .0 的浮点数，ISO 日期按 Python datetime 文本格式化。模板读取复用共享 Calamine ISO 日期投影覆盖日期序列值，并在 template_read 事件的 components 中记录该组件。公式表头仍保留公式文本，不执行重算。
+- pytools-core/tests/summary_comments_cli.rs：真实 summary-comments CLI 合成回归补充数值/日期表头及 ISO 日期投影日志组件断言。
+- pytools-core/probe/compare_summary_comments_template_header.py：合成模板加入整数型数值和日期表头，并断言输出 Python 字符串表现。
+- pytools-core/probe/reports/summary_comments_template_header_parity_20261025.json：更新 Windows 原生 PyCode/Rust 完整投影对拍，4×8 输出维度，different_fields 为空。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-2 表头语义、真实入口、验证范围和限制。
+- 本记录。
+
+真实入口与行为：pytools menu → 6 → 2 → summary-comments。合成测试现覆盖公式、空白、布尔、整数/小数和日期表头；模板日期值通过共享 Calamine 日期投影格式化，公式文本仍以公式写入结果簿，公式缓存留空。未修改 DEVELOPMENT_GOAL.md、共享 crates、根 Cargo 文件、配置或 Audit；原 PyTools Python 项目只读。
+
+验证（Windows 原生 MSVC）：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo build --offline --locked -q -p pytools-core --bin pytools：通过。
+- cargo test --offline --locked -p pytools-core --lib comment_region_tests：3/3 通过。
+- cargo test --offline --locked -p pytools-core --test summary_comments_cli --test summary_menu_cli -j 1：summary_comments_cli 5/5、summary_menu_cli 4/4 通过。
+- py -3.12 pytools-core/probe/compare_summary_comments_template_header.py：Python 3.12.10/openpyxl 3.1.5 只读 PyCode 基线与原生 Windows CLI 完整工作簿投影精确一致；3 行结果、1 个输出表、4×8；实际 reader/writer 为 Calamine/rust_xlsxwriter；源输入未变，输出仅在临时目录。
+- git diff --check：通过。
+
+对拍差异：扩展用例最初暴露数值 10 被 Rust 写成 “10.0”；修复后包含数值和日期表头的完整工作簿投影与 PyCode 一致，报告字段差异为空。
+
+限制与未执行项：使用合成 XLSX，不替代原项目有效批注区域业务模板验收；麒麟 V10/UOS V20、glibc 2.28、离线 deb、Linux 阶段验证及 workspace 全量测试未执行。PT-6-2 整体生产验收仍未完成。
+
+敏感内容检查：改动仅含 PyTools Rust 业务代码、合成测试/probe、机器结果和迁移记录；报告不含输入路径、文件名或单元格值，未发现凭据或真实业务数据。
+
+删除清单：无。
+回滚提示：git revert e5e8bf4 回滚业务代码、测试、probe、报告及迁移清单；如需移除本记录，再单独撤销本记录提交。
+【组件版本】：pytools-core 0.1.0，不升级。

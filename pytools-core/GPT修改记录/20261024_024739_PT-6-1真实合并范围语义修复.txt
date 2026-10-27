@@ -1,0 +1,31 @@
+时间：2026-10-24 02:47（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：4cec59c（与 origin/pytools-dev 同步）；修改后 commit：本轮提交，编号见 Git 历史。
+WIP 状态：开始时 pytools-dev 工作树干净；已 fetch origin/main，main 仍是当前分支祖先，没有新公共 crate、规则或目标文件变更。本轮只修改 pytools-core/**；`DEVELOPMENT_GOAL.md`、AGENTS、Rules、Audit、共享 crates、根 Cargo 配置和 Cargo.lock 未改。原 Python 项目和业务工作簿保持只读。
+
+目的：补齐 PT-6-1 的真实宽表对拍，并修复 Calamine 将真实 XLSX 合并子格返回为值时与 PyCode/openpyxl 不一致的问题。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：解析共享 reader 已返回的 worksheet 合并范围；生成使用区域汇总时保留合并锚点，跳过合并范围内的非锚点值。新增绝对坐标、多列范围和多行范围的回归单测。
+- `pytools-core/probe/compare_summary_tools.py`：把真实源项目对拍扩展为 4 个 XLSX 样本、2 个独立批次；按源 PyCode `_used_bounds` 统计区域行数，验证输入未改变，并记录 worksheet dimension 缺失和合并子格边界。失败诊断不包含单元格值；同步修正合成报告的限制说明，指向独立真实样本报告。
+- `pytools-core/probe/reports/summary_used_range_real_parity_20261024.json`：记录 4 份真实样本、批次输出、引擎与阶段计时及边界结果，不含单元格值/输出簿。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：更新完整合成 PT-6-1/PT-6-2 probe 结果。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录真实批次范围及合并子格修复。
+- 本修改记录。
+
+逻辑和数据流：PyCode `run_summary_by_usedrange` 与真实 Rust `summary-used-range` CLI 读取同一只读源 XLSX；Rust 使用 Calamine 读取值与合并范围、PyTools Rust 业务层过滤合并非锚点值、rust_xlsxwriter 新建汇总簿，支持的 Excel error 值按既有 namespace-aware OOXML Patch 保留；probe 在临时目录比较两侧输出。真实差异位于 `1.报表分口径.xlsx` 的源 B1（合并区 A1:AG1 非锚点），Rust 原先将其写入汇总 E3753，修复后与 PyCode 一样为空。`2.报表校验关系.xlsx` 的 15 个 worksheet 均缺少 `<dimension>` 元素，但实际单元格/合并范围最大到第 70 行、第 257 列；PyCode used-range 汇总 427 行，Rust extent 预扫描和批次对拍一致。另一个真实宽表的 1,212 个受支持错误值通过既有路径保留。
+
+验证与对拍：
+- `wsl -e sh -lc "cd /mnt/c/Users/AZI/Desktop/VibeCode/pytools-dev && cargo fmt -p pytools-core -- --check"`：通过。
+- `cargo test --offline --locked -p pytools-core merged_cell_tests`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core summary_used_range`：CLI 的错误值保留、未知错误失败关闭、无读取器 3/3 通过。
+- `python pytools-core/probe/compare_summary_tools.py`：通过。4 份源项目 XLSX（69 个工作表）分 2 批共输出 8,991 行；两批输出分别为 1,530×260 和 7,463×213。值/类型、已填充样式、工作表名/维度、冻结窗格/表头、公式/合并/定义名称/页面属性完全一致。输入 SHA-256 前后相同，输出只在临时目录。
+- `git diff --check`：通过。编译输出只有已有弃用 API 与未使用导入警告。
+
+对拍差异：修复前发现合并子格 B1 的一个真实值/类型/样式差异；修复后四份真实 XLSX 和原有合成 PT-6-1/PT-6-2 对拍均无 PyCode/Rust 差异。NoComPyTools 的既有合成差异继续按报告记录，不扩大 PyCode 产品契约。
+
+未执行项及限制：当前 Windows 环境无原生 Cargo，本轮 Rust CLI/测试经 WSL Linux 执行；未跑全 crate/workspace 测试。含 VBA 的真实 XLSM、XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28、deb 和峰值 RSS 仍未验证。`#DATA!` 仍按 workspace reader 约束失败关闭，没有普通值 OOXML 回退。该对拍不登记 Calamine/rust_xlsxwriter 生产默认能力；PT-6-1 整体验收仍未完成。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`；源样本未复制或修改。
+【组件版本】：不升级，当前 0.1.0。

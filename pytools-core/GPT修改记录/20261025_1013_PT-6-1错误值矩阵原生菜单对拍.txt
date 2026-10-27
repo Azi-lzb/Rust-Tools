@@ -1,0 +1,27 @@
+时间：2026-10-25 10:13（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：ec453e4；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步。
+修改后 commit：c19da38（机器报告和迁移清单）；本记录另行提交。
+WIP：修改前保留 6 个 PT-1-2 未提交文件：`pytools-core/probe/compare_timeline_extract.py`、`pytools-core/probe/reports/timeline_extract_parity_20261025.json`、`pytools-core/src/bin/pytools.rs`、`pytools-core/src/dedup_ops.rs`、`pytools-core/src/timeline_extract.rs`、`pytools-core/src/timeline_ops.rs`。本轮未修改或暂存这些文件。
+
+目的：补充 PT-6-1 按使用区域汇总的真实产品菜单及 Windows 原生文件对话框错误值矩阵入口对拍；不更改 PT-6-1 业务实现、格式支持范围或默认引擎。
+
+修改文件：
+- `pytools-core/probe/reports/summary_used_range_real_menu_parity_20261025.json`：并入一项合成错误值矩阵的原生菜单运行摘要，不含文件名或单元格数据。
+- `pytools-core/MIGRATION_INVENTORY.md`：补记菜单入口、完整投影和实际引擎证据，并维持 PT-6-1 未完成生产验收状态。
+- 本记录。
+
+实际入口与结果：用 Windows 原生 MSVC `pytools.exe` 启动 `pytools menu → 6 → 1`，经 Windows 原生 Open 对话框选取 `pytools-core/tests/fixtures/summary_used_range/error_token_matrix.xlsx`。Rust 生成 1 个临时 XLSX；与只读 PyCode `run_summary_by_usedrange` 完整工作簿投影精确一致，输出含标题行为 2×18。处理 8 个未知错误 token 的文本规范化及 7 个常见 Excel 错误单元格保留；开发者运行历史含 14 条事件，记录 Calamine、窄化错误 token 兼容、OOXML Patch 与 `rust_xlsxwriter`。输入夹具未改变；输出和运行历史位于系统 TEMP。
+
+验证结果（Windows 原生）：
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过；仅有既存共享 crate 弃用 API 及 PyTools 未使用导入警告。
+- 使用 `pytools-core/probe/compare_summary_tools.py` 中 `python_used_range_only` 与 `assert_equivalent` 对拍：完整投影 exact，差异字段为空。
+- `cargo test --offline --locked -p pytools-core --test summary_menu_cli --test summary_used_range_error -j 1`：菜单 4/4、错误值 5/5 通过。
+- `git diff --check`：通过。
+
+影响与未完成项：未修改业务代码或配置，不改变 VBA 行为，不升级组件版本。该样本为合成 XLSX，不替代原 PyTools VBA-bearing XLSM、NoComPyTools 全量变体、麒麟 V10/UOS V20 实机、glibc 2.28 或 deb 验收；PT-6-1 继续标记未完成。临时验证目录仍位于系统 TEMP，清理请求未由当前执行环境接受，不进入版本控制。
+
+敏感内容检查：待提交内容只有合成样本的行列尺寸、引擎和事件计数；无源业务数据、凭据、源文件名或单元格值。
+删除清单：无仓库文件删除。
+回滚提示：`git revert c19da38` 撤销本次机器报告和迁移清单证据；本记录的独立提交如需移除，再单独 revert 该提交。
+【组件版本】：纯验证，不升级。

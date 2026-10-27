@@ -1,0 +1,63 @@
+{
+  "report_type": "pytools-helper-parity",
+  "generated_at": "2026-10-23T01:14:41+08:00",
+  "status": "passed_with_limited_scope",
+  "scope": "Deterministic file-sort-prefix helpers only; this does not mark pytools operations 4-9 or 4-10 migrated.",
+  "source_baseline": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "python_version": "3.12.10",
+    "baseline_generator": "pytools-core/probe/file_sort_prefix_baseline.py",
+    "baseline_uses_source_helpers": [
+      "_sort_prefix_digits",
+      "_sort_prefix_width",
+      "_normalize_sort_prefix",
+      "_load_file_sort_rules",
+      "_match_file_sort_rule",
+      "_strip_sort_prefix"
+    ],
+    "focused_source_tests": {
+      "result": "passed",
+      "passed": 23,
+      "warnings": 1,
+      "source_writes": false
+    }
+  },
+  "comparisons": {
+    "groups": [
+      { "name": "sort_prefix_digits", "items": 9, "status": "保留" },
+      { "name": "sort_prefix_width", "items": 7, "status": "保留" },
+      { "name": "normalize_sort_prefix", "items": 6, "status": "保留" },
+      { "name": "build_file_sort_rules", "items": 4, "status": "保留" },
+      { "name": "match_file_sort_rule", "items": 4, "status": "保留" },
+      { "name": "strip_sort_prefix", "items": 8, "status": "保留" },
+      { "name": "prefixed_file_name", "items": 3, "status": "保留" }
+    ],
+    "rust_parity_test": "pytools-core/tests/file_sort_prefix_parity.rs",
+    "rust_parity_test_count": 1,
+    "rust_parity_test_result": "passed"
+  },
+  "workspace_validation": {
+    "format_check": "cargo fmt --all -- --check: passed",
+    "test_command": "cargo test --workspace --locked -q",
+    "tests_passed": 31,
+    "tests_failed": 0,
+    "result": "passed"
+  },
+  "not_covered": [
+    "Rust XLSX configuration workbook loading",
+    "directory discovery and collision-safe filesystem rename execution",
+    "xlsx report generation",
+    "content-prefix processing and the full operation 4-10 branch",
+    "COM integration",
+    "menu/configuration integration",
+    "real user directories and real business workbooks",
+    "other input formats and target Linux packaging"
+  ],
+  "routing": {
+    "production_default_changed": false,
+    "dependencies_changed": false,
+    "candidate_only": true
+  }
+}

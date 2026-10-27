@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-23",
+  "operation": "pytools 4-8 run_batch_rename_local_map_48",
+  "status": "synthetic_candidate_parity_passed",
+  "candidate": {
+    "api": "pytools_core::local_filename_map::run_local_filename_map_48_candidate",
+    "scope": "regular files of any extension",
+    "config_reader": "shared excel-reader backed by Rust calamine",
+    "rename_behavior": "ordered substring replacement in filename stem; preserve final suffix; no-clobber target reservation",
+    "menu_or_cli_integrated": true,
+    "cli_command": "pytools rename-local-map --config <workbook.xlsx> <file>...",
+    "production_default": false
+  },
+  "python_baseline": {
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "function": "run_batch_rename_local_map_48",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "report": "probe/reports/local_filename_map_48_python_baseline.json"
+  },
+  "case": {
+    "fixture": "tests/fixtures/local_filename_map_48_cases.json",
+    "mapping_rows": 6,
+    "input_paths": 10,
+    "python_stats": {"ok": 5, "skip": 5, "rules": 6},
+    "rust_stats": {"ok": 5, "skip": 5, "rules": 6},
+    "python_and_rust_final_entries_match": true,
+    "rust_input_file_bytes_preserved": true,
+    "preexisting_collision_target_preserved": true,
+    "covered": [
+      "ordered chained replacements",
+      "Chinese filename fragments",
+      "arbitrary .pdf/.docx/.xlsx/.doc/.txt/.bin extensions",
+      "empty replacement target",
+      "multiple source files mapping to one target and numbered collision suffixes",
+      "no matching fragment",
+      "missing path and directory skip",
+      "path-separator target rejection",
+      "overlong destination failure without losing the source file"
+    ]
+  },
+  "verification": {
+    "python_baseline_run": "passed",
+    "python_source_tests": "19 passed; test_rename_local_map_48.py and test_convert_rename_edges.py",
+    "rust_integration_tests": "3 passed; includes product CLI invocation",
+    "rust_module_unit_tests": "2 included in pytools-core run",
+    "pytools_core_tests": "28 passed",
+    "workspace_tests": "47 passed",
+    "cargo_fmt_check": "passed"
+  },
+  "unverified": [
+    "real user configuration workbook and real selected directories",
+    "Rust native Windows behavior and 麒麟 V10/UOS V20 deployment",
+    "non-UTF-8 Linux filenames (the candidate explicitly skips these)",
+    "mapping values sourced from numeric/date/error cells",
+    "platform-specific invalid filename characters other than path separators",
+    "original GUI menu integration and complete user workflow"
+  ],
+  "routing_decision": "CLI-callable Rust candidate; no production default change"
+}

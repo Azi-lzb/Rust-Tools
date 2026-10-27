@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary.biff_elapsed_duration_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_python_rust_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "python_version": "3.12.10",
+  "xlrd_version": "2.0.1",
+  "rust_entry": "Windows-native pytools CLI wide-summary / wide-summary-row-suffix",
+  "fixture": "pytools-core/tests/fixtures/timeline/wide_summary_elapsed_duration.xls",
+  "fixture_sha256": "5F5F3A3CBFB028458FC950222E20FAD4F67536A613CEE01FAF56F4025BBF842B",
+  "biff_cells": [
+    {
+      "cell": "B5",
+      "xlrd_cell_type": 3,
+      "number_format": "[h]:mm:ss.000"
+    },
+    {
+      "cell": "C5",
+      "xlrd_cell_type": 3,
+      "number_format": "yyyy/m/d h:mm:ss.000"
+    },
+    {
+      "cell": "B6",
+      "xlrd_cell_type": 3,
+      "number_format": "[h]:mm:ss.000"
+    },
+    {
+      "cell": "C6",
+      "xlrd_cell_type": 3,
+      "number_format": "yyyy/m/d h:mm:ss.000"
+    }
+  ],
+  "cases": [
+    {
+      "mode": "no_suffix",
+      "status": "passed",
+      "summary_rows": 3,
+      "summary_columns": 9,
+      "python_rust_value_type_format_style_projection": "exact",
+      "append_plan_count": 1,
+      "input_unchanged": true,
+      "config_unchanged": true
+    },
+    {
+      "mode": "row_suffix",
+      "status": "passed",
+      "summary_rows": 3,
+      "summary_columns": 9,
+      "python_rust_value_type_format_style_projection": "exact",
+      "append_plan_count": 1,
+      "input_unchanged": true,
+      "config_unchanged": true
+    }
+  ],
+  "limitations": [
+    "The fixture is synthetic; no real business XLS workbook was available.",
+    "The result covers this BIFF XLS fixture and Python xlrd semantics, not every XLS number format or input origin.",
+    "This does not claim general BIFF number-format metadata exposure from the shared reader."
+  ]
+}

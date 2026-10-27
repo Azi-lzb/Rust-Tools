@@ -1,0 +1,82 @@
+# Shared Cargo output
+/target/
+**/target/
+
+# Local language runtimes and build/cache output
+**/.venv/
+**/venv/
+**/env/
+**/.test-openpyxl-venv/
+**/build/
+**/dist/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.cache/
+**/tmp/
+**/temp/
+
+# Local-only sanitized samples and temporary output
+/audit-core/config-real/
+**/config-real/
+**/__pycache__/
+*.pyc
+*.pyo
+*.log
+*.log.*
+*.tmp
+*.temp
+*.swp
+*.deb
+*.zip
+**/logs/
+**/log/
+
+# Local credentials and environment-specific settings
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+*.local
+*.local.*
+local.settings.json
+credentials.json
+secrets.json
+**/credentials/
+**/secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.token
+
+# Workbook files are ignored by default; keep only approved project fixtures
+# and public placeholder configuration workbooks.
+*.xlsx
+*.xlsm
+*.xls
+*.xlsb
+!/audit-core/config/**/*.xlsx
+!/audit-core/config/*.xlsx
+!/audit-core/tests/fixtures/**/*.xlsx
+!/audit-core/tests/fixtures/*.xlsx
+!/audit-core/tests/fixtures/**/*.xlsm
+!/audit-core/tests/fixtures/*.xlsm
+!/audit-core/tests/fixtures/**/*.xls
+!/audit-core/tests/fixtures/*.xls
+!/audit-core/tests/fixtures/**/*.xlsb
+!/audit-core/tests/fixtures/*.xlsb
+!/pytools-core/tests/fixtures/**/*.xlsx
+!/pytools-core/tests/fixtures/*.xlsx
+!/pytools-core/tests/fixtures/**/*.xlsm
+!/pytools-core/tests/fixtures/*.xlsm
+!/pytools-core/tests/fixtures/**/*.xls
+!/pytools-core/tests/fixtures/*.xls
+!/pytools-core/tests/fixtures/**/*.xlsb
+!/pytools-core/tests/fixtures/*.xlsb
+
+# Explicitly excluded workbooks confirmed by the user
+/audit-core/config/**/外部文件-大集中相关数据20261016.xlsx
+/pytools-core/tests/fixtures/季度报表_县区报表_2024-12-31.xlsx
+!/pytools-core/packaging/target_fixtures/*.xlsx

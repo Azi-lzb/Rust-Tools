@@ -1,0 +1,22 @@
+时间：2026-10-27 00:51 +08:00
+执行者：Codex
+修改前 commit：087e24a
+修改后 commit：本记录随 PT-4-1 原子无覆盖重命名提交
+修改前 WIP：工作树干净；仅本轮 PT-4-1 修改未提交。原 Python 项目只读。
+
+目的：避免 PT-4-1 文件名标准化在检查目标不存在后、执行普通 rename 前发生竞争时覆盖既有文件或目录。
+
+修改/新增文件：
+- `pytools-core/src/batch_rename.rs`：Windows 使用无替换语义的 `MoveFileW`；Linux 使用 `renameat2(RENAME_NOREPLACE)`。目标竞争时按原 `_1`、`_2` 后缀规则重试；no-replace 能力不可用时返回失败，不降级为可能覆盖的 rename。新增目标已存在时源、目标内容保持不变的单测。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录此安全修复及其验证边界。
+- `pytools-core/GPT修改记录/20261027_005138_PT-4-1原子无覆盖文件重命名.txt`：本记录。
+
+配置、菜单、Python 基线和共享 Excel-Core 均未修改。业务规则和文件名生成保持原样；不改变 Excel 内容。Windows 与 Linux 使用各自的原子 no-replace 文件系统 API。
+
+验证：`cargo fmt -p pytools-core` 和 `cargo fmt -p pytools-core -- --check` 通过；`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1` 通过；`cargo test --offline --locked -q -p pytools-core --lib batch_rename::tests -j 1` 4/4 通过；`cargo test --offline --locked -q -p pytools-core --test batch_rename_parity -j 1` 4/4 通过。CLI 对拍继续确认映射、目标命名及静态冲突场景与 Python 基线一致；单测确认已有目标不变且源不丢失。构建和测试临时文件在 `F:\PyTools_Rust_本轮工作文件_20261026\` 下。
+
+未执行项/已知问题：当前 Windows Rust 安装没有 Linux target，本轮未编译或运行 `renameat2` 分支，也未做真实并发压力、长路径、用户业务目录、Linux/glibc 2.28 或 deb 验收。若目标文件系统/内核不支持 `RENAME_NOREPLACE`，操作将失败并报告错误，不尝试可覆盖回退。PT-4-1 整体仍为“未验证”。
+
+删除清单：无。
+回滚提示：回退本提交会恢复先检查后普通 rename 的竞争窗口。
+【组件版本】pytools-core 0.1.0，不升级。

@@ -1,0 +1,29 @@
+日期：2026-10-26 04:26（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：843b568e464b36a04d3d2ee1413f75c9613835aa；origin/pytools-dev 同步；origin/main 为其祖先。
+工作树已有 pytools-core/MIGRATION_INVENTORY.md 的 10 行修改，以及 HANDOFF_ZCODE_TO_CODEX.md、PT-4-2/PT-6-2 记录；均保留且未纳入本次修改。
+
+【目的】
+修复宽表汇总对显式 .xls 输入无条件调用 OOXML 样式读取器、导致 BIFF 文件在样式阶段失败的问题。对 .xls 跳过 OOXML 累计时长补读，继续用 Calamine 值处理，并明确记录累计时长格式识别未验证。
+
+【修改文件】
+- pytools-core/src/timeline_ops.rs：.xls 输入跳过 OOXML elapsed-time 样式读取，记录可见的 skipped 事件；其他格式的读取失败策略不变。
+- pytools-core/tests/fixtures/timeline/wide_summary_legacy.xls：加入 2×2 合成 smoke 工作簿（Data 表、“Installed smoke”文本和 42.0）；不含业务数据。
+- pytools-core/tests/timeline_menu_cli.rs：新增两种宽表 CLI 入口的 BIFF .xls 回归，验证单输入完成、匹配一个工作表、无失败、元数据提示存在、无可汇总单元格时不生成输出、源文件不变。
+- pytools-core/probe/compare_wide_summary_legacy_xls.py：新增 Windows Python/Rust 对拍脚本，调用原 PyCode run_wide_summary 与原生 pytools.exe。
+- pytools-core/probe/reports/wide_summary_legacy_xls_metadata_parity.json：保存两种行头模式的对拍结果。
+- 本记录。
+
+【验证】
+- cargo fmt --manifest-path pytools-core/Cargo.toml --check：通过。
+- Windows 原生 cargo build --manifest-path pytools-core/Cargo.toml --offline --locked -p pytools-core --bin pytools：通过。
+- cargo test --manifest-path pytools-core/Cargo.toml --offline --locked -p pytools-core --lib -j 1：44/44 通过。
+- cargo test --manifest-path pytools-core/Cargo.toml --offline --locked -p pytools-core --test timeline_menu_cli -j 1：18/18 通过。
+- 使用 PyTools 只读 Python venv 运行 compare_wide_summary_legacy_xls.py：两种入口均与 PyCode 一样返回无输出；Rust 成功读取并处理 1 个输入、匹配 1 个工作表、提取 0 个可汇总单元格、失败 0 个，累计时长元数据事件为 skipped。输入副本未改动。报告状态为 passed_synthetic_python_rust_skip_parity。
+
+【限制与已知问题】
+该 smoke 工作簿没有可提取的宽表数据；本轮只验证 .xls 不会因 OOXML 元数据补读而误失败以及无输出分支对拍，不证明非空 .xls 宽表结果、BIFF 累计时长格式、真实样本、麒麟/UOS、glibc 2.28 或离线 deb 已验收。PT-1-3/1-4 的真实样本验收仍未通过。无共享 crate 变更；未更新迁移清单，因为该文件有既有未提交 WIP。
+
+【组件版本】不升级。
+【删除清单】无。
+【回滚提示】仅回滚本次上述代码、测试、fixture、probe、报告及记录；保留工作树原有 WIP 和其他提交。

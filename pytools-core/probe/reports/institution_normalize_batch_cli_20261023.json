@@ -1,0 +1,1118 @@
+{
+  "baseline": "probe/reports/institution_normalize_baseline.json",
+  "fixture": "tests/fixtures/institution_normalize.xlsx (synthetic)",
+  "limitations": [
+    "synthetic XLSX fixture only; no authorized real business sample",
+    "tested planning and capability rejection, not a production engine execution",
+    "PT-7-2 remains unverified and no production capability was created",
+    "Windows native Rust and target Linux/deb are not verified"
+  ],
+  "python_baseline_stats": {
+    "branch_sheets": 3,
+    "failed_files": 0,
+    "files": 1,
+    "mapped_rows": 3,
+    "mapped_sheets": 2,
+    "mapping_empty": false
+  },
+  "rust_developer_history": {
+    "branch_sheets": 6,
+    "completed_files": 2,
+    "configuration_elapsed_ms": 53,
+    "elapsed_ms": 112,
+    "events": [
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "phase": "configuration_read",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 1,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.900307247+00:00",
+        "user_message": "正在读取机构映射配置。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "elapsed_ms": 53,
+        "phase": "configuration_read",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 2,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.957838909+00:00",
+        "user_message": "机构映射配置已读取，共 3 条有效映射。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "file_name": "first.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 3,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.957904794+00:00",
+        "user_message": "正在处理 1/3：first.xlsx"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "file_name": "first.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 4,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.961949051+00:00",
+        "user_message": "正在检查工作簿结构：first.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "elapsed_ms": 12,
+        "file_name": "first.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 5,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.971700028+00:00",
+        "user_message": "工作簿结构检查完成：first.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "file_name": "first.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 6,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.971774082+00:00",
+        "user_message": "正在按映射规则检查工作表：first.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "elapsed_ms": 14,
+        "file_name": "first.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 7,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.986550167+00:00",
+        "user_message": "映射规则检查完成：first.xlsx，命中 3 行。"
+      },
+      {
+        "components": [
+          "Rust",
+          "serde_json"
+        ],
+        "file_name": "first.xlsx",
+        "phase": "plan_persistence",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 8,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.987765274+00:00",
+        "user_message": "正在保存修改计划：first.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "serde_json"
+        ],
+        "elapsed_ms": 9,
+        "file_name": "first.xlsx",
+        "phase": "plan_persistence",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 9,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.997106559+00:00",
+        "user_message": "修改计划已保存：first.xlsx。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "elapsed_ms": 38,
+        "file_name": "first.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 1,
+          "total_files": 3
+        },
+        "sequence": 10,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.997222749+00:00",
+        "user_message": "已生成 1/3：first.xlsx 的修改计划，涉及 3 行；尚未修改原文件。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "file_name": "unsupported.xls",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 2,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 1,
+          "total_files": 3
+        },
+        "sequence": 11,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.997264759+00:00",
+        "user_message": "正在处理 2/3：unsupported.xls"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "diagnostic": "this PT-7-2 candidate currently supports .xlsx only; convert other formats before retrying",
+        "elapsed_ms": 0,
+        "error_type": "unsupported_format",
+        "file_name": "unsupported.xls",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 2,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 12,
+        "status": "failed",
+        "timestamp": "2026-10-23T15:32:46.997331639+00:00",
+        "user_message": "跳过 2/3：unsupported.xls，当前候选仅支持 .xlsx；原文件未修改。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "file_name": "last.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 13,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.997369107+00:00",
+        "user_message": "正在处理 3/3：last.xlsx"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "file_name": "last.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 14,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.997402585+00:00",
+        "user_message": "正在检查工作簿结构：last.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "elapsed_ms": 1,
+        "file_name": "last.xlsx",
+        "phase": "profile_inspection",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 15,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:46.998983588+00:00",
+        "user_message": "工作簿结构检查完成：last.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "file_name": "last.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 16,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:46.999026096+00:00",
+        "user_message": "正在按映射规则检查工作表：last.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "calamine"
+        ],
+        "elapsed_ms": 5,
+        "file_name": "last.xlsx",
+        "phase": "plan_build",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 17,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:47.004622794+00:00",
+        "user_message": "映射规则检查完成：last.xlsx，命中 3 行。"
+      },
+      {
+        "components": [
+          "Rust",
+          "serde_json"
+        ],
+        "file_name": "last.xlsx",
+        "phase": "plan_persistence",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 18,
+        "status": "started",
+        "timestamp": "2026-10-23T15:32:47.004680195+00:00",
+        "user_message": "正在保存修改计划：last.xlsx。"
+      },
+      {
+        "components": [
+          "Rust",
+          "serde_json"
+        ],
+        "elapsed_ms": 6,
+        "file_name": "last.xlsx",
+        "phase": "plan_persistence",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 19,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:47.011262380+00:00",
+        "user_message": "修改计划已保存：last.xlsx。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "elapsed_ms": 13,
+        "file_name": "last.xlsx",
+        "phase": "file_processing",
+        "progress": {
+          "completed_files": 2,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 3,
+          "total_files": 3
+        },
+        "sequence": 20,
+        "status": "completed",
+        "timestamp": "2026-10-23T15:32:47.011361859+00:00",
+        "user_message": "已生成 3/3：last.xlsx 的修改计划，涉及 3 行；尚未修改原文件。"
+      },
+      {
+        "components": [
+          "Rust"
+        ],
+        "elapsed_ms": 112,
+        "phase": "task",
+        "progress": {
+          "completed_files": 2,
+          "current_file": null,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 3,
+          "total_files": 3
+        },
+        "sequence": 21,
+        "status": "partial_failure",
+        "timestamp": "2026-10-23T15:32:47.011398159+00:00",
+        "user_message": "处理结束：成功 2 个，失败 1 个，修改 0 个文件。"
+      }
+    ],
+    "failed_files": 1,
+    "feature_id": "PT-7-2",
+    "files": [
+      {
+        "actual_engine": null,
+        "branch_sheets": 3,
+        "cleanup_warning": null,
+        "diagnostic": null,
+        "error_stage": null,
+        "error_type": null,
+        "execution": null,
+        "file_name": "first.xlsx",
+        "mapped_rows": 3,
+        "mapped_sheets": 2,
+        "operation_count": 3,
+        "plan_path": "/tmp/pytools-pt-7-2-batch-cli-4465-1792769566794326399/plans/0001_institution_normalize.json",
+        "route_diagnostic": null,
+        "stage_components": {
+          "plan_build": [
+            "Rust",
+            "calamine"
+          ],
+          "plan_persistence": [
+            "Rust",
+            "serde_json"
+          ],
+          "profile_inspection": [
+            "Rust",
+            "zip",
+            "roxmltree"
+          ]
+        },
+        "status": "planned",
+        "timings": {
+          "engine_execution_ms": 0,
+          "plan_build_ms": 14,
+          "plan_persistence_ms": 9,
+          "profile_inspection_ms": 12,
+          "safe_commit_ms": 0,
+          "source_fingerprint_ms": 0,
+          "source_stability_check_ms": 0,
+          "total_ms": 38
+        },
+        "user_message": "已生成 1/3：first.xlsx 的修改计划，涉及 3 行；尚未修改原文件。"
+      },
+      {
+        "actual_engine": null,
+        "branch_sheets": 0,
+        "cleanup_warning": null,
+        "diagnostic": "this PT-7-2 candidate currently supports .xlsx only; convert other formats before retrying",
+        "error_stage": "format_check",
+        "error_type": "unsupported_format",
+        "execution": null,
+        "file_name": "unsupported.xls",
+        "mapped_rows": 0,
+        "mapped_sheets": 0,
+        "operation_count": 0,
+        "plan_path": null,
+        "route_diagnostic": null,
+        "stage_components": {},
+        "status": "failed",
+        "timings": {
+          "engine_execution_ms": 0,
+          "plan_build_ms": 0,
+          "plan_persistence_ms": 0,
+          "profile_inspection_ms": 0,
+          "safe_commit_ms": 0,
+          "source_fingerprint_ms": 0,
+          "source_stability_check_ms": 0,
+          "total_ms": 0
+        },
+        "user_message": "跳过 2/3：unsupported.xls，当前候选仅支持 .xlsx；原文件未修改。"
+      },
+      {
+        "actual_engine": null,
+        "branch_sheets": 3,
+        "cleanup_warning": null,
+        "diagnostic": null,
+        "error_stage": null,
+        "error_type": null,
+        "execution": null,
+        "file_name": "last.xlsx",
+        "mapped_rows": 3,
+        "mapped_sheets": 2,
+        "operation_count": 3,
+        "plan_path": "/tmp/pytools-pt-7-2-batch-cli-4465-1792769566794326399/plans/0003_institution_normalize.json",
+        "route_diagnostic": null,
+        "stage_components": {
+          "plan_build": [
+            "Rust",
+            "calamine"
+          ],
+          "plan_persistence": [
+            "Rust",
+            "serde_json"
+          ],
+          "profile_inspection": [
+            "Rust",
+            "zip",
+            "roxmltree"
+          ]
+        },
+        "status": "planned",
+        "timings": {
+          "engine_execution_ms": 0,
+          "plan_build_ms": 5,
+          "plan_persistence_ms": 6,
+          "profile_inspection_ms": 1,
+          "safe_commit_ms": 0,
+          "source_fingerprint_ms": 0,
+          "source_stability_check_ms": 0,
+          "total_ms": 13
+        },
+        "user_message": "已生成 3/3：last.xlsx 的修改计划，涉及 3 行；尚未修改原文件。"
+      }
+    ],
+    "mapped_rows": 6,
+    "mapped_sheets": 4,
+    "mapping_empty": false,
+    "mode": "plan_only",
+    "modified_files": 0,
+    "product": "pytools",
+    "run_id": "pytools-pt-7-2-4476-1792769566897730309",
+    "schema_version": 1,
+    "started_at": "2026-10-23T15:32:46.895827177+00:00",
+    "status": "partial_failure",
+    "total_inputs": 3
+  },
+  "rust_user_view": {
+    "events": [
+      {
+        "elapsed_ms": null,
+        "file_name": null,
+        "message": "正在读取机构映射配置。",
+        "phase": "读取映射配置",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 1,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.900307247+00:00"
+      },
+      {
+        "elapsed_ms": 53,
+        "file_name": null,
+        "message": "机构映射配置已读取，共 3 条有效映射。",
+        "phase": "读取映射配置",
+        "progress": {
+          "completed_files": 0,
+          "current_file": null,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 2,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.957838909+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "first.xlsx",
+        "message": "正在处理 1/3：first.xlsx",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 3,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.957904794+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "first.xlsx",
+        "message": "正在检查工作簿结构：first.xlsx。",
+        "phase": "工作簿结构检查",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 4,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.961949051+00:00"
+      },
+      {
+        "elapsed_ms": 12,
+        "file_name": "first.xlsx",
+        "message": "工作簿结构检查完成：first.xlsx。",
+        "phase": "工作簿结构检查",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 5,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.971700028+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "first.xlsx",
+        "message": "正在按映射规则检查工作表：first.xlsx。",
+        "phase": "规则检查与修改计划",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 6,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.971774082+00:00"
+      },
+      {
+        "elapsed_ms": 14,
+        "file_name": "first.xlsx",
+        "message": "映射规则检查完成：first.xlsx，命中 3 行。",
+        "phase": "规则检查与修改计划",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 7,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.986550167+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "first.xlsx",
+        "message": "正在保存修改计划：first.xlsx。",
+        "phase": "保存修改计划",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 8,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.987765274+00:00"
+      },
+      {
+        "elapsed_ms": 9,
+        "file_name": "first.xlsx",
+        "message": "修改计划已保存：first.xlsx。",
+        "phase": "保存修改计划",
+        "progress": {
+          "completed_files": 0,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 0,
+          "total_files": 3
+        },
+        "sequence": 9,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.997106559+00:00"
+      },
+      {
+        "elapsed_ms": 38,
+        "file_name": "first.xlsx",
+        "message": "已生成 1/3：first.xlsx 的修改计划，涉及 3 行；尚未修改原文件。",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 1,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 1,
+          "total_files": 3
+        },
+        "sequence": 10,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.997222749+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "unsupported.xls",
+        "message": "正在处理 2/3：unsupported.xls",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 2,
+          "failed_files": 0,
+          "modified_files": 0,
+          "processed_files": 1,
+          "total_files": 3
+        },
+        "sequence": 11,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.997264759+00:00"
+      },
+      {
+        "elapsed_ms": 0,
+        "file_name": "unsupported.xls",
+        "message": "跳过 2/3：unsupported.xls，当前候选仅支持 .xlsx；原文件未修改。",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 2,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 12,
+        "status": "失败",
+        "timestamp": "2026-10-23T15:32:46.997331639+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "last.xlsx",
+        "message": "正在处理 3/3：last.xlsx",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 13,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.997369107+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "last.xlsx",
+        "message": "正在检查工作簿结构：last.xlsx。",
+        "phase": "工作簿结构检查",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 14,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.997402585+00:00"
+      },
+      {
+        "elapsed_ms": 1,
+        "file_name": "last.xlsx",
+        "message": "工作簿结构检查完成：last.xlsx。",
+        "phase": "工作簿结构检查",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 15,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:46.998983588+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "last.xlsx",
+        "message": "正在按映射规则检查工作表：last.xlsx。",
+        "phase": "规则检查与修改计划",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 16,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:46.999026096+00:00"
+      },
+      {
+        "elapsed_ms": 5,
+        "file_name": "last.xlsx",
+        "message": "映射规则检查完成：last.xlsx，命中 3 行。",
+        "phase": "规则检查与修改计划",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 17,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:47.004622794+00:00"
+      },
+      {
+        "elapsed_ms": null,
+        "file_name": "last.xlsx",
+        "message": "正在保存修改计划：last.xlsx。",
+        "phase": "保存修改计划",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 18,
+        "status": "进行中",
+        "timestamp": "2026-10-23T15:32:47.004680195+00:00"
+      },
+      {
+        "elapsed_ms": 6,
+        "file_name": "last.xlsx",
+        "message": "修改计划已保存：last.xlsx。",
+        "phase": "保存修改计划",
+        "progress": {
+          "completed_files": 1,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 2,
+          "total_files": 3
+        },
+        "sequence": 19,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:47.011262380+00:00"
+      },
+      {
+        "elapsed_ms": 13,
+        "file_name": "last.xlsx",
+        "message": "已生成 3/3：last.xlsx 的修改计划，涉及 3 行；尚未修改原文件。",
+        "phase": "处理工作簿",
+        "progress": {
+          "completed_files": 2,
+          "current_file": 3,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 3,
+          "total_files": 3
+        },
+        "sequence": 20,
+        "status": "已完成",
+        "timestamp": "2026-10-23T15:32:47.011361859+00:00"
+      },
+      {
+        "elapsed_ms": 112,
+        "file_name": null,
+        "message": "处理结束：成功 2 个，失败 1 个，修改 0 个文件。",
+        "phase": "任务汇总",
+        "progress": {
+          "completed_files": 2,
+          "current_file": null,
+          "failed_files": 1,
+          "modified_files": 0,
+          "processed_files": 3,
+          "total_files": 3
+        },
+        "sequence": 21,
+        "status": "部分文件失败",
+        "timestamp": "2026-10-23T15:32:47.011398159+00:00"
+      }
+    ],
+    "failure": null,
+    "feature_id": "PT-7-2",
+    "files": [
+      {
+        "branch_sheets": 3,
+        "cleanup_warning": null,
+        "error_stage": null,
+        "file_name": "first.xlsx",
+        "mapped_rows": 3,
+        "mapped_sheets": 2,
+        "message": "已生成 1/3：first.xlsx 的修改计划，涉及 3 行；尚未修改原文件。",
+        "operation_count": 3,
+        "plan_saved": true,
+        "stages": [
+          {
+            "elapsed_ms": 0,
+            "name": "文件检查"
+          },
+          {
+            "elapsed_ms": 12,
+            "name": "工作簿结构检查"
+          },
+          {
+            "elapsed_ms": 14,
+            "name": "业务规则与修改计划"
+          },
+          {
+            "elapsed_ms": 9,
+            "name": "计划保存"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "输入一致性复核"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "修改引擎执行"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "安全提交"
+          },
+          {
+            "elapsed_ms": 38,
+            "name": "文件总耗时"
+          }
+        ],
+        "status": "已生成计划，尚未修改"
+      },
+      {
+        "branch_sheets": 0,
+        "cleanup_warning": null,
+        "error_stage": "文件格式检查",
+        "file_name": "unsupported.xls",
+        "mapped_rows": 0,
+        "mapped_sheets": 0,
+        "message": "跳过 2/3：unsupported.xls，当前候选仅支持 .xlsx；原文件未修改。",
+        "operation_count": 0,
+        "plan_saved": false,
+        "stages": [
+          {
+            "elapsed_ms": 0,
+            "name": "文件检查"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "工作簿结构检查"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "业务规则与修改计划"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "计划保存"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "输入一致性复核"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "修改引擎执行"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "安全提交"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "文件总耗时"
+          }
+        ],
+        "status": "失败"
+      },
+      {
+        "branch_sheets": 3,
+        "cleanup_warning": null,
+        "error_stage": null,
+        "file_name": "last.xlsx",
+        "mapped_rows": 3,
+        "mapped_sheets": 2,
+        "message": "已生成 3/3：last.xlsx 的修改计划，涉及 3 行；尚未修改原文件。",
+        "operation_count": 3,
+        "plan_saved": true,
+        "stages": [
+          {
+            "elapsed_ms": 0,
+            "name": "文件检查"
+          },
+          {
+            "elapsed_ms": 1,
+            "name": "工作簿结构检查"
+          },
+          {
+            "elapsed_ms": 5,
+            "name": "业务规则与修改计划"
+          },
+          {
+            "elapsed_ms": 6,
+            "name": "计划保存"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "输入一致性复核"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "修改引擎执行"
+          },
+          {
+            "elapsed_ms": 0,
+            "name": "安全提交"
+          },
+          {
+            "elapsed_ms": 13,
+            "name": "文件总耗时"
+          }
+        ],
+        "status": "已生成计划，尚未修改"
+      }
+    ],
+    "history_report": "/tmp/pytools-pt-7-2-batch-cli-4465-1792769566794326399/batch-run.json",
+    "mode": "仅生成计划，未修改文件",
+    "product": "pytools",
+    "progress": {
+      "completed_files": 2,
+      "current_file": null,
+      "failed_files": 1,
+      "modified_files": 0,
+      "processed_files": 3,
+      "total_files": 3
+    },
+    "run_id": "pytools-pt-7-2-4476-1792769566897730309",
+    "schema_version": 1,
+    "started_at": "2026-10-23T15:32:46.895827177+00:00",
+    "status": "部分文件失败",
+    "summary": {
+      "branch_sheets": 6,
+      "completed_files": 2,
+      "configuration_elapsed_ms": 53,
+      "elapsed_ms": 112,
+      "failed_files": 1,
+      "mapped_rows": 6,
+      "mapped_sheets": 4,
+      "mapping_empty": false,
+      "modified_files": 0,
+      "total_inputs": 3
+    }
+  },
+  "schema_version": 1,
+  "security_checks": {
+    "input_workbooks_unchanged_in_plan_mode": true,
+    "plan_report_contains_no_cell_values": true,
+    "user_view_hides_engine_details": true
+  },
+  "status": "candidate_passed",
+  "suite": "pytools.institution_normalize_batch_cli"
+}

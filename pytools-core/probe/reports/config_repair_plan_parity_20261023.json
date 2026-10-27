@@ -1,0 +1,29 @@
+{
+  "status": "passed_plan_semantics_synthetic",
+  "scope": "5-1 existing configuration repair plan",
+  "python_repair_counts": {
+    "created_sheets": 7,
+    "repaired_sheets": 6
+  },
+  "rust_plan_operations": 258,
+  "comparison": [
+    "sheet order",
+    "cell values",
+    "comment text and author"
+  ],
+  "scenarios": [
+    "wrong headers/comments",
+    "missing sheets and global defaults",
+    "duplicate/blank global keys",
+    "default examples only for empty sheets",
+    "obsolete sheet removal",
+    "rename extra cells",
+    "unrelated user sheet/data/comments preserved"
+  ],
+  "source_sha256_unchanged": "4833f03a4f0272dae8918b8964c6061f44f7ff1be54ede4bc30cd37ac4494b9c",
+  "limitations": [
+    "Rust plan operations were applied by the probe to a temporary copy; the ExcelModifier backend was not invoked.",
+    "Synthetic XLSX only; real configuration repair and capability-gated execution remain unverified.",
+    "Styles, relationships, unrelated OOXML parts and Windows/Linux package behavior were not compared by this semantic plan probe."
+  ]
+}

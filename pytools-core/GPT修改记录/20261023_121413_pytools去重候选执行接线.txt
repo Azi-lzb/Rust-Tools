@@ -1,0 +1,22 @@
+时间：2026-10-23 12:14（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：修改前检查过 Git 状态和现有未跟踪内容。workspace `git ls-files` 为 0；本轮没有 stage、commit 或 push，原始 Python 项目保持只读。
+
+目的：在不建立或启用未经验收的编辑器默认路由前，把已有去重 EditPlan 接到统一 ExcelModifier 的可选能力证据执行入口，为用户指定的六项去重迁移补齐运行链路。
+
+变更文件：
+- `pytools-core/src/bin/pytools.rs`：批注/配置去重计划命令接受 `--capabilities` 与 `--platform`，有能力记录时执行候选计划；无能力文件时只输出计划。批注计划可用 `--plan-output` 持久化；配置计划结果携带计划文件及执行状态。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录接线范围与未验收边界。
+- `pytools-core/probe/reports/dedup_execution_wiring_20261023.json`：机器状态摘要，不代表对拍报告。
+- 本记录。
+
+逻辑边界：保留原输入不被命令覆盖，修改输出落到计划指定的候选路径。`ExcelModifier` 仅能按调用者提供并与计划匹配的能力/保留证据路由；本轮未添加任何生产能力记录，未改变默认后端。2-5 的新目标 XLSX writer 路径和既有目标编辑计划沿用已有实现。
+
+实际验证：未执行编译、测试或 Python 对拍。按用户提出的“先完成实现批次，再集中测试”，验证留待 pytools 批量实现完成后进行。尝试调用 WSL 的 `cargo fmt -p pytools-core` 时 WSL 返回本机 localhost/当前状态错误，未能确认格式化命令实际运行；Windows shell 未发现 cargo/rustfmt。后续恢复 Rust/WSL 工具链后先运行格式化、编译，再运行去重六项 Python/Rust 对拍及 workspace 回归。
+
+未完成项：真实去重样本和 Python 对拍；`SetCellFillColor`、`DeleteRows`、`ImportRange` 在 pytools 对应格式/对象/整批操作上的后端能力验收；日志及失败回退；Windows 原生与目标 Linux/deb。候选接线不等于去重功能完成迁移。
+
+删除清单：无。
+回滚提示：本轮改动未提交且 workspace 无 Git 基线；如需撤销，只恢复 `pytools-core/src/bin/pytools.rs` 本轮代码块与 inventory 改动，并删除本轮新增的机器报告和记录。恢复前需核对其他未跟踪工作内容。
+【组件版本】：不升级；现有版本 `0.1.0`。

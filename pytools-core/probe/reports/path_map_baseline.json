@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.path_map",
+  "baseline": "original PyCode.core.path_map and rule_engine",
+  "status": "保留",
+  "passed": 28,
+  "total": 28,
+  "cases": [
+    {
+      "id": "empty_keywords",
+      "operation": "keywords",
+      "actual": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "expected": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "status": "保留"
+    },
+    {
+      "id": "empty_tokens",
+      "operation": "keywords",
+      "actual": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "expected": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "status": "保留"
+    },
+    {
+      "id": "unicode_separators_and_case",
+      "operation": "keywords",
+      "actual": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "expected": {
+        "path_map": true,
+        "rule_engine": true
+      },
+      "status": "保留"
+    },
+    {
+      "id": "and_requires_all",
+      "operation": "keywords",
+      "actual": {
+        "path_map": false,
+        "rule_engine": false
+      },
+      "expected": {
+        "path_map": false,
+        "rule_engine": false
+      },
+      "status": "保留"
+    },
+    {
+      "id": "required_in_empty_source",
+      "operation": "keywords",
+      "actual": {
+        "path_map": false,
+        "rule_engine": false
+      },
+      "expected": {
+        "path_map": false,
+        "rule_engine": false
+      },
+      "status": "保留"
+    },
+    {
+      "id": "missing",
+      "operation": "parse_col_spec",
+      "actual": 0,
+      "expected": 0,
+      "status": "保留"
+    },
+    {
+      "id": "nan",
+      "operation": "parse_col_spec",
+      "actual": 0,
+      "expected": 0,
+      "status": "保留"
+    },
+    {
+      "id": "blank",
+      "operation": "parse_col_spec",
+      "actual": 0,
+      "expected": 0,
+      "status": "保留"
+    },
+    {
+      "id": "numeric_text",
+      "operation": "parse_col_spec",
+      "actual": 3,
+      "expected": 3,
+      "status": "保留"
+    },
+    {
+      "id": "integer_value",
+      "operation": "parse_col_spec",
+      "actual": 3,
+      "expected": 3,
+      "status": "保留"
+    },
+    {
+      "id": "integral_float",
+      "operation": "parse_col_spec",
+      "actual": 2,
+      "expected": 2,
+      "status": "保留"
+    },
+    {
+      "id": "fractional_float_truncates",
+      "operation": "parse_col_spec",
+      "actual": 2,
+      "expected": 2,
+      "status": "保留"
+    },
+    {
+      "id": "decimal_text",
+      "operation": "parse_col_spec",
+      "actual": 2,
+      "expected": 2,
+      "status": "保留"
+    },
+    {
+      "id": "column_letters",
+      "operation": "parse_col_spec",
+      "actual": 28,
+      "expected": 28,
+      "status": "保留"
+    },
+    {
+      "id": "three_letter_column",
+      "operation": "parse_col_spec",
+      "actual": 703,
+      "expected": 703,
+      "status": "保留"
+    },
+    {
+      "id": "invalid_cell_address",
+      "operation": "parse_col_spec",
+      "actual": 0,
+      "expected": 0,
+      "status": "保留"
+    },
+    {
+      "id": "missing",
+      "operation": "parse_col_specs",
+      "actual": [],
+      "expected": [],
+      "status": "保留"
+    },
+    {
+      "id": "nan",
+      "operation": "parse_col_specs",
+      "actual": [],
+      "expected": [],
+      "status": "保留"
+    },
+    {
+      "id": "blank",
+      "operation": "parse_col_specs",
+      "actual": [],
+      "expected": [],
+      "status": "保留"
+    },
+    {
+      "id": "numeric_value",
+      "operation": "parse_col_specs",
+      "actual": [
+        3
+      ],
+      "expected": [
+        3
+      ],
+      "status": "保留"
+    },
+    {
+      "id": "mixed_delimiters_and_deduplicate",
+      "operation": "parse_col_specs",
+      "actual": [
+        1,
+        3,
+        27
+      ],
+      "expected": [
+        1,
+        3,
+        27
+      ],
+      "status": "保留"
+    },
+    {
+      "id": "empty_tokens",
+      "operation": "parse_col_specs",
+      "actual": [
+        1,
+        2
+      ],
+      "expected": [
+        1,
+        2
+      ],
+      "status": "保留"
+    },
+    {
+      "id": "invalid_specs",
+      "operation": "parse_col_specs",
+      "actual": [],
+      "expected": [],
+      "status": "保留"
+    },
+    {
+      "id": "filters_and_contains_replaces_all",
+      "operation": "standardize_path",
+      "actual": "机构/标准/标准",
+      "expected": "机构/标准/标准",
+      "status": "保留"
+    },
+    {
+      "id": "both_target_exact",
+      "operation": "standardize_path",
+      "actual": "新路径",
+      "expected": "新路径",
+      "status": "保留"
+    },
+    {
+      "id": "exact_mismatch",
+      "operation": "standardize_path",
+      "actual": "old",
+      "expected": "old",
+      "status": "保留"
+    },
+    {
+      "id": "empty_path",
+      "operation": "standardize_path",
+      "actual": "",
+      "expected": "",
+      "status": "保留"
+    },
+    {
+      "id": "unknown_mode_uses_exact",
+      "operation": "standardize_path",
+      "actual": "标准",
+      "expected": "标准",
+      "status": "保留"
+    }
+  ]
+}

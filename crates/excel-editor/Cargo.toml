@@ -1,0 +1,19 @@
+[package]
+name = "excel-editor"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+umya-spreadsheet.workspace = true
+ooxml-patch = { path = "../ooxml-patch" }
+excel-reader = { path = "../excel-reader" }
+zip.workspace = true
+roxmltree.workspace = true
+
+[dev-dependencies]
+rust_xlsxwriter.workspace = true
+

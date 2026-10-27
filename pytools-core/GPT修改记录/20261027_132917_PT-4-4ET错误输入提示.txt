@@ -1,0 +1,22 @@
+时间：2026-10-27 13:29:17 +08:00
+执行者：Codex
+修改前 HEAD：aaef35af230920043e685e69a73d58b210c7bff9；分支：codex/pytools-menu-entry
+修改前状态：本轮开始时工作树干净；本轮仅 pytools-core/src/conversion.rs 有代码修改；F 盘样本不属于仓库；无既有 WIP。
+
+目的：KET 拒绝伪装成 .et 的工作簿时，CLI 以前会透出 PowerShell 堆栈及暂存路径。对已识别的格式错误显示简明原因，不改变转换路由及输出安全行为。
+修改文件：
+- pytools-core/src/conversion.rs：格式拒绝错误映射为安全提示；新增单元测试。
+- pytools-core/MIGRATION_INVENTORY.md：记录一次负例验证，保留 PT-4-4 正向转换未验证状态。
+- 本记录。
+
+逻辑/配置/VBA：只对 sidecar 的特定 ET 格式拒绝错误简化信息；不改配置、业务转换和共享 crate。pytools-core 版本沿用 0.1.0。
+
+验证：
+- rustfmt --check pytools-core/src/conversion.rs：通过。
+- cargo test --offline --locked -p pytools-core --lib et_sidecar_rejection_explains_source_format_without_staging_path -j 1：1/1 通过。
+- cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过；包含既有共享 crate 弃用 API、未使用导入和死代码警告。
+- F 盘正式 CLI 负例：输入 F:\PyToolsRustV2\manual-acceptance-20261027\04-files\pt44-et-validation\excel97-mislabeled-as-et.et；KET SaveAs(65521) 后重开为 FileFormat 56。转换退出码 2、没有 XLSX 输出，源 SHA256 仍为 17A2DAC79ABF37A3A883214C93CC9F82298AEC7DD793C60BE2525446E9A8BF3B；错误提示不包含暂存路径或 PowerShell 堆栈。F 盘 CLI stderr 位于同目录 cli-stderr.txt。
+- git diff --check：代码、迁移清单与记录更新后复核通过。
+
+未执行/限制：没有有效原生 ET 样本，正向 ET 转换、真实业务工作簿、Excel 桌面打开、Linux/deb 未验证；当前负例不是 ET 业务对拍。已向 main 请求提供有效原生 ET 样本或确认 KET 导出方法。
+删除清单：无。回滚：仅回滚本次 conversion.rs、MIGRATION_INVENTORY.md 与本记录对应改动；不影响其他工作树。

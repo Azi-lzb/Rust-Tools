@@ -1,0 +1,62 @@
+{
+  "source": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "operation": "run_batch_rename_local_map_48"
+  },
+  "operation48": {
+    "stats": {
+      "ok": 5,
+      "skip": 5,
+      "rules": 6
+    },
+    "final_entries": [
+      "folder_aa.pdf",
+      "invoice_cc_cc.pdf",
+      "nest.txt",
+      "prefix_nan.doc",
+      "same_cc.xlsx",
+      "same_cc_1.xlsx",
+      "same_cc_2.xlsx",
+      "unmatched.txt",
+      "zlong.bin",
+      "结果_cc.docx"
+    ],
+    "input_file_sha256_by_name": {
+      "invoice_aa_aa.pdf": "B4670FD8E7A1D1B8545BC3ABC43E4B036FD30668BA6955AFABDB90123556191C",
+      "nest.txt": "D93D0D84FC72B1B2B9C5BCB47DE7C32407EBF78A7F83BDF3FEAE2136272480BD",
+      "prefix_del.doc": "8AFA70E5DB115E9A0118FC1A0662363425AF6D31068F05A0EB1028C55A06293A",
+      "same_aa.xlsx": "FB5DA2CC15D5408B8AD461CCAAF94C4FB9D1BF8E9018BDB5DF9C991A1C8753D2",
+      "same_bb.xlsx": "5169BF8E7C33478024247C6016B68DE99DABA3F904F76674A6C9C464230976EC",
+      "unmatched.txt": "EB04F25BAC476DF13A7A5E8E3ACF15222CED17BC7D8E6FF67BF9DAB6435A4FF0",
+      "zlong.bin": "2DC9EE60E12AB129EC69E6DFEDBE62DB6AF51E59FC56AE8A539ADF9DDFDBAC38",
+      "测试_aa.docx": "7B878FA2054626A52CED51C03357D1CD763D8D9FED1B8A0BB33D0F17922EE0BB"
+    },
+    "final_file_sha256_by_name": {
+      "invoice_cc_cc.pdf": "B4670FD8E7A1D1B8545BC3ABC43E4B036FD30668BA6955AFABDB90123556191C",
+      "nest.txt": "D93D0D84FC72B1B2B9C5BCB47DE7C32407EBF78A7F83BDF3FEAE2136272480BD",
+      "same_cc.xlsx": "1F82A0DE3220F6397197E03F0CC538529399C63799D9923799B53DBB4D20B68B",
+      "same_cc_1.xlsx": "FB5DA2CC15D5408B8AD461CCAAF94C4FB9D1BF8E9018BDB5DF9C991A1C8753D2",
+      "same_cc_2.xlsx": "5169BF8E7C33478024247C6016B68DE99DABA3F904F76674A6C9C464230976EC",
+      "unmatched.txt": "EB04F25BAC476DF13A7A5E8E3ACF15222CED17BC7D8E6FF67BF9DAB6435A4FF0",
+      "zlong.bin": "2DC9EE60E12AB129EC69E6DFEDBE62DB6AF51E59FC56AE8A539ADF9DDFDBAC38",
+      "结果_cc.docx": "7B878FA2054626A52CED51C03357D1CD763D8D9FED1B8A0BB33D0F17922EE0BB",
+      "prefix_nan.doc": "8AFA70E5DB115E9A0118FC1A0662363425AF6D31068F05A0EB1028C55A06293A"
+    },
+    "input_file_bytes_preserved": true
+  },
+  "pandas_empty_config_cells": {
+    "stats": {
+      "ok": 2,
+      "skip": 1,
+      "rules": 4
+    },
+    "final_entries": [
+      "keep.txt",
+      "mapped.txt",
+      "nan.txt"
+    ],
+    "input_file_bytes_preserved": true
+  }
+}

@@ -1,0 +1,26 @@
+时间：2026-10-25 17:10（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：15061a2；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：把用户提供的 VBA 工具仓库主簿用作**真实业务配置数据源**，首次为配置解析层建立真实数据对拍证据（此前配置对拍全部为合成配置）。
+
+修改文件：
+- `pytools-core/tests/fixtures/vba_config/VbaV2.4.2.xlsm`（新增夹具：复制自用户公开仓库 https://github.com/Azi-lzb/VBA_Excel_Tools HEAD cea6dfa）
+- `pytools-core/tests/fixtures/vba_config/expected_loaders.json`（新增：只读 PyCode 各加载器对同一夹具的逐字段基线）
+- `pytools-core/tests/config_vba_workbook_parity.rs`（新增集成测试：Rust 加载器七段配置与基线比对）
+- `pytools-core/src/config.rs`（DedupTask/PrintTask/ExtractTask/TimelineRule/PathMapRule 补 `serde::Serialize` derive，无行为影响）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+对拍内容与结果（Windows 原生）：
+- 真实配置规模：时序提取规则 15 条、路径标准化映射 146 条、去重任务 17 条、打印任务 3 条、外资行 3 家、机构映射 39 条（工作表提取任务为空；全局配置页为 VBA 版结构、PyCode 无该表，属预期差异不参与对拍）。
+- Rust `config` 模块同名加载器对全部七段配置与 PyCode 基线**逐字段精确一致，零分歧**——真实业务配置值域（含合成夹具未覆盖的字段组合与边界）下的解析语义对齐得到直接证据。
+- `cargo test --offline --locked -p pytools-core --test config_vba_workbook_parity` 1/1；全量 43 项结果全部 0 failed；`cargo fmt --check`、`git diff --check` 通过。
+
+影响与未完成项：仅测试与 derive 补充，业务行为不变。配置驱动的各业务执行（宽表/去重/打印/提取按配置运行）仍以各自既有合成/真实验收状态为准；外部阻塞（真实报表样本、main 的 lo-convert 修复与最终打包、实机复核）不变。
+
+敏感内容检查：夹具来自用户公开仓库；配置内容为用户自有业务规则，随仓库公开，无新增敏感数据。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可撤销夹具、测试、derive 与记录。
+【组件版本】：纯测试补充，不升级。

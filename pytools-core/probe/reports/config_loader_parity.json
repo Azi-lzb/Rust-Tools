@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.config_loader",
+  "source": "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/core/config_xlsx.py",
+  "shared_vectors": "tests/fixtures/config_loader_cases.json",
+  "workbook_fixture": "tests/fixtures/config_loader.xlsx",
+  "python_baseline_report": "probe/reports/config_loader_baseline.json",
+  "python_baseline": {
+    "status": "保留",
+    "passed": 1,
+    "total": 1
+  },
+  "rust": {
+    "command": "cargo test -p pytools-core --offline",
+    "test": "config::tests::config_workbook_matches_original_python_loader_report",
+    "status": "保留",
+    "passed": 1,
+    "total": 1
+  },
+  "comparison": "Rust and the original Python config_xlsx loader returned identical normalized JSON for global settings, global key lookup, enabled timeline rules, set-region parsing, and enabled path maps.",
+  "limitations": [
+    "The workbook is synthetic and generated from the shared fixture vectors.",
+    "This verifies these four loader operations only; other configuration sheets, validation errors, business workflows, and real templates remain unverified."
+  ]
+}

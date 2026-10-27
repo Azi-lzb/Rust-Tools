@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "matrix": [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]],
+  "range_cases": [
+    {"op": "normalize", "value": " A1；B2、C3：D4 "},
+    {"op": "token", "value": " 7 ", "is_row": true},
+    {"op": "token", "value": "B", "is_row": false},
+    {"op": "token", "value": "B", "is_row": true},
+    {"op": "token", "value": "ZZZZ", "is_row": false},
+    {"op": "token", "value": "?", "is_row": false},
+    {"op": "parse", "value": "", "max": 3, "is_row": true},
+    {"op": "parse", "value": "9:2,2,4,invalid", "max": 4, "is_row": false},
+    {"op": "parse", "value": "bad", "max": 3, "is_row": true},
+    {"op": "parse", "value": "1", "max": 0, "is_row": false}
+  ],
+  "keyword_cases": [
+    {"op": "split", "value": "a, b; c|d；e"},
+    {"op": "match", "name": "2026 report", "value": "2025,2026;report"},
+    {"op": "match", "name": "2026 report", "value": "2025;report"},
+    {"op": "match", "name": "anything", "value": ""},
+    {"op": "exclude", "name": "report", "value": ""},
+    {"op": "exclude", "name": "report draft", "value": "final,draft"}
+  ],
+  "sheet_selection": {
+    "sheet_names": ["A-B", "A-B detail", "A-B draft"],
+    "keywords": ["", "A", "B"]
+  },
+  "task_sheet_selection": {
+    "sheet_names": ["A-B", "A-B detail", "A-B draft", "B detail"],
+    "sheet_keywords": "detail",
+    "exclude_keywords": "draft;temp"
+  },
+  "workbook_matches": [
+    {"name": "2026 report.xlsx", "keywords": "2026"},
+    {"name": "2026 report.xlsx", "keywords": "2025"}
+  ],
+  "area_cases": [
+    "整表", "C3:A1", "B:C", "3:1", "B2", "B20", "invalid"
+  ],
+  "configured_cases": [
+    {"area_spec": "", "stitch_mode": ""},
+    {"area_spec": "A1:B2", "stitch_mode": ""},
+    {"area_spec": "A1:A2;bad", "stitch_mode": ""},
+    {"area_spec": "A1:A2;C1:C3", "stitch_mode": "横向拼接"},
+    {"area_spec": "A1:A2；C1:C3", "stitch_mode": "纵向追加"}
+  ],
+  "stitch_cases": [
+    {"areas": [[[1], [2]], [[3, 4]]], "mode": "纵向追加"},
+    {"areas": [[[1], [2]], [[3, 4]]], "mode": "横向拼接"},
+    {"areas": [], "mode": "横向拼接"}
+  ],
+  "compact_cases": [
+    [[null, ""], ["", "  "]],
+    [[null, "x", null], [" ", "y", ""]]
+  ],
+  "sheet_name_cases": {
+    "sanitize": ["A/B:*?[]\\long name", "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x"],
+    "unique": [
+      {"used": ["Valid"], "base": "A/B"},
+      {"used": ["Valid", "A_B"], "base": "A/B"},
+      {"used": ["Valid", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "base": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+    ]
+  },
+  "output_path_cases": [
+    {"task": {}, "output_dir": "out", "default_name": "default"},
+    {"task": {"output_folder": "child", "output_name": "result.csv"}, "output_dir": "out", "default_name": "default"},
+    {"task": {"output_folder": "", "output_name": "result.XLSX"}, "output_dir": "out", "default_name": "default"},
+    {"task": {"output_folder": "", "output_name": ".xlsx"}, "output_dir": "out", "default_name": "default"},
+    {"task": {"output_folder": "", "output_name": "name."}, "output_dir": "out", "default_name": "default"}
+  ]
+}

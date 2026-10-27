@@ -1,0 +1,27 @@
+时间：2026-10-24 02:02（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：81a5405（已推送至 origin/pytools-dev）；修改后 commit：本轮提交，编号见 Git 历史。
+WIP 状态：恢复上轮 PT-6-1 未提交工作，开始时 HEAD 与 origin/pytools-dev 同步；工作树中已有 probe、机器报告、错误值 fixture 与 CLI 回归测试改动。本轮保留并完成这些 WIP。当前分支仍为 pytools-dev。主分支规则/目标文件无差异；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。
+
+目的：补齐 PT-6-1 空工作表及未知 XLSX 错误值的真实 CLI 回归证据，登记 PyCode 与 NoComPyTools 的边界差异，并遵循 workspace reader 规则对 Calamine 不支持的普通值读取失败关闭。
+
+修改文件：
+- pytools-core/probe/compare_summary_tools.py：在 macro-enabled 合成 XLSM 加入空工作表；添加 `t=e`、`#DATA!` 输入的 PyCode 输出和 Rust CLI 失败关闭对拍；保护输入文件内容不变。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录 14 行对拍、空工作表行为、未知错误单元格的 PyCode/Rust 结果及 NoComPyTools 差异。
+- pytools-core/tests/fixtures/summary_used_range/error_value.xlsx：加入空工作表。
+- pytools-core/tests/fixtures/summary_used_range/getting_data_error.xlsx：新增合成 `#DATA!` 错误类型输入。
+- pytools-core/tests/summary_used_range_error.rs：验证 CLI 输出空工作表默认范围行；验证未知错误值失败、无部分输出且源文件未更改。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-1 当前行数、空工作表和 `#DATA!` 支持边界。
+- 本修改记录。
+
+验证与对拍：
+- `wsl.exe -e bash -lc 'cd /mnt/c/Users/AZI/Desktop/VibeCode/pytools-dev && cargo fmt -p pytools-core -- --check && cargo test -p pytools-core --test summary_used_range_error --offline --locked -q'`：格式检查通过，集成测试 3/3 通过。Windows 原生 Cargo 不可用，Rust 测试经 WSL 执行。
+- `python pytools-core/probe/compare_summary_tools.py`：通过真实 `pytools summary-used-range` CLI 与只读 PyCode 基线对拍；XLSX + 无 VBA 的 macro-enabled XLSM，共 14 数据行；值/类型、已填充单元格样式、维度、冻结窗格、公式/合并/名称/页面属性一致，七种已支持 Excel 错误类型均保留。PyCode 对空工作表输出默认范围行，Rust 与之相同；NoComPyTools 跳过空工作表，输出 13 数据行，且七种错误值和日期格式仍与 PyCode 有差异。
+- `#DATA!` 对拍：PyCode 将合成 `t=e` 单元格写成字符串；Calamine 0.37 对该 token 读取失败，Rust CLI 报具体值并失败关闭，无部分报表。遵照 main 对 reader 边界的确认，不在 PyTools 添加 OOXML 普通值 fallback，不改共享 crate；该输入状态为不支持/未验证。
+- `git diff --check`：通过。对拍仅使用合成输入，不包含真实业务数据、凭据或用户文件。
+
+未执行项及限制：无授权真实汇总工作簿；含 VBA 的真实 XLSM、XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28 与 deb 尚未验证。没有测量峰值 RSS；只报告既有逐工作簿加载结构。普通用户/开发者双视图日志未完成。NoComPyTools 的格式范围差异仍待确认，PT-6-1 总体验收仍未完成。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`，回滚本轮 PT-6-1 合成边界验证和状态记录，不影响此前 PT-6-1 Rust 实现。
+【组件版本】：不升级，当前 0.1.0。

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.batch_rename_33",
+  "source": "PyCode/core/convert_33_34_35_37.py::run_batch_rename_33",
+  "rust": "pytools_core::batch_rename::run_batch_rename_33 + pytools rename-batch",
+  "python_baseline_report": "probe/reports/batch_rename_python_baseline.json",
+  "fixture": "tests/fixtures/batch_rename_cases.json + tests/fixtures/batch_rename_config.xlsx",
+  "status": "保留（合成配置与临时路径场景）",
+  "comparison": {
+    "renamed_count": {"python": 3, "rust": 3, "status": "保留"},
+    "skipped_count": {"python": 4, "rust": 4, "status": "保留"},
+    "top_level_entries": {"matched": 7, "total": 7, "status": "保留"},
+    "collision_suffix": {"python": "_2", "rust": "_2", "status": "保留"},
+    "directory_rename_and_child_content": {"status": "保留"},
+    "case_insensitive_ascii_match": {"status": "保留"},
+    "input_and_occupied_destination_bytes": {"status": "保留"},
+    "configuration_bytes": {"python_before_after_same": true, "rust_before_after_same": true, "status": "保留"},
+    "cli_timestamped_log": {"status": "保留"}
+  },
+  "test_evidence": {
+    "rust": "cargo test -p pytools-core: 54 passed; batch_rename_parity.rs: 3 passed",
+    "python_source_tests": "4 passed",
+    "real_config_smoke_report": "probe/reports/batch_rename_real_config_smoke.json"
+  },
+  "limitations": [
+    "No real business file was renamed.",
+    "Real configuration was used only for read validation and one temporary synthetic filename derived from a valid configured alias.",
+    "Windows-native Rust, target Linux filesystems, performance, and deb packaging remain unverified."
+  ]
+}

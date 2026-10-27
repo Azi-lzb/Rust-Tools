@@ -1,0 +1,30 @@
+时间：2026-10-25 10:41:28（Asia/Shanghai）
+执行者：Codex
+分支：pytools-dev
+修改前 commit：3e097cf
+修改后 commit：本次 PT-6-2 补充修复提交（由 Git 提交记录标识）
+WIP：开始本次补充前，前一项已提交且工作树干净；没有其他 PyTools WIP 文件。
+
+目的：补齐 PT-6-2 页签名大小写冲突时与 PyCode/openpyxl 的行为。真实 Rust `summary-comments` CLI 曾在模板页签 `  Region ` 与 `region` 经空白清理后冲突时退出，PyCode/openpyxl 则输出 `Region` 和 `region1`。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：将 PyCode 的安全页签名处理与 openpyxl 工作簿级大小写不敏感重复名处理分开模拟；新增回归断言。
+- `pytools-core/probe/compare_summary_comments_template_header.py`：完整 CLI 对拍加入第二个大小写冲突页签并断言两个输出名称。
+- `pytools-core/probe/reports/summary_comments_template_header_parity_20261025.json`：更新当前合成对拍证据。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新 PT-6-2 页签语义和结果。
+- 本文件：记录本次补充修改。
+
+配置及 VBA 影响：无配置变化；不执行宏，不复制宏部件，不改变 Excel 引擎路由。
+
+测试结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib comment_region_tests -j 1`：4/4 通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli -j 1`：5/5 通过。
+- `py -3.12 pytools-core/probe/compare_summary_comments_template_header.py`：只读 PyCode 与 Windows 原生 Rust CLI 完整投影一致；6 行，输出 `Branch_A`（4×11）与 `branch_a1`（4×5），输入未改变，输出只在临时目录。
+- `git diff --check`：通过。
+
+未执行项及已知问题：未找到带有效区域批注的真实 PT-6-2 业务模板；本次仅验证合成 XLSX。未在麒麟 V10/UOS V20、glibc 2.28 或离线 deb 上验证。PT-6-2 整体验收仍未完成。
+
+删除清单：无。
+回滚提示：如需撤销本补充修复，回滚本次提交即可；不触碰源 PyTools、Audit、共享 crates、根 Cargo 文件或长期目标文件。
+[组件版本] pytools-core 0.1.0（保留当前 workspace crate 版本）。

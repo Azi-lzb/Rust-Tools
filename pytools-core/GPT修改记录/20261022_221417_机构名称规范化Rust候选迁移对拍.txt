@@ -1,0 +1,44 @@
+【时间】2026-10-22 22:14:17（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】无；workspace 的 main 分支尚无提交。
+【修改后 commit】无；未执行 commit。
+【WIP 情况】开始时 workspace 根文件及各子目录均为未跟踪的迁移工作树内容；未覆盖或清理已有文件。本次只在 workspace 增加/更新迁移文件。
+
+【修改目的】
+将 py_statistics_tools 的机构名称规范化 helper 和 xlsx 文件适配器迁移为 Rust 候选实现，使用只读 Python 源项目生成对拍基线，验证值和常用保留项。候选适配器未接入正式菜单/配置执行链，也未获批为默认编辑后端。
+
+【修改/新增文件】
+- Cargo.toml、Cargo.lock、pytools-core/Cargo.toml：加入 Rayon 文件级并行依赖。
+- .gitignore：将错误的 rustTools-core 夹具白名单改为 pytools-core。
+- crates/excel-editor/src/lib.rs：公开共享编辑 crate 的 Cell 原语类型。
+- pytools-core/src/institution_normalize.rs、pytools-core/src/lib.rs：新增映射 helper、xlsx 文件处理、并行调度、统计与错误报告；重复路径顺序处理。
+- pytools-core/examples/institution_normalize_probe.rs：候选业务探针，生成编辑后 Rust workbook dump。
+- pytools-core/tests/fixtures/institution_normalize_cases.json、institution_normalize.xlsx：合成对拍输入。
+- pytools-core/probe/institution_normalize_baseline.py、institution_normalize_preservation_check.py：调用只读源函数生成 Python 基线，并核查 Rust dump 不包含的保留属性。
+- pytools-core/probe/reports/institution_normalize_baseline.json、institution_normalize_rust_dump.json、institution_normalize_probe_compare.json、institution_normalize_preservation.json、institution_normalize_parity.json：基线、探针输出、比较和最终报告。
+- pytools-core/MIGRATION_INVENTORY.md、pytools-core/README.md：登记候选实现范围和未验证项。
+- 本记录。
+
+【逻辑变化】
+- 保留源逻辑：仅处理工作表名含“分机构”的页；数据从第 2 行开始；整表先检查 A 列，A 列有数据就只用 A，否则用 B；映射精确匹配优先，之后按映射插入顺序做不区分大小写的子串匹配。
+- xlsx 候选适配器原位写值；独立文件使用 Rayon 并行。相同路径重复输入时顺序执行，避免并发写同一文件。
+- 实际测试发现 umya 写 B 列会新增默认列宽记录；实现已保存并恢复原有列尺寸集合，随后 openpyxl 保留性核验通过。
+- 当前只接受 .xlsx；.xlsm、真实模板、配置接入、文件发现及菜单/CLI 集成都未实现或未验证。umya 在真实模板通过对拍前不成为默认修改后端。
+- 未触及 VBA、外部引擎、产品打包或源 Python 业务逻辑。
+
+【验证】
+- Python 3.12.10 从只读源 `PyCode.core.feature_1_2_normalize_institution._process_sheet` 生成四工作表合成 xlsx 基线：1 个文件、3 个匹配页、2 个改动页、3 行改动。
+- `cargo test -p pytools-core --locked`：9 项通过。
+- `cargo run -p pytools-core --example institution_normalize_probe ...`：Rust 统计与 Python 基线一致。
+- `cargo run -p probe --locked -- compare ...`：sheet 名 4/4、值 20/20、公式 1/1、合并区域 1/1、批注 1/1 保留；条件格式和数据验证在此夹具中不适用。
+- `institution_normalize_preservation_check.py`：4/4 工作表的样式、行列尺寸、隐藏状态、合并、批注、页面设置、打印区域、居中和页眉页脚保留。
+- `cargo fmt --all -- --check && cargo test --workspace --locked`：通过；Audit helper 49 项对拍和所有 workspace 单测通过。
+- `cargo tree -p pytools-core` / `cargo tree -p audit-core`：两业务 crate 只依赖共享 crate 和各自外部 Rust 库，未互相依赖；workspace 搜索未发现 python-calamine/PyO3 生产依赖。
+- 未执行麒麟/统信构建、glibc 检查、deb 安装或真实模板对拍。
+
+【组件版本】
+pytools-core：0.1.0 → 0.1.0（workspace 迁移基线暂无独立业务组件版本，不升级）。共享 crate 包版本保持 0.1.0。未更新用户版更新日志。
+
+【删除清单】无。
+【已知问题/后续】候选功能还需配置与文件发现集成，增加真实脱敏 xlsx 对拍，并验证/支持源实现接收的 xlsm；真实模板全保留项未验收。两个 Python 项目的完整迁移目标仍在进行中。
+【回滚提示】本次新增模块、probe、fixtures、reports、日志可按文件清单删除；从 pytools-core/Cargo.toml 与根 Cargo.toml 移除 Rayon 后重新生成 Cargo.lock；撤销 excel-editor 的 Cell 再导出及 .gitignore 白名单路径修正。不要删除此前已有的迁移框架和报告。

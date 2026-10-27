@@ -1,0 +1,19 @@
+修改前检查：本工作树在本功能修改前干净，`pytools-core/GPT修改记录/` 未发现 WIP 文件。旧 Python 项目、Audit 工作树及 main 工作树均未修改；本次仅改 PyTools 子树。
+
+修改文件：
+- `pytools-core/src/conversion.rs`：ET→XLSX sidecar 输出先进入输入 staging 目录；只有 sidecar JSON 明确给出 `validation.source_format_verified=true` 和 `validation.source_format="et"` 后，才由 `file_commit::create_target_from_candidate` 无覆盖发布。缺字段、错类型或无效 JSON 均失败关闭并随 staging guard 清理候选。
+- `pytools-core/tests/conversion_menu_cli.rs`：增加显式忽略的 Windows/WPS COM 真实入口负向回归，将仓库 XLS 夹具改名 `.et` 后检查失败、无目标输出、输入字节不变且无残留 staging。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录误报复现、产品发布门槛、验证证据及 ET 正向未验收状态。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo check --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --lib conversion::tests::et_sidecar_must_explicitly_verify_native_source_format -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：11/11 通过，另有 1 个需 WPS 的专门测试默认忽略。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli conversion_cli_does_not_publish_xls_payload_mislabeled_as_et -j 1 -- --ignored --exact --nocapture`：在 Windows 实际 WPS COM 上 1/1 通过。
+- `git diff --check`：提交前执行。
+- 构建目录和测试临时目录位于 `F:\PyToolsRustV2\cargo-target` 与 `F:\PyToolsRustV2\tmp`。
+
+已知限制：当前 PyTools 侧车协议尚未含受信的 native-ET 来源格式证据，因此 ET 输出保持失败关闭；main 已收到字段合同和 WPS 复现，待其实现后再通过 Git 安全同步并复验。用户真实/合法 ET 样本缺失，本次负向合成 XLS 夹具不构成 ET 正向功能或保真验收。`F:\PyToolsRustV2\tmp\pt44-xls-mislabeled-as-et-20261027\` 中的最小复现及输出留给 main 核验，不清理或覆盖。
+
+回滚：使用 `git revert` 撤销本次 PyTools 功能提交；crate 版本未变化。

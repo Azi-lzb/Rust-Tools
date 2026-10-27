@@ -1,0 +1,22 @@
+时间：2026-10-27 01:02 +08:00
+执行者：Codex
+修改前 commit：71f8a0a
+修改后 commit：本记录随 PT-4-8 新版 AND/OR 回归提交
+修改前 WIP：工作树仅新增的提交检查合成 CLI 回归未提交。原 Python 项目只读。
+
+目的：将新版业务要求 A07 的“非空字段组之间 AND、机构别名之间 OR”落实为可执行 CLI 回归，防止配置字段被错误地全部作为 AND 或把空字段当作条件。
+
+修改/新增文件：
+- `pytools-core/tests/submission_check_parity.rs`：新增单项 `submission-check` CLI 测试。样例配置留空日期字段，要求县区和备用词同时匹配，并以机构全称或简称任一匹配；断言两个正例命中、三个缺条件的文件未识别，检查报表内容及输入/配置未变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录 A07 入口回归、旧 Python 语义及未验收边界。
+- `pytools-core/GPT修改记录/20261027_010219_PT-4-8新版AND_OR提交检查回归.txt`：本记录。
+
+未修改业务匹配算法、菜单或共享 Excel-Core。只读 Python 基线 `PyCode/core/convert_33_34_35_37.py` 中 `_load_submission_check_rules` 构造关键词分组，`_file_matches_submission_rule` 对非空组执行 AND、对组内 token 执行 OR；`_split_tokens` 支持分号/中文分号/逗号分隔。本次未现场运行 Python。
+
+验证：Windows 原生 `cargo fmt -p pytools-core`、`cargo fmt -p pytools-core -- --check`、`cargo check --offline --locked -q -p pytools-core --bin pytools -j 1` 和 `cargo test --offline --locked -q -p pytools-core --test submission_check_parity -j 1`（5/5）通过；`git diff --check` 通过。CLI 生成检查结果和未识别清单，配置与输入文件字节均未变化。构建和测试临时内容位于 `F:\PyTools_Rust_本轮工作文件_20261026\` 下。
+
+未执行项/已知问题：无授权真实业务文件或配置，本轮仅为合成输入；未重新执行 Python，未进行真实 Windows 业务验收、真实模板保真、Linux/glibc 2.28、麒麟/UOS 或离线 deb 验收。PT-4-8 不升级为真实验收通过。
+
+删除清单：无。
+回滚提示：回退本提交会移除新版 A07 关键词组合的 CLI 回归，不改变业务逻辑。
+【组件版本】pytools-core 0.1.0，不升级。

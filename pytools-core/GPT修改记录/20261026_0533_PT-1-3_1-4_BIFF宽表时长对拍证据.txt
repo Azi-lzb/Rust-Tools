@@ -1,0 +1,28 @@
+时间：2026-10-26 05:33（Asia/Shanghai）
+执行者：Codex
+修改前 commit：c3cd02ff167b710f6047fb553326b11c35e2405d
+修改后 commit：待提交
+
+WIP 状态：修改前已有 `pytools-core/MIGRATION_INVENTORY.md` 修改，及 `HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 XLS 转换失败记录、PT-6-2 时长表头缺口记录未跟踪文件。本次均未改动、暂不纳入提交。
+
+目的：针对 PT-1-3/PT-1-4 宽表汇总的 BIFF `.xls` 时长单元格，补充一个可复跑的合成 Python/Rust 业务对拍样本和机器报告。当前没有可用的真实业务样本，不把合成结果视为真实样本验收。
+
+新增文件：
+- `pytools-core/tests/fixtures/timeline/wide_summary_elapsed_duration.xls`：合成 BIFF 样本，含 `[h]:mm:ss.000` 时长格式与日历时间格式。
+- `pytools-core/probe/compare_wide_summary_biff_elapsed_duration.py`：通过 PyCode `run_wide_summary` 基线和 Windows 原生 `pytools` CLI 对拍无后缀及行后缀两种入口，并检查源文件/配置不变。
+- `pytools-core/probe/reports/wide_summary_biff_elapsed_duration_parity_20261026.json`：本轮机器可读结果。
+- 本记录。
+
+实现/迁移影响：仅补充测试夹具及 probe 证据；没有修改 Rust 产品逻辑、Excel 共享 crate、配置、CLI 或原 Python 项目。`xlrd 2.0.1` 确认 B5/B6 格式为 `[h]:mm:ss.000`、C5/C6 为 `yyyy/m/d h:mm:ss.000`。两个真实 Rust CLI 入口与 PyCode 输出在值、类型、数字格式、样式投影上完全一致，各生成一个 append plan，源工作簿和配置保持不变。该证据不表示共享 reader 已通用暴露 BIFF number-format 元数据。
+
+实际验证：
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1 --quiet`：通过。
+- 使用 `PYTOOLS_RUST_CLI` 指向本地 Windows 原生 `pytools.exe` 运行 `pytools-core/probe/compare_wide_summary_biff_elapsed_duration.py`：通过，2/2 模式精确对拍；Python 3.12.10、xlrd 2.0.1；机器报告状态 `passed_synthetic_python_rust_parity`。
+- `git diff --check`：通过（仅提示已有 inventory 文件的 LF/CRLF 转换提示）。
+- 未执行：真实业务 `.xls` 样本、其他 BIFF 格式组合、Linux 目标机及 Kylin/UOS 验收。
+
+已知限制/协作：用户当前没有可提供的脱敏真实样本。已向 main 报告该合成证据；本样本不需要共享 crate 变更，真实 `.xls` 业务样本仍待后续验收。无公共能力修改请求。
+
+【组件版本】pytools-core 0.1.0；仅新增验证材料，不升级。
+删除清单：无。
+回滚提示：若需撤销本次验证材料，仅撤销本记录、上述 probe/JSON 报告和对应合成 `.xls` fixture；不要触碰本记录中列出的既有 WIP 或历史业务提交。

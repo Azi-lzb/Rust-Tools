@@ -1,0 +1,12 @@
+pytools（通用汇总工具，Rust 版）
+================================
+
+本包安装 /usr/bin/pytools 命令行入口。功能覆盖原 py_statistics_tools
+约定的时序、宽表汇总、去重、打印、转换、汇总、归档与快捷工具九类业务，
+以 `pytools` 无参数启动交互菜单，或以子命令直接调用（如
+`pytools summary-used-range`、`pytools wide-summary`）。
+
+核心路径为纯 Rust 实现，不依赖 Python、Office、WPS 或 COM；公式计算等
+外部引擎能力默认关闭，显式触发且不可用时按规则提示，不阻塞其他功能。
+
+可选能力与运行历史输出目录沿用全局配置（`pytools config-view` 可查看）。

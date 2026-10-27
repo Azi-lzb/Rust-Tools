@@ -1,0 +1,42 @@
+{
+  "report_type": "pytools_windows_interactive_menu_entry_smoke",
+  "date": "2026-10-26",
+  "base_branch": "origin/pytools-dev",
+  "base_commit": "49fe393747bf28576fdfd81dc81e371f8858bab0",
+  "working_branch": "codex/pytools-menu-entry",
+  "entry": {
+    "binary": "pytools.exe",
+    "no_argument_launch": "passed",
+    "main_menu_numbers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+    "submenus_reuse_existing_rust_dispatch": true,
+    "windows_native_picker_for_interactive_console": "existing implementation; prior Windows evidence retained, not rerun in this task",
+    "noninteractive_path_fallback": "existing implementation; not separately exercised in this task",
+    "pt_1_2_menu_route": "explicitly excluded; legacy standalone candidate retained",
+    "print_menu_pdf_item_5": "legacy number shown as not implemented/out of scope; selection creates no output"
+  },
+  "validation": {
+    "cargo_fmt_pytools_check": "passed",
+    "cargo_build_pytools_bin_windows_native": "passed",
+    "cargo_test_timeline_menu_cli": {
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0
+    },
+    "cargo_test_print_menu_cli": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    "direct_executable_no_argument_smoke": "passed; actual Windows target/debug/pytools.exe showed numbered menu and exited normally",
+    "menu_selection_1_2_smoke": "passed; prints exclusion and does not request source paths",
+    "menu_selection_3_5_pdf_smoke": "passed; prints not-implemented notice and creates no output"
+  },
+  "business_parity": "not rerun; no business algorithm changed",
+  "real_sample_acceptance": "not established by this entry smoke",
+  "platform_acceptance": {
+    "windows_native_entry": "smoke passed",
+    "linux_glibc_2_28_and_deb": "not tested in this task"
+  },
+  "data_safety": "tests used isolated synthetic configurations; direct executable smoke used the repository config_loader fixture with PDF disabled and created no output; source Python files and business workbooks were not altered",
+  "warnings": "existing dependency deprecation and unused-import warnings remain outside this change"
+}

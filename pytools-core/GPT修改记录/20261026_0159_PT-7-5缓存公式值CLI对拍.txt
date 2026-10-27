@@ -1,0 +1,29 @@
+时间：2026-10-26 01:59（Asia/Shanghai）
+执行者：Codex
+修改前 commit：2380d157a86811943aa5f67bd661d0aec69ccc10
+修改后 commit：本记录生成时尚未提交；提交 SHA 见本轮 Git 历史。
+修改前 WIP：保留 `pytools-core/MIGRATION_INVENTORY.md` 中已有 PT-4-2 追加记录、未跟踪的 `HANDOFF_ZCODE_TO_CODEX.md`、PT-4-2 记录及 PT-6-2 样本缺口记录；未暂存这些无关成果。
+
+目的：复核此前临时缓存公式探针报告的列宽差异，并给 PT-7-5 的缓存公式输入补充稳定的 Python/Rust 真实 CLI 合成对拍。
+
+修改文件：
+- `pytools-core/probe/generate_region_sum_fixtures.py`：新增两张分地区表的合成缓存公式夹具生成；总计缓存值分别为 75 和 60。
+- `pytools-core/tests/fixtures/region_sum/cached_formula/cases.json`、`cached_formula_total.xlsx`：新增合成输入。
+- `pytools-core/probe/reports/region_sum_cached_formula_python_baseline.json`：使用只读 PyCode 源函数生成的新基线。
+- `pytools-core/tests/region_sum_parity.rs`：新增 `pytools region-sum-check` CLI 对拍，比较统计、单元格值、公式、样式、列宽并确认输入字节不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：仅新增 PT-7-5 缓存公式合成证据；保留文件末尾已有 PT-4-2 WIP，不纳入本轮提交。
+
+结果：重新构建的缓存公式用例未复现此前临时报告的列宽差异；Python 与 Rust 的统计（1/2/1/0）、输出单元格、公式、样式和列宽一致。该证据只覆盖合成数据，不能视作真实样本或 PT-7-5 整体验收。没有修改 Rust 生产业务逻辑，也没有修改源 Python 项目。
+
+验证：
+- Windows 原生 Rust 1.99.1 / `x86_64-pc-windows-msvc`：`cargo fmt --manifest-path pytools-core/Cargo.toml --package pytools-core -- --check` 通过。
+- `cargo test --offline --locked -p pytools-core --test region_sum_parity region_sum_cli_projects_cached_formula_totals_like_python -j 1` 通过（1/1）。
+- `cargo test --offline --locked -p pytools-core --test region_sum_parity -j 1` 通过（7/7）。
+- Python 3.12.10 / OpenPyXL 3.1.5：`probe/region_sum_baseline.py` 生成新基线；`data_only=True` 读到缓存值 75、60，公式模式读到两条 `=SUM(C4:C9)`。
+- `git diff --check` 通过。构建中有共享 `excel-editor` 现存弃用 API 警告及 PyTools 既有未使用导入警告，本轮未修改。
+
+未执行与已知边界：没有可用真实业务样本；未执行 Windows 文件选择器人工操作、Linux/glibc 2.28、麒麟/UOS 或 deb 验收。此前临时探针所报的具体列宽差异场景没有保留可重放输入；本轮等价缓存公式回归通过，但不据此声称定位或修复了那个未复现差异。PT-7-5 仍未通过真实样本验收。
+
+删除清单：无。回滚提示：如撤销本轮证据，只回滚本轮提交，删除上述缓存公式夹具、基线、测试、生成器辅助和对应 PT-7-5 清单/修改记录改动；保留工作树中既有 PT-4-2 与交接 WIP。
+
+【组件版本】不升级（仅测试与验证基线，无产品业务逻辑变更）。

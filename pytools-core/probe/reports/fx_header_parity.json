@@ -1,0 +1,50 @@
+{
+  "checks": {
+    "fx_and_modified_sheet_counts_match_python": true,
+    "non_fx_header_remains_unchanged": true,
+    "odd_even_first_header_text_matches_python": true,
+    "output_reopens_with_calamine": true,
+    "requested_patch_scope_only": true,
+    "values_formulas_merges_comments_conditional_formatting_and_data_validations_preserved": true
+  },
+  "feature": "pytools.feature_1_4_fx_header.ordinary_unit_replacement",
+  "not_verified": [
+    "real business workbooks",
+    "XLSM/VBA preservation",
+    "Windows native Rust execution",
+    "Kylin/UOS glibc 2.28 packaging",
+    "menu or CLI integration",
+    "in-place source replacement"
+  ],
+  "python_baseline": {
+    "fixture": "pytools-core/tests/fixtures/fx_header/source.xlsx",
+    "fixture_sha256": "977b7d29aa582efc8f9021a733b543146716b4a6c9303921079acbe4491e6ce8",
+    "source_file": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main\\PyCode\\core\\feature_1_4_fx_header.py",
+    "source_sha256": "cc436a215d577f6063cc1847024f890448711d22278bcf07eff7088452e0e00e",
+    "stats": {
+      "failed_files": 0,
+      "files": 1,
+      "fx_sheets": 2,
+      "modified_sheets": 1,
+      "saved_files": 1
+    }
+  },
+  "rust_candidate": {
+    "backend": "ooxml-patch/0.1.0",
+    "backend_status": "passed for this synthetic XLSX operation and preservation contract",
+    "metadata_reader": "excel_reader::read_header_inventory",
+    "modifier": "excel_editor::ExcelModifier",
+    "plan_builder": "pytools_core::fx_header::build_fx_header_plan"
+  },
+  "schema_version": 1,
+  "scope": {
+    "edit_operations": 1,
+    "fx_sheets": 2,
+    "input_format": "xlsx",
+    "modified_sheets": 1,
+    "platform": "ubuntu-wsl2-x86_64",
+    "python_baseline_variant": "PyCode ordinary non-COM path",
+    "sample_kind": "synthetic"
+  },
+  "status": "passed"
+}

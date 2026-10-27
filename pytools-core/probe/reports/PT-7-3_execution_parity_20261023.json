@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.pt_7_3_batch_execution_parity",
+  "status": "passed_synthetic_execution_parity",
+  "feature_id": "PT-7-3",
+  "sample_kind": "synthetic_xlsx",
+  "host": "Windows 11 x64",
+  "python": {
+    "version": "3.12.10",
+    "openpyxl": "3.1.5",
+    "baseline_module": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main\\PyCode\\core\\feature_1_3_remove_foreign_bank.py",
+    "baseline_sha256": "b8a70314c0aac06d2aa2d71b15bf40626b3cb6715653061e7719384f47316e79",
+    "summary": {
+      "files": 2,
+      "ok_files": 2,
+      "branch_sheets": 4,
+      "deleted_rows": 3,
+      "failed_files": 0,
+      "foreign_empty": false
+    }
+  },
+  "rust": {
+    "command": "pytools remove-foreign-bank",
+    "execution": {
+      "branch_sheets": 4,
+      "deleted_rows": 3,
+      "failed_files": 0,
+      "files": 2,
+      "foreign_empty": false,
+      "items": [
+        {
+          "branch_sheets": 2,
+          "deleted_rows": 3,
+          "elapsed_ms": 343,
+          "execution": {
+            "attempts": [
+              {
+                "elapsed_ms": 228,
+                "engine": "umya_spreadsheet",
+                "message": "validated output published",
+                "outcome": "succeeded"
+              }
+            ],
+            "elapsed_ms": 230,
+            "engine": "umya_spreadsheet",
+            "input": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed.xlsx",
+            "output": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed(金融局).xlsx",
+            "route_decisions": [
+              {
+                "eligible": true,
+                "engine": "umya_spreadsheet",
+                "rejected_reasons": []
+              }
+            ]
+          },
+          "input": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed.xlsx",
+          "output": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed(金融局).xlsx",
+          "plan": {
+            "drop_allowed": {},
+            "format": "xlsx",
+            "input": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed.xlsx",
+            "operations": [
+              {
+                "count": 1,
+                "first_row": 5,
+                "operation": "delete_rows",
+                "sheet": "甲分机构本外币"
+              },
+              {
+                "count": 1,
+                "first_row": 3,
+                "operation": "delete_rows",
+                "sheet": "甲分机构本外币"
+              },
+              {
+                "count": 1,
+                "first_row": 2,
+                "operation": "delete_rows",
+                "sheet": "乙分机构人民币"
+              }
+            ],
+            "output": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/changed(金融局).xlsx",
+            "preserve": [
+              "cell_values_and_types",
+              "formula_text",
+              "comments_and_positions",
+              "styles",
+              "merged_ranges",
+              "defined_names",
+              "row_and_column_dimensions",
+              "page_settings",
+              "header_footer_text",
+              "relationships",
+              "unmodified_package_parts",
+              "sheet_identity_and_order"
+            ],
+            "request_id": "pytools-remove-foreign-bank",
+            "workbook": {
+              "features_present": [
+                "defined_names",
+                "relationships"
+              ],
+              "format": "xlsx",
+              "inventory_complete": true
+            }
+          },
+          "planned_branch_sheets": 2,
+          "planned_deleted_rows": 3,
+          "status": "written"
+        },
+        {
+          "branch_sheets": 2,
+          "deleted_rows": 0,
+          "elapsed_ms": 241,
+          "execution": {
+            "backup_path": null,
+            "cleanup_warning": null,
+            "elapsed_ms": 207,
+            "operation": "copied",
+            "sha256_after": "81821102a22c26ab859d6dd8711acdae5f07a9ebf7d85f0f76051d6078cdc265",
+            "sha256_before": null,
+            "target": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/unchanged(金融局).xlsx"
+          },
+          "input": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/unchanged.xlsx",
+          "output": "/mnt/c/Users/AZI/AppData/Local/Temp/pt-7-3-execution-tw75icm6/unchanged(金融局).xlsx",
+          "plan": null,
+          "planned_branch_sheets": 2,
+          "planned_deleted_rows": 0,
+          "status": "written"
+        }
+      ],
+      "mode": "execute",
+      "ok_files": 2,
+      "planned_branch_sheets": 4,
+      "planned_deleted_rows": 3,
+      "planned_files": 2
+    },
+    "engine": "umya_spreadsheet",
+    "platform_capability": "synthetic-pt-7-3-umya-execution-probe"
+  },
+  "comparison": {
+    "counts": "equal",
+    "sheet_order_and_cell_values": "equal",
+    "original_inputs_unchanged": true,
+    "unchanged_workbook_output_byte_copy": true,
+    "execution_capability": "temporary_test_only",
+    "production_capability_created": false,
+    "default_route_changed": false
+  },
+  "synthetic_source_sha256": {
+    "changed.xlsx": "488f0692f6ffc635cd3c0bc8941ff1cd017d0a03abc577da19bae111afc04cf7",
+    "unchanged.xlsx": "81821102a22c26ab859d6dd8711acdae5f07a9ebf7d85f0f76051d6078cdc265"
+  },
+  "python_output_sha256": {
+    "python-changed(金融局).xlsx": "995a2acb39fd70a2959d121b6ba0266fe00ff1c4654acc8990d6c9f3204f7f3d",
+    "python-unchanged(金融局).xlsx": "81821102a22c26ab859d6dd8711acdae5f07a9ebf7d85f0f76051d6078cdc265"
+  },
+  "limitations": [
+    "No real pytools workbook or configuration was available; production acceptance remains unverified.",
+    "This probe compares business values, sheet order, counts and source safety; it does not qualify OOXML object preservation.",
+    "Formula, comment, merge and cross-sheet reference behavior remains covered only by the focused Rust integration test and must be compared with an Excel COM oracle for this feature.",
+    "Windows-native Rust, Kylin/UOS, glibc 2.28 and offline deb packaging were not verified."
+  ]
+}

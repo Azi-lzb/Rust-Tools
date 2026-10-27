@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.archive.python_rust_parity",
+  "date": "2026-10-23",
+  "status": "passed_synthetic_parity",
+  "python_baseline": "probe/reports/archive_python_baseline.json",
+  "source_python_file": "PyCode/core/convert_33_34_35_37.py",
+  "source_python_sha256": "9cfd0de33f6cc0cc7c665ace7c445feb125b24f0c201165bcf281a53f24617a3",
+  "comparisons": {
+    "preview_and_copy_report_rows": "exact row-by-row match",
+    "workflow_statistics": "exact match",
+    "copied_file_bytes": "matched for every reported successful copy",
+    "cli_date_preview_config_filter": "passed; 12 files, 1 invalid path, 13 rows, 2 extension-filter skips"
+  },
+  "scenarios": {
+    "date_preview": {"files": 12, "invalid": 1, "planned": 13, "skipped_extensions": 0},
+    "date_filtered_preview": {"files": 12, "invalid": 1, "planned": 13, "skipped_extensions": 2},
+    "type_preview": {"files": 12, "invalid": 1, "planned": 13, "rules": 3, "skipped_extensions": 2},
+    "date_copy": {"rows": 12, "copied": 12, "skipped": 0, "failed": 0},
+    "type_copy": {"rows": 12, "copied": 10, "skipped": 2, "failed": 0},
+    "execute_archive_plan": {"rows": 13, "copied": 12, "skipped": 1, "failed": 0}
+  },
+  "tests": {
+    "focused_command": "cargo test -p pytools-core --test archive_parity",
+    "focused_result": "2 passed",
+    "workspace_command": "cargo test --workspace",
+    "workspace_result": "passed"
+  },
+  "changes_found_and_fixed": [
+    "Added Python-compatible optional --config extension filtering to archive-date-preview CLI.",
+    "Cleared preview-only target-collision notes before executing an archive plan and regenerated the note only for a collision observed during copying."
+  ],
+  "limitations": [
+    "Synthetic files and configuration only; real business directories/configuration are not validated.",
+    "GUI menu integration, filesystem permission/race behavior, non-UTF-8 paths, Kylin/UOS, glibc 2.28 and deb packaging are not validated."
+  ]
+}

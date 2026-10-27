@@ -1,0 +1,21 @@
+时间：2026-10-25 23:27（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+分支：pytools-dev
+修改前 HEAD：c8b5faa；开始修改时与 origin/pytools-dev 同步。
+修改后提交：随本记录所在 Git 提交确认。
+WIP：保留既有 MIGRATION_INVENTORY.md 的 PT-4-2 尾部差异记录、HANDOFF_ZCODE_TO_CODEX.md，以及 20261025_2040_PT-4-2真实XLS转换保真失败记录.txt；均不暂存、不覆盖。
+
+## 目的与修改文件
+真实主菜单已提供 9→1–3 快捷工具，但 pytools --help 的可用菜单分类遗漏 9，用户无法从帮助确认入口。
+- pytools-core/src/bin/pytools.rs：帮助分类补充“9 (quick tools 1-3)”。
+- pytools-core/tests/quick_menu_cli.rs：增加 --help 输出回归断言。
+- 本记录。
+
+## 验证
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check：通过。
+- cargo test --offline --locked -p pytools-core --test quick_menu_cli -j 1：2/2 通过，覆盖真实 CLI 的帮助输出和三条菜单动作路由。
+- 编译仅有既有共享 Excel 依赖弃用 API及 PyTools unused import 警告；本修改未触及这些代码。
+- 未运行全量测试、Python/Rust 业务对拍或 Linux 验证；本修改只修正 CLI 入口说明，不改变任何业务行为。
+- 【组件版本】不升级。
+- 删除清单：无。
+- 回滚：撤销本记录所在独立提交即可；不触碰 PT-4-2 WIP。

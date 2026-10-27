@@ -1,0 +1,33 @@
+{
+  "operation46": {
+    "content_spec": "sheet1@A1;sheet2@A2",
+    "remark": "4-6 对拍",
+    "input_names": [
+      "report.xlsx",
+      "A_B_already.xlsx",
+      "A_partial.xlsx",
+      "report_A_B_later.xlsx",
+      "conflict.xlsx",
+      "missing_sheet.xlsx",
+      "macroLess.xlsm",
+      "A_B_corrupt.xlsx",
+      "missing.xlsx",
+      "directory.xlsx",
+      "A_B_unverified.xlsb",
+      "legacy.csv"
+    ],
+    "existing_names": ["A_B_conflict.xlsx"],
+    "missing_names": ["missing.xlsx"],
+    "directory_names": ["directory.xlsx"],
+    "corrupt_names": ["A_B_corrupt.xlsx", "A_B_unverified.xlsb", "legacy.csv"],
+    "workbooks": {
+      "report.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_B_already.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "A_partial.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "report_A_B_later.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "conflict.xlsx": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}},
+      "missing_sheet.xlsx": {"sheet1": {"A1": "A"}},
+      "macroLess.xlsm": {"sheet1": {"A1": "A"}, "sheet2": {"A2": "B"}}
+    }
+  }
+}

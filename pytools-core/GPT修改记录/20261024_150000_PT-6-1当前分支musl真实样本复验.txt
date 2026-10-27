@@ -1,0 +1,27 @@
+时间：2026-10-24 15:00:00 中国标准时间
+执行者：Codex（pytools-dev）
+当前代码 HEAD：9837336。复验前工作树干净，分支与 origin/pytools-dev 一致。本轮仅更新 PyTools 迁移状态和机器报告，未改 Rust 业务代码、DEVELOPMENT_GOAL.md、Rules、Audit、根 Cargo.toml 或 Cargo.lock。
+
+目的：在当前 pytools-dev HEAD 验证 PT-6-1 Windows 回归、VBA 启用 XLSM 行为和 WSL musl release 的真实业务结果。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md：记录当前 HEAD 的 musl release 真实样本复验及平台边界。
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：追加当前 HEAD 的机器结果；不记录源文件名或单元格内容。
+- 本修改记录。
+
+入口与数据流：真实 CLI `pytools summary-used-range`；原 PyTools 最大备份 XLSX → WSL `x86_64-unknown-linux-musl` release / Calamine 读取 → Rust 汇总 → rust_xlsxwriter 新建输出。39,171 行完整工作簿投影与只读 PyCode 精确一致；developer 视图 18 条事件与保存历史匹配；输入大小和修改时间未变。ELF 为静态 PIE，`ldd` 报告静态链接。
+
+额外格式边界：真实 Rust CLI 与只读 PyCode 对含 `xl/vbaProject.bin` 的 XlsxWriter VBA 启用 XLSM 测试夹具逐项比较输出，结果精确一致，源文件未变，两个新汇总均为 XLSX 且未复制 VBA。此第三方合成夹具不替代原 PyTools 业务 XLSM 验收。
+
+验证：
+- `cargo test --offline --locked -p pytools-core --test summary_used_range_error --test summary_comments_cli`：Windows 原生 9/9 通过。
+- `cargo build --release --offline --locked -p pytools-core --bin pytools --target x86_64-unknown-linux-musl`：WSL 成功。
+- 当前 HEAD musl release 最大真实备份簿与只读 PyCode 完整投影对拍：通过；日志事件流与历史相符；源文件未变。
+- 当前 HEAD VBA 启用 XLSM 夹具与 PyCode 对拍：通过。
+- `file`、`ldd`：确认 WSL 产物为静态 PIE/静态链接。
+
+未执行项与已知问题：WSL 缺 Zig；Windows 与 WSL 下载官方 Zig 均在 TLS 连接阶段超时，因此未重建当前 HEAD 的 glibc 2.28 release。原 PyTools 目录无 VBA 启用 XLSM 业务样本；麒麟 V10/UOS V20 实机、deb 与离线交付未验证。PT-6-1 最终验收未完成。
+
+删除清单：无。
+回滚：仅回滚本轮证据提交，不涉及业务代码。
+【组件版本】：不升级，本轮为现有 PT-6-1 实现的当前 HEAD 复验。

@@ -1,0 +1,22 @@
+时间：2026-10-26 06:53:01（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：修改前 9f2df44；修改后随本次证据提交，最终 SHA 由提交记录确认。
+WIP 状态：修改前检查 pytools-dev 分支、HEAD 和未提交文件。MIGRATION_INVENTORY.md 已有其他条目修改；本轮只更新 PT-8 归档状态句并只暂存该 hunk。HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 失败记录、PT-6-2 过期说明及其余 inventory WIP 保持原状。
+
+目的：补充 PT-8-2 Windows 原生菜单文件多选与目标目录选择的真实交互证据，并核对 Rust 计划与 Python 业务函数结果。
+
+变更文件：
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-8 归档状态，登记本次原生窗口合成验证及其限制。
+- pytools-core/probe/reports/archive_type_native_dialog_parity_20261026.json：只记录合成样本计数、入口、结果与限制，不包含源文件名称、真实路径或业务数据。
+- pytools-core/GPT修改记录/20261026_065301_PT-8-2原生选择器合成对拍.txt：本记录。
+
+验证过程与结果：
+- 使用现有 Windows 原生 pytools menu --config <临时配置> --log-view developer，进入菜单 8→2；原生多选窗口返回 2 个合成文件，原生目标目录窗口返回 1 个临时目录。
+- Rust 菜单产生 2 行计划，统计为 files=2、invalid=0、planned=2、rules=3、skipped_ext=0；不复制文件，target 保持空。
+- 只读导入 PyCode 基线函数并传入与 Rust 原生窗口完全相同的文件顺序，Python/Rust 归一化计划行相同，统计相同；Rust 历史状态 succeeded，2 个事件记录 Calamine、rust_xlsxwriter 与 Rust 文件系统引擎。
+- 初次比较用 Unicode 排序的目录迭代顺序作为 Python 输入，与 Rust 对话框顺序不同，导致两行倒序；按同一输入序列重跑后对拍一致。未据此推断业务排序错误。
+
+未执行项与已知问题：原 PyCode skopenfilenames 的 Tk 窗口在本桌面会话中不可见，未能直接测得 Python 选择器的返回顺序；故 Python/Rust 两侧 UI 排序等价性仍未验证。本轮仅用合成输入，真实业务样本、glibc 2.28、麒麟 V10、统信 UOS V20 和离线 deb 仍未验收。
+
+回滚提示：本轮无代码修改；如需撤销，只对报告、PT-8 inventory 句子和本记录使用 git revert <提交 SHA>。其他未提交 WIP 保持原样。删除清单：无。
+【组件版本】：不升级；保持 0.1.0。

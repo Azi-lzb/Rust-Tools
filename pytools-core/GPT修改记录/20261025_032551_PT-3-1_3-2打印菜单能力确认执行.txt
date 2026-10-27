@@ -1,0 +1,25 @@
+时间：2026-10-25 03:25（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+修改前 commit：478dabf（pytools-dev）
+WIP 情况：修改前工作树干净；只改动 PT-3-1/PT-3-2 打印菜单入口、对应集成测试和迁移记录。
+【组件版本】：pytools-core 0.1.0；未升级 crate 版本。
+
+修改目的：把已有的按批注打印候选执行能力接入真实交互菜单，同时保留无 capability 时的默认计划行为，并要求用户明确确认后才生成输出工作簿。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs：主菜单向打印菜单传递已成对校验的 capability/platform。打印 1/2 在两项均存在时显示执行提示并要求 y/yes/是；确认后调用已有 `print-comment-plan` CLI 并传入能力证据，拒绝时只生成计划；缺少能力时继续原 plan-only 流程。
+- pytools-core/tests/print_menu_cli.rs：新增 PT-3-1/3-2 两种模式的真实菜单确认执行测试及拒绝测试；使用仅限合成样本的临时 Passed capability，核对候选工作表、批注/零值行为和源工作簿不变。
+- pytools-core/MIGRATION_INVENTORY.md：更新打印菜单状态、测试证据与未完成验收项。
+- 本记录。
+
+真实入口与数据流：`pytools menu --capabilities <json> --platform <id>` → 主菜单 3 → 打印 1/2 → 选择 `.xlsx` → 用户确认 → `print-comment-plan` → `ExcelEditPlan`/`ExcelModifier` capability 校验 → 新候选工作簿。启动菜单未提供能力时仍只生成计划。打印范围只包括页面设置，不渲染或导出 PDF。
+
+测试与对拍：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --test print_menu_cli --test print_comment_execution -j 1`：`print_menu_cli` 3/3、`print_comment_execution` 1/1 通过。
+- 菜单确认测试覆盖 PT-3-1 和 PT-3-2，读回新候选的工作表名、批注/零值语义并确认源工作簿字节不变；拒绝测试确认仅保留计划且不生成候选。
+- 使用 PyTools Python 3.12.10/openpyxl 3.1.5 与 Windows 原生 `target/debug/pytools.exe` 新跑 `probe/compare_print_comment_plans.py`：keep/fast 两种计划与 ExcelModifier 候选完整投影对拍通过；机器报告为 `probe/reports/print_comment_plan_parity_20261025.json`、`probe/reports/print_comment_execution_parity_20261025.json`。菜单使用同一 Rust CLI 处理器，无业务复制。
+
+未执行项与已知限制：测试使用合成 XLSX 和临时 capability，不登记生产 Passed 能力或改变默认路由。真实打印模板、生产 capability、Windows 桌面文件弹窗手工操作、XLSM、麒麟 V10/UOS V20、glibc 2.28 和离线 deb 未验收。PT-3-1/PT-3-2 整体仍为未验证。
+
+回滚：可整体 revert 本功能提交；不涉及源 Python 项目、共享 crates、根 Cargo 文件、Cargo.lock、audit-core 或 DEVELOPMENT_GOAL.md。

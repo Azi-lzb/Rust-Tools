@@ -1,0 +1,732 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.archive.python_baseline",
+  "source_sha256": "9cfd0de33f6cc0cc7c665ace7c445feb125b24f0c201165bcf281a53f24617a3",
+  "date_preview": {
+    "stats": {
+      "files": 12,
+      "invalid": 1,
+      "planned": 13,
+      "rules": 0,
+      "skipped_ext": 0
+    },
+    "rows": [
+      {
+        "source": "input/missing/不存在.xlsx",
+        "file_name": "不存在.xlsx",
+        "mode": "按日期",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：非文件",
+        "note": ""
+      },
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/20260609_存款表_1.xlsx",
+        "status": "待归档",
+        "note": "目标同名：将自动后缀"
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/20260609_存款表_2.xlsx",
+        "status": "待归档",
+        "note": "目标同名：将自动后缀"
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "file_name": "2026-06-09_贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/2026-06-09_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "file_name": "2026年6月普惠贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "file_name": "2025.03.31_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202503",
+        "target_dir": "target/202503",
+        "target": "target/202503/2025.03.31_存款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "file_name": "20250331广东省信贷收支月报.xls",
+        "mode": "按日期",
+        "category": "202503",
+        "target_dir": "target/202503",
+        "target": "target/202503/20250331广东省信贷收支月报.xls",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "file_name": "无日期_科技贷款表.xlsx",
+        "mode": "按日期",
+        "category": "未识别日期",
+        "target_dir": "target/未识别日期",
+        "target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "status": "未识别日期",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "file_name": "202606_普惠贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_普惠贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "file_name": "202606_科技贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_科技贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "file_name": "202606_贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "file_name": "202606_禁用表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_禁用表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "file_name": "202606_贷款表.docx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_贷款表.docx",
+        "status": "待归档",
+        "note": ""
+      }
+    ]
+  },
+  "date_filtered_preview": {
+    "stats": {
+      "files": 12,
+      "invalid": 1,
+      "planned": 13,
+      "rules": 0,
+      "skipped_ext": 2
+    },
+    "rows": [
+      {
+        "source": "input/missing/不存在.xlsx",
+        "file_name": "不存在.xlsx",
+        "mode": "按日期",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：非文件",
+        "note": ""
+      },
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/20260609_存款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/20260609_存款表_1.xlsx",
+        "status": "待归档",
+        "note": "目标同名：将自动后缀"
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "file_name": "2026-06-09_贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/2026-06-09_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "file_name": "2026年6月普惠贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "file_name": "2025.03.31_存款表.xlsx",
+        "mode": "按日期",
+        "category": "202503",
+        "target_dir": "target/202503",
+        "target": "target/202503/2025.03.31_存款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "file_name": "20250331广东省信贷收支月报.xls",
+        "mode": "按日期",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：后缀不在归档范围",
+        "note": ""
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "file_name": "无日期_科技贷款表.xlsx",
+        "mode": "按日期",
+        "category": "未识别日期",
+        "target_dir": "target/未识别日期",
+        "target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "status": "未识别日期",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "file_name": "202606_普惠贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_普惠贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "file_name": "202606_科技贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_科技贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "file_name": "202606_贷款表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "file_name": "202606_禁用表.xlsx",
+        "mode": "按日期",
+        "category": "202606",
+        "target_dir": "target/202606",
+        "target": "target/202606/202606_禁用表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "file_name": "202606_贷款表.docx",
+        "mode": "按日期",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：后缀被排除",
+        "note": ""
+      }
+    ]
+  },
+  "type_preview": {
+    "stats": {
+      "files": 12,
+      "invalid": 1,
+      "planned": 13,
+      "rules": 3,
+      "skipped_ext": 2
+    },
+    "rows": [
+      {
+        "source": "input/missing/不存在.xlsx",
+        "file_name": "不存在.xlsx",
+        "mode": "按类型",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：非文件",
+        "note": ""
+      },
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按类型",
+        "category": "未识别类型",
+        "target_dir": "target/未识别类型",
+        "target": "target/未识别类型/20260609_存款表.xlsx",
+        "status": "未识别类型",
+        "note": ""
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "file_name": "20260609_存款表.xlsx",
+        "mode": "按类型",
+        "category": "未识别类型",
+        "target_dir": "target/未识别类型",
+        "target": "target/未识别类型/20260609_存款表_1.xlsx",
+        "status": "未识别类型",
+        "note": "目标同名：将自动后缀"
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "file_name": "2026-06-09_贷款表.xlsx",
+        "mode": "按类型",
+        "category": "贷款表",
+        "target_dir": "target/贷款表",
+        "target": "target/贷款表/2026-06-09_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "file_name": "2026年6月普惠贷款表.xlsx",
+        "mode": "按类型",
+        "category": "普惠贷款表",
+        "target_dir": "target/普惠贷款表",
+        "target": "target/普惠贷款表/2026年6月普惠贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "file_name": "2025.03.31_存款表.xlsx",
+        "mode": "按类型",
+        "category": "未识别类型",
+        "target_dir": "target/未识别类型",
+        "target": "target/未识别类型/2025.03.31_存款表.xlsx",
+        "status": "未识别类型",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "file_name": "20250331广东省信贷收支月报.xls",
+        "mode": "按类型",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：后缀不在归档范围",
+        "note": ""
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "file_name": "无日期_科技贷款表.xlsx",
+        "mode": "按类型",
+        "category": "科技贷款表",
+        "target_dir": "target/科技贷款表",
+        "target": "target/科技贷款表/无日期_科技贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "file_name": "202606_普惠贷款表.xlsx",
+        "mode": "按类型",
+        "category": "普惠贷款表",
+        "target_dir": "target/普惠贷款表",
+        "target": "target/普惠贷款表/202606_普惠贷款表_1.xlsx",
+        "status": "待归档",
+        "note": "目标同名：将自动后缀"
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "file_name": "202606_科技贷款表.xlsx",
+        "mode": "按类型",
+        "category": "科技贷款表",
+        "target_dir": "target/科技贷款表",
+        "target": "target/科技贷款表/202606_科技贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "file_name": "202606_贷款表.xlsx",
+        "mode": "按类型",
+        "category": "贷款表",
+        "target_dir": "target/贷款表",
+        "target": "target/贷款表/202606_贷款表.xlsx",
+        "status": "待归档",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "file_name": "202606_禁用表.xlsx",
+        "mode": "按类型",
+        "category": "未识别类型",
+        "target_dir": "target/未识别类型",
+        "target": "target/未识别类型/202606_禁用表.xlsx",
+        "status": "未识别类型",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "file_name": "202606_贷款表.docx",
+        "mode": "按类型",
+        "category": "",
+        "target_dir": "",
+        "target": "",
+        "status": "跳过：后缀被排除",
+        "note": ""
+      }
+    ]
+  },
+  "date_copy": {
+    "stats": {
+      "rows": 12,
+      "copied": 12,
+      "skip": 0,
+      "failed": 0,
+      "files": 12,
+      "invalid": 0,
+      "planned": 12,
+      "rules": 0,
+      "skipped_ext": 0
+    },
+    "rows": [
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "planned_target": "target/202606/20260609_存款表_1.xlsx",
+        "actual_target": "target/202606/20260609_存款表_1.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "planned_target": "target/202606/20260609_存款表_2.xlsx",
+        "actual_target": "target/202606/20260609_存款表_2.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "planned_target": "target/202606/2026-06-09_贷款表.xlsx",
+        "actual_target": "target/202606/2026-06-09_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "planned_target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "actual_target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "planned_target": "target/202503/2025.03.31_存款表.xlsx",
+        "actual_target": "target/202503/2025.03.31_存款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "planned_target": "target/202503/20250331广东省信贷收支月报.xls",
+        "actual_target": "target/202503/20250331广东省信贷收支月报.xls",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "planned_target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "actual_target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "planned_target": "target/202606/202606_普惠贷款表.xlsx",
+        "actual_target": "target/202606/202606_普惠贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "planned_target": "target/202606/202606_科技贷款表.xlsx",
+        "actual_target": "target/202606/202606_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "planned_target": "target/202606/202606_贷款表.xlsx",
+        "actual_target": "target/202606/202606_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "planned_target": "target/202606/202606_禁用表.xlsx",
+        "actual_target": "target/202606/202606_禁用表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "planned_target": "target/202606/202606_贷款表.docx",
+        "actual_target": "target/202606/202606_贷款表.docx",
+        "status": "已复制",
+        "note": ""
+      }
+    ]
+  },
+  "type_copy": {
+    "stats": {
+      "rows": 12,
+      "copied": 10,
+      "skip": 2,
+      "failed": 0,
+      "files": 12,
+      "invalid": 0,
+      "planned": 12,
+      "rules": 3,
+      "skipped_ext": 2
+    },
+    "rows": [
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "planned_target": "target/未识别类型/20260609_存款表.xlsx",
+        "actual_target": "target/未识别类型/20260609_存款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "planned_target": "target/未识别类型/20260609_存款表_1.xlsx",
+        "actual_target": "target/未识别类型/20260609_存款表_1.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "planned_target": "target/贷款表/2026-06-09_贷款表.xlsx",
+        "actual_target": "target/贷款表/2026-06-09_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "planned_target": "target/普惠贷款表/2026年6月普惠贷款表.xlsx",
+        "actual_target": "target/普惠贷款表/2026年6月普惠贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "planned_target": "target/未识别类型/2025.03.31_存款表.xlsx",
+        "actual_target": "target/未识别类型/2025.03.31_存款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "planned_target": "",
+        "actual_target": "",
+        "status": "跳过：计划状态不可执行",
+        "note": "跳过：后缀不在归档范围"
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "planned_target": "target/科技贷款表/无日期_科技贷款表.xlsx",
+        "actual_target": "target/科技贷款表/无日期_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "planned_target": "target/普惠贷款表/202606_普惠贷款表_1.xlsx",
+        "actual_target": "target/普惠贷款表/202606_普惠贷款表_1.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "planned_target": "target/科技贷款表/202606_科技贷款表.xlsx",
+        "actual_target": "target/科技贷款表/202606_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "planned_target": "target/贷款表/202606_贷款表.xlsx",
+        "actual_target": "target/贷款表/202606_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "planned_target": "target/未识别类型/202606_禁用表.xlsx",
+        "actual_target": "target/未识别类型/202606_禁用表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "planned_target": "",
+        "actual_target": "",
+        "status": "跳过：计划状态不可执行",
+        "note": "跳过：后缀被排除"
+      }
+    ]
+  },
+  "plan_copy": {
+    "stats": {
+      "rows": 13,
+      "copied": 12,
+      "skip": 1,
+      "failed": 0,
+      "files": 0,
+      "invalid": 0,
+      "planned": 0,
+      "rules": 0,
+      "skipped_ext": 0
+    },
+    "rows": [
+      {
+        "source": "input/missing/不存在.xlsx",
+        "planned_target": "",
+        "actual_target": "",
+        "status": "跳过：计划状态不可执行",
+        "note": "跳过：非文件"
+      },
+      {
+        "source": "input/00/20260609_存款表.xlsx",
+        "planned_target": "target/202606/20260609_存款表_1.xlsx",
+        "actual_target": "target/202606/20260609_存款表_1.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/01/20260609_存款表.xlsx",
+        "planned_target": "target/202606/20260609_存款表_2.xlsx",
+        "actual_target": "target/202606/20260609_存款表_2.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/02/2026-06-09_贷款表.xlsx",
+        "planned_target": "target/202606/2026-06-09_贷款表.xlsx",
+        "actual_target": "target/202606/2026-06-09_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/03/2026年6月普惠贷款表.xlsx",
+        "planned_target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "actual_target": "target/202606/2026年6月普惠贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/04/2025.03.31_存款表.xlsx",
+        "planned_target": "target/202503/2025.03.31_存款表.xlsx",
+        "actual_target": "target/202503/2025.03.31_存款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/05/20250331广东省信贷收支月报.xls",
+        "planned_target": "target/202503/20250331广东省信贷收支月报.xls",
+        "actual_target": "target/202503/20250331广东省信贷收支月报.xls",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/06/无日期_科技贷款表.xlsx",
+        "planned_target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "actual_target": "target/未识别日期/无日期_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/07/202606_普惠贷款表.xlsx",
+        "planned_target": "target/202606/202606_普惠贷款表.xlsx",
+        "actual_target": "target/202606/202606_普惠贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/08/202606_科技贷款表.xlsx",
+        "planned_target": "target/202606/202606_科技贷款表.xlsx",
+        "actual_target": "target/202606/202606_科技贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/09/202606_贷款表.xlsx",
+        "planned_target": "target/202606/202606_贷款表.xlsx",
+        "actual_target": "target/202606/202606_贷款表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/10/202606_禁用表.xlsx",
+        "planned_target": "target/202606/202606_禁用表.xlsx",
+        "actual_target": "target/202606/202606_禁用表.xlsx",
+        "status": "已复制",
+        "note": ""
+      },
+      {
+        "source": "input/11/202606_贷款表.docx",
+        "planned_target": "target/202606/202606_贷款表.docx",
+        "actual_target": "target/202606/202606_贷款表.docx",
+        "status": "已复制",
+        "note": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+功能：PT-4-4 ET 输入隔离与共享 sidecar 阻塞复现
+
+时间：2026-10-27 03:12（Asia/Shanghai）
+执行者：Codex
+修改前 HEAD：f27604e
+修改后 HEAD：待本地提交
+WIP：开始前工作树干净；无既有未提交修改。
+
+目的：保护 `.et` 路由输入不被 sidecar 改写，并记录共享 `lo-convert` 的验证缺口；不将 WPS 安装目录中无法确认为 ET 的测试模板冒充真实 ET 验收。
+
+修改文件：
+- `pytools-core/src/conversion.rs`：仅对 `.et` 输入创建输出目录内隔离副本，并由 `TempDirGuard` 在 sidecar 返回后清理；其他扩展名保持原路由。新增单测模拟外部引擎改写暂存副本，验证原件字节不变和临时目录清理。
+- `pytools-core/tests/`：单测位于 `conversion.rs` 单元测试中。
+- `pytools-core/MIGRATION_INVENTORY.md`：纠正 V2 PT-6-2 入口状态；登记 ET 转换阻塞、实际失败证据及源保护结果。
+
+复现与影响：
+- WPS Office 2019 11.8.2.8053 安装目录名为 `newfile.et` 的模板（CFB，6,656 bytes）作为只读来源，复制到 `F:\PyToolsRustV2\PT-4-4-ET-20261027\`。本机 KET.Application 能打开，但 `Workbook.FileFormat=56`（Excel 8）；WPS 当前公开格式表将 65521 列为 ET，故该模板不算合法 ET 验收样本，只用于 `.et` 路由、CFB 验证失败及源保护检查。
+- `pytools.exe convert-file --input <input.et> --output <output.xlsx> --to xlsx --engine com` 退出码 2。共享 sidecar 将 ET 副本改扩展名为 `.xlsx` 后由 Calamine 读取，失败为 `invalid Zip archive`，没有发布输出。
+- 未加 PyTools staging 时，WPS COM 在失败路径改变了该 `.et` 名称模板副本字节；原安装目录来源未变化。本次 staging 后同一产品 CLI 仍按共享验证缺陷退出 2，但输入副本 SHA-256 前后均为 `F92F7EA8543804539CBCB3D8B9B061DB099E3E0FCAEFCD52A04A1170FF5A3BDC`，没有输出，临时 staging 目录数为 0。已将本轮测试副本从只读来源恢复并复核一致。真实 ET 格式/业务文件仍未验证。
+- 已向 main 发送共享 sidecar 修复请求；需要合法 ET 的 sheet/数据/公式转换前后验证，并保护输入。PyTools 未修改 `sidecar/lo-convert` 或共享 crates。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib conversion::tests::et_sidecar_input_is_staged_so_engine_cannot_modify_source -j 1`：1/1 通过。
+- `cargo build --offline --locked -p lo-convert -j 1`：通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1`：10/10 通过。
+- `git diff --check`：通过。
+
+未执行：ET 成功转换与数据保真对拍（共享 sidecar 当前失败）、用户业务 ET 样本验收、Python 输出对拍、Linux/麒麟/UOS/glibc 2.28/deb 验收。
+
+配置/VBA 影响：无。组件版本：不升级；workspace 按 Cargo.toml/Cargo.lock 管理版本。
+
+已知问题：PT-4-4 的 ET→XLSX 子路线受共享 `sidecar/lo-convert` 阻塞。不能将本次源保护视为 ET 转换成功，也不能宣称输出保真。PT-2-4 的继承数字格式共享阻塞不受本次变更影响。
+
+测试文件说明：`F:\PyToolsRustV2\et-conversion-smoke-20261027-030136\sample.et` 与 `sample-com-et.et` 是本轮 COM 格式码 56 的生成尝试，不是合法 ET。删除这两个自生成文件的命令被自动审查拦截（未返回具体理由），未绕过该拦截；请勿把它们当 ET 样本。
+
+回滚：移除 `stage_sidecar_input` 与对应 temp-dir helper/单测，并恢复 `convert_one` 直接向 sidecar 传入原路径；同步撤销本记录及迁移清单中的本条说明。回滚前确认 sidecar 已解决输入原件会被修改的问题。

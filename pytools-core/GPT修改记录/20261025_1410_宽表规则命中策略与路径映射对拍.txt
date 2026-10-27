@@ -1,0 +1,27 @@
+时间：2026-10-25 14:10（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：6e71a4e；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：按用户"自行新建测试文件"的指示继续深化宽表规则语义的对拍覆盖：规则命中策略（all_match/first_match，重叠关键字）、路径标准化映射（按规则名/作用对象/匹配方式）、数据结束行列边界与必含行头。不改生产代码。
+
+修改文件：
+- `pytools-core/probe/compare_realistic_synthetic_suite.py`（新增 `make_mode_config`/`run_rule_mode_case` 两个场景函数并接入 main；修正全局配置键为 PyCode 实际读取的 `时序规则命中策略`——此前套件写的 `时序规则匹配模式` 被两侧同时忽略并各自默认 all_match，未造成分歧但未真正测到该键）
+- `pytools-core/probe/reports/realistic_synthetic_suite_parity_20261025.json`（更新：新增 `wide_summary_rule_match_modes` 段）
+- `pytools-core/MIGRATION_INVENTORY.md`（在现实合成套件小节末尾补一段）
+- 本记录。
+
+场景与结果（Windows 原生，Python 基线经 PyCode 配置加载器读同一配置簿）：
+- 两条规则关键字重叠（`Report` 与 `Rep` 同时命中源工作表），第二条含数据结束行 20/结束列 D 边界与必含行头（甲分行;乙分行）。
+- `all_match`：两张规则表 WideAll 39×11、WideRep 35×8，PyCode/Rust 完整投影精确一致。
+- `first_match`：仅首条规则表 WideAll 39×11（次条规则表两侧均不出现），精确一致。
+- 路径标准化映射（WideAll、行头、包含匹配 甲分行→甲标准化分行）在行头加后缀模式下的行头路径逐格一致。
+
+验证结果：套件 EXIT=0 且全部场景 exact；本轮无 Rust 代码改动，未重复全量测试（生产代码与上次全绿运行一致）；`git diff --check` 通过。
+
+影响与未完成项：纯对拍证据补充，不改业务行为。宽表真实输入与批注汇总真实模板仍缺，PT-1-3/1-4 与 PT-6-2 整体仍未验收；目标平台未验证。
+
+敏感内容检查：全部样本为脚本生成的合成数据，无真实业务数据进入提交。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销套件扩展、报告与清单记录。
+【组件版本】：纯验证，不升级。

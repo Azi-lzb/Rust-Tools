@@ -1,0 +1,47 @@
+【时间】2026-10-23 02:14（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】不可用；workspace 尚未创建首次提交
+【修改后 commit】未提交
+【WIP 情况】修改前检查 workspace 状态：当前文件均为未跟踪 WIP；仅按本轮范围增补候选、fixture、probe 报告和迁移文档，未清理或覆盖其他文件。原始 py_statistics_tools 项目保持只读。
+
+【目的】
+增量迁移 pytools 操作 4-6“按内容加前缀”为 Rust 候选，与只读 Python `run_batch_rename_by_content_46` 建立独立合成对拍。候选不接入菜单/CLI，不改变生产默认路由。
+
+【修改文件】
+- `pytools-core/src/file_sort_prefix.rs`：增加 4-6 候选 API 和结果类型；用共享 excel-reader/Calamine 读取配置指定的 `.xlsx/.xlsm` 文本格，文件改名时使用不覆盖目标的硬链接预留。
+- `pytools-core/tests/fixtures/content_rename_46_cases.json`：增加配置单元格、命名规则、冲突目标、缺失/损坏/未验收输入和工作簿案例。
+- `pytools-core/tests/content_rename_46_parity.rs`：增加 Python 基线统计、最终文件名、改名后原工作簿字节及冲突目标检查。
+- `pytools-core/probe/content_rename_46_baseline.py`：增加隔离临时目录中的只读 Python/openpyxl 基线生成器；输出写入 workspace probe，不触碰原始项目。
+- `pytools-core/probe/reports/content_rename_46_python_baseline.json`：记录 Python 函数来源与 SHA-256、运行统计、文件哈希和最终目录内容。
+- `pytools-core/probe/reports/content_rename_46_parity.json`：记录对拍结论、范围、测试和未验证项。
+- `pytools-core/MIGRATION_INVENTORY.md`、`PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：登记候选范围、报告和当前限制。
+- 本记录。
+
+【行为与迁移边界】
+- 源模块 SHA-256：`F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65`。
+- 合成主场景 12 个输入路径，Python 与 Rust 统计均为改名 5、跳过 7；配置规格、配置行/备注和最终文件名集合一致。
+- 覆盖唯一启用的 `重命名配置!O:P:Q`、`sheet@A1` 多格规格、缺失工作表回退值、前缀已在文件名中、部分内容前缀、占用目标后缀、损坏文件、缺失文件、目录及未验收扩展名。
+- Rust 测试确认改名不改变工作簿字节，且占用的 `A_B_conflict.xlsx` 未被覆盖。
+- 候选只接受 `.xlsx/.xlsm`，只读后改文件名，不保存工作簿、不进入 ExcelModifier；不得据此视为完整 4-6 功能迁移或默认路由。
+
+【测试】
+- Python 基线脚本：通过；源函数 5/7；输入文件内容摘要在改名后仍可找到。
+- 原始项目只读聚焦测试：`test_rename_by_content_46.py`，13 passed（该文件包含 4-6 和 4-7 测试）。使用 `PYTHONDONTWRITEBYTECODE=1` 与 `-p no:cacheprovider`。
+- Rust 4-6 集成对拍：1 passed。
+- `cargo fmt --all -- --check`：通过。
+- `cargo test -p pytools-core --locked -q`：24 项通过。
+- `cargo test --locked -q`：workspace 43 项通过，doc-tests 0 项。
+- Rust 命令在 WSL Ubuntu 执行；未在 Windows 原生 Rust 环境、麒麟或统信目标机验证。
+
+【未执行项/已知问题】
+- 未测试真实业务文件、真实 VBA `.xlsm`、数字/日期/公式缓存/错误值及空白边缘语义。
+- `.xls/.xlt` 的源 COM 分支未迁移；`.xlsb`、CSV 及其他源代码可能接纳的扩展名未纳入候选。
+- 未验证不支持硬链接的文件系统、Windows 原生文件改名语义、目标 Linux/deb、完整菜单/CLI 或真实目录工作流。
+- 合成测试中的 `.xlsm` 是由 XLSX 工具生成后使用 `.xlsm` 扩展名，不代表宏保真。
+- 无依赖、Cargo 配置、产品路由或两个原始 Python 项目变化。
+
+【删除清单与回滚提示】
+- 本轮无删除。
+- 回滚时删除 4-6 候选类型/API、专用 integration test、fixture、baseline 脚本、两份 4-6 probe 报告，并撤销三份清单/架构文档中对应 4-6 段；不要影响既有 4-7/4-9/4-10 候选及其证据。
+
+【组件版本】不升级。

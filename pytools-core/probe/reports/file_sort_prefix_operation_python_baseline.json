@@ -1,0 +1,107 @@
+{
+  "source": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "operation": "run_file_sort_prefix_49"
+  },
+  "stats": {
+    "rules": 4,
+    "files": 8,
+    "renamed": 5,
+    "unmatched": 1,
+    "skipped": 2,
+    "failed": 0
+  },
+  "rows": [
+    {
+      "source_file": "202506_建设银行_存款表.xlsx",
+      "original_name": "202506_建设银行_存款表.xlsx",
+      "new_name": "002_202506_建设银行_存款表.xlsx",
+      "config_row": 3,
+      "sort_prefix": "002",
+      "matched_keywords": "工商银行；农业银行,中国银行;建设银行;交通银行",
+      "status": "已重命名",
+      "remark": "国有银行"
+    },
+    {
+      "source_file": "202506_国开行_贷款表.xlsx",
+      "original_name": "202506_国开行_贷款表.xlsx",
+      "new_name": "001_202506_国开行_贷款表.xlsx",
+      "config_row": 2,
+      "sort_prefix": "001",
+      "matched_keywords": "政策性银行;国开行;农发行",
+      "status": "已重命名",
+      "remark": "政策性银行"
+    },
+    {
+      "source_file": "202506_未命中文件.xlsx",
+      "original_name": "202506_未命中文件.xlsx",
+      "new_name": "",
+      "config_row": "",
+      "sort_prefix": "",
+      "matched_keywords": "",
+      "status": "未命中",
+      "remark": ""
+    },
+    {
+      "source_file": "02-202506_国开行_重复.xlsx",
+      "original_name": "02-202506_国开行_重复.xlsx",
+      "new_name": "001_202506_国开行_重复_1.xlsx",
+      "config_row": 2,
+      "sort_prefix": "001",
+      "matched_keywords": "政策性银行;国开行;农发行",
+      "status": "目标同名：已自动后缀",
+      "remark": "政策性银行"
+    },
+    {
+      "source_file": "003 202506_浦发银行_存款表.xlsx",
+      "original_name": "003 202506_浦发银行_存款表.xlsx",
+      "new_name": "003_202506_浦发银行_存款表.xlsx",
+      "config_row": 4,
+      "sort_prefix": "003",
+      "matched_keywords": "招商银行;浦发银行;中信银行",
+      "status": "已重命名",
+      "remark": "股份制银行"
+    },
+    {
+      "source_file": "quarterly_FOO_report.xlsx",
+      "original_name": "quarterly_FOO_report.xlsx",
+      "new_name": "004_quarterly_FOO_report.xlsx",
+      "config_row": 6,
+      "sort_prefix": "004",
+      "matched_keywords": "FOO;Quarterly",
+      "status": "已重命名",
+      "remark": "英文关键词"
+    },
+    {
+      "source_file": "missing.xlsx",
+      "original_name": "missing.xlsx",
+      "new_name": "",
+      "config_row": "",
+      "sort_prefix": "",
+      "matched_keywords": "",
+      "status": "跳过：非文件",
+      "remark": ""
+    },
+    {
+      "source_file": "not-a-file.xlsx",
+      "original_name": "not-a-file.xlsx",
+      "new_name": "",
+      "config_row": "",
+      "sort_prefix": "",
+      "matched_keywords": "",
+      "status": "跳过：非文件",
+      "remark": ""
+    }
+  ],
+  "final_files": [
+    "001_202506_国开行_贷款表.xlsx",
+    "001_202506_国开行_重复.xlsx",
+    "001_202506_国开行_重复_1.xlsx",
+    "002_202506_建设银行_存款表.xlsx",
+    "003_202506_浦发银行_存款表.xlsx",
+    "004_quarterly_FOO_report.xlsx",
+    "202506_未命中文件.xlsx"
+  ]
+}

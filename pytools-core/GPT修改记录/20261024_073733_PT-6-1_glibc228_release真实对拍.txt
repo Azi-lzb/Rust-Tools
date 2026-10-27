@@ -1,0 +1,26 @@
+时间：2026-10-24 07:37:33（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：591b825c8c00eb8ac7529373d8da1593bbb9ea2b；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净。无未提交用户 WIP。
+修改后 commit：本轮提交（提交号见本文件所在 Git commit）。
+
+目的：完成 PT-6-1 glibc 2.28 release 阶段构建和真实最大备份工作簿对拍。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：增加 glibc 2.28 release ELF 与真实 CLI 对拍证据。
+- pytools-core/MIGRATION_INVENTORY.md：记录本阶段结果及验收边界。
+- 本修改记录。
+
+生产 Rust 业务代码、引擎路由、Excel 行为、配置及 VBA 迁移均未改变。DEVELOPMENT_GOAL.md、AGENTS.md、共享 crates、根 Cargo 配置、Cargo.lock 和 Audit 均未修改。未将 Zig 或其运行时加入产品。
+
+验证与结果：
+- WSL Ubuntu：CARGO_ZIGBUILD_ZIG_PATH=/tmp/pytools-zig-0.17.0/zig cargo zigbuild --release --offline --locked -p pytools-core --bin pytools --target x86_64-unknown-linux-gnu.2.28：通过，Zig 0.17.0。
+- file/readelf/ldd/objdump 检查 release ELF：64 位 PIE、动态链接；ldd 成功；objdump -T 最高 GLIBC 符号 GLIBC_2.28。
+- 实际 release CLI summary-used-range 对 PyTools 原只读最大备份 XLSX 与 PyCode 的完整工作簿投影精确一致，共 39,171 行；读取/写入组件 Calamine、excel-reader::read_xlsx_worksheet_extents、rust_xlsxwriter。
+- developer 事件 18 条，与保存历史一致；output_workbook 1,406 ms；源文件大小与修改时间前后相同。
+- git diff --check：提交前已对全部暂存文件执行，通过。
+
+未执行项与已知问题：未在麒麟 V10/UOS V20 实机安装或执行 deb；未做 Windows 原生 Cargo 构建；未知 #DATA! 仍因 Calamine 0.37 的解析能力按既有边界失败关闭，需 main 协调共享 reader 能力后继续；PT-6-1 最终验收未完成。
+
+删除清单：无仓库文件删除；真实对拍输入/输出及日志均在临时目录并随脚本结束清理。Zig 工具留在临时目录，不在仓库或产品中。
+回滚提示：可使用 git revert <本轮提交> 撤回本轮报告、清单和记录。
+【组件版本】：不升级，当前 0.1.0。

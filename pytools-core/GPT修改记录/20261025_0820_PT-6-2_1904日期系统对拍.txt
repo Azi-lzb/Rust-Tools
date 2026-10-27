@@ -1,0 +1,26 @@
+时间：2026-10-25 08:20（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d7e13c0；pytools-dev 与 origin/pytools-dev 同步且工作树干净。无既有 WIP。本轮为 PT-6-2 已实现日期表头语义增加 1904 日期系统对拍证据，不修改 Rust 业务代码。本记录与证据单独提交。
+
+目的：验证 summary-comments 模板日期通过共享 Calamine ISO 日期投影后，能按 PyCode 对 1904 日期系统工作簿的读取行为输出日期文本。
+
+修改文件：
+- pytools-core/probe/compare_summary_comments_template_header.py：合成模板设为 Excel 1904 日期系统。
+- pytools-core/probe/reports/summary_comments_template_header_parity_20261025.json：记录日期系统、完整投影结果和适用限制。
+- pytools-core/MIGRATION_INVENTORY.md：在 PT-6-2 对拍证据中记录 1904 日期系统覆盖。
+- 本记录。
+
+入口与结果：只读 PyCode run_summary_by_comment 与现有 Windows 原生 pytools summary-comments CLI 对同一合成模板/源簿执行。完整工作簿投影精确一致，different_fields 为空；输出 3 行、1 张表、4×8，reader/writer 为 Calamine/rust_xlsxwriter。输入为临时合成 XLSX，源未变，输出仅在临时目录。本轮没有产品业务代码或入口变化。
+
+验证：
+- py -3.12 pytools-core/probe/compare_summary_comments_template_header.py：通过，含工作簿投影完整比较。
+- git diff --check：通过。
+- 未重跑 Cargo 测试：本轮只修改对拍 probe、结果记录和迁移清单；Rust 代码未变。该代码在前一提交的 Windows 原生 CLI 5/5、菜单 4/4、库目标 3/3 回归中通过。
+
+限制与未执行项：证据为合成 1904 日期系统模板，不替代原项目真实批注区域模板；Linux 目标、麒麟 V10/UOS V20、glibc 2.28、离线 deb 及 workspace 全量测试未在本轮执行。PT-6-2 整体生产验收仍未完成。
+
+敏感内容检查：只改动合成对拍、机器报告和迁移记录；报告未保存路径、输入文件名或单元格值，未发现凭据或真实业务数据。未修改 DEVELOPMENT_GOAL.md、共享 crates、根 Cargo 文件或 Audit。
+
+删除清单：无。
+回滚提示：回滚本轮 evidence commit 即可移除 1904 日期系统 probe、报告、迁移清单更新和本记录；不影响前一提交的业务修复。
+【组件版本】：pytools-core 0.1.0，不升级。

@@ -1,0 +1,24 @@
+时间：2026-10-25 13:30（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：2d336bf；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：以系统性只读扫描确认 PT-6-2 真实批注汇总模板与 PT-6-1 真实业务含 VBA XLSM 样本在原项目中的可用性；不改业务代码。
+
+修改文件：
+- `pytools-core/MIGRATION_INVENTORY.md`：末尾新增日期化小节。
+- 本记录。
+
+扫描方法与结果（Windows Python 3.12.10/openpyxl 3.1.5，源树只读）：
+- 范围：原项目排除 `.venv`/`build`/`dist`/`_internal`/`cache/test-venv` 后全部 169 份 XLSX/XLSM。
+- 阶段一（ZIP 部件清单，无 XML 解析）：含 `xl/comments*.xml` 的工作簿仅 2 份。
+- 阶段二（openpyxl 提取批注文本）：按 PyCode `summary_321_322` 标记语义匹配，含 `行区域N/#N`+`列区域N/#N`（同工作表）的可用模板 0 份；含任一区域标记或 `set(` 标记的文件 0 份。
+- XLSM：全树仅 2 份，均为 cache 下 pytest 产物且 ZIP 无效（BadZipFile）；不存在真实业务含 VBA 的 XLSM。
+- 全程未修改源文件；未做写入操作。
+
+结论与未完成项：PT-6-2 真实模板缺口由"未找到"升级为系统性全树负结果，真实样本需用户提供；PT-6-1 业务 VBA XLSM 样本同样需用户提供。两项现有合成证据与未验收状态不变。纯验证轮次，不升级组件版本。
+
+敏感内容检查：报告只含计数与结论，不含工作簿名称、路径明细或单元格内容。
+删除清单：无仓库文件删除。
+回滚提示：`git revert` 本次提交即可撤销清单记录；本记录随同一提交回滚。
+【组件版本】：纯验证，不升级。

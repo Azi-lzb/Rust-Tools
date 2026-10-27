@@ -1,0 +1,44 @@
+时间：2026-10-22 22:27:50（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 未提交）
+修改后 commit：无（workspace 未提交）
+WIP 状态：修改前检查 git status；workspace 仍为未跟踪迁移工作区。本次仅在 pytools-core 及其 fixtures/probe 中增量修改，未覆盖或清理既有文件。
+
+目的：迁移 PyCode 配置加载器中尚未实现的去重任务、打印准备、工作表提取和机构映射读取，为后续业务迁移提供 Rust 配置模型。
+
+修改/新增文件：
+- 修改 `pytools-core/src/config.rs`：新增 `DedupTask`、`PrintTask`、`ExtractTask` 及五个配置 loader；保留当前/旧版去重配置表兼容、缺表返回空结果、启用和空提取任务规则。
+- 新增 `pytools-core/tests/fixtures/config_task_loader_cases.json`：合成配置表向量。
+- 新增 `pytools-core/tests/fixtures/config_task_loaders.xlsx`、`config_task_loaders_legacy.xlsx`、`config_task_loaders_missing.xlsx`：由 workspace 内基线脚本从向量生成的测试夹具。
+- 新增 `pytools-core/probe/config_task_loaders_baseline.py`：以只读源项目 Python loader 生成基线；设置 `sys.dont_write_bytecode`，不向源目录写入 Python 字节码。
+- 新增 `pytools-core/probe/reports/config_task_loaders_python_baseline.json` 和 `config_task_loaders_parity.json`：记录旧实现结果与逐项状态。
+- 新增 `pytools-core/tests/config_task_loader_parity.rs`：Rust 加载同一夹具并与 Python JSON 逐项比较。
+- 修改 `pytools-core/MIGRATION_INVENTORY.md`：登记配置 loader 范围和证据，保持菜单功能和真实配置状态未验证。
+
+实现要点：
+- 去重表先选“去重追加数据配置”，缺失时回退“数据处理配置”；字段按旧 loader 的列名候选顺序读取。
+- 打印 loader 只读取页面准备参数，不执行渲染或 PDF 导出。
+- 工作表提取只返回启用且至少包含工作簿关键字、工作表关键字、排除关键字或提取区域之一的任务。
+- 机构映射按 A/B 列读取非空映射，外资行按 B/C 列读取并按旧逻辑对 flag 做整数化。
+- 原始数值 `1` 的启用标记按单元格数值类型处理，避免 reader 将其规范化为 `1.0` 后被当成文本 false；文本值仍遵循源逻辑。
+
+测试与对拍：
+- Python 基线：`<pytools-main>/.venv/Scripts/python.exe probe/config_task_loaders_baseline.py --source-root <pytools-main>`，通过，11/11 比较组。
+- Rust：`cargo fmt --all && cargo test -p pytools-core --locked`，通过；9 项现有单测和新增 1 项对拍测试通过。
+- 全 workspace：`cargo fmt --all -- --check && cargo test --workspace --locked`，通过；audit-core 2 项、excel-reader 2 项、probe 5 项、pytools-core 10 项测试通过，其他 crate 与 doc-test 无失败。
+- 首次系统 Python 基线因缺少 pandas 未能导入；改用源项目 `.venv` 后成功。首轮 Rust 对拍发现数值 flag 类型差异，修正后全量对拍通过。
+
+范围限制与未执行项：
+- 只迁配置加载，不含去重、打印、提取等消费者业务流程；菜单清单仍为未验证。
+- 合成配置簿不代表真实用户配置；配置初始化/修复、原位修改保真、xls/xlsm/xlsb 输入、性能及目标 Linux 行为未验证或测量。
+- 未修改源 Python 项目；未升级产品或组件版本。
+
+【组件版本】
+系统：不适用（pytools-core 迁移基线尚未建立业务组件版本）
+影响功能：不升级
+影响配置：无
+未修改的相关组件：全部
+版本升级原因：迁移中的内部 Rust 配置读取 API 和对拍夹具，未发布业务版本。
+
+删除清单：无。
+回滚提示：可单独回退本记录列出的 Rust、fixture、probe、报告和清单改动；不要删除其他未跟踪文件。

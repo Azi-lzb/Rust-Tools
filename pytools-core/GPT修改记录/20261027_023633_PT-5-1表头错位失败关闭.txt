@@ -1,0 +1,22 @@
+时间：2026-10-27 02:36 +08:00
+执行者：Codex
+修改前 commit：c612bff
+修改后 commit：待本记录随功能提交
+修改前 WIP：无；仅本轮 PT-5-1 修改。
+
+目的：按 V2 配置修复安全约束，在表头字段错位时拒绝自动重写，以免掩盖列映射歧义。
+
+修改文件：
+- `pytools-core/src/config_admin.rs`：计划构造前检查规范配置 Sheet 的首行。已知字段位于非预期列或规范表头格含公式时，返回含 Sheet/坐标的错误，不生成编辑计划。
+- `pytools-core/tests/config_menu_cli.rs`：增加真实 `7→1` 菜单错位表头回归，断言失败状态、错误原因、无 output 目录且源配置字节不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录拒绝边界和合成入口验证。
+- 本记录。
+
+行为说明：旧 Python 配置修复会按列重写首行表头；Rust 对可明确识别的错列字段采用 V2 安全规则失败关闭。其他未识别的首行文本仍按现有配置模式修复。未改变业务数据读取或配置列映射。
+
+验证：Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml`；`cargo test --offline --locked -p pytools-core --test config_menu_cli -j 1`：7/7 通过，含正常配置修复计划、歧义表头失败路径、输入保护和运行历史。
+
+未执行/限制：合成配置测试，不代表真实用户配置或 Excel 手工验收；未运行 Python/Rust 完整结果对拍、隔离 openpyxl 候选执行、Linux/glibc/deb 或麒麟/UOS 验收。无配置格式变更；组件版本不升级。
+
+删除清单：无。
+回滚提示：回退本提交恢复仅按列写入规范表头的原修复计划行为，并移除错位表头失败关闭回归及状态记录。

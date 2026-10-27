@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.path_map",
+  "source": [
+    "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/core/path_map.py",
+    "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/core/rule_engine.py"
+  ],
+  "shared_vectors": "tests/fixtures/path_map_cases.json",
+  "counts": {
+    "keyword_matching": 5,
+    "single_column_specs": 11,
+    "multiple_column_specs": 7,
+    "path_standardization": 5,
+    "total": 28
+  },
+  "python_baseline": {
+    "report": "probe/reports/path_map_baseline.json",
+    "status": "保留",
+    "passed": 28,
+    "total": 28
+  },
+  "rust": {
+    "command": "cargo test -p pytools-core --offline",
+    "tests": [
+      "path_map::tests::matches_shared_python_keyword_and_column_vectors",
+      "rule_engine::path_map_tests::standardization_matches_shared_python_vectors"
+    ],
+    "status": "保留",
+    "vectors_passed": 28,
+    "vectors_total": 28
+  },
+  "comparison": "Python baseline and Rust were checked against the same expected-output vectors.",
+  "limitations": [
+    "This covers the helper functions and path standardization vectors only.",
+    "Configuration workbook loading and full timeline/wide-summary workflows remain unverified."
+  ]
+}

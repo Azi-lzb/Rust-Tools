@@ -1,0 +1,31 @@
+时间：2026-10-26 04:04（Windows 本地时间）
+执行者：Codex（pytools-dev）
+修改前 commit：5315ced1549033811f2eb69053e70d1b083c32cc
+分支：pytools-dev；记录前 HEAD 与 origin/pytools-dev 同步。工作树已有 PT-1-3/1-4 累计时长功能修改；另有 MIGRATION_INVENTORY.md、HANDOFF_ZCODE_TO_CODEX.md、PT-4-2 与 PT-6-2 旧记录 WIP，本次均不覆盖、不暂存。
+
+【目的】
+继续 PT-1-3/1-4 宽表汇总的累计时长 Python/Rust 对拍。修正 `[h]:mm:ss.000` 多日时长被当作日历日期的问题，并补齐目标工作簿追加中时长数值格式丢失的问题，使 Python timedelta 的毫秒舍入、数值单元格和 `0` 格式在摘要及目标追加中保持一致。
+
+【修改文件】
+- `pytools-core/src/summary_ops.rs`：提取 PyCode/openpyxl timedelta 微秒舍入并投影为数值序列；通过本地 namespace-aware OOXML 适配读取 elapsed-time 与 `0` 数字格式单元格地址。
+- `pytools-core/src/timeline_ops.rs`：宽表读取时按单元格格式区分累计时长和日历日期；目标追加规划从摘要工作簿恢复 `0` 格式对应的时长类型；无目标追加规则时不读取额外格式元数据。
+- `pytools-core/src/workbook_extract.rs`、`timeline_extract.rs`、`dedup_ops.rs`：增加内部 DurationSerial/数值追加表达与写入，目标追加继续走现有新建 writer 或 ExcelModifier 计划。
+- `pytools-core/tests/timeline_menu_cli.rs`：增加菜单 `wide-summary` 与 `wide-summary-row-suffix` 的累计时长 CLI 回归。
+- `pytools-core/probe/compare_wide_summary.py`：增加合成累计时长 Python/Rust 菜单及目标追加对拍场景。
+- `pytools-core/probe/reports/wide_summary_elapsed_duration_parity_20261026.json`：保存本次脱敏合成输入验证摘要，不包含输入文件名或单元格值。
+- 本记录。
+
+【验证】
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml --check`：通过。
+- Windows 原生 `cargo test --offline --locked -p pytools-core --lib --test timeline_menu_cli --test summary_menu_cli -j 1`：66/66 通过（lib 44、timeline CLI 17、summary CLI 5）。
+- 使用原 Python 项目只读 `.venv`（pandas 2.2.3、openpyxl 3.1.5）执行 `probe/compare_wide_summary.py --elapsed-duration`：4/4 合成对拍通过，覆盖行后缀/无后缀及新建目标/已有目标替换；摘要、目标单元格值/类型/有效样式与 Python 一致，实际菜单入口执行成功；原输入和配置未变。
+- 本次运行记录了 rust_xlsxwriter 新建目标与 umya_spreadsheet 已有目标修改引擎。仍有 workspace 既有弃用 API 与无关未使用导入警告。
+
+【未验证项与限制】
+- 用户暂时没有脱敏真实宽表样本；本记录仅为合成样本证据，PT-1-3/1-4 不标为真实业务验收完成。
+- 未验证其他累计时长格式、xls/xlsm/xlsb/et 输入、Windows Excel 桌面人工打开、Linux/glibc 2.28、麒麟 V10/UOS V20 或离线 deb。
+- 未修改共享 crate、根 Cargo 文件、Audit、原 Python 项目或真实业务数据；不调整迁移清单中已有 WIP 状态。
+
+【组件版本】不升级：仅修复既有迁移范围的行为差异，不改变依赖或产品版本。
+【删除清单】无。
+【回滚提示】若回滚本功能，仅撤销本次列出的 PT-1-3/1-4 源码、测试、probe、合成报告及本记录；不得清理或覆盖本次开始前已存在的其他 WIP。

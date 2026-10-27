@@ -1,0 +1,95 @@
+{
+  "report_type": "pytools-operation-parity",
+  "generated_at": "2026-10-23T01:26:04+08:00",
+  "status": "passed_with_limited_scope",
+  "operation": "4-9 file sort prefix",
+  "scope": "Rust API and explicit CLI parity on an isolated synthetic xlsx configuration and file set. The CLI is not integrated into the original product GUI menu/dispatcher.",
+  "source_baseline": {
+    "project": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+    "module": "PyCode/core/convert_33_34_35_37.py",
+    "function": "run_file_sort_prefix_49",
+    "sha256": "F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65",
+    "python_version": "3.12.10",
+    "baseline_generator": "pytools-core/probe/file_sort_prefix_operation_baseline.py",
+      "focused_source_tests": {
+      "file": "PyCode/tests/test_file_sort_prefix_49.py",
+      "passed": 8,
+      "failed": 0,
+        "warnings": 1,
+        "provenance": "recorded Python baseline; not rerun in the current Rust CLI integration round"
+    }
+  },
+  "rust_candidate": {
+    "module": "pytools-core/src/file_sort_prefix.rs",
+    "entrypoint": "run_file_sort_prefix_49",
+    "configuration_reader": "shared excel-reader (Calamine)",
+    "report_writer": "shared excel-writer (rust_xlsxwriter)",
+    "report_readback": "shared excel-reader (Calamine)",
+    "menu_or_cli_integrated": true,
+    "cli_command": "pytools file-sort-prefix --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] <file>...",
+    "original_gui_menu_integrated": false
+  },
+  "environment": {
+    "python_baseline": "Windows 11 x64, Python 3.12.10",
+    "rust_validation": "Ubuntu WSL2 x86_64",
+    "kylin_or_uos_glibc_2_28": "未验证"
+  },
+  "fixture": {
+    "configuration": "pytools-core/tests/fixtures/file_sort_prefix_config.xlsx",
+    "configuration_source": "openpyxl-generated synthetic workbook using file_sort_prefix_cases.json",
+    "input_paths": 8,
+    "existing_collision_targets": 1,
+    "directory_inputs": 1,
+    "missing_inputs": 1
+  },
+  "python_result": {
+    "rules": 4,
+    "files": 8,
+    "renamed": 5,
+    "unmatched": 1,
+    "skipped": 2,
+    "failed": 0
+  },
+  "comparisons": {
+    "statistics": "保留",
+    "per_input_report_rows": "保留 (8/8)",
+    "collision_suffix_and_existing_target_contents": "保留",
+    "final_file_name_set": "保留",
+    "rust_generated_report_xlsx_opens_and_matches_headers_and_cells": "保留",
+    "real_business_data": "未验证"
+  },
+  "safety_tests": {
+    "destination_collision_does_not_overwrite_and_source_can_be_restored": "passed",
+    "injected_report_write_failure_rolls_back_completed_moves": "passed",
+    "output_directory_creation_failure_leaves_source_untouched": "passed",
+    "filesystem_without_hard_link_support": "未验证"
+  },
+  "validation": {
+    "source_pytest": "8 passed, 1 warning",
+    "rust_integration_tests": "3 passed, including product CLI invocation",
+    "rust_module_unit_tests": 4,
+    "pytools_core_tests": "44 passed, 0 failed",
+    "workspace_tests": "116 passed, 0 failed",
+    "cargo_fmt": "cargo fmt --all -- --check: passed",
+    "workspace_test_command": "cargo test --workspace --locked",
+    "cargo_check": "cargo check --workspace --locked: passed"
+  },
+  "not_covered": [
+    "original product GUI menu and configuration dispatch integration",
+    "exact Python logger timestamp, repeated-run, concurrency, and failure-event equivalence (CLI file/stderr success and failure logging is implemented; only synthetic success entries are asserted)",
+    "operation 4-10 and its content-prefix preservation branch",
+    "real user directories and file-system permission/lock failures",
+    "Rust native Windows build",
+    "Kylin/UOS x86_64 glibc 2.28 build, offline deb and target-machine tests",
+    "non-UTF-8 paths and file systems that do not support hard links"
+  ],
+  "routing_and_dependencies": {
+    "production_default_route_changed": false,
+    "manifest_changes": [
+      "pytools-core now uses the existing workspace chrono dependency for local timestamped output names",
+      "workspace chrono enables its existing clock feature"
+    ],
+    "resolved_chrono_version": "0.4.45",
+    "lockfile_validation": "cargo test --workspace --locked passed"
+  }
+}

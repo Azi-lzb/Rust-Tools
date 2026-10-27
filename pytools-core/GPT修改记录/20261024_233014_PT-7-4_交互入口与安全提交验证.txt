@@ -1,0 +1,21 @@
+PT-7-4 外汇页眉修改的交互入口与安全提交验证
+
+开始状态：当前目录为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`，分支 `pytools-dev`，开始 commit 为 `7cdb746`，与 `origin/pytools-dev` 同步。保留同一迁移任务此前未提交的 `pytools-core/src/bin/pytools.rs` 菜单/批量入口改动和 `pytools-core/tests/fx_header_menu_cli.rs`。没有覆盖或清理其他文件。原 Python 项目保持只读；未修改 Audit、共享 crates、根 Cargo 配置、Cargo.lock、DEVELOPMENT_GOAL.md 或 Rules。
+
+目的：将现有页眉计划候选接入直接 Rust CLI `fx-header` 和交互菜单 7→4，验证计划默认、能力门控提交、双视图日志、成功后安全替换和 Python 普通路径结果一致。
+
+实现：
+- `pytools-core/src/bin/pytools.rs` 增加批量 `fx-header` CLI 与菜单 7-4。默认只保存计划；提交需 `--commit-target` 和精确匹配的 capability/platform。只接受 `.xlsx`；菜单跳过未验收扩展名。执行后汇总文件与工作表计数、阶段进度、实际引擎和运行记录。
+- 修正 PT-7-4 成功提交提示：`replace_target_from_candidate` 在临时回滚副本保留期间校验候选，成功后清理；清理失败时返回备份路径及警告。
+- `pytools-core/tests/fx_header_menu_cli.rs` 覆盖直接 CLI plan-only、菜单 plan-only 和 `.xls` 跳过、测试 capability 下的菜单提交与 Python 基线、off 视图不写事件/历史。
+- `pytools-core/probe/reports/fx_header_menu_parity_20261024.json` 记录本轮合成对拍；`pytools-core/MIGRATION_INVENTORY.md` 更新 PT-7-4 状态和限制。
+
+验证（Windows 11 x64，x86_64-pc-windows-msvc，Rust 1.99.1）：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `git diff --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test fx_header_parity --test fx_header_menu_cli --test file_commit`：11/11 通过（页眉计划/补丁对拍 2/2、真实菜单/CLI 集成 4/4、目标提交回归 5/5）。编译保留既有 `excel-editor` Umya deprecated API 和 `pytools-core` unused import 警告。
+- Python 对拍使用 `probe/reports/fx_header_python_baseline.json`：旧 PyCode 普通非 COM 路径与 Rust 的页眉文本、文件/工作表计数一致；检查值、公式文本、合并区、批注、条件格式、数据验证以及候选重开和安全目标提交。
+
+未执行/限制：没有真实业务工作簿与配置；没有使用生产 capability；菜单集成用终端输入驱动，没有实测 Windows 原生文件选择器；`.xlsm`/VBA、Kylin/UOS、glibc 2.28、deb 和离线交付未验证。因此 PT-7-4 整体状态仍为未验证。本轮没有运行全量 workspace 测试。
+
+回滚：当前相关源码、测试、报告、迁移记录共同纳入一个 PyTools 功能提交；需要撤回时，仅逆向该提交中的 PT-7-4 文件，不使用 reset、clean 或覆盖用户工作树操作。

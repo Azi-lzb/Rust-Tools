@@ -1,0 +1,28 @@
+时间：2026-10-27 11:31:37（Asia/Shanghai）
+执行者：Codex
+修改前 commit：eb38a267ba3dcafa15a25125712363bebd93832b
+修改后 commit：由本记录所在提交确定
+WIP：修改前工作树干净。
+
+【组件版本】不升级（补充 PT-4-1 合成菜单冒烟证据）
+
+目的与范围：
+- 更新 pytools-core/MIGRATION_INVENTORY.md，记录正式 Rust CLI 菜单 4→1 的合成样本结果；不提升 PT-4-1 为真实业务验收通过。
+- 在 F 盘 README 添加可复现的样本配置、输入文件、菜单步骤和预期输出。
+- 未改 Rust 业务代码、共享 crates、Cargo 配置、Audit 或 Python 源项目。
+
+实际运行：
+- 输入副本：F:\PyToolsRustV2\manual-acceptance-20261027\actual\pt41-batch-rename-20261027_112839\Bank-smoke-report.xlsx（来自既有合成 XLSX）。
+- 配置副本：同目录 config.xlsx；简称 Bank→Example Bank，代码 B01，数据日期“2026-10-24”（文本），报表名 Monthly。
+- 正式入口：pytools.exe menu --config <该配置> --log-view user；菜单 4→1→1 并输入输入文件路径。
+- 结果：菜单退出码 0，改名 1、跳过 0；输出为 2026-10-24 B01 Example Bank Monthly.xlsx，文件字节数 3432，与输入副本逐字节相同。运行日志：F:\PyToolsRustV2\manual-acceptance-20261027\logs\3_3_batch_rename_20261027_113007.log。
+- 留给用户手工复现的副本：F:\PyToolsRustV2\manual-acceptance-20261027\04-files\pt41-manual\config.xlsx 和 Bank-smoke-report.xlsx。原始 submission 文件未修改。
+- 首次样本生成时 WPS 将日期文本自动转为 Excel 日期，Rust 按该日期文本构造出含时间冒号的 Windows 文件名并跳过（错误 123）；随后把测试副本中的日期单元格明确设为文本，符合现有 Python/Rust 测试配置语义后成功。未据此修改业务逻辑。
+
+验证：
+- cargo check --offline --locked -p pytools-core --bin pytools 通过。
+- cargo test --offline --locked -p pytools-core --test conversion_menu_cli batch_rename_menu_supports_user_developer_and_off_progress_views 1/1 通过。
+- 只验证合成文件名规则、正式菜单和源内容保留；未运行 Python/Rust 对拍、真实业务文件或完整样式比较。PT-4-1 仍待真实 Windows 样本验收；Linux/deb 未执行。
+
+回滚：
+- 回退迁移清单新增文字和本记录；F 盘样本及结果单独保留供人工操作。

@@ -1,0 +1,29 @@
+时间：2026-10-26 07:38（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+记录时 HEAD：769dac3；分支 pytools-dev；开始时与 origin/pytools-dev 同步。
+
+目的：修复 PT-7-2 对数值单元格做机构映射时与原 Python `str(float)` 不一致的问题。
+
+修改文件：
+- `pytools-core/src/institution_normalize.rs`：Number 值改用现有 Python 浮点文本格式化函数；增加科学计数法映射回归。
+- `pytools-core/tests/institution_normalize_batch_cli.rs`：增加真实 `institution-normalize` CLI 的合成计划回归和可选机器报告输出。
+- `pytools-core/probe/reports/institution_normalize_float_string_parity_20261026.json`：记录合成 CLI 回归结果。
+- 本记录。
+
+差异与修复：原 Python `_process_sheet` 对单元格执行 `str(v)`。合成 XLSX 中的 `0.00001` 被 Python 表示为 `1e-05`；旧 Rust `f64::to_string()` 得到 `0.00001`，导致相同映射未命中（Rust 0 行、无计划；Python 1 行）。Rust 现在复用 `summary_ops::python_float_text`，CLI 为 A2 生成与 Python 相同的文本更新计划。未改变映射顺序、配置格式、VBA 行为或 Excel 修改引擎路由；仅验证计划生成，未执行工作簿修改。
+
+验证（Windows 原生）：
+- 修复前通过原 Python baseline 与旧 Rust CLI 复现上述差异。
+- 修复后用同一临时合成 XLSX、映射配置和原 Python `_process_sheet` baseline 对拍真实 `institution-normalize` CLI：两侧均生成 1 条 A2 更新；源和配置哈希未变，输出仅在临时目录。
+- `cargo test --offline --locked -p pytools-core --lib floating_mapping_keys_use_python_float_string_format -j 1`：1/1 通过。
+- `cargo test --offline --locked -p pytools-core --test institution_normalize_plan_parity -j 1`：通过。
+- `cargo test --offline --locked -p pytools-core --test institution_normalize_batch_cli -j 1`：6/6 通过。
+- `cargo build --offline --locked -p pytools-core --bin pytools -j 1`、本轮 Rust 文件 `rustfmt --check --edition 2021`、`git diff --check`：通过。构建仅有仓库既有 deprecation/unused warnings。
+- 未运行完整 PyTools 测试、Linux 构建、目标系统安装或 deb 验收。
+
+未完成与限制：没有经授权真实机构规范化工作簿；PT-7-2 仍为未验收。生产 capability、ExcelModifier 执行保真、`.xlsm`、Linux/glibc 2.28、麒麟/UOS 和离线 deb 均未验证。PT-1-2 保持排除。
+
+【组件版本】pytools-core 0.1.0；未升级版本。
+
+删除清单：无。
+回滚提示：回滚本次 PT-7-2 浮点格式修复提交可撤销该行为变更；原先已有的 `MIGRATION_INVENTORY.md` 修改、交接文件和 PT-4-2/PT-6-2 旧记录未触碰，应保留。

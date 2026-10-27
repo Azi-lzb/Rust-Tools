@@ -1,0 +1,29 @@
+{
+  "status": "passed_synthetic_parity",
+  "scope": "3-4 print config precheck only",
+  "python_counts": {
+    "ok": 2,
+    "warn": 2,
+    "fail": 4
+  },
+  "rust_counts": {
+    "ok": 2,
+    "warn": 2,
+    "fail": 4
+  },
+  "scenarios": [
+    "fit height zero falls back to the legacy default",
+    "negative fit height warning",
+    "ambiguous orientation warning",
+    "invalid mode",
+    "missing source sheet",
+    "invalid A1 range",
+    "empty target path",
+    "disabled invalid row ignored"
+  ],
+  "limitations": [
+    "Synthetic XLSX config and source only; no real print task exists in the current source config.",
+    "Print output and workbook modification were not executed; ExcelModifier capability evidence remains required.",
+    "XLSM, comment-based print, full configuration print, Windows release build, Kylin/UOS and deb were not validated."
+  ]
+}

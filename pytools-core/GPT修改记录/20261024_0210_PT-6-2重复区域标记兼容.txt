@@ -1,0 +1,26 @@
+时间：2026-10-24 02:10（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：2d9fc1f（已推送至 origin/pytools-dev）；修改后 commit：本轮提交，编号见 Git 历史。
+WIP 状态：开始时 pytools-dev 工作树干净且与 origin/pytools-dev 同步。已 fetch origin/main；main 当前为 pytools-dev 祖先，没有新规范、共享 crate 或 Cargo 文件变更。本轮只修改 pytools-core/**，不修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit、共享 crates、根 Cargo 配置或 Cargo.lock。源 Python 项目只读。
+
+目的：对照 `PyCode/core/summary_321_322.py::_extract_regions` 与 Rust PT-6-2 解析器时，确认重复同编号区域边界的兼容差异并修复。PyCode 按行列顺序遍历批注、持续覆盖边界，因此最后一个同编号起点和终点生效；Rust 原先选择第一个。
+
+修改文件：
+- pytools-core/src/summary_ops.rs：区域解析按行列顺序选择最后一个匹配起止批注；增加重复起止标记的单元回归测试。
+- pytools-core/probe/compare_summary_tools.py：构造重复 `行区域1` / `行区域#1` 标记模板，分别调用只读 PyCode 与真实 `summary-comments` Rust CLI，对比整本输出及行号。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：加入 PT-6-2 重复标记对拍结果；保留同轮 PT-6-1 对拍与 `#DATA!` 边界结果。
+- pytools-core/MIGRATION_INVENTORY.md：补充 PT-6-2 重复区域标记已做合成 CLI 对拍、真实模板仍未验收。
+- 本修改记录。
+
+验证：
+- `wsl.exe -e bash -lc 'cd /mnt/c/Users/AZI/Desktop/VibeCode/pytools-dev && cargo fmt -p pytools-core -- --check && cargo test -p pytools-core --lib comment_region_tests --offline --locked -q'`：格式检查通过，区域解析单测 1/1 通过。
+- `python pytools-core/probe/compare_summary_tools.py`：通过。真实 `summary-comments` CLI 与 PyCode 对重复起止批注生成相同的 6 行，行号 `[3,4,5,3,4,5]`，值/类型、工作表维度、冻结窗格和表头投影一致。常规模板 6 行对拍仍通过。
+- 同一 probe 中 PT-6-1 的 XLSX/XLSM 汇总仍为 14 行，七种受支持错误值保留；未知 `#DATA!` 继续失败关闭。
+- `cargo test -p pytools-core --test summary_used_range_error --offline --locked -q`（WSL）：3/3 通过。
+- `git diff --check`：通过。对拍只使用合成工作簿，不含真实业务数据或凭据。
+
+未执行项及限制：没有授权真实批注模板或真实汇总输入；XLSM VBA、XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28 和 deb 未验证。PT-6-2 整体验收仍未完成。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`，回滚 PT-6-2 区域标记兼容改动、探针证据和状态记录。
+【组件版本】：不升级，当前 0.1.0。

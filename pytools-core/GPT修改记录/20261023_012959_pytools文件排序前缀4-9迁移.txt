@@ -1,0 +1,45 @@
+【时间】2026-10-23 01:29:59（Asia/Shanghai）
+【执行者】Codex
+【修改前 commit】无；workspace 当前内容为未提交迁移工作树。
+【修改后 commit】无；未执行 commit。
+【WIP 情况】开始前检查了 workspace 状态；现有根文件和子目录均为未跟踪 WIP。只在 workspace 中增量新增/更新迁移模块、夹具、对拍材料和清单；没有覆盖或清理既有文件。
+
+【修改目的】
+在已完成的文件排序前缀纯逻辑 helper 基础上，端到端迁移 pytools 操作 4-9 的 Rust 候选 API：读取配置工作簿、按规则安全重命名文件并生成同契约 XLSX 结果表。保持 Python 源项目只读，4-9 尚未接入菜单/CLI，也未成为生产默认。
+
+【修改/新增文件】
+- Cargo.toml、pytools-core/Cargo.toml、Cargo.lock：启用 workspace 已有 chrono 的 clock 功能，并让 pytools-core 使用 chrono 生成本地时间戳报告名；没有新 crate 版本 pin。
+- pytools-core/src/file_sort_prefix.rs：新增 Calamine 配置读取、4-9 执行/统计、rust_xlsxwriter 报告写入、无覆盖冲突处理及报告失败回滚；保留先前 helper。
+- pytools-core/tests/fixtures/file_sort_prefix_cases.json、pytools-core/tests/fixtures/file_sort_prefix_config.xlsx：新增 4-9 合成用例和 openpyxl 生成的配置簿。
+- pytools-core/probe/file_sort_prefix_operation_baseline.py：增加实际 Python `run_file_sort_prefix_49` 隔离运行的基线脚本；日志处理器只在临时测试运行中关闭。
+- pytools-core/probe/reports/file_sort_prefix_operation_python_baseline.json、file_sort_prefix_operation_parity.json：新增源操作结果与 Rust 对拍机器报告。
+- pytools-core/tests/file_sort_prefix_operation_parity.rs：新增业务结果/报告读回对拍、输出目录失败安全测试。
+- pytools-core/MIGRATION_INVENTORY.md：更新 4-9 迁移范围和 4-10 缺口。
+- EXCEL_ENGINE_ARCHITECTURE.md、PYTHON_EXCEL_OPERATION_INVENTORY.md：登记 Calamine reader 与 rust_xlsxwriter 的实际候选使用位置、边界和本轮测试证据。
+- pytools-core/GPT修改记录/20261023_012959_pytools文件排序前缀4-9迁移.txt：新增本记录。
+
+【逻辑与范围】
+- 配置从“文件排序配置”sheet 按表头读取，规则行序、关键词、备注及前缀语义沿用 PyCode helper；使用共享 `excel-reader`/Calamine。
+- 逐条处理输入：缺失路径/目录计为“跳过：非文件”，未命中记为“未命中”；命中后按原规则清理已有前缀并生成目标名。同名目标采用 `_1` 等后缀，不覆盖既有文件。
+- 目标名通过同目录硬链接预留后再删除源路径。若文件系统不支持硬链接，操作失败并保留源路径；此限制已登记。
+- 使用共享 `excel-writer`/rust_xlsxwriter 新建“文件排序前缀结果”工作簿。报告写入失败会按反向顺序回滚本轮已完成改名；回滚冲突/失败会返回结构化错误上下文。
+- 与旧 Python `run_file_sort_prefix_49` 的合成用例结果一致：4 条规则、8 个输入路径、5 改名、1 未命中、2 跳过、0 失败；8 条结果行、最终文件名集合和冲突前的既有文件内容一致。Rust 生成的 XLSX 由共享 `excel-reader` 读回核对表头和数据单元格。
+- pytools 4-9 候选 API 尚未接入产品菜单/CLI，真实用户目录和输入类型未验收；4-10 删除前缀、内容前缀兼容逻辑和旧 COM 读取分支未迁移。没有修改现有生产默认路由。
+
+【只读源项目】
+- 源函数：`C:\Users\AZI\Desktop\VibeCode\4.pytools-main\PyCode\core\convert_33_34_35_37.py::run_file_sort_prefix_49`。
+- 当前 SHA256：F7AB3796305056A9355275088432B1EA1B1D60935F82F9FD92111BF507436B65，与 Python 基线记录相同。
+- 只读源项目 `PyCode/tests/test_file_sort_prefix_49.py`：8 passed，1 个 pandas FutureWarning。命令使用源项目 `.venv`、`PYTHONDONTWRITEBYTECODE=1`、禁用 pytest cache；基线函数的日志文件留在系统临时目录。
+
+【验证】
+- WSL Ubuntu：`cargo fmt --all -- --check` 通过。
+- WSL Ubuntu：`cargo test --workspace --locked -q`：35 passed，0 failed；doc-tests 为 0 项。
+- Rust 端 4-9 对拍和安全相关测试通过；包含目标冲突无覆盖、反向回滚、注入报告写入失败后的整批改名回滚，以及输出目录创建失败时源文件不变。
+- Windows 原生 Rust 构建、不同文件系统/锁定错误、真实业务目录、麒麟/UOS、glibc 2.28 和离线 deb 未执行。
+
+【组件版本】
+pytools-core：0.1.0 → 0.1.0（不升级）。没有修改第三方 crate 的版本号；Cargo manifest/lock 依赖关系因使用现有 chrono 时间戳能力而更新。未更新用户版更新日志。
+
+【删除清单】无。
+【已知问题/后续】4-9 尚未接入菜单/CLI，不能据此将转换与文件命名菜单整体标为迁移完成。硬链接不支持的文件系统会安全失败。下一步应迁移独立的 4-10 基本前缀移除与内容前缀判定，并先完成 Calamine 读取契约和源调用链盘点；继续保持 COM 只允许出现在已批准旁路职责中。
+【回滚提示】本轮代码/夹具/报告可按上方文件清单单独撤销；删除该候选模块时同步撤销 pytools-core/src/lib.rs 的 `file_sort_prefix` 导出，以及 pytools-core/Cargo.toml、根 Cargo.toml 和 Cargo.lock 中本轮 chrono 依赖/feature 变更。不要删除此前 helper 基线、共享 crates 或其他已验收功能。

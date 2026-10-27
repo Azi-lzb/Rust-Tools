@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_used_range_real_menu_input_parity",
+  "date": "2026-10-25",
+  "status": "passed_python_rust_real_menu_input_parity",
+  "data_origin": "read-only XLSX assets in the original PyTools project",
+  "environment": {
+    "platform": "Windows x86_64",
+    "rust_target": "x86_64-pc-windows-msvc",
+    "rust_toolchain": "1.99.1",
+    "pytools_branch": "pytools-dev",
+    "pytools_commit": "13c83fb"
+  },
+  "entry_route": "pytools menu -> 6 -> 1 -> manual semicolon-path fallback",
+  "baseline": "PyCode/core/summary_321_322.py::run_summary_by_usedrange",
+  "rust_entry": "target/debug/pytools.exe menu --config <temporary config> --log-view developer",
+  "input": {
+    "format": "xlsx",
+    "sample_count": 2,
+    "summary_rows": 1102
+  },
+  "comparison": {
+    "workbook_projection": "exact",
+    "fields": [
+      "sheet names and dimensions",
+      "row values and cell types",
+      "non-empty cell number format, bold, and fill style",
+      "freeze panes and header bold state",
+      "merged ranges, formula text, and defined names",
+      "print area, page setup, margins, and centering"
+    ],
+    "assertion": "pytools-core/probe/compare_summary_tools.py::assert_equivalent"
+  },
+  "execution": {
+    "status": "succeeded",
+    "history_total_inputs": 2,
+    "saved_history_event_count": 16,
+    "reader_engine": "calamine",
+    "writer_engine": "rust_xlsxwriter"
+  },
+  "native_dialog_run": {
+    "date": "2026-10-25",
+    "environment": {
+      "platform": "Windows x86_64",
+      "rust_target": "x86_64-pc-windows-msvc",
+      "rust_toolchain": "1.99.1",
+      "pytools_branch": "pytools-dev",
+      "pytools_commit": "0500b20"
+    },
+    "entry_route": "pytools menu -> 6 -> 1 -> Win32 GetOpenFileNameW multi-select",
+    "baseline": "PyCode/core/summary_321_322.py::run_summary_by_usedrange",
+    "input": {
+      "format": "xlsx",
+      "selection_method": "native Windows Open dialog multi-select",
+      "sample_count": 2,
+      "summary_rows": 1167,
+      "output_dimensions_including_header": {
+        "rows": 1168,
+        "columns": 260
+      }
+    },
+    "comparison": {
+      "workbook_projection": "exact",
+      "fields": [
+        "sheet names and dimensions",
+        "row values and cell types",
+        "non-empty cell number format, bold, and fill style",
+        "freeze panes and header bold state",
+        "merged ranges, formula text, and defined names",
+        "print area, page setup, margins, and centering"
+      ],
+      "assertion": "pytools-core/probe/compare_summary_tools.py::assert_equivalent",
+      "different_fields": []
+    },
+    "execution": {
+      "status": "succeeded",
+      "saved_history_event_count": 16,
+      "history_elapsed_ms": 1094,
+      "completed_files": 2,
+      "output_files": 1,
+      "actual_engines": [
+        "calamine",
+        "excel-reader::read_xlsx_worksheet_extents",
+        "rust_xlsxwriter"
+      ]
+    },
+    "safety": {
+      "source_unchanged": true,
+      "outputs_temporary_only": true,
+      "report_contains_source_filenames_or_cell_values": false
+    }
+  },
+  "safety": {
+    "source_size_and_mtime_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_source_filenames_or_cell_values": false
+  },
+  "limitations": [
+    "The original manual-path run was performed while the desktop was locked; a separate native-dialog multi-select run is recorded in native_dialog_run.",
+    "The result covers these two XLSX samples only and does not extend acceptance to other formats or sample sets.",
+    "The original business VBA-bearing XLSM and 麒麟 V10/UOS V20 offline deb acceptance remain unverified."
+  ],
+  "native_error_token_matrix_menu_run": {
+    "date": "2026-10-25",
+    "environment": {
+      "platform": "Windows 11 x64",
+      "rust_target": "x86_64-pc-windows-msvc",
+      "rust_toolchain": "1.99.1",
+      "worktree_head": "ec453e4",
+      "uncommitted_scope": "pre-existing PT-1-2 WIP; no PT-6-1 source changes"
+    },
+    "entry_route": "pytools menu -> 6 -> 1 -> Windows native Open dialog single-select",
+    "baseline": "PyCode/core/summary_321_322.py::run_summary_by_usedrange",
+    "input": {
+      "format": "xlsx",
+      "sample_kind": "synthetic_error_token_matrix",
+      "selection_method": "Windows native file dialog single-select",
+      "source_count": 1
+    },
+    "comparison": {
+      "complete_workbook_projection": "exact",
+      "assertion": "pytools-core/probe/compare_summary_tools.py::assert_equivalent",
+      "dimensions_including_header": [
+        {
+          "rows": 2,
+          "columns": 18
+        }
+      ],
+      "different_fields": []
+    },
+    "execution": {
+      "status": "succeeded",
+      "summary_data_rows": 1,
+      "saved_history_event_count": 14,
+      "unknown_error_tokens_normalized_as_text": 8,
+      "common_excel_error_cells_patched": 7,
+      "actual_engines": [
+        "excel-reader::read_xlsx_worksheet_extents",
+        "calamine",
+        "calamine + OOXML error-token normalization",
+        "rust_xlsxwriter",
+        "OOXML Patch"
+      ],
+      "output_files": 1
+    },
+    "safety": {
+      "source_fixture_unchanged": true,
+      "outputs_and_history_temporary_only": true,
+      "report_contains_source_filename_or_cell_values": false
+    },
+    "production_acceptance": false,
+    "limitations": [
+      "Synthetic XLSX menu input only; this does not replace original business VBA-bearing XLSM validation.",
+      "This run does not establish Linux target, deb, or production capability acceptance."
+    ]
+  }
+}

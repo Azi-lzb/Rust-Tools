@@ -1,0 +1,29 @@
+时间：2026-10-24 18:55（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+工作树：C:\Users\AZI\Desktop\VibeCode\pytools-dev
+分支：pytools-dev
+修改前 commit：b04f454（pytools-dev，已推送 origin/pytools-dev）
+本轮结束状态：PT-7-2 主菜单 7→2 已接入；合成菜单/CLI/计划对拍通过。当前修改尚未提交。
+
+修改目的：把已有 Rust `institution-normalize` 计划/批处理 CLI 接入真实交互菜单；延续显式 ExcelModifier capability 执行门控，并使该功能的 `off` 视图不输出阶段事件或写运行历史。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs
+- pytools-core/tests/batch_tools_menu_cli.rs
+- pytools-core/MIGRATION_INVENTORY.md
+- 本记录
+
+业务路径：主菜单 7→2 → 文件/文件夹选择并筛选 `.xlsx` → 从全局配置读取机构映射 → 默认生成计划至 output/plans/PT-7-2；仅提供 capability 与 platform 时才追加 `--apply`，经 ExcelModifier 校验候选后安全替换目标。未验收格式在入口跳过并提示，不进入业务读取/写入。
+
+日志行为：`user` 输出用户进度并写 JSON 历史；`developer` 输出结构化阶段事件并写 JSON 历史；`off` 不输出阶段事件、不创建历史文件，但保留最终汇总输出。`--view off` 与显式 `--report-output` 冲突时拒绝执行。
+
+验证：
+- Windows 原生 `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test batch_tools_menu_cli -j 1`：6/6 通过；含 user/developer/off、配置映射、计划模式源文件不变、手工选入 `.xlsm` 时安全跳过、临时 synthetic capability 的 CLI→ExcelModifier 实际执行。执行后逐工作表对比 PyCode 基线的值、公式、合并区域和批注投影，完全一致；ExcelModifier 候选验证通过计划声明的样式及未修改包部件保留项。
+- `cargo test --offline --locked -p pytools-core --test institution_normalize_batch_cli -j 1`：5/5 通过。
+- `cargo test --offline --locked -p pytools-core --test institution_normalize_plan_parity -j 1`：1/1 通过，Rust 计划与既有 PyCode 基线一致。
+- 临时 capability 的执行测试只用于验证菜单调用链，不登记生产 Passed capability 或默认路由；原有 PyCode 基线与完整保留项报告仍限定于合成 XLSX。
+
+已知限制：原 Python 机构规范化实现还保留 `.xlsm` VBA；当前 Rust 菜单和批处理候选只接受 `.xlsx`，因此 PT-7-2 尚未完整迁移。无授权真实业务样本；真实模板、Windows 原生弹窗操作、目标 Linux/glibc 2.28 和 deb 未验证。
+
+提交/同步：本轮尚未提交或推送 PT-7-2 工作树变更。上个独立 PT-7-1 提交 `b04f454` 已推送到 `origin/pytools-dev`；本轮未修改共享 crate、根 Cargo 文件、Cargo.lock 或 Development Goal。

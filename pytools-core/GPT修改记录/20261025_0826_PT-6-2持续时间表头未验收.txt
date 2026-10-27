@@ -1,0 +1,21 @@
+时间：2026-10-25 08:26（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：b43ebf9；pytools-dev 与 origin/pytools-dev 同步，工作树干净。本轮只记录新发现的共享 reader 差异，不修改业务代码。
+
+发现：用临时合成 XLSX 对真实 PyCode run_summary_by_comment 与 Windows 原生 pytools summary-comments CLI 执行持续时间表头最小复现。模板值为 timedelta(1 day, 2:03:04.123000)，格式为 [h]:mm:ss.000；PyCode/openpyxl 将其输出为 timedelta 字符串，Rust 日期投影却将相同 Excel 序列值输出为 1900 日历日期。原因是共享 excel-reader 没有保留持续时间与日历日期的值类型区别。
+
+协作：已向 main 的 main 协调任务发送复现、路径和最小 reader API 请求。main 回复当前不修改共享源码或路由，要求保持 PyTools 路由、标记该场景未验收并继续独立业务迁移。PyTools 不绕过共享 reader 解析 OOXML 样式。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md：为 PT-6-2 添加该差异和共享修复依赖，明确持续时间表头未验证。
+- 本记录。
+
+验证：本轮运行的是临时合成输入的原 Python/Rust CLI 对照；观察值类型和输出表头确认差异。临时文件只在系统临时目录，命令退出后由 TemporaryDirectory 清理。没有重跑 Cargo 测试：本轮没有业务代码变化。
+
+限制：未修复该行为。PT-6-2 真实有效区域模板、持续时间表头、麒麟 V10/UOS V20、glibc 2.28、离线 deb 和 workspace 全量测试仍未验收。PT-1-3/1-4 普通入口与源 Python 对应的文件选择行为一致；Python 仅在显式 COM 入口增加文件夹选择，按既有迁移范围本轮不引入 COM 路径。
+
+敏感内容检查：只记录合成工作簿行为，不含真实业务数据、凭据或原始路径。未修改 DEVELOPMENT_GOAL.md、共享 crates、Cargo 文件或 Audit。
+
+删除清单：无。
+回滚提示：回滚本轮记录提交即可移除库存与修改记录中的差异说明；业务实现及已通过的 1904 日期系统对拍不受影响。
+【组件版本】：pytools-core 0.1.0，不升级。

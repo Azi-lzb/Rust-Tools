@@ -1,0 +1,26 @@
+时间：2026-10-27 08:44（Asia/Shanghai）
+执行者：Codex
+修改前 commit：3738f47b240fc6fc52912fe698c952a01afc8667
+修改后 commit：本记录随本地提交纳入版本控制
+WIP：修改前工作树干净。
+
+目的：记录 PT-4-2/PT-4-3 的有限 Windows 合成转换验证，避免将 CLI 成功误记为真实业务验收。
+
+修改文件：
+- pytools-core/MIGRATION_INVENTORY.md：追加合成 XLS→XLSX、DOC→DOCX 的 COM 转换冒烟证据，注明 LibreOffice 缺失时的失败关闭行为及未验收范围。
+- 本记录：留痕。
+
+逻辑、配置及 VBA 影响：未修改业务逻辑、配置、依赖或 VBA 迁移范围；未修改共享 crates。旧 Python 项目及其数据只读。
+
+验证：
+- cargo build --offline --locked -p pytools-core --bin pytools -j 1：通过。
+- cargo build --offline --locked -p lo-convert -j 1：通过。
+- 实际 pytools.exe convert-excel ... --engine lo 对合成 XLS：因本机无 soffice 明确失败；源文件未变、未生成输出。
+- pytools.exe convert-excel ... --engine com 对合成 XLS：成功；Excel COM 重开检查工作表名称及 UsedRange.Value2 与输入一致，源文件未变。
+- pytools.exe convert-word ... --engine com 对合成 DOC：成功；Word COM 重开检查文档文本一致，源文件未变。
+- 以上不是格式/样式/页面设置/对象保真验收，也不是真实业务文件 Python/Rust 对拍；ET、Linux/deb 和目标发行版未验证。
+- git diff --check：提交前执行。
+
+删除清单：无。
+回滚：仅回退本次迁移清单段落和本记录；不涉及产品代码。
+【组件版本】：不升级（仅验证记录）。

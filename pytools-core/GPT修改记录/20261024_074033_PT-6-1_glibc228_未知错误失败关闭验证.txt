@@ -1,0 +1,20 @@
+时间：2026-10-24 07:40:33（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：3c09c60b4831f7ba762eddbb878209b1a7c9da27；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无未提交用户 WIP。
+修改后 commit：本轮提交（提交号见本文件所在 Git commit）。
+
+目的：在 glibc 2.28 release CLI 上验证 PT-6-1 未知错误值的失败关闭边界。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_real_parity_20261024.json：记录未知错误值回归结果。
+- pytools-core/MIGRATION_INVENTORY.md：补充边界状态和输出限制。
+- 本修改记录。
+
+验证：直接运行 target/x86_64-unknown-linux-gnu/release/pytools summary-used-range，输入 tests/fixtures/summary_used_range/getting_data_error.xlsx。CLI 退出码 2；保存一条结构化运行记录，status=failed、stage=value_read、error_type=value_read_error；developer 终止事件为 failed。输出目录无部分汇总，运行日志未记录单元格 token，输入文件大小和修改时间未变。Python/Rust 成功输出对拍不适用于此未知 token；根据 main 已确认的 workspace reader 边界，当前行为为预期失败关闭。
+
+生产 Rust 逻辑、读取/写入路由、配置、VBA 行为未改变。未修改 DEVELOPMENT_GOAL.md、AGENTS.md、共享 crates、根 Cargo 配置、Cargo.lock 或 Audit。
+
+未执行：麒麟 V10/UOS V20 实机、deb 安装和正式目标系统验收；PT-6-1 仍未完成最终验收。
+删除清单：无仓库删除；夹具输出/日志由系统临时目录自动清理。
+回滚：可使用 git revert <本轮提交> 撤回本轮报告、清单和记录。
+【组件版本】：不升级，当前 0.1.0。

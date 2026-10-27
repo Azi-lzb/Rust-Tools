@@ -1,0 +1,20 @@
+执行者：Codex（pytools-dev）
+记录时 HEAD：5a68522；分支 pytools-dev；执行前与 origin/pytools-dev 同步。
+
+目的：修正 PT-1-1 表头路径比对对日期单元格的 Python/Rust 语义差异，并覆盖真实菜单入口。
+
+差异与实现：原只读 PyCode compare_393.py 经 pandas 将日期单元格转成 Python datetime 文本；Rust timeline_ops.rs 原先直接用日期序列值文本，导致同一表头路径分别显示为 存款_2024-02-29 00:00:00 与 存款_45351.0。Rust 现在仅在 PT-1-1 比较矩阵中按既有 Python datetime 格式化语义归一化日期值，并读取 OOXML 1904 日期系统元数据，对日历日期做 1462 天历元修正；时间型小于 1 的序列值不平移。日期元数据读取失败显式记录失败，不静默回退。数据读取仍由 Calamine 完成，未修改共享 crate。
+
+真实入口与文件：pytools menu → 时序 → 表头路径比对（1→1）。集成测试覆盖真实菜单路由及日期型多级表头输出。修改 pytools-core/src/timeline_ops.rs、pytools-core/tests/timeline_menu_cli.rs、pytools-core/probe/compare_timeline_compare.py、本清单及机器对拍报告 probe/reports/timeline_compare_parity_20261026.json。
+
+验证：
+- cargo fmt --manifest-path pytools-core/Cargo.toml -- --check 通过。
+- cargo test --offline --locked -p pytools-core --test timeline_menu_cli -j 1：14/14 通过；构建期间有既存共享 crate 弃用警告及 PyTools 无关 unused import 警告。
+- 使用原项目只读 NoComPyTools venv 运行 probe/compare_timeline_compare.py：通过。覆盖关键字/筛选、结果内容与类型/结构、标题样式、日期表头及混合 1900/1904 日期系统；标题样式 17 格一致。
+- git diff --check 通过。
+
+证据边界：对拍使用合成工作簿。当前真实配置输入目录不存在；原项目可见的 70 份 XLSX 均无文件名和工作表同时命中时序规则，因此没有真实业务匹配样本。报告只证明上述合成语义和限定输出投影，不代表 PT-1-1 整体验收、全部 OOXML 部件保真、Linux/glibc 2.28、麒麟/UOS 或 deb 验收。用户暂时无法提供脱敏业务样本，真实样本验证待后续取得样本后进行。PT-1-2 仍排除。
+
+限制：原 Python 项目及其真实数据只读且未更改；没有修改 DEVELOPMENT_GOAL.md、Cargo 清单、共享 crate 或 Audit；既有 HANDOFF_ZCODE_TO_CODEX.md 与 PT-4-2 未提交失败证据保持原状，不纳入本功能提交。
+
+修改后 commit：本记录与 PT-1-1 实现随同一提交保存。

@@ -1,0 +1,34 @@
+时间：2026-10-25 17:25（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：ce151b6；worktree 为 `C:\Users\AZI\Desktop\VibeCode\pytools-dev`、分支 `pytools-dev`，与 `origin/pytools-dev` 同步，修改前工作区干净。
+WIP：无未提交文件。
+
+目的：把真实配置对拍从解析层推进到执行层（真实规则 × 合成源数据），修复对拍发现的真实缺陷与一处既有测试并发缺陷。
+
+修改文件：
+- `pytools-core/src/rule_engine.rs`（生产修复：配置数据区间超出工作表时由报错改为按 PyCode 语义截断 row_end/col_end）
+- `pytools-core/probe/compare_real_rules_wide.py`（新增：真实规则桥接配置 + 三源簿两种行头模式对拍）
+- `pytools-core/probe/reports/real_rules_wide_parity_20261025.json`（新增机器报告）
+- `pytools-core/tests/dedup_comment_delete_umya.rs`、`pytools-core/tests/dedup_append_execution.rs`（测试夹具输出/日志目录相对路径改绝对路径）
+- `pytools-core/MIGRATION_INVENTORY.md`（末尾新增日期化小节）
+- 本记录。
+
+缺陷与修复：
+- 现象：真实规则 `中外资本外币分地区`（数据区间 40-66）驱动 47 行合成源簿时，PyCode 成功输出（越界行行头取空自然跳过），Rust 报 "configured data range is outside the worksheet" 失败退出。
+- 根因：PyCode `_header_cell_text`/`_row_header_text` 对越界坐标返回空串，配置区间超出实际行数时静默截断；真实 VBA 规则按模板最大行配区间而实际报表更短，此为真实业务必经场景。Rust 原实现将区间越界视为错误。
+- 修复：`rule_engine` 的 `row_end`/`col_end` 用 `min` 截断到工作表实际行列（对齐 PyCode 可观察行为与 wide 侧既有列向 clamp），附注释说明依据；区间其余校验不变。
+- 验证：修复后两种行头模式三条真实规则（双列头有界区间/单列头/三列拼接行头）PyCode/Rust 完整投影与有效样式精确一致。
+
+测试并发缺陷修复：
+- 现象：全量 `cargo test` 连续三轮随机红（失败测试每轮不同：pt_2_5/pt_1_3_pt_1_4 → pt_2_4 → file_commit 系），单跑全绿。
+- 根因：两个 dedup 测试的配置夹具写相对 `output`/`logs`，CLI 子进程 cwd 为 crate 根，并行测试二进制共享 `pytools-core/output` 相互踩踏；此前两轮全绿属未撞线。
+- 修复：夹具改为各测试临时目录绝对路径；修复后全量连续两轮 43 项结果全部 0 failed。
+
+验证结果（Windows 原生）：`cargo test --offline --locked -p pytools-core` 两轮全绿（43 项）；`cargo fmt --check`、`git diff --check` 通过；真实规则对拍 `compare_real_rules_wide.py` EXIT=0 双模式 exact。
+
+影响与未完成项：宽表汇总对"配置区间超出实际数据"的行为与 PyCode 对齐（截断），影响所有含 data_row_end/data_col_end 的规则在较短源簿上的执行；区间配置错误不再显式报错（与 PyCode 一致的静默语义，已注释说明）。真实报表输入样本、NoCom/_capability 既有结论、main 的 lo-convert 与最终打包、实机复核等外部事项不变。
+
+敏感内容检查：真实规则内容来自用户公开仓库已入库夹具；源数据全部合成；输出均在临时目录。
+删除清单：无。
+回滚提示：`git revert` 本次提交即可撤销全部改动；rule_engine 修复为两行 clamp 可独立还原。
+【组件版本】：缺陷修复，产品/组件版本不升级。

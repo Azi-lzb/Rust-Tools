@@ -1,0 +1,31 @@
+时间：2026-10-24 05:26（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：d0962161727243aa154aa0fcf0c4194994cef09c；分支 `pytools-dev` 与 `origin/pytools-dev` 同步，工作树干净。`origin/main` 为 473c75a4c93cd4875e37f31c53e567120cb9d040。源 Python 项目只读；未修改 DEVELOPMENT_GOAL.md、AGENTS.md、workspace Rules、Audit、共享 crates、根 Cargo.toml 或 Cargo.lock。
+
+目的：在现有 PT-6-2 `summary-comments` Rust 业务及真实 CLI 上接入普通用户/开发者/off 双视图、阶段进度、实际引擎/耗时和 PT-6-2 历史运行记录；保持批注区域解析、输出数据、样式与页面设置行为。
+
+修改文件：
+- `pytools-core/src/summary_ops.rs`：新增 `summarize_by_comments_with_progress`，在既有业务流程中发出运行、目录准备、模板校验/读取/规则解析、输入筛选、源读取、区域提取、工作簿生成/保存事件；记录文件/行进度、阶段耗时、实际读取/写入引擎和失败阶段。输出 `SummaryExecution` 汇总读取、写入和总耗时。
+- `pytools-core/src/bin/pytools.rs`：为真实 `summary-comments` CLI 增加 `--log-view user|developer|off`、`--log-dir`，保存 `PT-6-2` JSON 历史并在输出 JSON 中返回运行标识/历史路径；更新 CLI 用法。
+- `pytools-core/tests/summary_comments_cli.rs`：新增实际 CLI 回归，覆盖三种视图、历史与 stderr 事件一致、实际引擎/耗时、失败阶段、输出一致和源文件不变。
+- `pytools-core/tests/fixtures/summary_comments/comment_template.xlsx`：由 openpyxl 生成的微型合成批注模板，不含业务数据。
+- `pytools-core/probe/reports/summary_used_range_parity_20261024.json`：记录 PT-6-2 Windows 对拍、事件/历史一致性和 10,000 行日志 on/off 测量。
+- `pytools-core/MIGRATION_INVENTORY.md`：登记日志入口、引擎、对拍、性能测量和验收边界。
+- 本修改记录。
+
+业务与数据流：`summary-comments --template ... <source...>` → `excel-reader::read_workbook`（Calamine 读取值并由 namespace-aware OOXML 补充读取批注元数据）→ Rust 按模板行列/区域/set 批注提取并组装汇总 → `rust_xlsxwriter` 新建 `.xlsx`。未修改输入工作簿；日志不包含单元格原始值。普通用户视图只输出业务步骤，开发者视图输出 JSON 事件，off 不写事件或历史文件。
+
+验证结果：
+- `cargo fmt --package pytools-core -- --check`（WSL，离线）：通过。
+- `cargo test --offline --locked -p pytools-core --test summary_comments_cli --test summary_used_range_error`（WSL）：6/6 通过；含 PT-6-2 CLI 两项及 PT-6-1 回归四项。
+- `cargo build --offline --locked -p pytools-core --bin pytools --target x86_64-pc-windows-gnu`（WSL/MinGW）：通过；Windows 本机运行该目标二进制。
+- Windows PowerShell 启动实际 `summary-comments` CLI；使用原项目 Windows `.venv` 的 PyCode `run_summary_by_comment` 对拍标准标记、重复行标记两场景，每场景 2 个合成源簿、输出 21 行。两场景值/类型/样式/维度/冻结窗格/页面设置/页边距完整投影均精确一致；24 条开发者事件与历史 JSON 完全相同。
+- 10,000 行合成 XLSX，Windows CLI developer/off 各运行 3 次；输出与 Python 完整投影一致，developer/off 墙钟中位数分别为 2,640.29/2,618.42ms（developer +0.84%）。样本量仅每种模式 3 次且运行范围重叠，性能差异结论不确定；没有出现业务输出差异。
+- 集成测试覆盖跳过的 `.xls` 输入未调用 reader、历史不包含合成源簿单元格原值。
+- `git diff --check` 与 `python -m json.tool pytools-core/probe/reports/summary_used_range_parity_20261024.json`：通过。
+
+对拍差异与已知边界：无输出或页面设置差异。原项目 72 份 XLSX/XLSM 中未找到带 PT-6-2 行/列/set 标记的真实业务模板，因此本轮模板和 10,000 行负载均为合成数据。Windows 原生 Cargo 不可用，本轮 Rust 编译由 WSL 完成，Windows GNU CLI 在 PowerShell 运行；Linux glibc 2.28、麒麟 V10/UOS V20、deb、目标平台 Excel 验收未执行。不据此宣称 PT-6-2 整体迁移完成。测试首轮仅因把 CLI 错误文本当 JSON 事件而失败，已修正测试解析并通过复测。
+
+删除文件：无。对拍源和临时输出在系统临时目录；原 Python 项目未修改。
+回滚：可用 `git revert <本轮提交>` 撤回 PT-6-2 日志代码、测试和证据。
+【组件版本】：不升级，当前 0.1.0。

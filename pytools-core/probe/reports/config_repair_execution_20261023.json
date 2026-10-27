@@ -1,0 +1,74 @@
+{
+  "status": "passed_synthetic_and_real_config_execution_parity",
+  "scope": "5-1 existing configuration repair plan and capability-gated execution",
+  "environment": {
+    "python_baseline": "Original PyTools .venv; Windows Python 3.12.10, openpyxl 3.1.5",
+    "rust_cli": "Ubuntu on WSL2 x86_64; rustc 1.99.1, cargo 1.99.1",
+    "openpyxl_worker_runtime": "workspace isolated test venv; openpyxl 3.1.5",
+    "windows_native_rust_validated": false,
+    "kylin_v10_validated": false,
+    "uos_v20_validated": false,
+    "glibc_2_28_validated": false,
+    "offline_deb_validated": false
+  },
+  "python_repair_counts": {
+    "created_sheets": 7,
+    "repaired_sheets": 6
+  },
+  "rust_plan_operations": 258,
+  "comparison": [
+    "sheet order",
+    "cell values",
+    "comment text and author"
+  ],
+  "execution": {
+    "engine": "openpyxl_worker",
+    "candidate_created": true,
+    "temporary_test_capability_only": true,
+    "production_capability_created": false,
+    "default_route_changed": false
+  },
+  "engine_evaluation": {
+    "umya_spreadsheet": {
+      "status": "rejected_for_this_synthetic_operation_batch",
+      "observation": "Python readback of the Umya candidate did not retain expected repaired header comments; parity failed.",
+      "production_capability_created": false
+    },
+    "openpyxl_worker": {
+      "status": "passed_synthetic_and_real_configuration_copy_parity",
+      "selection_is_default": false
+    }
+  },
+  "scenarios": [
+    "wrong headers/comments",
+    "missing sheets and global defaults",
+    "duplicate/blank global keys",
+    "default examples only for empty sheets",
+    "obsolete sheet removal",
+    "rename extra cells",
+    "unrelated user sheet/data/comments preserved"
+  ],
+  "synthetic_input_sha256_unchanged": "865d7b82e176ee4a119be991a21ccfdc51bed52db87efd994fff1999f66e7912",
+  "python_baseline_source_sha256": "c6cd86e5275e63845b48db6029c14e09ee3edc2ec30057047999da244a14a0ab",
+  "production_capability_created": false,
+  "default_route_changed": false,
+  "limitations": [
+    "The real sample is the PyTools configuration workbook, not a business data workbook.",
+    "Value/sheet/comment projections were compared; full preservation of every real OOXML object and target Linux package behavior remains unverified.",
+    "The capability records were generated only for temporary test copies and are not production evidence."
+  ],
+  "real_configuration": {
+    "source": "4.pytools-main/PyCode/config/config.xlsx (read-only; only temporary copies were modified)",
+    "source_sha256_unchanged": "e000c784e85b63b4fc19fd45684aa8729dbd032238d78321fdc9fb4c33cee716",
+    "python_repair_counts": {
+      "created_sheets": 0,
+      "repaired_sheets": 1
+    },
+    "rust_plan_operations": 2,
+    "engine": "openpyxl_worker",
+    "python_rust_projection_equal": true,
+    "rust_input_copy_unchanged": true,
+    "temporary_test_capability_only": true
+  },
+  "overall_production_acceptance": "unverified"
+}

@@ -1,0 +1,29 @@
+时间：2026-10-27 09:56（Asia/Shanghai）
+执行者：Codex
+修改前 HEAD：98769a9
+WIP：修改前 `git status` 干净；保留现有测试/用户文件，只在独立 F 盘目录生成合成测试文件。
+
+目的：为 PT-4-4 增加可复现的原生 ET 正向 CLI 集成回归入口；在无有效 ET 样本时明确保持未验证。
+
+修改文件：
+- `pytools-core/tests/conversion_menu_cli.rs`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- `pytools-core/GPT修改记录/20261027_0956_PT-4-4原生ET正向CLI入口.txt`
+
+实现：
+- 增加 ignored 集成测试，使用 `LO_CONVERT_NATIVE_ET_FIXTURE` 指定合法 ET，通过 `pytools convert-excel --engine com` 验证报告中的 ET 来源格式证据、XLSX 输出可读、源文件未变及输出目录无暂存残留。
+- 合成样本尝试目录位于 `F:\PyToolsRustV2\PT-4-4-ET-20261027\saveas-fallback-fileformat-56`。WPS COM `SaveAs(...,65521)` 后重开报告 `FileFormat=56`；输出已按实测格式改名为 `.xls`，未生成或使用原生 ET 样本。
+- 不修改业务转换算法、sidecar、共享 crates、根 Cargo 文件或只读 Python 源码。PT-4-4 生命周期不变。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --test conversion_menu_cli -j 1 conversion_cli_does_not_publish_xls_payload_mislabeled_as_et -- --ignored --exact`：1/1 通过；实际 WPS COM 拒绝 Excel 8 伪装 ET，源未变且未发布输出。
+- 同一集成测试目标已编译，新增的正向测试未执行（无 `FileFormat=65521` 的 ET 输入）。
+
+未验证项/已知限制：
+- 无合法原生 ET 或真实业务工作簿，未执行正向转换、Python/Rust 输出对拍或格式保真验收。
+- Linux、glibc 2.28、麒麟 V10、统信 UOS V20 和离线 deb 未验证。
+- 后续取得 WPS 可识别 `FileFormat=65521` 的 ET 样本后，可通过设置 `LO_CONVERT_NATIVE_ET_FIXTURE` 显式运行正向测试。
+
+回滚：使用 `git revert` 撤销本次提交；保留此前共享格式校验和 PyTools 安全门控。
+组件版本：不升级（pytools-core 0.1.0）。

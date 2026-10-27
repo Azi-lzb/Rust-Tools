@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.date_parse",
+  "source": "C:/Users/AZI/Desktop/VibeCode/4.pytools-main/PyCode/core/date_parse.py",
+  "shared_vectors": "tests/fixtures/date_parse_cases.json",
+  "counts": {
+    "normalize": 16,
+    "parse": 6,
+    "total": 22
+  },
+  "python_baseline": {
+    "runner": "probe/date_parse_baseline.py with the original PyCode import path",
+    "report": "probe/reports/date_parse_baseline.json",
+    "status": "保留",
+    "passed": 22,
+    "total": 22
+  },
+  "rust": {
+    "command": "cargo test -p pytools-core --offline",
+    "test": "date_parse::tests::matches_shared_python_date_parse_vectors",
+    "status": "保留",
+    "vectors_passed": 22,
+    "vectors_total": 22
+  },
+  "comparison": "Both implementations were checked against the same 22 expected-output vectors.",
+  "limitations": [
+    "This covers the date parsing helper only, not all pytools workflows.",
+    "Vectors are synthetic and do not constitute workbook-template or full-project acceptance."
+  ]
+}

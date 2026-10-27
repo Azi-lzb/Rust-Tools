@@ -1,0 +1,27 @@
+时间：2026-10-27 14:00（本地）
+执行者：Codex
+修改前 commit：7f65921
+修改后 commit：待本地提交
+WIP 状态：本项开始前工作树干净；修改仅涉及 PyTools PT-2-5 去重追加表头匹配及对应迁移清单、测试。
+
+目的：按 V2 业务合同，来源与已有目标表头名称、顺序和列数必须一致。此前比较会 trim 首尾空白，可能把不同列名误判为相同并继续追加；现改为逐列比较完整表头文本，避免错误写入。
+
+修改文件：
+- pytools-core/src/dedup_ops.rs：源表与已有目标表头使用原始单元格文本比较；日期表头沿用现有 ISO 日期投影。
+- pytools-core/tests/dedup_append_execution.rs：增加带首部空格表头的计划级 mismatch 覆盖。
+- pytools-core/tests/dedup_menu_cli.rs：增加真实菜单入口用例，断言 mismatch 被跳过、无成功追加，且源/目标文件字节不变。
+- pytools-core/MIGRATION_INVENTORY.md：记录 PT-2-5 严格匹配行为与验证状态。
+
+组件版本：不升级（收紧既有追加保护条件，不改变配置格式或文件输出契约）。
+
+测试：
+- `cargo test --offline --locked -p pytools-core --test dedup_menu_cli --test dedup_append_execution -j 1 --quiet`：15/15 通过（菜单测试 7/7、追加计划测试 8/8）。
+- `cargo fmt --manifest-path pytools-core/Cargo.toml`：完成；随后进行格式检查。
+- `git diff --check`：通过。
+- 测试目标与临时目录位于 `F:\PyToolsRustV2\cargo-target` 和 `F:\PyToolsRustV2\cargo-temp`。
+
+未执行：真实业务工作簿对拍、Windows 人工打开、Linux/glibc 2.28 与 deb 验收。PT-2-5 仍为“已实现，待 Windows 真实验收”；普通样式差异不作为本项阻塞。
+
+已知问题：源 Python 对“目标多列”采用过宽松兼容行为；本次按已确认的 V2 严格表头合同执行。暂无真实业务文件供人工验收。
+
+回滚：撤销上述 Rust 表头比较改动及对应测试/清单记录，并删除本记录文件；不涉及用户工作簿或配置数据。

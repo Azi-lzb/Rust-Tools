@@ -1,0 +1,25 @@
+时间：2026-10-24 01:34（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：3094615；该提交已推送至 origin/pytools-dev。
+WIP 状态：开始时 pytools-dev 工作树干净且与 origin/pytools-dev 同步。本轮没有修改 DEVELOPMENT_GOAL.md、AGENTS.md、Rules、Audit 或共享 crates。
+
+目的：继续 PT-6-1 变体行为核实，直接比较 NoComPyTools 与 PyCode 在同一合成 XLSX 输入下的结果，记录已有差异到当前机器报告。
+
+修改文件：
+- pytools-core/probe/compare_summary_tools.py：增加 PyCode 与 NoComPyTools 的字段、单元格坐标、合成值/样式及输出维度差异摘要。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录直接变体比较结果。
+- pytools-core/MIGRATION_INVENTORY.md：登记观测到的 NoComPyTools 差异和未确认格式范围。
+- 本修改记录。
+
+结果：两变体输出维度相同，均为 14 行×11 列。NoComPyTools 在汇总!H5 对合成源错误单元格返回空值；PyCode 输出 #DIV/0! 且类型为 error。NoComPyTools 在汇总!E4 日期样式为 yyyy-mm-dd，PyCode 为 yyyy-mm-dd h:mm:ss。差异坐标仅属本轮合成 XLSX。PyCode/Rust 对拍仍通过；未将 NoCom 差异或 XLS/XLSB 能力扩展为生产范围。
+
+验证：
+- python pytools-core/probe/compare_summary_tools.py：通过，Rust CLI 与 PyCode 对拍成功，NoCom/PyCode 差异摘要写入同一报告。
+- 探针确认输入为本地临时合成夹具，并在流程前后核验夹具指纹相等；未读取、复制或修改源 Python 项目中的业务工作簿。
+- 本轮只变更 pytools-core 的 probe、报告、迁移清单和修改记录；未修改生产 Rust 代码和共享接口。
+
+限制：输出差异只代表本轮合成 XLSX；真实业务样本、.xlsm/.xls/.xlsb、麒麟/UOS 和 deb 未验证。NoComPyTools 与 PyCode 的最终功能范围仍待确认。
+
+回滚：通过 git revert <本轮提交> 回滚本轮对拍摘要和记录，不影响已推送的前序 PT-6-1 提交。
+删除文件：无。
+【组件版本】：不升级，当前 0.1.0。

@@ -1,0 +1,15 @@
+功能：PT-4-2 native Excel 按值转换 typed error 失败关闭验证
+基线：pytools-dev HEAD 55b7c6d；只修改 pytools-core。
+
+目的：转换实现拒绝无法保留类型的 Excel error cell，但此前主要依赖内部校验逻辑，缺少真实 CLI 的拒绝码、位置诊断、无输出及输入不变证据。
+
+修改文件：
+- `pytools-core/probe/compare_native_excel_value_conversion.py`：新增 openpyxl 合成 XLSM，写入 `错误!A1` typed `#N/A`，运行 Windows 原生 Rust CLI 并验证失败路径。
+- `pytools-core/probe/reports/native_excel_value_conversion_parity_20261026.json`：记录拒绝结果、失败计数、错误坐标、无输出和源不变。
+- `pytools-core/MIGRATION_INVENTORY.md`：补充该限定证据，文件中的早期未提交条目另行保留，提交时只暂存本轮尾部 hunk。
+
+验证：`py -3.12 pytools-core/probe/compare_native_excel_value_conversion.py` 通过。Rust `convert-excel --engine native` 对 `错误!A1` typed error 返回退出码 2、converted=0/failed=1；诊断含表名及坐标；没有发布目标 XLSX；源文件字节未变。该 probe 还重跑此前合成日期序列、true/false、公式文本、ISO/1904 epoch 拒绝和仓库 VBA 配置 fixture 值投影。
+
+限制：仅验证合成 XLSM 的失败关闭路径，不证明旧 PyCode `.xls` 保真转换的 error-token 对拍；空字符串、公式缓存、legacy `.xls/.xlsb` 的 1904 epoch、真实业务样本、Windows 原生文件选择器、glibc 2.28、麒麟/UOS 和离线 deb 仍未验收。PT-4-2 整体继续未验收。本轮未修改 Rust 生产代码。
+
+回滚：仅回退本轮 probe、机器报告和迁移清单新增记录；保留已有失败关闭修复及其他工作树 WIP。

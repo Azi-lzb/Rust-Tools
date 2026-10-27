@@ -1,0 +1,89 @@
+{
+  "feature_id": "PT-6-1",
+  "date": "2026-10-24",
+  "status": "passed_windows_native_python_rust_cli_parity",
+  "execution_environment": {
+    "python_sys_platform": "win32",
+    "rust_cli_host": "Windows native MSVC x86_64-pc-windows-msvc",
+    "rust_cli_executable": "cargo test built native MSVC debug pytools.exe"
+  },
+  "entrypoint": "pytools summary-used-range",
+  "real_project_xlsx": {
+    "source_workbooks": 13,
+    "source_sheets": 96,
+    "source_used_range_rows": 203580,
+    "summary_rows": 203580,
+    "batch_count": 4,
+    "python_rust_full_projection": "exact_in_all_batches",
+    "comparison": {
+      "cell_values_and_types": "exact",
+      "populated_cell_styles": "exact",
+      "worksheet_names_and_dimensions": "exact",
+      "freeze_panes_and_header_bold": "exact",
+      "formula_merge_name_and_page_properties": "exact"
+    },
+    "batches": [
+      {
+        "workbooks": 4,
+        "summary_rows": 1956,
+        "ooxml_error_cells_patched": 0,
+        "python_rust_full_projection": "exact"
+      },
+      {
+        "workbooks": 1,
+        "summary_rows": 7462,
+        "ooxml_error_cells_patched": 1212,
+        "python_rust_full_projection": "exact"
+      },
+      {
+        "workbooks": 4,
+        "summary_rows": 5797,
+        "ooxml_error_cells_patched": 0,
+        "python_rust_full_projection": "exact"
+      },
+      {
+        "workbooks": 4,
+        "summary_rows": 188365,
+        "ooxml_error_cells_patched": 0,
+        "python_rust_full_projection": "exact"
+      }
+    ],
+    "actual_engines": [
+      "OOXML Patch",
+      "calamine",
+      "excel-reader::read_xlsx_worksheet_extents",
+      "rust_xlsxwriter"
+    ],
+    "developer_event_counts": [
+      26,
+      14,
+      27,
+      63
+    ],
+    "developer_event_history_matches": true,
+    "source_integrity_check": "passed"
+  },
+  "synthetic_cli_suite": {
+    "status": "passed_synthetic_cli_parity",
+    "coverage": [
+      "XLSX and XLSM behavior",
+      "VBA-enabled test fixture",
+      "Excel error tokens including literal #DATA!",
+      "input extension filtering",
+      "summary-comments integration",
+      "duplicate comment markers"
+    ],
+    "unknown_error_token": {
+      "status": "passed",
+      "output_value": "#DATA!",
+      "output_type": "string",
+      "developer_history_exposes_cell_token": false,
+      "event_stream_matches_saved_history": true
+    }
+  },
+  "limitations": [
+    "Original-project XLSX samples only; no production default or broad format acceptance inferred.",
+    "Original PyTools VBA-bearing XLSM, XLS/XLSB, Kylin/UOS installation, deb packaging and offline delivery remain unvalidated.",
+    "Run-time measurements are omitted; no performance comparison is claimed."
+  ]
+}

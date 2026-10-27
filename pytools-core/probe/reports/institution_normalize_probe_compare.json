@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "rust_dump": "pytools-core/probe/reports/institution_normalize_rust_dump.json",
+  "baseline_dump": "pytools-core/probe/reports/institution_normalize_baseline.json",
+  "overall_status": "保留",
+  "metrics": [
+    {
+      "item": "sheet_names",
+      "status": "保留",
+      "matched": 4,
+      "total": 4,
+      "pass_rate": 1.0,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "values",
+      "status": "保留",
+      "matched": 20,
+      "total": 20,
+      "pass_rate": 1.0,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "formula_text",
+      "status": "保留",
+      "matched": 1,
+      "total": 1,
+      "pass_rate": 1.0,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "merged_ranges",
+      "status": "保留",
+      "matched": 1,
+      "total": 1,
+      "pass_rate": 1.0,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "comments",
+      "status": "保留",
+      "matched": 1,
+      "total": 1,
+      "pass_rate": 1.0,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "conditional_formatting",
+      "status": "不适用",
+      "matched": 0,
+      "total": 0,
+      "pass_rate": null,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    },
+    {
+      "item": "data_validations",
+      "status": "不适用",
+      "matched": 0,
+      "total": 0,
+      "pass_rate": null,
+      "missing_in_rust": [],
+      "extra_in_rust": [],
+      "changed": [],
+      "note": null
+    }
+  ]
+}

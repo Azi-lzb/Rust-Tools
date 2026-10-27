@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.config_task_loaders",
+  "source": "PyCode/core/config_xlsx.py",
+  "source_python_version": "3.12.10",
+  "fixture_generator": "openpyxl synthetic workbooks from shared JSON vectors",
+  "source_functions": [
+    "load_dedup_tasks",
+    "load_print_tasks",
+    "load_extract_tasks",
+    "load_foreign_banks",
+    "load_institution_mapping"
+  ],
+  "shared_vectors": "tests/fixtures/config_task_loader_cases.json",
+  "workbooks": [
+    "tests/fixtures/config_task_loaders.xlsx",
+    "tests/fixtures/config_task_loaders_legacy.xlsx",
+    "tests/fixtures/config_task_loaders_missing.xlsx"
+  ],
+  "python_baseline": {
+    "status": "保留",
+    "passed": 11,
+    "total": 11
+  },
+  "result": {
+    "dedup_tasks": [
+      {
+        "row_no": 2,
+        "enabled": true,
+        "task_name": "main task",
+        "source_wb": "$BASE/input/source.xlsx",
+        "source_ws": "Data",
+        "key_cols": [
+          1,
+          2,
+          3,
+          2
+        ],
+        "target_wb": "$BASE/output/target.xlsx",
+        "target_ws": "Out",
+        "write_mode": "append"
+      },
+      {
+        "row_no": 3,
+        "enabled": false,
+        "task_name": "disabled",
+        "source_wb": null,
+        "source_ws": "",
+        "key_cols": [],
+        "target_wb": null,
+        "target_ws": "",
+        "write_mode": ""
+      }
+    ],
+    "print_tasks": [
+      {
+        "row_no": 2,
+        "enabled": true,
+        "mode": 2,
+        "source_wb": "$BASE/input/source.xlsx",
+        "source_ws": "Data",
+        "source_ranges": "A1:B2",
+        "target_wb": "$BASE/output/print.xlsx",
+        "target_ws": "Printed",
+        "fit_wide": 1,
+        "fit_tall": 0,
+        "orientation": "横向",
+        "center_h": true,
+        "center_v": false,
+        "drop_comments": true,
+        "hide_zero": true,
+        "remark": "fixture print"
+      },
+      {
+        "row_no": 3,
+        "enabled": false,
+        "mode": 3,
+        "source_wb": null,
+        "source_ws": "",
+        "source_ranges": "",
+        "target_wb": null,
+        "target_ws": "",
+        "fit_wide": 1,
+        "fit_tall": 1,
+        "orientation": "",
+        "center_h": false,
+        "center_v": false,
+        "drop_comments": false,
+        "hide_zero": false,
+        "remark": "disabled print"
+      }
+    ],
+    "extract_tasks": [
+      {
+        "row_no": 4,
+        "workbook_keywords": "县区;支行",
+        "sheet_keywords": "数据",
+        "exclude_keywords": "汇总",
+        "area_spec": "A1:C9",
+        "stitch_mode": "horizontal",
+        "output_folder": "out",
+        "output_name": "name.xlsx",
+        "remark": "fixture extract"
+      }
+    ],
+    "foreign_banks": [
+      "float-flag",
+      "mapped1",
+      "nameless"
+    ],
+    "institution_mapping": {
+      "raw1": "mapped-new",
+      "raw2": "mapped2",
+      "raw3": "mapped3",
+      "raw5": "float-flag"
+    },
+    "legacy_dedup_tasks": [
+      {
+        "row_no": 2,
+        "enabled": true,
+        "task_name": "",
+        "source_wb": "$BASE/legacy/source.xlsx",
+        "source_ws": "Data",
+        "key_cols": [
+          2,
+          3
+        ],
+        "target_wb": "$BASE/legacy/target.xlsx",
+        "target_ws": "Out",
+        "write_mode": ""
+      }
+    ],
+    "missing_sheets": {
+      "dedup_tasks": [],
+      "print_tasks": [],
+      "extract_tasks": [],
+      "foreign_banks": [],
+      "institution_mapping": {}
+    }
+  },
+  "limitations": [
+    "Synthetic configuration workbooks only; real user configuration and consuming business workflows remain unverified.",
+    "This report covers configuration loading, not print rendering or workbook de-duplication execution."
+  ]
+}

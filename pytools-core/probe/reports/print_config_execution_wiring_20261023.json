@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.print_config.execution_wiring",
+  "date": "2026-10-23",
+  "status": "implementation_pending_validation",
+  "changes": [
+    {
+      "cli": "print-comment-plan",
+      "capability_execution": true,
+      "plan_output_option": true
+    },
+    {
+      "cli": "print-config-plan",
+      "capability_execution": true,
+      "plan_files": true
+    },
+    {
+      "cli": "config-repair-plan",
+      "capability_execution": true,
+      "plan_output_option": true
+    }
+  ],
+  "safety": {
+    "default": "plan only; no unverified editor route is selected",
+    "execution": "requires --capabilities and --platform and delegates to ExcelModifier",
+    "pdf_rendering_or_export": "not implemented or added"
+  },
+  "unvalidated_requirements": [
+    "Python parity for print 3-1 through 3-4 and configuration repair",
+    "actual print-copy preservation for styles, comments, merges, dimensions and page setup",
+    "configuration repair workbook structure/defaults/error behavior",
+    "Windows native and Kylin/UOS glibc 2.28 deb execution"
+  ],
+  "tests": "deferred until the requested pytools implementation batch is ready"
+}

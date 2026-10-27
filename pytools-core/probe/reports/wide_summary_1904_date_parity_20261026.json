@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_1904_calendar_date_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_python_rust_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "rust_entry": "pytools menu -> timeline -> wide summary (no row suffix)",
+  "input": {
+    "format": "xlsx",
+    "kind": "synthetic",
+    "date_system": "1904",
+    "case": "calendar date in a date-formatted summary value cell"
+  },
+  "comparison": {
+    "workbook_projection": "exact",
+    "date_epoch_projection_event": {
+      "phase": "calendar_date_projection",
+      "status": "completed",
+      "actual_engine": "calamine",
+      "stage_elapsed_ms_recorded": true
+    },
+    "source_and_configuration_unchanged": true,
+    "candidate_and_target_projection": "exact"
+  },
+  "result": {
+    "row_suffix": false,
+    "cached_formula_value_projected": false,
+    "source_date_system": "1904",
+    "calendar_date_projection": {
+      "phase": "calendar_date_projection",
+      "status": "completed",
+      "actual_engine": "calamine",
+      "stage_elapsed_ms_recorded": true
+    },
+    "blank_data_date_format": "not_applicable",
+    "summary_status": "passed",
+    "target_append_status": "passed",
+    "summary_sheet_names": [
+      "WideRule"
+    ],
+    "summary_dimensions": [
+      [
+        4,
+        9
+      ]
+    ],
+    "summary_cell_count": 36,
+    "summary_effective_styles": "exact",
+    "entry_route": "pytools menu -> 1 timeline -> 3 row-suffix or 4 no-suffix -> confirm",
+    "target_commit_operation": "created",
+    "target_candidate_matches_committed_bytes": true,
+    "target_execution_history": {
+      "phase": "target_append_execute",
+      "status": "succeeded",
+      "actual_engine": "rust_xlsxwriter",
+      "stage_elapsed_ms_recorded": true
+    },
+    "target_execution_summary": {
+      "appended_rows": 2,
+      "duplicate_rows_filtered": 1,
+      "elapsed_ms": 43,
+      "function": "append_target_execute",
+      "stages": [
+        {
+          "elapsed_ms": 27,
+          "engine": "rust_xlsxwriter",
+          "name": "new_workbook_write_and_reopen",
+          "status": "succeeded"
+        },
+        {
+          "elapsed_ms": 15,
+          "name": "target_commit",
+          "status": "succeeded"
+        }
+      ],
+      "status": "succeeded",
+      "task_skipped_count": 0,
+      "task_success_count": 1
+    }
+  },
+  "safety": {
+    "source_unchanged": true,
+    "configuration_unchanged": true,
+    "outputs_temporary_only": true,
+    "report_contains_input_filenames_or_cell_values": false
+  },
+  "limitations": [
+    "Synthetic input only; a sanitized real wide-summary workbook is still required for business acceptance.",
+    "This case verifies a calendar-date metric cell; sub-day serials (including the 1904 epoch boundary), time-only cells, and elapsed durations remain separately scoped.",
+    "Linux targets and offline deb acceptance were not tested."
+  ]
+}

@@ -1,0 +1,21 @@
+时间：2026-10-23 15:52（Asia/Shanghai）
+执行者：Codex
+修改前/后 commit：workspace `main` 尚无首次提交；无法记录 commit ID。
+WIP 状态：`pytools-core/GPT修改记录/` 未发现 WIP 文件；workspace `git ls-files` 为 0，既有内容整体未跟踪。本轮未 stage、commit 或 push。原始 Python 项目只读。
+
+目的：对用户选定的去重菜单 2-1 至 2-6 建立合成 Python/Rust 语义对拍，并修复追加跨任务键列缓存遗漏。
+
+修改文件：
+- `pytools-core/src/dedup_ops.rs`
+- `pytools-core/probe/compare_dedup_tools.py`
+- `pytools-core/probe/reports/dedup_parity_20261023.json`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- 本修改记录。
+
+验证：`cargo fmt --all`、`cargo check -p pytools-core --message-format short` 通过；`compare_dedup_tools.py` 六项合成对拍通过。批注查重 3 行、配置查重 5 行、批注删除 3 行、配置删除 4 行、追加 7 行并过滤 7 行、预校验 4/1/2。追加测试包含同一目标工作表按不同键列连续追加，Rust 修复后候选数据和值与 Python 一致。
+
+限制：批注标记与删除仍是计划语义对拍；删除操作由 probe 应用于临时副本，不是已验收的生产 `ExcelModifier` 执行。追加只创建新目标候选；既有目标仍受能力证据门控。未用真实模板/业务数据，未验证日志、失败恢复、其他输入格式、Windows 发布构建、麒麟/UOS 与 deb。
+
+回滚：可单独恢复 `dedup_ops.rs` 的本轮缓存变更并移除新增 probe/报告/记录，再把清单去重小节恢复为待 Python 对拍；workspace 无 Git 首次提交，不能通过 commit 回滚。
+删除清单：无。
+【组件版本】：不升级；现有版本 `0.1.0`。

@@ -1,0 +1,30 @@
+时间：2026-10-27 09:44（Asia/Shanghai）
+执行者：Codex
+修改前 commit：f359056
+修改后 commit：本次修改记录提交
+WIP：修改前仅有 `pytools-core/src/conversion.rs` 未提交改动；无其他 WIP。
+
+目的：让 PyTools 仅在共享 sidecar 明确报告 WPS 原生 ET 数值格式时发布 ET 转换候选。
+
+修改文件：
+- `pytools-core/src/conversion.rs`
+- `pytools-core/MIGRATION_INVENTORY.md`
+- `pytools-core/GPT修改记录/20261027_0944_PT-4-4ET数值格式证据门槛.txt`
+
+逻辑变化：
+- `.et` 转换报告必须同时满足 `status=converted`、`engine=com`、`source_format_verified=true`、`source_format="et"`、`source_file_format=65521`。
+- 缺少数值格式字段、格式码为 Excel 8 `56`、报告引擎为 LibreOffice 或报告失败时均拒绝发布。
+- 不修改 sidecar、共享 crate、Cargo manifest/lock、配置文件或 Python 源项目；不升级产品版本。
+
+测试结果：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- `cargo test --offline --locked -p pytools-core --lib et_sidecar_must_explicitly_verify_native_source_format -j 1`：1/1 通过。
+- 显式运行 `cargo test --offline --locked -p pytools-core --test conversion_menu_cli conversion_cli_does_not_publish_xls_payload_mislabeled_as_et -j 1 -- --ignored --exact --nocapture`：1/1 通过，真实 WPS COM 拒绝 XLS 改名 `.et`；源字节不变、输出不存在。
+
+未执行项/已知问题：
+- 未取得合法原生 ET 样本，未验收正向转换和输出保真，也未进行 Python/Rust 正向对拍。
+- Linux、glibc 2.28、麒麟 V10、统信 UOS V20 和离线 deb 未验证。
+
+回滚：以 `git revert` 回滚本次 PyTools 提交；不回退 main 的共享 ET 修复提交。
+
+【组件版本】：不升级（pytools-core 0.1.0）。

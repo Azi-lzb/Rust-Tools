@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.sheet_extract_helpers",
+  "source_project": "py_statistics_tools/PyCode",
+  "source_module": "PyCode/core/feature_1_6_extract_sheets.py",
+  "source_baseline": "probe/reports/sheet_extract_python_baseline.json",
+  "rust_test": "tests/sheet_extract_parity.rs::extraction_helpers_match_python_baseline_vectors",
+  "source_python_version": "3.12.10",
+  "status": "保留（局部规则逻辑）",
+  "parity": {
+    "groups": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "items": [
+    {
+      "item": "区域文本规范化、索引解析及工作簿关键字分组",
+      "status": "保留"
+    },
+    {
+      "item": "工作簿与工作表匹配、排除词和精确表名优先",
+      "status": "保留"
+    },
+    {
+      "item": "单元格、行、列和整表区域解析",
+      "status": "保留"
+    },
+    {
+      "item": "多区域提取、横向拼接、纵向追加和非法范围处理",
+      "status": "保留"
+    },
+    {
+      "item": "空行列压缩、目标工作表命名和输出路径扩展名",
+      "status": "保留"
+    },
+    {
+      "item": "源文件发现、xlsx 读取、结果簿写入和追加",
+      "status": "未验证"
+    },
+    {
+      "item": "整表样式、合并、行高列宽复制",
+      "status": "未验证"
+    },
+    {
+      "item": "真实模板、xls/xlsm/xlsb/csv 输入及目标 Linux 行为",
+      "status": "未验证"
+    },
+    {
+      "item": "运行性能",
+      "status": "未测量"
+    }
+  ],
+  "verification": {
+    "python_command": "<pytools-main>/.venv/Scripts/python.exe probe/sheet_extract_baseline.py --source-root <pytools-main>",
+    "python_result": "通过；源项目 helper 为 11 个共享向量组生成基线",
+    "rust_command": "cargo fmt --all && cargo test -p pytools-core --locked",
+    "rust_result": "通过；pytools-core 9 项单测及 2 项配置/提取对拍集成测试通过"
+  },
+  "limitations": [
+    "本结果验证纯规则 helper，不代表 `run_extract_sheets` 文件工作流已迁移。",
+    "整表样式复制和输出文件持久化未包含在本对拍范围。",
+    "合成向量不能替代真实脱敏工作簿和目标 Linux 环境验收。"
+  ]
+}

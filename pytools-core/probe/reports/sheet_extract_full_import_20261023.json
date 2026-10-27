@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.sheet_extract.full_sheet_import_candidate",
+  "date": "2026-10-23",
+  "source": "PyCode/core/feature_1_6_extract_sheets.py::_copy_full_sheet_with_style; source tree read-only",
+  "implementation": {
+    "reader": "shared excel-reader calamine values plus namespace-aware OOXML worksheet extent",
+    "modifier": "ExcelEditPlan ImportRange via umya-spreadsheet candidate and outline OOXML patch",
+    "formats": ["xlsx"],
+    "production_route": "not promoted; matching capability evidence remains mandatory",
+    "default_route_changed": false
+  },
+  "candidate_behavior": [
+    "copies ordinary data-only values and cached formula results",
+    "copies full cell styles and merged regions",
+    "can copy row/column dimensions, hidden state and outline levels beyond the cell rectangle",
+    "can materialize blank coordinates within the imported rectangle",
+    "rejects workbooks containing package parts not covered by the preservation inventory"
+  ],
+  "validation": {
+    "cargo_fmt_all": "passed",
+    "cargo_check_workspace": "passed",
+    "cargo_test_workspace": "passed",
+    "source_python_tests": {
+      "command_mode": "PYTHONDONTWRITEBYTECODE=1; pytest -q -p no:cacheprovider PyCode/tests",
+      "result": "passed",
+      "passed": 78,
+      "failed": 0,
+      "warnings": 3,
+      "warning_kind": "pandas FutureWarning",
+      "meaning": "baseline source tests only; not Python-vs-Rust workbook parity"
+    },
+    "synthetic_backend_checks": [
+      "cached formula result imported as a value when copy_formulas is false",
+      "cell style preserved",
+      "merge preserved",
+      "row height/hidden and column width/hidden preserved beyond data extent",
+      "worksheet extent includes stored styled blanks and merge coordinates, not only the dimension hint",
+      "combined column-definition ranges are split safely for outline patch"
+    ]
+  },
+  "follow_up_parity_report": "probe/reports/sheet_extract_full_import_parity_20261023.json",
+  "follow_up_semantic_property_parity": {
+    "result": "passed",
+    "differences": 0,
+    "oracle": "source worksheet properties the legacy helper copies",
+    "legacy_helper_output_styles_readable": false,
+    "legacy_helper_output_error": "openpyxl raises IndexError: list index out of range when reading copied cell.font from the helper-generated styled cross-workbook output"
+  },
+  "not_validated": [
+    "file-level Python/openpyxl vs Rust output parity for full-sheet extraction",
+    "real business workbooks and real configurations",
+    "comments, external relationships and every package preservation item",
+    "append-to-existing-output behavior",
+    "XLS, XLSM, XLSB, ET, Windows native and target Linux/deb",
+    "production capability registration"
+  ],
+  "source_project_modified": false,
+  "limitations": "The direct backend integration test uses a test-only Unverified capability to inspect the candidate implementation; the production router rejects Unverified capabilities."
+}

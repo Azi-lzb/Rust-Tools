@@ -1,0 +1,24 @@
+时间：2026-10-25 14:25（Asia/Shanghai）
+执行者：ZCode（pytools-dev）
+修改前 commit：a7796a8（与 origin/pytools-dev 同步）；远端 origin/main 最新 7ac87d6。
+WIP：合并前工作区干净。
+
+目的：按 DEVELOPMENT_GOAL.md 第十六章与目标第五节，同步 main 侧共享 excel-editor 变更到 pytools-dev 并回归，不修改任何业务代码或共享 crate。
+
+同步内容（origin/main 自分叉点以来的 3 个提交，仅触及 crates/excel-editor 与 workspace 文档）：
+- `7ac87d6` feat(excel-editor): implement umya freeze-pane and AutoFilter edits
+- `07196d5` fix(excel-editor): make engine-neutral sheet-order validation move-aware
+- `bbd922d` feat(excel-editor): add MoveSheet and remap sheet-index metadata
+
+操作：`git merge origin/main --no-edit`，合并干净无冲突（双方文件集不相交；pytools-dev 侧对共享 crates 无未同步修改）。合并提交 `04cd008`。
+
+回归验证（Windows 原生）：
+- `cargo test --offline --locked -p pytools-core`：42 项结果全部 0 failed——main 侧 umya 冻结窗格/自动筛选/MoveSheet 编辑与校验变更不影响任何 PyTools 既有行为（含全部 ExcelModifier 执行路径测试）。
+- `cargo test --offline --locked -p excel-editor`：全部通过（含新并入的 freeze_panes_auto_filter、move_sheet、sheet_index_metadata 测试），合并后 workspace 一致。
+
+影响与未完成项：pytools-dev 现包含 main 最新共享基线；无业务行为变化。真实样本、NoCom 变体与生产 capability 决策、deb 打包与目标实机验收等外部阻塞不变。纯同步轮次，不升级组件版本。
+
+敏感内容检查：无新增数据文件。
+删除清单：无。
+回滚提示：`git revert -m 1 04cd008` 可撤销合并；正常情况下应保留同步基线。
+【组件版本】：纯同步，不升级。

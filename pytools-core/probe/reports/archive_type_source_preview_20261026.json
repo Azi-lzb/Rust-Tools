@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "feature_id": "PT-8-2",
+  "command": "archive-type-preview",
+  "status": "windows_local_source_preview_parity_pass_with_blank_cell_marker_difference",
+  "validation_scope": {
+    "input": "original PyTools xlsx directory, read-only; not an approved sanitized sample",
+    "input_files": 149,
+    "config": "original PyTools config.xlsx, read-only",
+    "outputs": "temporary directory"
+  },
+  "python": {
+    "entry": "PyCode.core.convert_33_34_35_37.run_archive_by_type_preview",
+    "files": 149,
+    "invalid": 0,
+    "planned": 149,
+    "rules": 4,
+    "skipped_extensions": 0
+  },
+  "rust": {
+    "entry": "pytools menu → archive menu option 2 (manual recursive-directory path)",
+    "files": 149,
+    "invalid": 0,
+    "planned": 149,
+    "rules": 4,
+    "skipped_extensions": 0
+  },
+  "comparison": {
+    "row_values_order_and_target_paths_equal_after_temp_root_normalization": true,
+    "workbook_sheet_names": [
+      "归档计划"
+    ],
+    "workbook_dimensions": {
+      "rows": 150,
+      "columns": 8
+    },
+    "nonempty_cell_types_equal": true,
+    "blank_note_cell_marker_mismatches": 147,
+    "low_level_cell_marker_parity": false,
+    "header_style_effectively_equal_after_black_color_normalization": true,
+    "page_margins_equal": true,
+    "portrait_orientation_semantically_equal": true,
+    "source_files_and_config_unchanged": true
+  },
+  "limitations": [
+    "Python emitted 147 explicit inlineStr empty note cells while Rust omitted them; both read back as blank, but low-level OOXML cell-marker parity is not met.",
+    "Python leaves default portrait orientation implicit; Rust writes portrait explicitly.",
+    "The local source sample is not an approved sanitized sample; this is investigation evidence and does not close real-sample acceptance.",
+    "Native file-picker UI was not manually exercised; only the manual path flow was used.",
+    "glibc 2.28, Kylin V10, UOS V20, and offline deb acceptance remain unverified."
+  ]
+}

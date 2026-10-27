@@ -1,0 +1,32 @@
+【本轮范围】
+- 按 pytools-core/MIGRATION_INVENTORY.md 的源入口，迁移 PyCode.core.convert_33_34_35_37.run_batch_rename_33（菜单 3-3：批量重命名文件）。
+- 只读源项目：C:\Users\AZI\Desktop\VibeCode\4.pytools-main。未在源项目写入、改名或删除任何文件。
+- 生产实现为 Rust。新增的 Python 文件仅是 pytools-core/probe 下的合成 fixture 生成器和只读 Python 对拍脚本，不进入 Cargo 依赖、二进制或运行路径。
+
+【实现文件】
+- pytools-core/src/batch_rename.rs：通过共享 excel-reader/Calamine 读取“重命名配置”；按配置插入顺序执行简称子串匹配、全称/代码映射和日期/报表名组合；支持显式文件或目录路径、同名跳过、缺项/缺文件跳过、目标重名编号和逐项结果。
+- pytools-core/src/lib.rs：导出业务模块。
+- pytools-core/src/bin/pytools.rs：新增 `rename-batch --config ... [--log-dir ...] [<file-or-directory>...]` 命令、JSON 结果和时间戳日志。
+- pytools-core/tests/batch_rename_parity.rs 与 tests/fixtures/batch_rename_{cases.json,config.xlsx}：API/CLI 合成回归。
+- pytools-core/probe/make_batch_rename_fixture.py、probe/batch_rename_baseline.py、probe/reports/batch_rename_python_baseline.json：只读 Python 基线与 fixture 工具。
+- probe/reports/batch_rename_parity.json、probe/reports/batch_rename_real_config_smoke.json：机器可读对拍与真实配置窄范围 smoke 摘要。
+- 更新 pytools-core/README.md、MIGRATION_INVENTORY.md，登记实现状态和限制。
+
+【行为与测试】
+- 源规则：配置工作表“重命名配置”按行构造简称→全称、全称→代码、键→值映射；重复键覆盖值但保留首次插入顺序；文件名以大小写不敏感子串命中首个简称；目标名为“数据日期 代码 全称 报表名称 + 原扩展名”；目标已存在时尝试 `_1`、`_2` 等；文件与目录都由 OS rename 处理。
+- Python 基线：Python 3.12.10、pandas 2.2.3、openpyxl 3.1.5；同一合成配置/路径场景结果为改名 3、跳过 4。最终文件/目录名、目录标记内容、占用目标内容写入 `probe/reports/batch_rename_python_baseline.json`。fixture/config 前后 SHA-256 相同。
+- 源项目既有聚焦测试：4/4 通过，覆盖普通改名与 Sheet 重命名调用关系、必要配置缺失、映射/碰撞/跳过以及 OS 改名错误。
+- Rust `cargo test -p pytools-core`：54 项通过，其中本次新增 2 项模块单测、3 项 API/CLI 集成测试；验证映射顺序、跨列坐标、Python 基线目录结果、日志、原文件字节与冲突目标不变、缺少配置工作表时不改输入。
+- 原只读 `PyCode/config/config.xlsx` 已由 Rust CLI 以空路径列表读取成功（ok=0、skip=0），证明真实配置能通过本功能必需项校验；此空输入运行没有改动真实文件。
+- 用原只读配置中的一个有效映射将临时目录中的合成文件执行改名，成功改名 1 项、跳过 0 项；改名文件字节相同，源配置 SHA-256 前后不变。摘要见 `probe/reports/batch_rename_real_config_smoke.json`。该 smoke test 不读取、改动或提交真实业务文件。
+- Windows 11 x64 开发机通过 WSL Ubuntu 的 Rust 1.99.1 构建/测试；本轮未验证 Windows 原生 Rust 二进制、麒麟/UOS、glibc 2.28 或 deb。
+
+【未完成与风险】
+- 此实现是 3-3 的 Rust CLI 候选，不代表完整 pytools 功能迁移或旧 UI 全面迁移；输入路径由用户明确提供，尚无目录发现流程。
+- 未对真实业务文件执行改名；真实配置与实际文件名的总体命中率、跨平台路径/占用竞争、异常 ACL/锁定行为、目标 Linux 文件系统和性能未验证。
+- MIGRATION_INVENTORY 中 3-3 总体状态仍为“未验证”；只有本报告所述窄切片有合成对拍及真实配置读取证据。
+
+【依赖、版本与 Git】
+- 未改 Cargo.toml、Cargo.lock、生产路由、sidecar 或产品版本；没有 Python/Go 生产依赖。
+- 未执行 commit/push。当前 workspace 的 `main` 分支没有提交，`git status` 显示现有仓库内容整体为未跟踪；本轮新增/修改留在工作区供审阅。根 AGENTS.md 要求未经明确请求不得提交或推送。
+- 回退：删除本记录列出的本轮 Rust 文件/测试 fixture/基线脚本与报告，并还原 README/MIGRATION_INVENTORY 文本即可；源 Python 项目不需回滚。

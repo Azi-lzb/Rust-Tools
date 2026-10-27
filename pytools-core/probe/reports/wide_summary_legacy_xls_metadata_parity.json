@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary.legacy_xls_metadata_parity",
+  "date": "2026-10-26",
+  "status": "passed_synthetic_python_rust_skip_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "rust_entry": "Windows-native pytools CLI wide-summary / wide-summary-row-suffix",
+  "input": {
+    "format": "xls",
+    "kind": "synthetic smoke workbook",
+    "fixture": "pytools-core/tests/fixtures/timeline/wide_summary_legacy.xls",
+    "sheet": "Data",
+    "dimensions": [
+      2,
+      2
+    ]
+  },
+  "comparison": {
+    "summary_output": "both implementations returned no summary for this smoke fixture",
+    "rust_input_processing": "one input completed, one rule sheet matched, zero extractable wide cells",
+    "elapsed_duration_metadata": "explicitly skipped for BIFF .xls; format classification remains unverified",
+    "source_unchanged": true,
+    "cases": [
+      {
+        "entry": "wide-summary",
+        "python_summary": "none",
+        "rust_summary": "none",
+        "python_cells": 0,
+        "rust_matched_sheets": 1,
+        "rust_extracted_cells": 0,
+        "rust_completed_inputs": 1,
+        "rust_failed_inputs": 0,
+        "metadata_event": "skipped",
+        "source_unchanged": true
+      },
+      {
+        "entry": "wide-summary-row-suffix",
+        "python_summary": "none",
+        "rust_summary": "none",
+        "python_cells": 0,
+        "rust_matched_sheets": 1,
+        "rust_extracted_cells": 0,
+        "rust_completed_inputs": 1,
+        "rust_failed_inputs": 0,
+        "metadata_event": "skipped",
+        "source_unchanged": true
+      }
+    ]
+  },
+  "limitations": [
+    "The synthetic smoke XLS contains no extractable wide data cells; this verifies the metadata failure regression and no-output parity, not a nonempty XLS summary.",
+    "Real business workbooks and XLS elapsed-time/date formats remain unverified.",
+    "This does not change the XLS production capability or claim full PT-1-3/PT-1-4 format acceptance."
+  ]
+}

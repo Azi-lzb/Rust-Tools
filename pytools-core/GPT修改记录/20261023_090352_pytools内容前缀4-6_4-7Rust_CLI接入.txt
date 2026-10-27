@@ -1,0 +1,41 @@
+时间：2026-10-23 09:03:52（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace 尚无首次提交）
+修改后 commit：无
+WIP 状态：workspace 文件仍为未跟踪初始化内容；已先检查 `git status` 和 pytools 记录目录，无 WIP 文件；保留已有内容，没有清理或覆盖其他工作。
+
+目的：将既有 4-6“按内容添加前缀”和 4-7“按内容取消前缀” Rust 候选接入纯 Rust `pytools` CLI，并直接对启动后的产品二进制做 Python 基线对拍。
+
+修改文件：
+- `pytools-core/src/bin/pytools.rs`：新增 `rename-by-content`、`unrename-by-content` 命令，接既有 Rust API，解析 `--config` 和显式文件列表并输出 JSON 报告。
+- `pytools-core/tests/content_rename_46_parity.rs`：增加 4-6 CLI 端到端测试，断言统计、最终文件名集合、改名后工作簿字节和冲突目标内容。
+- `pytools-core/tests/content_unrename_47_parity.rs`：增加 4-7 主场景及缺少旧排序配置工作表场景的 CLI 测试，断言基线统计、最终文件集合和文件字节。
+- `pytools-core/probe/reports/content_rename_46_parity.json`、`content_unrename_47_parity.json`：记录 CLI 接入状态、命令和当前 Rust 验证结果，并保留未验证范围。
+- `pytools-core/MIGRATION_INVENTORY.md`、`pytools-core/README.md`：更新命令、行为、对拍范围和限制。
+- `PYTHON_EXCEL_OPERATION_INVENTORY.md`、`EXCEL_ENGINE_ARCHITECTURE.md`：同步 4-6/4-7 的 CLI 状态和 2026-10-23 验证数据。
+- 本记录。
+
+迁移范围：
+- `pytools rename-by-content --config <workbook.xlsx> <file>...`
+- `pytools unrename-by-content --config <workbook.xlsx> <file>...`
+- 命令使用现有共享 Calamine 读取配置和 `.xlsx/.xlsm` 指定内容单元格；文件系统改名不覆盖目标，不保存或重写工作簿。输出为 stdout JSON，不新增 Python、Go、Office/LO/COM 运行依赖。
+- 候选仅支持当前已对拍的输入范围。原 GUI 菜单/dispatcher、产品默认路由和 Excel 引擎选择未改变。
+
+对拍及验证：
+- 4-6 合成场景 12 个路径，5 次改名、7 次跳过；CLI JSON 统计和最终文件名集合匹配已有只读 Python 基线，测试检查输入工作簿字节不变和已占用目标未被覆盖。专项集成测试 2/2 通过。
+- 4-7 主场景 13 个路径（改名 8、跳过 5）；缺少旧排序配置 sheet 场景 2 个路径（改名 1、跳过 1）。CLI JSON 统计和最终目录文件集合匹配已有 Python 基线，测试检查改名文件字节未变。专项集成测试 4/4 通过。
+- 在 WSL Ubuntu 执行 `cargo fmt --all -- --check`、`cargo test --workspace --locked`、`cargo check --workspace --locked`：格式检查和检查命令通过，workspace 121 个单元/集成测试通过、0 失败，doc-tests 0 项；pytools-core 共 49 项。
+- `cargo run -q -p pytools-core --bin pytools -- rename-by-content --help` 和 `... unrename-by-content --help` 均退出 0 并显示新命令用法。
+- 本轮未运行 Python 测试/基线生成器；复用了已有机器基线 JSON。源 Python 项目只读且未修改。
+
+未完成与已知问题：
+- 4-6/4-7 仍只覆盖合成文本值和 `.xlsx/.xlsm`；真实 VBA `.xlsm`、`.xls/.xlt` 的旧 COM 读取、数字/日期/公式缓存/错误值、多单元格规格、真实目录及不同文件系统尚未验收。
+- 命令接收显式文件列表，尚未接入旧 GUI 菜单/dispatcher；不是生产默认路由，也不代表完整命名功能已迁移。
+- Python 代码盘点：workspace 产品 Rust 源码与二进制入口未发现生产 Python 调用；现有 `.py` 位于 `probe/`、`tests/compare/`，用于基线/夹具辅助，按规则保留。Audit 源项目的前端在只读目录 `C:\Users\AZI\Desktop\VibeCode\3.open-data-audit\core\frontend\web\index.html`（407,411 字节），workspace 当前未携带该资源；它使用 `bridge.api`，Rust API bridge 尚未实现。未改动或复制源前端。
+- Windows 原生 Rust、麒麟 V10/UOS V20、glibc 2.28、离线 deb 均未验证；本轮未新增 Go worker，当前还没有已验收的 Excelize 使用场景。
+
+【组件版本】`pytools-core` 保持 `0.1.0`，本轮未升级。
+
+删除清单：无。
+
+回滚：从 `pytools.rs` 移除 4-6/4-7 dispatch、两个 handler 和仅供其使用的 `parse_config_and_files`；移除 4-6 文件中新增的一个 CLI 测试及 4-7 文件中新增的两个 CLI 测试；恢复两个 probe 报告、pytools README/迁移清单、workspace Excel 操作清单与引擎架构文档，并删除本记录。保留原候选 API、已有 Python 基线、fixtures 及其他 WIP；不要修改源 Python 项目。

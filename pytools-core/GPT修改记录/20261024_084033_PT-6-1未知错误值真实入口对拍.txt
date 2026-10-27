@@ -1,0 +1,22 @@
+时间：2026-10-24 08:40:33（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：ba880d80ab605c8959a9895f043218a6ce02870f；分支 pytools-dev 与 origin/pytools-dev 同步，工作树干净，无未提交用户 WIP。
+修改后 commit：本轮提交，提交号由 Git 记录。
+
+目的：核实 PT-6-1 `#DATA!` 未知错误值失败关闭边界是否符合原 PyCode 真实业务行为。
+
+修改文件：
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录 PyCode 原入口和 Windows GNU debug Rust CLI 的实际结果、运行时与迁移差异。
+- pytools-core/MIGRATION_INVENTORY.md：更新该边界的业务状态及 main 协调共享 reader 的要求。
+- 本修改记录。
+
+业务入口及结果：使用合成夹具 `pytools-core/tests/fixtures/summary_used_range/getting_data_error.xlsx`。Windows Python 3.12.10 直接调用只读 `PyCode.core.summary_321_322.run_summary_by_usedrange`，成功保存 1 行；工作簿名、工作表名、源行号和值为 `getting_data_error`、`Errors`、1、`#DATA!`，最后一格为普通字符串类型 `s`。实际 Windows GNU debug `pytools summary-used-range` CLI 退出码为 2，在 `value_read` 失败，没有生成部分 XLSX，生成 1 条运行日志。
+
+差异与协作：确认 PyCode/Rust 业务行为不一致。当前生产路径保持 Calamine 错误失败关闭，不添加 OOXML 普通值回退；按 workspace 边界已向 main 协调 `excel-reader` 的共享能力/API。没有修改 Rust 生产逻辑、共享 crates、根 Cargo 配置、Cargo.lock、Audit 或 `DEVELOPMENT_GOAL.md`；输入夹具只读。
+
+验证：实际 PyCode 函数与真实 Rust CLI 已运行；Rust 输出目录无部分报表，日志文件数为 1。此前 `summary_used_range_error` 集成回归已覆盖该错误的失败阶段、无部分报表和日志不包含 token。本轮未重跑 Cargo 测试，因为没有生产代码变化。
+
+未执行及已知问题：未知 `#DATA!` 的 parity fix 等待 main 协调共享 reader 支持或批准的窄方案；麒麟 V10、UOS V20、目标 deb 和该变更后的回归对拍未执行。PT-6-1 仍未完成验收。
+
+删除清单：无仓库删除；本轮生成的临时目录及输出已从系统 TEMP 清理。回滚：可用 `git revert <本轮提交>` 撤回本轮报告与迁移记录。
+【组件版本】：不升级，当前 0.1.0。

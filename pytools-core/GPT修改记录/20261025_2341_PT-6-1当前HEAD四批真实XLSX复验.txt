@@ -1,0 +1,26 @@
+时间：2026-10-25 23:41（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+分支：pytools-dev
+修改前 HEAD：6cc0232；开始验证时与 origin/pytools-dev 同步。
+修改后提交：随本记录所在 Git 提交确认。
+WIP：保留既有 MIGRATION_INVENTORY.md 尾部 PT-4-2 真实转换差异、HANDOFF_ZCODE_TO_CODEX.md，以及 PT-4-2 独立失败记录；不暂存、不覆盖。
+
+## 目的与文件
+以当前 Windows 原生 MSVC 二进制复验 PT-6-1 对原 PyTools 只读 XLSX 样本的四批真实输出对拍，覆盖共享 Excel reader 更新后的当前 HEAD。
+- probe/reports/summary_used_range_real_parity_20261025.json：更新本轮 6cc0232 真实样本报告，并保留既有 WSL glibc 2.28 阶段记录。
+- MIGRATION_INVENTORY.md：补记当前 HEAD Windows 完整投影结果及边界。
+- 本记录。
+
+## 执行和结果
+- Windows 原生构建：cargo build --offline --locked -p pytools-core --bin pytools -j 1，成功。
+- 调用现有 compare_summary_tools.py::compare_real_used_range_sample，以原只读项目 xlsx/ 下 13 份 XLSX 四批分别运行 PyCode 与 pytools summary-used-range。
+- 四批输出完整投影精确一致：96 张工作表、203,580 条数据行、最大使用宽度 257 列；值/类型、已填充样式、工作表名称/维度、冻结窗格/表头加粗、公式/合并/定义名称/页面属性相同。
+- 输入前后指纹一致；四批 developer 事件流均匹配保存历史；实际引擎为 Calamine 与 rust_xlsxwriter，第二批由既有 OOXML Patch 保留 1,212 个受支持错误单元格。Python 和 Rust 输出仅在 TEMP 临时目录。
+- 当前单轮运行不是性能比较。第四批比较期间对 Windows Python 进程观察到 WorkingSet64 一次约 3.87 GB；这是瞬时快照，不是峰值 RSS 测量。
+- 已验证机器报告中的字段，不含单元格值。本轮只覆盖 PT-6-1 的这 13 份 XLSX，不外推到其他功能、格式或未抽样工作簿；未验证麒麟/UOS、当前 HEAD glibc 2.28、deb 安装和离线交付。
+
+## 影响、删除和回滚
+- 未修改产品代码、源 Python 项目、原始 Excel 资产或共享 crates。
+- 【组件版本】不升级。
+- 删除清单：无。
+- 回滚：撤销本记录所在提交的 PT-6-1 报告与清单摘要更新；不得触碰此前 PT-4-2 WIP。

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.dedup.execution_wiring",
+  "date": "2026-10-23",
+  "status": "implementation_pending_validation",
+  "implemented_surface": [
+    "comment duplicate check/mark and delete plan routes",
+    "config duplicate check/mark and delete plan routes",
+    "config append plan and candidate execution",
+    "config precheck"
+  ],
+  "change": {
+    "file": "src/bin/pytools.rs",
+    "description": "dedup-comment-plan and dedup-config-plan can optionally pass plans through the existing capability-gated ExcelModifier using --capabilities and --platform; comment plans can be persisted with --plan-output."
+  },
+  "safety": {
+    "without_capability_file": "plan only; source workbook is not modified",
+    "with_capability_file": "execution is delegated to ExcelModifier and requires matching capability evidence",
+    "existing_workbook_output": "candidate output path; original is not overwritten"
+  },
+  "unvalidated_requirements": [
+    "Python baseline parity for all six menu items",
+    "real pytools configuration and workbook samples",
+    "SetCellFillColor, DeleteRows and ImportRange preservation evidence for actual operation combinations",
+    "logging, failure recovery and candidate-file behavior",
+    "Windows native and Kylin/UOS glibc 2.28 deb execution"
+  ],
+  "tests": "deferred until the requested pytools implementation batch is ready"
+}

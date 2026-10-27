@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.summary_used_range_error_token_matrix_parity",
+  "date": "2026-10-24",
+  "status": "passed_python_rust_cli_parity",
+  "source_python_file": "PyCode/core/summary_321_322.py::run_summary_by_usedrange",
+  "entrypoint": "pytools summary-used-range",
+  "fixture": "tests/fixtures/summary_used_range/error_token_matrix.xlsx",
+  "fixture_sha256_before_after_equal": true,
+  "coverage": {
+    "input_error_cells": 15,
+    "common_excel_error_tokens": [
+      "#DIV/0!",
+      "#N/A",
+      "#NAME?",
+      "#NULL!",
+      "#NUM!",
+      "#REF!",
+      "#VALUE!"
+    ],
+    "extended_error_tokens": [
+      "#DATA!",
+      "#SPILL!",
+      "#CALC!",
+      "#FIELD!",
+      "#BLOCKED!",
+      "#UNKNOWN!",
+      "#CONNECT!",
+      "#BUSY!"
+    ],
+    "python_rust_full_workbook_projection": "exact",
+    "output_rows": 1,
+    "output_columns": 18,
+    "common_errors_preserved_as_error_cells": 7,
+    "extended_errors_output_as_text": 8
+  },
+  "rust_cli": {
+    "runtime": "WSL Linux",
+    "executable": "cargo run",
+    "reader_engine": "calamine + OOXML error-token normalization",
+    "writer_engine": "rust_xlsxwriter",
+    "ooxml_error_cells_patched": 7,
+    "unknown_error_token_cells_normalized": 8,
+    "read_elapsed_ms": 133,
+    "write_elapsed_ms": 209,
+    "total_elapsed_ms": 391,
+    "progress_log": {
+      "view": "developer",
+      "status": "succeeded",
+      "event_count": 14,
+      "event_stream_matches_saved_history": true,
+      "actual_engines": [
+        "OOXML Patch",
+        "calamine",
+        "calamine + OOXML error-token normalization",
+        "excel-reader::read_xlsx_worksheet_extents",
+        "rust_xlsxwriter"
+      ]
+    }
+  },
+  "limitations": [
+    "Synthetic XLSX only; this verifies literal t=e token handling for the listed values.",
+    "No behavior is inferred for other unknown tokens, XLS/XLSB, or non-XLSX containers.",
+    "This probe does not establish Kylin/UOS, deb, or production-default acceptance."
+  ],
+  "platform_runs": {
+    "windows_gnu_debug": {
+      "runtime": "Windows 11 x64",
+      "executable": "Windows GNU debug CLI",
+      "reader_engine": "calamine + OOXML error-token normalization",
+      "writer_engine": "rust_xlsxwriter",
+      "ooxml_error_cells_patched": 7,
+      "unknown_error_token_cells_normalized": 8,
+      "read_elapsed_ms": 30,
+      "write_elapsed_ms": 58,
+      "total_elapsed_ms": 90,
+      "progress_log": {
+        "view": "developer",
+        "status": "succeeded",
+        "event_count": 14,
+        "event_stream_matches_saved_history": true,
+        "actual_engines": [
+          "OOXML Patch",
+          "calamine",
+          "calamine + OOXML error-token normalization",
+          "excel-reader::read_xlsx_worksheet_extents",
+          "rust_xlsxwriter"
+        ]
+      }
+    },
+    "wsl_cargo_debug": {
+      "runtime": "WSL Linux",
+      "executable": "cargo run",
+      "reader_engine": "calamine + OOXML error-token normalization",
+      "writer_engine": "rust_xlsxwriter",
+      "ooxml_error_cells_patched": 7,
+      "unknown_error_token_cells_normalized": 8,
+      "read_elapsed_ms": 133,
+      "write_elapsed_ms": 209,
+      "total_elapsed_ms": 391,
+      "progress_log": {
+        "view": "developer",
+        "status": "succeeded",
+        "event_count": 14,
+        "event_stream_matches_saved_history": true,
+        "actual_engines": [
+          "OOXML Patch",
+          "calamine",
+          "calamine + OOXML error-token normalization",
+          "excel-reader::read_xlsx_worksheet_extents",
+          "rust_xlsxwriter"
+        ]
+      }
+    }
+  }
+}

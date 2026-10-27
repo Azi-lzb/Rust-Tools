@@ -1,0 +1,24 @@
+时间：2026-10-24 02:12（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 commit：4bc1c11（已推送至 origin/pytools-dev）；修改后 commit：本轮提交，编号见 Git 历史。
+WIP 状态：开始时 pytools-dev 工作树干净且与 origin/pytools-dev 同步；origin/main 没有新提交或共享规则/代码变化。本轮只修改 pytools-core/**。源 Python 项目保持只读。
+
+目的：补测 PT-6-1 的隐藏工作表处理。只读 PyCode `run_summary_by_usedrange` 遍历 `workbook.worksheets`，应汇总 hidden 与 veryHidden 工作表；既有对拍没有这两类工作表。
+
+修改文件：
+- pytools-core/probe/compare_summary_tools.py：第二份合成 XLSM 加入 hidden、veryHidden 工作表及不同起始行的值，断言 Rust CLI 的总行数，并把该覆盖项写入报告。
+- pytools-core/probe/reports/summary_used_range_parity_20261024.json：记录 17 行对拍、隐藏表处理与实际 Calamine/rust_xlsxwriter 执行耗时。
+- pytools-core/MIGRATION_INVENTORY.md：更新 PT-6-1 行数与 hidden/veryHidden 证据，并更新对应输出尺寸及 NoCom 差异。
+- 本修改记录。
+
+验证与对拍：
+- `python pytools-core/probe/compare_summary_tools.py`：通过。通过实际 `summary-used-range` Rust CLI 对照只读 PyCode，XLSX 与无 VBA 的 macro-enabled XLSM 共 2 个工作簿、17 个数据行；值/类型、已填充单元格样式、工作表顺序与维度、冻结窗格、表头、公式/合并/名称/页面属性一致。空、hidden 与 veryHidden 工作表均按 PyCode 行为汇总。
+- NoComPyTools 当前输出 16 个数据行并跳过空工作表，汇总表维度 17×14；PyCode/Rust 输出 17 个数据行、维度 18×14。既有七种错误值和日期格式差异仍记录在机器报告中，不改变 PyCode 迁移基线。
+- 同一 probe 保留 6-2 常规模板和重复区域标记的 Rust CLI/PyCode 对拍，分别为 6 行，完全一致；未知 `#DATA!` 仍失败关闭。
+- `git diff --check`：通过。所有输入均为 probe 临时目录生成的合成工作簿；没有读取或提交真实业务工作簿。
+
+未执行项及限制：无授权真实业务样本；含 VBA 的 XLSM、XLS/XLSB、Windows 原生 Rust、麒麟/UOS、glibc 2.28 与 deb 未验证。此轮只新增对拍覆盖，未修改生产 Rust 代码；PT-6-1 仍待真实样本和目标平台验收。
+
+删除文件：无。
+回滚：提交后可对本轮提交执行 `git revert <本轮提交>`，回滚隐藏工作表合成对拍、报告与状态记录。
+【组件版本】：不升级，当前 0.1.0。

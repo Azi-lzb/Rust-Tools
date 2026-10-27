@@ -1,0 +1,18 @@
+时间：2026-10-25 21:24:25（Asia/Shanghai）
+执行者：Codex（pytools-dev）
+修改前 HEAD：ca3c9ff；分支 `pytools-dev`，工作区含 PT-4-2 迁移清单 WIP、交接报告和 PT-4-2 独立失败记录；全部保留。
+
+目的：为 PT-6-2 批注汇总的真实 Rust 交互菜单路径补充结果计数回归，确保菜单提交的模板与源文件确实产生预期汇总行数。
+
+修改文件：
+- `pytools-core/tests/summary_menu_cli.rs`：`interactive_summary_menu_routes_comment_summary_with_template_and_sources` 断言运行历史摘要 `saved=true`、`files=1`、`rows=3`。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录菜单计数回归及其与现有 PyCode 对拍报告的关系和验证边界。
+- 本文件：本次修改记录。
+
+验证：Windows 原生 MSVC Rust 1.99.1。`cargo fmt --manifest-path pytools-core/Cargo.toml --package pytools-core -- --check` 通过；`cargo test --offline --locked -p pytools-core --test summary_menu_cli -j 1 -q` 4/4 通过；`git diff --check` 通过。既有 `probe/reports/summary_comments_windows_native_parity_20261025.json` 中使用相同合并子格源夹具的 PyCode/Rust 完整投影比较为 exact、输出 3 行；本次把 3 行计数约束连接到菜单运行历史，不声称重新比较了菜单输出的完整工作簿投影，也未重新运行 Python。
+
+未执行项与已知边界：没有真实 PT-6-2 批注模板；未手工操作 Windows 原生文件选择器；未验证麒麟 V10/UOS V20、glibc 2.28 或 deb。工作区既有 Excel 编辑器弃用 API 与 PyTools unused import 警告未处理。本次只改测试与迁移记录，不改产品业务逻辑及 Excel 路由。
+
+组件版本：不升级（测试和验证记录变更）。
+删除清单：无。
+回滚提示：只回滚本记录、对应 PT-6-2 菜单断言和清单段落；保留其他 WIP。

@@ -1,0 +1,31 @@
+时间：2026-10-24 18:10（Asia/Shanghai）
+执行者：Codex，PyTools 专属 Agent
+工作树：C:\Users\AZI\Desktop\VibeCode\pytools-dev
+分支：pytools-dev
+修改前 commit：92da3a8（pytools-dev）
+修改后 commit：本记录与代码一并提交
+WIP 情况：开始时工作树干净；没有丢弃或覆盖其它修改。
+
+修改目的：依据 PyCode 主菜单将 PT-7-5 地区总分校验接入 Rust 真实交互入口，并使用当前共享 Rust 业务实现及 Python 对拍基线。
+
+修改文件：
+- pytools-core/src/bin/pytools.rs
+- pytools-core/tests/batch_tools_menu_cli.rs
+- pytools-core/tests/region_sum_parity.rs
+- pytools-core/MIGRATION_INVENTORY.md
+- 本记录
+
+逻辑变化：主菜单新增批处理类别 7，当前仅开放 7-5 地区总分校验；支持多文件、当前层/递归目录和手工路径选择，使用全局配置的 output/log 目录，调用现有 `region-sum-check` CLI。筛选并明确跳过非 `.xlsx/.xlsm` 输入，提示 `.xls` 先显式转换；不调用 COM 进行业务读取。地区核对只读源工作簿，生成新的结果工作簿。修正 `region_sum_parity` 测试临时目录命名以避免并行碰撞。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`：通过。
+- Windows 原生 Cargo，F 盘独立验证目标：`batch_tools_menu_cli`、`region_sum_parity`、`timeline_menu_cli`、`conversion_menu_cli`、`summary_menu_cli` 合计 11/11 通过。
+- PT-7-5 菜单集成运行五个合成核对样本，统计为 files=4、sheets=3、errors=1、failed_files=1；输出单元格符合既有 Python 基线投影，输入字节未变，日志文件产生；合成 `.xls` 被跳过且保留原字节。
+- `region_sum_parity` 含既有 Python/Rust 输出值、类型、样式、尺寸和日志对拍。
+
+未执行项及已知问题：未运行完整 PyTools 套件、Linux/目标系统和 deb 验证；没有手动操作 Windows 原生目录弹窗。仅 PT-7-5 接入交互菜单，其它批处理入口待迁移；真实 `.xls` 业务流程与 COM 旧路径不在本 Rust 菜单候选中，需用户显式转为已支持格式。真实业务工作簿未在本轮使用。编译警告来自既有共享 `excel-editor` 弃用方法及无关 unused imports。
+
+删除清单：无。
+配置/VBA 迁移影响：不改 Excel 配置和 VBA；测试配置与输入均在临时目录，所有工作簿都是已有合成 fixture。
+组件版本：不升级；保持 `pytools-core` 0.1.0。
+回滚提示：可 revert 本次独立 PT-7-5 菜单提交；保留 `92da3a8` 及其父提交。

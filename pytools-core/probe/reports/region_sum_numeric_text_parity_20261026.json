@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.region_sum.numeric_text_float_parity",
+  "status": "synthetic_parity_passed",
+  "source": "PyCode/core/feature_1_5_region_sum_check.py::_to_num_or_none",
+  "python_version": "3.12.10",
+  "fixture": "tests/fixtures/region_sum/numeric_text_underscores.xlsx",
+  "fixture_sha256": "CBB860A2169771EF27F85CE3298B4A1AF2FF8BE93B3F31C6E933C32AEDA9B2BA",
+  "cases": [
+    {
+      "input": "1_000.25",
+      "python_result": 1000.25,
+      "rust_result": 1000.25
+    },
+    {
+      "input": "١_٠٠٠.٢٥",
+      "python_result": 1000.25,
+      "rust_result": 1000.25
+    },
+    {
+      "input": "1__000 / ١__٠٠٠",
+      "python_result": "rejected-as-non-numeric",
+      "rust_result": "rejected-as-non-numeric"
+    }
+  ],
+  "workflow_statistics": {
+    "files": 5,
+    "sheets": 5,
+    "errors": 3,
+    "failed_files": 1
+  },
+  "rust_verification": {
+    "command": "cargo test --offline --locked -p pytools-core --lib --test region_sum_parity --test batch_tools_menu_cli -j 1 region_sum --quiet",
+    "region_sum_unit_tests": "4 passed",
+    "batch_menu_cli_tests": "2 passed",
+    "region_sum_parity_tests": "5 passed",
+    "checked_output": "Python/Rust statistics, result cells and types, formulas, dimensions, styles, and column widths matched; input fixtures remained unchanged."
+  },
+  "limitations": [
+    "Synthetic fixtures only; no real business workbook sample was available.",
+    "Windows native file-picker interaction and target Linux/glibc 2.28 or deb delivery were not tested.",
+    "The decimal digit table matches the Python 3.12 baseline's Unicode 15.0 database."
+  ]
+}

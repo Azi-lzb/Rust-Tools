@@ -1,0 +1,35 @@
+时间：2026-10-23 13:23:21（Asia/Shanghai）
+执行者：Codex
+修改前 commit：无（workspace main 尚无 HEAD）
+修改后 commit：无
+WIP：workspace `git status` 显示所有现存文件均未跟踪，`git ls-files` 为 0；修改前无 WIP 文件。未 stage、commit 或 push。原 pytools 项目只读，本轮没有对其写入。
+
+修改目的：补齐普通无批注版整表工作表提取所需的 ImportRange 候选能力，并明确其仍受能力证据门控，不提升为默认编辑后端。
+
+修改文件：
+- `crates/excel-reader/src/lib.rs`：增加 XLSX worksheet 实际存储单元格/合并区域 extent 读取及测试。
+- `crates/excel-editor/src/plan.rs`：为全表导入记录空格物化和范围外显式行列尺寸复制选项。
+- `crates/excel-editor/src/umya_backend.rs`：支持复制完整行列尺寸、隐藏状态及 full-sheet outline 候选行为。
+- `crates/excel-editor/tests/import_range.rs`：增加全表属性导入的直接后端合成测试。
+- `crates/ooxml-patch/src/lib.rs`：outline patch 遇到合并的列定义区间时进行安全拆分，并增加回归测试。
+- `pytools-core/src/sheet_extract.rs`：构造完整 ImportRange 计划并结合 OOXML 实际 extent；整表任务继续要求能力文件和 platform。
+- `pytools-core/src/print_ops.rs`：更新 ImportRange 计划构造字段。
+- `pytools-core/MIGRATION_INVENTORY.md`：更新整表候选状态及其验证边界。
+- `pytools-core/probe/reports/sheet_extract_full_import_20261023.json`：记录候选能力、测试与未验证项。
+- 本记录文件。
+
+逻辑变化：完整整表候选可复制普通版 openpyxl `data_only=True` 语义下的值/公式缓存、样式、合并、行列尺寸/隐藏/outline，以及 A1 矩形内空白坐标。读取范围不依赖 worksheet dimension 标签；outline 写入仍由 namespace-aware OOXML 定点适配器处理。没有执行能力记录或修改生产路由。
+
+测试结果：
+- `cargo fmt --all`：通过。
+- `cargo check --workspace --message-format short`：通过；umya 弃用及既有未使用项警告仍存在。
+- `cargo test --workspace`：通过（包括新增 reader、OOXML outline 和 ImportRange 合成测试）。
+- 只读源项目 `PyCode/tests`：78 passed、0 failed、3 条 pandas FutureWarning。环境设置 `PYTHONDONTWRITEBYTECODE=1` 且禁用 pytest cache；这只是 Python 基线测试，不是 Rust 输出对拍。
+
+未执行项与已知问题：没有对同一工作簿执行 Python/openpyxl 与 Rust 文件级输出对拍；真实业务模板、批注/关系等全保留项、追加已有输出簿、非 XLSX 格式及目标 Linux/deb 未验收。生产路由无法执行完整整表修改，除非之后以对应格式/对象/整批操作/平台的通过证据注册 capability。
+
+配置/VBA 影响：没有修改业务配置、VBA 或源 Python 项目。候选后端对未知 OOXML 部件保持拒绝策略。
+
+删除清单：无。
+回滚提示：文件均处于未跟踪 workspace 中，没有可用 Git 基线；不要用整目录 reset/clean 回滚。需人工审阅上述文件并逐文件恢复该候选改动。
+【组件版本】pytools-core 与共享 crate 不升级版本；本次只扩展未提升为默认路由的候选能力。

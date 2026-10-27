@@ -1,0 +1,203 @@
+{
+  "schema_version": 3,
+  "reader": "openpyxl-baseline",
+  "elapsed_ms": 0,
+  "suite": "pytools.institution_normalize",
+  "baseline": "original PyCode.core.feature_1_2_normalize_institution._process_sheet",
+  "source_python": "3.12.10",
+  "source_root": "C:\\Users\\AZI\\Desktop\\VibeCode\\4.pytools-main",
+  "mapping": [
+    [
+      "AB",
+      "Short Standard"
+    ],
+    [
+      "ABC Bank",
+      "Exact Standard"
+    ],
+    [
+      "branch",
+      "Branch Standard"
+    ]
+  ],
+  "sheets": [
+    {
+      "name": "报表分机构本外币",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "B1": {
+          "type": "string",
+          "value": "说明"
+        },
+        "C1": {
+          "type": "string",
+          "value": "合并标题"
+        },
+        "E1": {
+          "type": "string",
+          "value": "批注保留"
+        },
+        "A2": {
+          "type": "string",
+          "value": "Exact Standard"
+        },
+        "B2": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "A3": {
+          "type": "string",
+          "value": "Short Standard"
+        },
+        "B3": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "A4": {
+          "type": "string",
+          "value": "Unmapped"
+        },
+        "B4": {
+          "type": "string",
+          "value": "保持原值"
+        },
+        "A5": {
+          "type": "string",
+          "value": "   "
+        },
+        "B5": {
+          "type": "string",
+          "value": "空白行"
+        }
+      },
+      "formulas": {
+        "F2": "SUM(1,2)"
+      },
+      "formula_status": "read_by_openpyxl_baseline",
+      "merges": [
+        "C1:D1"
+      ],
+      "merge_status": "read_by_openpyxl_baseline",
+      "comments": {
+        "E1": "保留批注"
+      },
+      "comments_status": "read_by_openpyxl_baseline",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "fixture_has_none",
+      "data_validations": [],
+      "data_validations_status": "fixture_has_none"
+    },
+    {
+      "name": "分机构-备用",
+      "values": {
+        "B1": {
+          "type": "string",
+          "value": "机构名称"
+        },
+        "B2": {
+          "type": "string",
+          "value": "Branch Standard"
+        },
+        "B3": {
+          "type": "string",
+          "value": "unchanged"
+        },
+        "B4": {
+          "type": "string",
+          "value": "   "
+        }
+      },
+      "formulas": {},
+      "formula_status": "read_by_openpyxl_baseline",
+      "merges": [],
+      "merge_status": "read_by_openpyxl_baseline",
+      "comments": {},
+      "comments_status": "read_by_openpyxl_baseline",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "fixture_has_none",
+      "data_validations": [],
+      "data_validations_status": "fixture_has_none"
+    },
+    {
+      "name": "分机构-空表",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "B1": {
+          "type": "string",
+          "value": "说明"
+        }
+      },
+      "formulas": {},
+      "formula_status": "read_by_openpyxl_baseline",
+      "merges": [],
+      "merge_status": "read_by_openpyxl_baseline",
+      "comments": {},
+      "comments_status": "read_by_openpyxl_baseline",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "fixture_has_none",
+      "data_validations": [],
+      "data_validations_status": "fixture_has_none"
+    },
+    {
+      "name": "汇总",
+      "values": {
+        "A1": {
+          "type": "string",
+          "value": "机构"
+        },
+        "A2": {
+          "type": "string",
+          "value": "ABC Bank"
+        }
+      },
+      "formulas": {},
+      "formula_status": "read_by_openpyxl_baseline",
+      "merges": [],
+      "merge_status": "read_by_openpyxl_baseline",
+      "comments": {},
+      "comments_status": "read_by_openpyxl_baseline",
+      "conditional_formatting": [],
+      "conditional_formatting_status": "fixture_has_none",
+      "data_validations": [],
+      "data_validations_status": "fixture_has_none"
+    }
+  ],
+  "stats": {
+    "files": 1,
+    "branch_sheets": 3,
+    "mapped_sheets": 2,
+    "mapped_rows": 3,
+    "failed_files": 0,
+    "mapping_empty": false
+  },
+  "fixture_metadata": {
+    "style_cells": [
+      {
+        "sheet": "报表分机构本外币",
+        "cell": "A2",
+        "fill": "FFFF00"
+      }
+    ],
+    "column_widths": [
+      {
+        "sheet": "报表分机构本外币",
+        "column": "A",
+        "width": 24
+      }
+    ],
+    "row_heights": [
+      {
+        "sheet": "报表分机构本外币",
+        "row": 2,
+        "height": 25
+      }
+    ]
+  },
+  "status": "基线已生成，等待 Rust 对拍"
+}

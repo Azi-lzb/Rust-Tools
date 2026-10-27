@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.timeline.wide_summary_input_filter_python_rust_parity",
+  "date": "2026-10-25",
+  "status": "passed_synthetic_parity",
+  "baseline": "PyCode/core/wide_397_398.py::run_wide_summary",
+  "rust_entry": "pytools wide-summary",
+  "contract": "Use existing paths whose extensions appear in the configured source_exts, and always allow .xls; ignore other extensions and nonexistent paths before reading.",
+  "case": {
+    "selected_paths": 3,
+    "python_eligible_sources": 1,
+    "rust_eligible_sources": 1,
+    "unsupported_extension": ".xlsb",
+    "missing_supported_path": true,
+    "summary_projection": "exact Python/Rust parity",
+    "source_and_config_unchanged": true,
+    "target_append_plan_count": 1
+  },
+  "input_contents": "synthetic workbook and invalid unsupported-extension bytes only"
+}

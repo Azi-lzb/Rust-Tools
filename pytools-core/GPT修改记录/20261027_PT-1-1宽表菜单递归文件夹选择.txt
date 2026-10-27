@@ -1,0 +1,17 @@
+功能：PT-1-1 新版宽表菜单目录选择
+
+变更文件：
+- `pytools-core/src/bin/pytools.rs`：`1→1` 宽表汇总从仅选工作簿改为复用已有多文件/文件夹选择器，支持当前层与递归目录选择；多目录收集规范化并按路径排序、去重。
+- `pytools-core/tests/timeline_menu_cli.rs`：实际菜单集成用例覆盖当前层不收嵌套文件，以及反向传入两个目录（含嵌套目录）时 3 个工作簿按旧行为排序、三源数据均进入汇总且源文件字节未变；其余宽表菜单回归输入按旧选择器增加“文件”模式。
+- `pytools-core/MIGRATION_INVENTORY.md`：记录旧 Python 选择行为对应关系、测试证据及验收边界。
+
+对照依据：只读旧 Python `PyCode/main.py` 的宽表入口调用 `_pick_source_files_or_folders`，该选择器支持多选文件、当前层文件夹及递归全部子目录；后缀为 `.xls/.xlsx/.xlsm`。实现复用 Rust 已有选择器，不新增文件收集引擎。
+
+验证：
+- `cargo fmt --manifest-path pytools-core/Cargo.toml -- --check`
+- `cargo test --offline --locked -p pytools-core --test timeline_menu_cli --test batch_tools_menu_cli -j 1`（55/55）
+- `git diff --check`
+
+性质与限制：Windows 合成工作簿、真实 Rust 菜单入口冒烟；未做 Python/Rust 汇总结果对拍、真实业务样本或 Linux/deb 验收。
+
+回滚：恢复宽表菜单原 `choose_workbooks` 调用并删除对应目录回归与记录。
