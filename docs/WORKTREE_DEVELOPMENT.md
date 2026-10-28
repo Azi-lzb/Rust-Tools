@@ -1,6 +1,6 @@
 # Rust-Tools 多 Agent / Git Worktree 开发规范
 
-本文是 Rust-Tools 多工作树协作的唯一详细规范。根目录 `AGENTS.md` 保留通用业务安全和授权规则，并引用本文；各分支不得维护互相冲突的 Worktree 规则。Git 分支和 Worktree 是独立工作副本，提交或修改不会自动传播到其他分支。
+本文是 Rust-Tools 多工作树协作的唯一详细规范。根目录 `AGENTS.md` 保留通用业务安全和授权规则，并引用本文；各分支不得维护互相冲突的 Worktree 规则。Main Agent 统一维护根目录 `AGENTS.md` 和本文；Feature/Test Agent 不自行修改协作规则，调整建议提交 Main 处理。Git 分支和 Worktree 是独立工作副本，提交或修改不会自动传播到其他分支。
 
 ## 1. 工作树职责与路径
 
@@ -48,7 +48,7 @@ Main 是正式集成和唯一正式发布分支，不承担日常业务开发。
 4. 指定集成任务使用普通 Git merge 将已完成的 Feature/Test 修改合入 Main。发生冲突时逐项查看并有针对性地解决；禁止强制 reset、强制 push、覆盖文件或丢弃未提交修改。
 5. 合并后在 Main 重新执行本次任务明确授权的必要编译、测试和回归。Feature/Test 单独通过不代表 Main 已通过；Main 验收通过后才可进行正式 Release。
 6. Main 稳定后，Feature/Test 可在明确安排下通过普通 Git merge 同步 Main 的新提交；不得自动合并。
-7. 本文或 `AGENTS.md` 更新后，应随普通 commit 记录，并在检查各工作树状态、安全确认无冲突后，通过正常 Git merge 传播。修改 Main 的规则不会自动更新 Feature/Test，也不得覆盖它们的未提交改动。
+7. 本文或 `AGENTS.md` 更新后，由 Main Agent 随普通 commit 记录，并在检查各工作树状态、安全确认无冲突后，通过正常 Git merge 传播。修改 Main 的规则不会自动更新 Feature/Test，也不得覆盖它们的未提交改动。
 
 ## 6. 冲突与业务数据保护
 

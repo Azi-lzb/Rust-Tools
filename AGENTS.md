@@ -3,6 +3,7 @@
 ## Worktree 角色与协作
 
 - 多 Agent / Worktree 的完整职责、启动检查、构建路径和集成规则见 `docs/WORKTREE_DEVELOPMENT.md`。本文件中的业务安全和授权约束仍然适用；规则更新不会自动传播到其他分支。
+- 根目录 `AGENTS.md` 和 Worktree 协作规范由 Main Agent 统一维护。Feature/Test Agent 不自行修改协作规则；调整建议提交 Main 处理并通过正常 Git 同步。
 
 | 工作目录 | 分支 | 主要用途 | `CARGO_TARGET_DIR` |
 | --- | --- | --- | --- |
@@ -26,7 +27,8 @@
 - 保留七类菜单、既定子功能和明确排除项，见 `DEVELOPMENT_GOAL.md`、`pytools-core/MIGRATION_PLAN.md` 和 `pytools-core/MIGRATION_INVENTORY.md`。历史文档和修改记录是参考，不是新的执行任务。
 - 保护原始 Excel 文件、业务数据、公式、必要结构和明确约定保留的对象；优先在副本上操作。涉及覆盖原文件时，必须有明确授权及备份或快照保护。不因普通字体、边框、颜色等外观差异阻塞功能交付；用户明确要求的业务格式和重要结构仍应保护。
 - Excel 原语放在本仓库 `crates/`，PyTools 业务逻辑放在 `pytools-core/`。按需遵循 `rules/13_Rust_Excel读写修改与引擎路由规范.md` 的当前安全约束；遇到冲突，以本轮用户明确要求和本文件为准。
-- 新增或修改业务功能时遵守 `docs/RUN_LOGGING_STANDARD.md`：关联 run_id、时间和阶段，按实际业务记录输入与必要 Sheet 的结果、可定位错误及运行汇总，并编写必要日志测试；不得凭读取成功推断业务成功。
+- 新增或修改业务功能必须遵守 `docs/RUN_LOGGING_STANDARD.md`；它是运行日志的唯一权威规范。
+- 新增批处理入口须关联 run_id，记录开始/结束时间、阶段、文件最终状态、必要的 Sheet/单元格定位、输出结果、用户可读错误、结构化错误及统一运行汇总，并为统计和状态判定补充测试；不得凭读取成功推断业务成功，也不得删除旧运行 JSON 的兼容字段。
 - 未经用户批准，不执行 Git 强制操作、push 或远端修改。不得主动清除 Cargo target 缓存。
 
 ## 编译、运行和交付
