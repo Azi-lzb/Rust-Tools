@@ -5089,6 +5089,38 @@ mod tests {
             let _ = fs::remove_dir_all(&dir);
         }
 
+        /// “清理时发生错误”：注入 terminate 恒失败的守卫，断言
+        /// terminate_and_reap 的结果消息同时携带终止失败原因与回收结果，
+        /// 该消息会进入后端超时/异常错误的“清理结果”字段。
+        #[test]
+        fn cleanup_error_is_reported_in_the_result_message() {
+            let Some(python) = test_python() else {
+                eprintln!("SKIP: no local python runtime for cleanup-error test");
+                return;
+            };
+            let mut command = Command::new(&python);
+            command.arg("-I").arg("-c").arg("import sys; sys.exit(0)");
+            command.stdin(Stdio::null());
+            let mut worker =
+                crate::worker_process::WorkerProcess::spawn_with_failing_termination(command)
+                    .expect("spawn worker with failing termination guard");
+            // 守卫不会真正终止进程：等 worker 自然退出，回收路径才能立即完成。
+            let deadline = Instant::now() + Duration::from_secs(30);
+            loop {
+                match worker.try_wait().expect("try_wait") {
+                    Some(_) => break,
+                    None if Instant::now() < deadline => {
+                        thread::sleep(Duration::from_millis(10))
+                    }
+                    None => panic!("worker did not exit within the deadline"),
+                }
+            }
+            let message = terminate_and_reap(&mut worker);
+            assert!(message.contains("进程树终止失败"), "{message}");
+            assert!(message.contains("注入的清理失败"), "{message}");
+            assert!(message.contains("已回收"), "{message}");
+        }
+
         #[test]
         fn worker_failure_messages_carry_category_and_suggestion() {
             let message = worker_failure_message("worker_unavailable", "openpyxl import failed: boom");

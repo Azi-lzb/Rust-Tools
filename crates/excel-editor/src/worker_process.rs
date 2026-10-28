@@ -35,10 +35,9 @@ enum PlatformGuard {
     Job { handle: windows_sys::Win32::Foundation::HANDLE },
     #[cfg(unix)]
     ProcessGroup,
-    /// 平台启动前置步骤失败后不再有句柄可管（仅 Windows assign 失败时出现，
-    /// 该路径上子进程已被终止并回收）。
-    #[cfg(windows)]
-    None,
+    /// 仅测试：terminate 恒失败，用于验证清理错误进入诊断消息。
+    #[cfg(test)]
+    AlwaysFails,
 }
 
 impl WorkerProcess {
@@ -142,9 +141,22 @@ impl WorkerProcess {
                 }
                 Ok(())
             }
-            #[cfg(windows)]
-            PlatformGuard::None => self.child.kill(),
+            #[cfg(test)]
+            PlatformGuard::AlwaysFails => Err(io::Error::other("注入的清理失败")),
         }
+    }
+}
+
+#[cfg(test)]
+impl WorkerProcess {
+    /// 以普通方式启动子进程并挂接“终止恒失败”的守卫：
+    /// 模拟 terminate_tree 返回错误的场景（回收路径仍可用）。
+    pub(crate) fn spawn_with_failing_termination(mut command: Command) -> io::Result<Self> {
+        let child = command.spawn()?;
+        Ok(Self {
+            child,
+            platform: PlatformGuard::AlwaysFails,
+        })
     }
 }
 
