@@ -810,54 +810,32 @@ def _verify_style_table_integrity(output_path: Path) -> None:
         )
 
 
-def _materialize_merged_member_style_attributes(path: Path) -> None:
-    """Give every merged-range cell an explicit style attribute.
+def _materialize_explicit_style_attributes(path: Path) -> None:
+    """Give every worksheet cell an explicit style attribute.
 
-    OOXML treats an omitted ``s`` attribute as style index 0. openpyxl writes
-    merged-range members without ``s`` whenever their style table entry is the
-    default, but the Rust readback (umya) reports an EMPTY style instead of the
-    default xf for such cells. Excel itself writes an explicit style attribute
-    on every member of a merged range; mirror that canonical behaviour by
-    adding ``s="0"`` where openpyxl omitted it inside merged ranges only.
+    OOXML treats an omitted ``s`` attribute as style index 0, but openpyxl
+    omits ``s`` whenever the cell's style entry is the default while the Rust
+    readback (umya) reports an EMPTY style instead of the default xf for such
+    cells. Excel itself writes an explicit style attribute on every cell;
+    mirror that canonical behaviour by adding ``s="0"`` wherever openpyxl
+    omitted it. This keeps every downstream reader (umya readback included)
+    consistent about omitted-style semantics.
     """
-    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    replacement = path.with_name(path.name + ".mergestyle.tmp")
+    replacement = path.with_name(path.name + ".styleattr.tmp")
     if replacement.exists():
-        raise WorkerError("save_failed", "merge-style temporary output already exists")
+        raise WorkerError("save_failed", "style-attribute temporary output already exists")
+    pattern = re.compile(r'<c r="([A-Z]+[0-9]+)"([^>]*?)(/?)>')
 
     def patch_part(data: bytes) -> bytes:
-        try:
-            root = ElementTree.fromstring(data)
-        except ElementTree.ParseError:
-            return data
-        member_coordinates = set()
-        for merge_element in root.iter("{%s}mergeCell" % main_ns):
-            reference = merge_element.attrib.get("ref")
-            if not reference:
-                continue
-            from openpyxl.utils.cell import get_column_letter, range_boundaries
-            try:
-                min_col, min_row, max_col, max_row = range_boundaries(reference)
-            except (TypeError, ValueError):
-                continue
-            if not all((min_col, min_row, max_col, max_row)):
-                continue
-            for row in range(min_row, max_row + 1):
-                for column in range(min_col, max_col + 1):
-                    member_coordinates.add(
-                        "{}{}".format(get_column_letter(column), row)
-                    )
-        if not member_coordinates:
-            return data
-        pattern = re.compile(r'<c r="([A-Z]+[0-9]+)"([^>]*?)(/?)>')
+        text = data.decode("utf-8")
 
         def patch(match: "re.Match[str]") -> str:
             coordinate, attributes, closing = match.groups()
-            if coordinate not in member_coordinates or " s=" in attributes:
+            if " s=" in attributes:
                 return match.group(0)
             return '<c r="{}" s="0"{}{}>'.format(coordinate, attributes, closing)
 
-        return pattern.sub(patch, data.decode("utf-8")).encode("utf-8")
+        return pattern.sub(patch, text).encode("utf-8")
 
     try:
         changed_parts = set()
@@ -1155,8 +1133,8 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         workbook.close()
         cached_workbook.close()
     _preserve_significant_string_whitespace(output_path)
-    _materialize_merged_member_style_attributes(output_path)
     _materialize_tracked_cells(output_path, tracked_cells)
+    _materialize_explicit_style_attributes(output_path)
     after_hash = _sha256(input_path)
     if after_hash != before_hash:
         raise WorkerError("source_changed", "worker input changed while applying the edit plan")
