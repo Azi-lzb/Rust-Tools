@@ -185,7 +185,9 @@ const SHEET_SPECS: &[(&str, &[&str])] = &[
 const GLOBAL_DEFAULTS: &[(&str, &str)] = &[
     ("输入目录", "input"),
     ("输出目录", "output"),
-    ("日志目录", "logs"),
+    // Blank selects run_logging::default_log_dir() at runtime; an explicit
+    // user value remains relative to the configuration workbook as before.
+    ("日志目录", ""),
     ("日志模式", "普通"),
     ("日志保留天数", ""),
     ("日志最大占用MB", ""),

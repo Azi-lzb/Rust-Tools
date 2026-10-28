@@ -1169,20 +1169,8 @@ fn interactive_rural_loan_menu_creates_city_adjustment_copy_and_writes_user_hist
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("7  涉农贷款比上月修正"));
     assert!(stdout.contains(r#""feature_id": "PT-7-7""#));
-    assert!(stdout.contains("rust_xlsxwriter"));
-    let output_copy = current
-        .parent()
-        .context("PT-7-7 source parent missing")?
-        .join("PyTools_专用报表处理结果")
-        .join(current.file_name().context("PT-7-7 source name missing")?);
-    assert!(
-        output_copy.is_file(),
-        "PT-7-7 copy missing: {}\nstdout:\n{}\nstderr:\n{}",
-        output_copy.display(),
-        stdout,
-        stderr
-    );
-    let adjusted = read_workbook(&output_copy)?;
+    // 就地模式：本期工作簿被直接改写（不再生成 PyTools_专用报表处理结果 副本）。
+    let adjusted = read_workbook(&current)?;
     let adjusted_sheet = adjusted
         .sheets
         .iter()

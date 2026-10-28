@@ -5,6 +5,7 @@
 use chrono::Local;
 use serde::Serialize;
 use std::{
+    env,
     fs::{self, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -40,6 +41,37 @@ pub fn diagnostic_path_for_log_view(path: &Path, developer_view: bool) -> String
             .to_string_lossy()
             .into_owned()
     }
+}
+
+/// Resolve a stable per-user log directory for CLI operations that have no
+/// explicit or workbook-configured log path. Never anchor this default to the
+/// process working directory, which may be a protected install directory or
+/// the user's project root.
+pub fn default_log_dir() -> PathBuf {
+    #[cfg(windows)]
+    let root = env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| {
+            env::var_os("USERPROFILE")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute())
+                .map(|path| path.join("AppData").join("Local"))
+        });
+
+    #[cfg(not(windows))]
+    let root = env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute())
+                .map(|path| path.join(".local").join("state"))
+        });
+
+    root.map(|path| path.join("rust-tools").join("logs"))
+        .unwrap_or_else(|| env::temp_dir().join("rust-tools").join("logs"))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -129,6 +161,35 @@ pub struct SheetStats {
     pub skipped: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SheetStatus {
+    Pending,
+    InProgress,
+    Succeeded,
+    Failed,
+    Skipped,
+}
+
+/// A sheet result keeps the full workbook → sheet → stage failure chain in
+/// the run summary instead of relying on aggregate counters alone.
+#[derive(Clone, Debug, Serialize)]
+pub struct SheetResult {
+    pub file_index: usize,
+    pub file_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sheet_index: Option<usize>,
+    pub sheet_name: String,
+    pub attempted: bool,
+    pub status: SheetStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cell_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct RecordStats {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -190,6 +251,8 @@ pub struct RunSummary {
     pub inputs: Vec<InputResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sheet_stats: Option<SheetStats>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sheets: Vec<SheetResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub record_stats: Option<RecordStats>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -212,6 +275,7 @@ pub struct RunTracker {
     started: Instant,
     inputs: Vec<InputResult>,
     discovered: Option<usize>,
+    sheets: Vec<SheetResult>,
 }
 
 impl RunTracker {
@@ -243,6 +307,7 @@ impl RunTracker {
             started_at: Local::now().to_rfc3339(),
             started: Instant::now(),
             discovered: None,
+            sheets: Vec::new(),
             inputs: files
                 .iter()
                 .enumerate()
@@ -290,6 +355,98 @@ impl RunTracker {
 
     pub fn input_result(&self, index: usize) -> Option<&InputResult> {
         index.checked_sub(1).and_then(|n| self.inputs.get(n))
+    }
+
+    /// Record a sheet discovered in an actively processed workbook. Sheet
+    /// names are unique within a valid workbook and form a stable local key.
+    pub fn discover_sheet(
+        &mut self,
+        file_index: usize,
+        sheet_index: Option<usize>,
+        sheet_name: &str,
+    ) -> Result<(), &'static str> {
+        let input = self.input_result(file_index).ok_or("invalid input index")?;
+        if input.status != FileStatus::InProgress {
+            return Err("sheet discovery requires an in-progress input");
+        }
+        let file_name = input.file_name.clone();
+        if self
+            .sheets
+            .iter()
+            .any(|sheet| sheet.file_index == file_index && sheet.sheet_name == sheet_name)
+        {
+            return Err("duplicate sheet discovery");
+        }
+        self.sheets.push(SheetResult {
+            file_index,
+            file_name,
+            sheet_index,
+            sheet_name: sheet_name.to_owned(),
+            attempted: false,
+            status: SheetStatus::Pending,
+            stage: None,
+            cell_address: None,
+            error_code: None,
+        });
+        Ok(())
+    }
+
+    pub fn sheet_state(&self, file_index: usize, sheet_name: &str) -> Option<SheetStatus> {
+        self.sheets
+            .iter()
+            .find(|sheet| sheet.file_index == file_index && sheet.sheet_name == sheet_name)
+            .map(|sheet| sheet.status)
+    }
+
+    /// Apply an exclusive sheet transition and preserve the final operation
+    /// stage and optional cell/error location for diagnostics.
+    pub fn transition_sheet(
+        &mut self,
+        file_index: usize,
+        sheet_name: &str,
+        next: SheetStatus,
+        stage: &str,
+        cell_address: Option<&str>,
+        error_code: Option<&str>,
+    ) -> Result<(), &'static str> {
+        let sheet = self
+            .sheets
+            .iter_mut()
+            .find(|sheet| sheet.file_index == file_index && sheet.sheet_name == sheet_name)
+            .ok_or("unknown sheet")?;
+        match (sheet.status, next) {
+            (SheetStatus::Pending, SheetStatus::InProgress | SheetStatus::Failed) => {
+                sheet.attempted = true;
+            }
+            (SheetStatus::Pending, SheetStatus::Skipped) => {}
+            (
+                SheetStatus::InProgress,
+                SheetStatus::Succeeded | SheetStatus::Failed | SheetStatus::Skipped,
+            ) => {}
+            _ => return Err("invalid sheet state transition"),
+        }
+        sheet.status = next;
+        sheet.stage = Some(stage.to_owned());
+        sheet.cell_address = cell_address.map(str::to_owned);
+        sheet.error_code = error_code.map(str::to_owned);
+        Ok(())
+    }
+
+    pub fn sheet_stats(&self) -> SheetStats {
+        let mut stats = SheetStats {
+            discovered: self.sheets.len(),
+            ..SheetStats::default()
+        };
+        for sheet in &self.sheets {
+            stats.attempted += usize::from(sheet.attempted);
+            match sheet.status {
+                SheetStatus::Succeeded => stats.succeeded += 1,
+                SheetStatus::Failed => stats.failed += 1,
+                SheetStatus::Skipped => stats.skipped += 1,
+                SheetStatus::Pending | SheetStatus::InProgress => {}
+            }
+        }
+        stats
     }
 
     pub fn skip_unfinished(&mut self) {
@@ -409,7 +566,8 @@ impl RunTracker {
             input_stats,
             input_stats_available: true,
             inputs: self.inputs.clone(),
-            sheet_stats: None,
+            sheet_stats: (!self.sheets.is_empty()).then(|| self.sheet_stats()),
+            sheets: self.sheets.clone(),
             record_stats: None,
             output_stats: None,
             performance_stats: None,
@@ -453,9 +611,13 @@ impl EventWriter {
         &self.path
     }
     pub fn write(&mut self, event: &LogEvent) -> io::Result<()> {
-        serde_json::to_writer(&mut self.file, event).map_err(io::Error::other)?;
-        self.file.write_all(b"\n")
+        write_event_line(&mut self.file, event)
     }
+}
+
+fn write_event_line(writer: &mut impl Write, event: &LogEvent) -> io::Result<()> {
+    serde_json::to_writer(&mut *writer, event).map_err(io::Error::other)?;
+    writer.write_all(b"\n")
 }
 
 /// Retention is limited to complete, self-identifying JSONL runs.  In-progress
@@ -648,6 +810,67 @@ mod tests {
     }
 
     #[test]
+    fn sheet_ledger_keeps_multiple_results_and_failure_location() {
+        let mut run = RunTracker::new("PT-6-1", "按使用区域汇总", &inputs()[..1]);
+        run.transition(1, FileStatus::InProgress).unwrap();
+        run.discover_sheet(1, Some(1), "资产").unwrap();
+        run.discover_sheet(1, Some(2), "贷款表").unwrap();
+        run.transition_sheet(1, "资产", SheetStatus::InProgress, "sheet_read", None, None)
+            .unwrap();
+        run.transition_sheet(1, "资产", SheetStatus::Succeeded, "sheet_write", None, None)
+            .unwrap();
+        run.transition_sheet(
+            1,
+            "贷款表",
+            SheetStatus::InProgress,
+            "sheet_read",
+            None,
+            None,
+        )
+        .unwrap();
+        run.transition_sheet(
+            1,
+            "贷款表",
+            SheetStatus::Failed,
+            "cell_read",
+            Some("E42"),
+            Some("SHEET_READ_FAILED"),
+        )
+        .unwrap();
+        assert!(run.discover_sheet(1, Some(3), "资产").is_err());
+        run.transition(1, FileStatus::Failed).unwrap();
+
+        let summary = run.finish(false, false, false, vec![], None);
+        let sheets = summary.sheet_stats.as_ref().unwrap();
+        assert_eq!(
+            (
+                sheets.discovered,
+                sheets.attempted,
+                sheets.succeeded,
+                sheets.failed,
+                sheets.skipped
+            ),
+            (2, 2, 1, 1, 0)
+        );
+        assert_eq!(summary.sheets[1].file_name, "机构甲.xlsx");
+        assert_eq!(summary.sheets[1].sheet_index, Some(2));
+        assert_eq!(summary.sheets[1].stage.as_deref(), Some("cell_read"));
+        assert_eq!(summary.sheets[1].cell_address.as_deref(), Some("E42"));
+        assert_eq!(summary.sheets[1].error_code.as_deref(), Some("SHEET_READ_FAILED"));
+        assert_eq!(summary.overall_status, TaskStatus::Failed);
+    }
+
+    #[test]
+    fn default_log_directory_is_absolute_and_uses_application_state_suffix() {
+        let log_dir = default_log_dir();
+        assert!(
+            log_dir.is_absolute(),
+            "default log directory must be absolute: {log_dir:?}"
+        );
+        assert!(log_dir.ends_with(Path::new("rust-tools").join("logs")));
+    }
+
+    #[test]
     fn user_diagnostic_path_is_relative_and_developer_path_keeps_location() {
         let path = Path::new(r"C:\private\logs\run-events\PT-1-1_example.jsonl");
         assert_eq!(
@@ -726,11 +949,35 @@ mod tests {
     }
 
     #[test]
+    fn jsonl_write_failure_is_returned_to_the_caller() {
+        struct FailingWriter;
+
+        impl Write for FailingWriter {
+            fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "write denied",
+                ))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let run = RunTracker::new("1-2", "汇总", &inputs());
+        let event = run.event(Level::Info, "run_started", "run", "started", "开始");
+        assert!(write_event_line(&mut FailingWriter, &event).is_err());
+    }
+
+    #[test]
     fn windows_extended_paths_do_not_leak_into_file_names() {
-        let path = PathBuf::from(r"\\?\C:\业务\机构甲-长期中文文件名称.xlsx");
+        let filename = format!("{}长期中文文件名称.xlsx", "机构甲_".repeat(18));
+        let directory = "长期业务目录".repeat(18);
+        let path = PathBuf::from(format!(r"\\?\C:\业务\{directory}\{filename}"));
         let run = RunTracker::new("1-2", "汇总", &[path]);
         let summary = run.finish(false, true, false, vec![], None);
-        assert_eq!(summary.inputs[0].file_name, "机构甲-长期中文文件名称.xlsx");
+        assert_eq!(summary.inputs[0].file_name, filename);
     }
 
     #[test]

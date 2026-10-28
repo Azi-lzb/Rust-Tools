@@ -90,7 +90,23 @@ fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<
     assert_eq!(history["overall_status"], "SUCCESS");
     assert_eq!(history["sheet_stats"]["succeeded"], 2);
     assert_eq!(history["output_stats"]["workbooks_saved"], 1);
-    let diagnostic_path = logs.join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?);
+    let terminal = String::from_utf8_lossy(&output.stderr);
+    assert!(terminal.contains(
+        "[INFO] 处理成功：选择 2 个，尝试 2 个，成功 2 个，失败 0 个"
+    ));
+    assert!(terminal.contains("工作表发现 2 个，尝试 2 个，成功 2 个"));
+    assert!(terminal.contains("处理 4 行，输出 4 行"));
+    assert!(terminal.contains("读取耗时") && terminal.contains("写入耗时"));
+    assert!(terminal.contains("总耗时") && terminal.contains("运行编号"));
+    assert_eq!(history["sheets"].as_array().unwrap().len(), 2);
+    assert_eq!(history["sheets"][0]["file_name"], "source branch one.xlsx");
+    assert_eq!(history["sheets"][0]["sheet_name"], "Data");
+    assert_eq!(history["sheets"][0]["status"], "succeeded");
+    let diagnostic_path = logs.join(
+        history["diagnostic_log_path"]
+            .as_str()
+            .context("diagnostic path missing")?,
+    );
     let diagnostic = fs::read_to_string(diagnostic_path)?;
     let structured_events = diagnostic.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
     assert!(structured_events.iter().all(|event| event["run_id"] == history["run_id"]));
@@ -786,10 +802,17 @@ fn create_arbitrary_row_source(path: &Path) -> Result<usize> {
 }
 
 fn run_menu(config: &Path, input: &str) -> Result<Output> {
+    let log_dir = config
+        .parent()
+        .and_then(Path::parent)
+        .context("configuration app directory missing")?
+        .join("logs");
     let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
+        .arg("--log-dir")
+        .arg(log_dir)
         .arg("--log-view")
         .arg("developer")
         .stdin(Stdio::piped())

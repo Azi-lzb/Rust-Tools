@@ -12,7 +12,7 @@
     "global": {
       "input_dir": "$BASE/data/input",
       "output_dir": "$BASE/output",
-      "log_dir": "$BASE/logs",
+      "log_dir": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs",
       "error_policy": "abort",
       "default_encoding": "gb18030",
       "source_exts": [

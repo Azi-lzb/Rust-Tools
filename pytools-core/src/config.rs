@@ -108,8 +108,10 @@ pub struct ExtractTask {
 
 /// Load the global key/value settings from the configuration workbook.
 ///
-/// Relative input/output/log paths use the same base as the Python tools:
-/// the parent directory of the `PyCode` directory containing the workbook.
+/// Relative input, output, and explicitly configured log paths use the same
+/// base as the Python tools: the parent directory of the `PyCode` directory
+/// containing the workbook. If no log path is configured, use the per-user
+/// writable state directory instead of the process working directory.
 pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
     let config_path = config_path.as_ref();
     let workbook = read_workbook(config_path)
@@ -139,6 +141,7 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
             default,
         )
     };
+    let log_dir = resolve_log_dir(&base, values.get("日志目录").map(String::as_str));
 
     let mut source_exts = split(values.get("源文件扩展名").map(String::as_str).unwrap_or(""));
     if source_exts.is_empty() {
@@ -944,6 +947,13 @@ fn resolve_config_path(base: &Path, configured: &str, default: &str) -> PathBuf 
     std::fs::canonicalize(&normalized).unwrap_or(normalized)
 }
 
+fn resolve_log_dir(base: &Path, configured: Option<&str>) -> PathBuf {
+    configured
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| resolve_config_path(base, value, ""))
+        .unwrap_or_else(crate::run_logging::default_log_dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -968,7 +978,8 @@ mod tests {
         let global_json = json!({
             "input_dir": normalized_path(&global.input_dir, base),
             "output_dir": normalized_path(&global.output_dir, base),
-            "log_dir": normalized_path(&global.log_dir, base),
+            // 新日志语义：未配置"日志目录"时回退到用户状态目录（绝对路径）。
+            "log_dir": serde_json::Value::String(global.log_dir.to_string_lossy().into_owned()),
             "error_policy": global.error_policy,
             "default_encoding": global.default_encoding,
             "source_exts": global.source_exts,
@@ -1034,6 +1045,23 @@ mod tests {
 
         assert_eq!(baseline["python_baseline"]["status"], "保留");
         assert_eq!(actual, baseline["result"]);
+    }
+
+    #[test]
+    fn explicit_log_directory_uses_config_base_and_missing_value_uses_user_state() {
+        let base = std::env::temp_dir().join("rust-tools-config-log-path-test");
+        assert_eq!(
+            resolve_log_dir(&base, Some("logs")),
+            resolve_config_path(&base, "logs", "")
+        );
+        assert_eq!(
+            resolve_log_dir(&base, Some("  ")),
+            crate::run_logging::default_log_dir()
+        );
+        assert_eq!(
+            resolve_log_dir(&base, None),
+            crate::run_logging::default_log_dir()
+        );
     }
 }
 

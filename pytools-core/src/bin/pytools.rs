@@ -78,7 +78,13 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("pytools: {error:#}");
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Error,
+                &format!("命令执行失败：{error}")
+            )
+        );
         std::process::exit(2);
     }
 }
@@ -242,7 +248,7 @@ fn fallback_menu_global(config_path: &Path) -> Result<GlobalConfig> {
     Ok(GlobalConfig::new(
         base.join("input"),
         base.join("output"),
-        base.join("logs"),
+        pytools_core::run_logging::default_log_dir(),
     ))
 }
 
@@ -2734,7 +2740,7 @@ impl ConfiguredRunLog {
             if let Some((ok, skipped, failures)) = task_counts { value["task_stats"] = serde_json::json!({"succeeded": ok, "skipped": skipped, "failed": failures}); }
             let path = self.log_dir.join(format!("{}_{}.run.json", self.tracker.feature_id, self.tracker.run_id));
             match write_json_report_create_new(&path, &value) {
-                Ok(()) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", self.tracker.run_id, path.display()))),
+                Ok(()) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", self.tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, self.log_view == "developer")))),
                 Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留"))),
             }
         }
@@ -6430,7 +6436,7 @@ fn attach_legacy_batch_diagnostics(
     match write_json_report_create_new(&path, &summary) {
         Ok(()) => {
             report["run_summary_path"] = serde_json::json!(path.to_string_lossy());
-            if log_view == "user" { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, path.display()))); }
+            if log_view == "user" { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, false)))); }
         }
         Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))),
     }
@@ -6499,7 +6505,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         None => config
             .as_ref()
             .map(|config| config.log_dir.clone())
-            .unwrap_or_else(|| PathBuf::from("logs")),
+            .unwrap_or_else(pytools_core::run_logging::default_log_dir),
     };
     let emit_plan_files = config
         .as_ref()
@@ -6881,7 +6887,16 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
     };
     if log_view == "user" {
         if let Some(path) = run_log_path {
-            eprintln!("运行记录已保存：{}", path.display());
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Info,
+                    &format!(
+                        "运行记录已保存：{}",
+                        pytools_core::run_logging::path_for_log_view(&path, false)
+                    )
+                )
+            );
         }
     }
     if interactive && log_view != "developer" {
@@ -7016,7 +7031,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                     .values
                     .get("log-dir")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| PathBuf::from("logs"));
+                    .unwrap_or_else(pytools_core::run_logging::default_log_dir);
                 log_dir.join(format!(
                     "PT-7-3_{}_{}_{}.json",
                     Local::now().format("%Y%m%dT%H%M%S"),
@@ -7545,7 +7560,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
 
     let total_elapsed_ms = run_started.elapsed().as_millis();
     if let Some(current_view) = view {
-        let diagnostic_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("logs"));
+        let diagnostic_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
         attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &diagnostic_dir, current_view);
     }
     if let Some(view) = view {
@@ -8512,7 +8527,16 @@ fn run_rural_loan_menu(
                 if let Some(path) = run_log_path {
                     result["run_log_path"] = serde_json::Value::String(path.display().to_string());
                     if log_view == "user" {
-                        eprintln!("运行记录已保存：{}", path.display());
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                pytools_core::run_logging::Level::Info,
+                                &format!(
+                                    "运行记录已保存：{}",
+                                    path_for_log_view(&path, log_view)
+                                )
+                            )
+                        );
                     }
                 }
             }
@@ -8532,10 +8556,10 @@ fn run_rural_loan_menu(
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行记录已保存：{}", path.display())));
+                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
                 }
                 if let Some(path) = unified_summary_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("结构化日志已保存：{}", path.display())));
+                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("结构化日志已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
                 }
                 Err(anyhow::anyhow!(
                     "涉农贷款处理失败；请查看运行记录中的错误阶段。"
@@ -8641,7 +8665,7 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|duration| duration.as_nanos())
                     .unwrap_or_default();
-                PathBuf::from("logs").join(format!(
+                pytools_core::run_logging::default_log_dir().join(format!(
                     "PT-7-2_{}_{}_{}.json",
                     chrono::Local::now().format("%Y%m%dT%H%M%S"),
                     std::process::id(),
@@ -8719,9 +8743,13 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
         "internal progress event count mismatch"
     );
 
-    let diagnostic_dir = report_output.as_deref().and_then(Path::parent).unwrap_or_else(|| Path::new("logs"));
+    let diagnostic_dir = report_output
+        .as_deref()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let unified_path = if view != "off" {
-        write_normalize_unified_log(&report, &options.positional, diagnostic_dir, view)
+        write_normalize_unified_log(&report, &options.positional, &diagnostic_dir, view)
     } else { None };
 
     if let Some(report_output) = report_output.as_deref() {
@@ -9031,7 +9059,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         .values
         .get("log-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let plan_dir = if create_copy {
         None
     } else {
@@ -9805,7 +9833,7 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let (recursive, arguments) = extract_boolean_flag(arguments, "recursive")?;
     let options = parse_cli_arguments(arguments)?;
     let config = required_path(&options, "config")?;
-    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = options.values.get("log-view").map(String::as_str).unwrap_or("user");
     anyhow::ensure!(matches!(log_view, "user" | "developer" | "off"), "--log-view must be user, developer, or off");
     let capabilities = required_path(&options, "capabilities")?;
@@ -9885,7 +9913,7 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
         .get("log-dir")
         .map(PathBuf::from)
         .or_else(|| load_global(&config).ok().map(|global| global.log_dir))
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-8", "机构提交完整性检查", log_view, None);
     unified.set_inputs(&options.positional, None);
     let mut events = Vec::<serde_json::Value>::new();
@@ -9929,7 +9957,7 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
             unified.operation_failure(stage, error_code, "提交完整性检查失败", &error);
             let _ = unified.finish(true, false, false, &[], None, None, None);
             if let Some(Ok(path)) = &history_result {
-                eprintln!("pytools: developer run history: {}", path.display());
+                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("pytools: developer run history: {}", path.display())));
             }
             return Err(error);
         }
@@ -10098,7 +10126,7 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
         .get("log-dir")
         .map(PathBuf::from)
         .or_else(|| load_global(&config).ok().map(|global| global.log_dir))
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let output_dir = options.values.get("output-dir").map(Path::new);
     let feature_id = if excel { "PT-4-2" } else { "PT-4-3" };
     let function = if excel {
@@ -10191,7 +10219,7 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
         let path = log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &report) {
             Ok(()) => {
-                if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, path.display()))); }
+                if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, log_view == "developer")))); }
                 unified_report_path = Some(path);
             },
             Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}"))),
@@ -10443,7 +10471,7 @@ fn run_timeline_extract_cli_report(
                     .values
                     .get("log-dir")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| PathBuf::from("logs"));
+                    .unwrap_or_else(pytools_core::run_logging::default_log_dir);
                 if let Err(history_error) = write_timeline_extract_run_history(
                     &log_dir,
                     &run_id,
@@ -10750,7 +10778,7 @@ fn run_timeline_extract_cli_report(
                     "issues": plan.issues,
                 }));
                 if log_view == "user" {
-                    eprintln!("目标簿计划已保存，未修改既有文件：{}", plan_path.display());
+                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("目标簿计划已保存，未修改既有文件：{}", plan_path.display())));
                 }
                 continue;
             }
@@ -10929,7 +10957,16 @@ fn run_timeline_extract_cli_report(
                 if let Some(path) = history_path {
                     output["run_log_path"] = serde_json::Value::String(path.display().to_string());
                     if log_view == "user" {
-                        eprintln!("运行记录已保存：{}", path.display());
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                pytools_core::run_logging::Level::Info,
+                                &format!(
+                                    "运行记录已保存：{}",
+                                    pytools_core::run_logging::path_for_log_view(&path, false)
+                                )
+                            )
+                        );
                     }
                 }
             }
@@ -10951,7 +10988,17 @@ fn emit_timeline_extract_cli_event(
                 eprintln!("{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}")
             }
         },
-        "user" => eprintln!("{}", event.user_message),
+        "user" => {
+            let level = match event.status.as_str() {
+                "failed" => pytools_core::run_logging::Level::Error,
+                "skipped" | "partial_failure" => pytools_core::run_logging::Level::Warn,
+                _ => pytools_core::run_logging::Level::Info,
+            };
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(level, &event.user_message)
+            );
+        }
         _ => return,
     }
     events.push(event);
@@ -11004,7 +11051,7 @@ fn write_timeline_extract_run_history(
 fn run_timeline_precheck_cli(arguments: Vec<String>) -> Result<()> {
     let options = parse_cli_arguments(arguments)?;
     let config = required_path(&options, "config")?;
-    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = options.values.get("log-view").map(String::as_str).unwrap_or("user");
     anyhow::ensure!(matches!(log_view, "user" | "developer" | "off"), "--log-view must be user, developer, or off");
     let mut unified = UnifiedRunSession::new(&log_dir, "PT-1-5", "时序配置预校验", log_view, None);
@@ -11109,7 +11156,7 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
     let explicit_log_dir = options.values.get("log-dir").map(PathBuf::from);
     let mut log_dir = explicit_log_dir
         .clone()
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let mut progress = HeaderPathCompareProgress {
         total_inputs: options.positional.len(),
         ..HeaderPathCompareProgress::default()
@@ -11179,9 +11226,9 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
                     error_type,
                     &events,
                 ) {
-                    Ok(path) => eprintln!("PT-1-1 run history: {}", path.display()),
+                    Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", path.display()))),
                     Err(history_error) => {
-                        eprintln!("pytools: warning: could not write PT-1-1 run history: {history_error:#}")
+                        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("pytools: warning: could not write PT-1-1 run history: {history_error:#}")))
                     }
                 }
             }
@@ -11362,7 +11409,7 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
         Ok(path) => path,
         Err(_error) => {
             if let Some(Ok(history_path)) = history_result.as_ref() {
-                eprintln!("PT-1-1 run history: {}", history_path.display());
+                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", history_path.display())));
             } else if let Some(Err(history_error)) = history_result.as_ref() {
                 eprintln!(
                     "pytools: warning: could not write PT-1-1 run history: {history_error:#}"
@@ -12483,7 +12530,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         .values
         .get("log-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     if options.positional.is_empty() {
         bail!("provide at least one workbook path");
     }
@@ -12495,7 +12542,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-6-1-{}-{nonce}", std::process::id());
-    use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
+    use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker, SheetStatus};
     let mut tracker = RunTracker::with_id("PT-6-1", "按使用区域快速汇总", &options.positional, run_id.clone());
     let mut diagnostic = if log_view == "off" {
         None
@@ -12510,6 +12557,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
     };
     let mut diagnostic_failed = false;
     let mut events = Vec::<SummaryRunEvent>::new();
+    let mut next_sheet_index = std::collections::HashMap::<usize, usize>::new();
     let result = summarize_used_ranges_with_progress(&options.positional, &output_dir, |event| {
             let input_index = event.progress.current_input_index;
             if let Some(index) = input_index {
@@ -12519,6 +12567,55 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
                     ("extent_scan" | "value_read", "failed", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Failed); }
                     ("row_write", "succeeded", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Succeeded); }
                     _ => {}
+                }
+            }
+            if event.phase == "sheet_process" {
+                if let (Some(index), Some(sheet_name)) =
+                    (input_index, event.progress.current_sheet.as_deref())
+                {
+                    match event.status.as_str() {
+                        "started" => {
+                            let sheet_index = next_sheet_index.entry(index).or_default();
+                            *sheet_index += 1;
+                            if tracker
+                                .discover_sheet(index, Some(*sheet_index), sheet_name)
+                                .is_ok()
+                            {
+                                let _ = tracker.transition_sheet(
+                                    index,
+                                    sheet_name,
+                                    SheetStatus::InProgress,
+                                    &event.phase,
+                                    None,
+                                    None,
+                                );
+                            }
+                        }
+                        "succeeded" | "skipped" | "failed" => {
+                            if tracker.sheet_state(index, sheet_name)
+                                == Some(SheetStatus::InProgress)
+                            {
+                                let next = match event.status.as_str() {
+                                    "succeeded" => SheetStatus::Succeeded,
+                                    "skipped" => SheetStatus::Skipped,
+                                    _ => SheetStatus::Failed,
+                                };
+                                let error_code = event
+                                    .error_type
+                                    .as_deref()
+                                    .map(|kind| summary_event_error_code(Some(kind), &event.phase));
+                                let _ = tracker.transition_sheet(
+                                    index,
+                                    sheet_name,
+                                    next,
+                                    &event.phase,
+                                    None,
+                                    error_code.as_deref(),
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             let level = match event.status.as_str() { "failed" => Level::Error, "skipped" => Level::Warn, "started" | "running" => Level::Info, "succeeded" if event.phase == "row_write" || event.phase == "run" => Level::Info, _ => Level::Debug };
@@ -12560,6 +12657,22 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         tracker.skip_unfinished();
     } else if result.is_err() {
         if let Some(event) = events.last() {
+            if let (Some(index), Some(sheet_name)) =
+                (event.progress.current_input_index, event.progress.current_sheet.as_deref())
+            {
+                if tracker.sheet_state(index, sheet_name) == Some(SheetStatus::InProgress) {
+                    let code =
+                        summary_event_error_code(event.error_type.as_deref(), &event.phase);
+                    let _ = tracker.transition_sheet(
+                        index,
+                        sheet_name,
+                        SheetStatus::Failed,
+                        &event.phase,
+                        None,
+                        Some(&code),
+                    );
+                }
+            }
             if event.file_name.is_some() {
                 if let Some(index) = event.progress.current_input_index {
                     if tracker.state(index) == Some(FileStatus::InProgress) {
@@ -12576,13 +12689,17 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
     let mut unified = tracker.finish(result.is_err(), false, matches!(&result, Ok(summary) if !summary.saved), outputs, diagnostic_path.clone());
     if let Some(last) = events.last() {
         let progress = &last.progress;
-        unified.sheet_stats = Some(pytools_core::run_logging::SheetStats {
-            discovered: progress.sheets_discovered,
-            attempted: progress.sheets_attempted,
-            succeeded: progress.sheets_succeeded,
-            failed: progress.sheets_failed + usize::from(result.is_err() && last.phase == "sheet_process" && last.status == "started"),
-            skipped: progress.sheets_skipped,
-        });
+        let tracked = tracker.sheet_stats();
+        let sheet_stats = pytools_core::run_logging::SheetStats {
+            discovered: tracked.discovered.max(progress.sheets_discovered),
+            attempted: tracked.attempted.max(progress.sheets_attempted),
+            succeeded: tracked.succeeded.max(progress.sheets_succeeded),
+            failed: tracked.failed.max(progress.sheets_failed),
+            skipped: tracked.skipped.max(progress.sheets_skipped),
+        };
+        if sheet_stats.discovered > 0 || sheet_stats.attempted > 0 {
+            unified.sheet_stats = Some(sheet_stats);
+        }
         unified.record_stats = Some(pytools_core::run_logging::RecordStats {
             rows_processed: Some(progress.processed_rows),
             rows_written: result.as_ref().ok().filter(|summary| summary.saved).map(|summary| summary.rows),
@@ -12620,6 +12737,27 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             failure.error_code = Some(summary_event_error_code(
                 failed_event.and_then(|event| event.error_type.as_deref()), stage,
             ));
+            let failure_context = failed_event.or_else(|| {
+                events.iter().rev().find(|event| {
+                    event.file_name.is_some()
+                        && matches!(
+                            event.phase.as_str(),
+                            "extent_scan" | "value_read" | "sheet_process" | "row_write"
+                        )
+                })
+            });
+            if let Some(context) = failure_context {
+                failure.file_index = context.progress.current_input_index;
+                failure.file_name = context.file_name.clone();
+                failure.sheet_name = context.progress.current_sheet.clone();
+                if log_view == "developer" {
+                    failure.file_path = context
+                        .progress
+                        .current_input_index
+                        .and_then(|index| options.positional.get(index.saturating_sub(1)))
+                        .map(|path| path.to_string_lossy().into_owned());
+                }
+            }
             if log_view == "developer" {
                 failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
             }
@@ -12639,7 +12777,73 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
     }
     if interactive && log_view == "user" {
         let stats = &unified.input_stats;
-        eprintln!("{}", pytools_core::run_logging::terminal_line(if result.is_err() { Level::Error } else { Level::Info }, &format!("处理结束：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，未完成 {} 个；耗时 {} ms；运行编号 {}", stats.selected, stats.attempted, stats.succeeded, stats.failed, stats.skipped, stats.pending, unified.total_elapsed_ms, run_id)));
+        let (status, level) = match unified.overall_status {
+            pytools_core::run_logging::TaskStatus::Success => ("成功", Level::Info),
+            pytools_core::run_logging::TaskStatus::PartialSuccess => ("部分成功", Level::Warn),
+            pytools_core::run_logging::TaskStatus::Failed => ("失败", Level::Error),
+            pytools_core::run_logging::TaskStatus::Cancelled => ("已取消", Level::Warn),
+            pytools_core::run_logging::TaskStatus::NoOp => ("无需处理", Level::Info),
+        };
+        let sheet_summary = unified
+            .sheet_stats
+            .as_ref()
+            .map(|sheets| {
+                format!(
+                    "；工作表发现 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个",
+                    sheets.discovered,
+                    sheets.attempted,
+                    sheets.succeeded,
+                    sheets.failed,
+                    sheets.skipped
+                )
+            })
+            .unwrap_or_default();
+        let record_summary = unified.record_stats.as_ref().map(|records| {
+            let processed = records
+                .rows_processed
+                .map(|rows| format!("处理 {rows} 行"))
+                .unwrap_or_else(|| "处理行数未采集".to_owned());
+            let written = records
+                .rows_written
+                .map(|rows| format!("输出 {rows} 行"))
+                .unwrap_or_else(|| "输出行数未采集".to_owned());
+            format!("；{processed}，{written}")
+        }).unwrap_or_default();
+        let performance_summary = unified
+            .performance_stats
+            .as_ref()
+            .map(|performance| {
+                format!(
+                    "；读取耗时 {} ms，写入耗时 {} ms",
+                    performance
+                        .read_elapsed_ms
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "未采集".to_owned()),
+                    performance
+                        .write_elapsed_ms
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "未采集".to_owned())
+                )
+            })
+            .unwrap_or_default();
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                level,
+                &format!(
+                    "处理{status}：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，取消 {} 个，未完成 {} 个{sheet_summary}{record_summary}{performance_summary}；总耗时 {} ms；运行编号 {}",
+                    stats.selected,
+                    stats.attempted,
+                    stats.succeeded,
+                    stats.failed,
+                    stats.skipped,
+                    stats.cancelled,
+                    stats.pending,
+                    unified.total_elapsed_ms,
+                    run_id
+                )
+            )
+        );
         if let Some(path) = &diagnostic_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("诊断日志：{path}"))); }
     }
 
@@ -12671,7 +12875,10 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         if log_view == "developer" {
             eprintln!("{}", serde_json::to_string(event)?);
         } else {
-            eprintln!("{}", event.user_message);
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(Level::Error, &event.user_message)
+            );
         }
     }
 
@@ -12710,6 +12917,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             "performance_stats": unified.performance_stats,
             "error_summary": unified.error_summary,
             "inputs": unified.inputs,
+            "sheets": unified.sheets,
             "output_paths": unified.output_paths,
             "diagnostic_log_path": unified.diagnostic_log_path,
             "total_inputs": options.positional.len(),
@@ -12722,8 +12930,14 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         });
         match write_json_report_create_new(&path, &report) {
             Ok(()) => Some(path),
-            Err(error) => {
-                eprintln!("pytools: warning: could not save PT-6-1 run history: {error:#}");
+            Err(_error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        "无法保存 PT-6-1 运行汇总；业务结果仍保留",
+                    )
+                );
                 None
             }
         }
@@ -12737,7 +12951,16 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
                 if let Some(path) = run_log_path {
                     output["run_log_path"] = serde_json::Value::String(path.display().to_string());
                     if log_view == "user" {
-                        eprintln!("运行记录已保存：{}", path.display());
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行记录已保存：{}",
+                                path_for_log_view(&path, log_view)
+                            )
+                        )
+                    );
                     }
                 }
             }
@@ -12753,7 +12976,16 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("运行记录已保存：{}", path.display());
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行记录已保存：{}",
+                                path_for_log_view(&path, log_view)
+                            )
+                        )
+                    );
                 }
             }
             Err(error)
@@ -12782,7 +13014,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         .values
         .get("log-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     anyhow::ensure!(
         !options.positional.is_empty(),
         "provide at least one source workbook path"
@@ -12922,7 +13154,10 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         if log_view == "developer" {
             eprintln!("{}", serde_json::to_string(event)?);
         } else {
-            eprintln!("{}", event.user_message);
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(Level::Error, &event.user_message)
+            );
         }
     }
 
@@ -12984,7 +13219,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
                 if let Some(path) = run_log_path {
                     output["run_log_path"] = serde_json::Value::String(path.display().to_string());
                     if log_view == "user" {
-                        eprintln!("运行记录已保存：{}", path.display());
+                        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
                     }
                 }
             }
@@ -12996,7 +13231,16 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("运行记录已保存：{}", path.display());
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行记录已保存：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
                 }
             }
             if interactive && log_view == "user" {
@@ -13027,7 +13271,7 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
         .values
         .get("log-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     if options.positional.is_empty() {
         bail!("provide at least one source workbook path");
     }
@@ -13282,7 +13526,16 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
                 if let Some(path) = run_log_path {
                     output["run_log_path"] = serde_json::Value::String(path.display().to_string());
                     if log_view == "user" {
-                        eprintln!("运行记录已保存：{}", path.display());
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Info,
+                                &format!(
+                                    "运行记录已保存：{}",
+                                    pytools_core::run_logging::path_for_log_view(&path, false)
+                                )
+                            )
+                        );
                     }
                 }
             }
@@ -13294,7 +13547,7 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
                         stats.selected, stats.succeeded, stats.failed, stats.skipped, output["rows"],
                         output.get("path").and_then(serde_json::Value::as_str).map(|path| format!("；文件 {path}")).unwrap_or_default())
                 ));
-                if let Some(path) = &unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, path.display()))); }
+                if let Some(path) = &unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(path, log_view == "developer")))); }
             } else {
                 println!("{}", serde_json::to_string_pretty(&output)?);
             }
@@ -13303,9 +13556,9 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行记录已保存：{}", path.display())));
+                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
                 }
-                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("统一记录：{}", path.display()))); }
+                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("统一记录：{}", pytools_core::run_logging::path_for_log_view(&path, false)))); }
             }
             Err(error)
         }
@@ -13450,12 +13703,25 @@ fn run_archive_menu_operation(
                     Some("archive_operation_failed"),
                     &events,
                 ) {
-                    Ok(path) if log_view == "user" => {
-                        eprintln!("归档运行记录已保存：{}", path.display())
-                    }
-                    Ok(path) => eprintln!("{feature_id} run history: {}", path.display()),
+                    Ok(path) if log_view == "user" => eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "归档运行记录已保存：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    ),
+                    Ok(path) => eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!("{feature_id} run history: {}", path.display())
+                        )
+                    ),
                     Err(history_error) => {
-                        eprintln!("pytools: warning: could not save {feature_id} run history: {history_error:#}")
+                        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("pytools: could not save {feature_id} run history: {history_error:#}")))
                     }
                 }
             }
@@ -13493,7 +13759,7 @@ fn run_archive_menu_operation(
         report["archive_stats"] = serde_json::json!({"files": result.files, "invalid": result.invalid, "copied": result.copied, "skipped": result.skipped, "failed": result.failed});
         let path = global.log_dir.join("run-unified").join(format!("{feature_id}_{run_id}.json"));
         match write_json_report_create_new(&path, &report) {
-            Ok(()) if log_view == "user" => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {run_id}；运行记录：{}", path.display()))),
+            Ok(()) if log_view == "user" => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {run_id}；运行记录：{}", pytools_core::run_logging::path_for_log_view(&path, false)))),
             Ok(()) => {},
             Err(log_error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{log_error}"))),
         }
@@ -13542,12 +13808,25 @@ fn run_archive_menu_operation(
             None,
             &events,
         ) {
-            Ok(path) if log_view == "user" => {
-                eprintln!("归档运行记录已保存：{}", path.display())
-            }
-            Ok(path) => eprintln!("{feature_id} run history: {}", path.display()),
+            Ok(path) if log_view == "user" => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!(
+                        "归档运行记录已保存：{}",
+                        pytools_core::run_logging::path_for_log_view(&path, false)
+                    )
+                )
+            ),
+            Ok(path) => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!("{feature_id} run history: {}", path.display())
+                )
+            ),
             Err(error) => {
-                eprintln!("pytools: warning: could not save {feature_id} run history: {error:#}")
+                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("pytools: could not save {feature_id} run history: {error:#}")))
             }
         }
     }
@@ -13856,7 +14135,7 @@ fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
         matches!(log_view.as_str(), "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
     );
-    let log_dir = log_dir.unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
 
     let mut events = Vec::<serde_json::Value>::new();
     let mut active_stage = None;
@@ -13931,12 +14210,29 @@ fn emit_local_filename_map_event_view(
 ) {
     match log_view {
         "user" => {
+            let level = match event.status.as_str() {
+                "failed" => pytools_core::run_logging::Level::Error,
+                "partial_failure" => pytools_core::run_logging::Level::Warn,
+                _ => pytools_core::run_logging::Level::Info,
+            };
             if event.status == "started" {
-                eprintln!("{}", event.user_message);
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(level, &event.user_message)
+                );
             } else if let Some(stage_elapsed_ms) = event_value["stage_elapsed_ms"].as_u64() {
-                eprintln!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms);
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        level,
+                        &format!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms)
+                    )
+                );
             } else {
-                eprintln!("{}", event.user_message);
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(level, &event.user_message)
+                );
             }
         }
         "developer" => {
@@ -14040,7 +14336,7 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
         matches!(log_view.as_str(), "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
     );
-    let log_dir = log_dir.unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let mut legacy_log = match open_batch_rename_log(&log_dir) {
         Ok(value) => Some(value),
         Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("无法创建重命名日志：{error}；业务处理继续"))); None }
@@ -14128,7 +14424,7 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
     if log_view != "off" {
         let path = log_dir.join(format!("PT-4-1_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &unified) {
-            Ok(()) => { if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, path.display()))); } unified_path = Some(path); }
+            Ok(()) => { if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, log_view == "developer")))); } unified_path = Some(path); }
             Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))),
         }
     }
@@ -14475,7 +14771,7 @@ fn parse_content_prefix_cli_arguments(
     Ok(Some((
         config_path,
         files,
-        log_dir.unwrap_or_else(|| PathBuf::from("logs")),
+        log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir),
         log_view,
     )))
 }
@@ -14577,7 +14873,7 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
         bail!("provide at least one file path");
     }
     let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("output"));
-    let log_dir = log_dir.unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = file_sort_log_view(log_view)?;
     let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-9", "文件排序前缀添加", &log_view, None);
     unified.set_inputs(&files, Some(files.len()));
@@ -14900,7 +15196,7 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
 
     let config_path = config_path.context("--config is required")?;
     let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("output"));
-    let log_dir = log_dir.unwrap_or_else(|| PathBuf::from("logs"));
+    let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = file_sort_log_view(log_view)?;
     let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-10", "取消文件排序前缀", &log_view, None);
     unified.set_inputs(&files, Some(files.len()));
@@ -15074,7 +15370,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         .context("output directory is unavailable")?;
     let log_dir = log_dir
         .or_else(|| global.map(|config| config.log_dir))
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let run_started = Instant::now();
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -15222,7 +15518,25 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存工作表提取记录：{history_error}")));
                 }
                 if interactive && view == "user" {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("工作表提取失败；运行编号 {}{}", tracker.run_id, unified_path.map(|path| format!("；运行记录 {}", pytools_core::run_logging::path_for_log_view(&path, false))).unwrap_or_default())));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Error,
+                            &format!(
+                                "工作表提取失败；运行编号 {}{}",
+                                tracker.run_id,
+                                unified_path
+                                    .map(|path| format!(
+                                        "；运行记录 {}",
+                                        pytools_core::run_logging::path_for_log_view(
+                                            &path,
+                                            log_view.as_deref() == Some("developer")
+                                        )
+                                    ))
+                                    .unwrap_or_default()
+                            )
+                        )
+                    );
                 }
             }
             return Err(error);
@@ -15277,9 +15591,9 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             &events,
         ) {
             Ok(path) if view == "user" => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("工作表提取运行记录已保存：{}", path.display())))
+                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("工作表提取运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))))
             }
-            Ok(path) => eprintln!("PT-7-6 run history: {}", path.display()),
+            Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("PT-7-6 run history: {}", path.display()))),
             Err(error) => {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存工作表提取记录：{error}")))
             }
@@ -15299,7 +15613,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         for path in &result.paths {
             println!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("输出：{path}")));
         }
-        if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, path.display()))); }
+        if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, view == "developer")))); }
     } else {
         let mut output = serde_json::to_value(&result)?;
         if view != "off" {
@@ -15641,7 +15955,7 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         .unwrap_or_else(|| PathBuf::from("output"));
     let log_dir = log_dir
         .or_else(|| global.as_ref().map(|config| config.log_dir.clone()))
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
 
     use pytools_core::run_logging::{EventWriter, Level, RecordStats, RunTracker};
     let mut events = Vec::new();
@@ -15746,7 +16060,7 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
                         result.sheets, result.errors,
                         path.as_deref().map(|path| format!("；报表 {path}")).unwrap_or_default())
                 ));
-                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, path.display()))); }
+                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, view == "developer")))); }
             } else {
                 let mut output = serde_json::json!({
                     "files": result.files,
@@ -15764,7 +16078,7 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         }
         Err(error) => {
             if view == "user" {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("地区总分校验失败；运行编号 {}{}", tracker.run_id, unified_path.map(|path| format!("；诊断记录 {}", path.display())).unwrap_or_default())));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("地区总分校验失败；运行编号 {}{}", tracker.run_id, unified_path.map(|path| format!("；诊断记录 {}", pytools_core::run_logging::path_for_log_view(&path, false))).unwrap_or_default())));
             }
             Err(error)
         }
@@ -15902,7 +16216,7 @@ fn print_usage() {
     eprintln!("PyTools {}", build_banner().trim());
     eprintln!(
         "Usage:\n\
-         pytools [menu] [--config <config.xlsx>] [--log-view user|developer|off] [--capabilities <json> --platform <id>]\n\
+         pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id>]\n\
          no command opens the PyTools Rust V2 menu; available categories: 1 (data extraction and summaries 1-5), 2 (configured deduplication and append 1-4), 3 (static print and precheck 1-2), 4 (file processing 1-8), 5 (special reports 1-8), 6 (archive preview and copy), and 7 (configuration and quick actions 1-5)\n\
          timeline-precheck --config <workbook.xlsx>\n\
          timeline-compare --config <workbook.xlsx> --template <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
@@ -15959,9 +16273,9 @@ fn print_usage() {
          pytools rename-local-map --config <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          pytools rename-batch --config <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] [<file-or-directory>...]\n\
          The region-sum command runs the Rust non-COM regional total check. Without --config,\n\
-         output and logs default to ./output and ./logs. File-sort-prefix writes its XLSX report\n\
-         under ./output unless --output-dir is supplied; its log defaults to ./logs. The\n\
-         remove-file-sort-prefix command also writes under ./output and ./logs by default; it\n\
+         output defaults to ./output. Logs default to the per-user Rust-Tools state directory\n\
+         unless --log-dir or the global configuration specifies another path. File-sort-prefix\n\
+         and remove-file-sort-prefix write reports under ./output unless --output-dir is supplied;\n\
          accepts an empty file list to produce the source-compatible blank report. rename-by-content reads .xlsx/.xlsm/.xls through Calamine; unrename-by-content accepts .xlsx/.xlsm. Legacy .xlt COM reads are not part of the Rust path."
     );
 }

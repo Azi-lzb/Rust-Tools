@@ -66,6 +66,7 @@ fn missing_configuration_bootstraps_through_menu_and_can_be_viewed() -> Result<(
     let workbook = read_workbook(&config)?;
     assert_eq!(workbook.sheets.len(), 11);
     assert_eq!(workbook.sheets[0].name, "全局配置");
+    assert_eq!(load_global(&config)?.log_dir, pytools_core::run_logging::default_log_dir());
     assert!(stdout.contains("源文件扩展名"));
     Ok(())
 }
@@ -673,10 +674,17 @@ fn write_ambiguous_config(path: &Path) -> Result<()> {
 }
 
 fn run_menu(config: &Path, input: &str, log_view: &str) -> Result<Output> {
+    let log_dir = config
+        .parent()
+        .and_then(Path::parent)
+        .context("configuration app directory missing")?
+        .join("logs");
     let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
+        .arg("--log-dir")
+        .arg(log_dir)
         .arg("--log-view")
         .arg(log_view)
         .stdin(Stdio::piped())

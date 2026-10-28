@@ -680,6 +680,57 @@ fn summary_used_range_cli_reports_no_reader_when_no_workbook_is_read() -> Result
     Ok(())
 }
 
+#[test]
+fn summary_used_range_failure_event_keeps_file_and_stage_context() -> Result<()> {
+    let root = unique_test_dir();
+    let source = root.join("机构甲-损坏工作簿.xlsx");
+    let log_dir = root.join("logs");
+    fs::write(&source, b"not an OOXML workbook")?;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        .arg("summary-used-range")
+        .arg("--output-dir")
+        .arg(root.join("output"))
+        .arg("--log-dir")
+        .arg(&log_dir)
+        .arg(&source)
+        .output()
+        .context("run pytools summary-used-range with a corrupt workbook")?;
+    assert!(
+        !output.status.success(),
+        "a corrupt workbook must fail the task"
+    );
+
+    let events_path = fs::read_dir(log_dir.join("run-events"))?
+        .next()
+        .context("diagnostic JSONL was not created")??
+        .path();
+    let lines = fs::read_to_string(events_path)?;
+    let events = lines
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let failure = events
+        .iter()
+        .find(|event| event["event_name"] == "operation_failed")
+        .context("unified operation failure event was not written")?;
+    assert_eq!(failure["feature_id"], "PT-6-1");
+    assert_eq!(failure["file_index"], 1);
+    assert_eq!(failure["file_name"], "机构甲-损坏工作簿.xlsx");
+    assert_eq!(failure["stage"], "extent_scan");
+    assert_eq!(failure["error_code"], "EXCEL_READ_FAILED");
+    assert!(
+        failure.get("file_path").is_none(),
+        "user mode must not persist absolute source paths"
+    );
+    assert!(events
+        .iter()
+        .all(|event| event["run_id"] == failure["run_id"]));
+
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
 fn unique_test_dir() -> PathBuf {
     let temp_dir = std::env::temp_dir();
     loop {

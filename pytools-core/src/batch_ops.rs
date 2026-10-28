@@ -502,7 +502,11 @@ fn unique_sheet<'a>(book: &'a excel_reader::WorkbookDump, keys: &[&str]) -> Opti
         .iter()
         .filter(|sheet| keys.iter().all(|key| sheet.name.contains(key)))
         .collect::<Vec<_>>();
-    (hits.len() == 1).then_some(hits[0])
+    if hits.len() == 1 {
+        Some(&hits[0])
+    } else {
+        None
+    }
 }
 fn region_sheets<'a>(book: &'a excel_reader::WorkbookDump) -> Result<Vec<(String, &'a SheetDump)>> {
     let mut result = Vec::new();
