@@ -198,6 +198,11 @@ fn run_interactive_menu(arguments: Vec<String>) -> Result<()> {
             Some(format!("{error:#}")),
         ),
     };
+    if let Some(log_dir) = options.values.get("log-dir") {
+        let log_dir = PathBuf::from(log_dir);
+        global.log_dir = log_dir.clone();
+        global.log_dir_override = Some(log_dir);
+    }
     let log_view = options.values.get("log-view").cloned().unwrap_or_else(|| global.log_view.clone());
     anyhow::ensure!(matches!(log_view.as_str(), "user" | "developer" | "off"), "--log-view must be user, developer, or off");
     if let Err(error) = pytools_core::run_logging::retain_completed_events(
@@ -1107,7 +1112,13 @@ where
                         }
                         facts.add_component("pytools_core::config::load_global");
                         match refreshed_global {
-                            Ok(refreshed) => {
+                            Ok(mut refreshed) => {
+                                // 与 refresh_interactive_global 相同：重载配置
+                                // 不得丢弃 --log-dir 显式覆盖。
+                                refreshed.log_dir_override = global.log_dir_override.clone();
+                                if let Some(log_dir) = &global.log_dir_override {
+                                    refreshed.log_dir = log_dir.clone();
+                                }
                                 *global = refreshed;
                                 *config_error = None;
                                 facts.metrics["global_config_loaded"] = serde_json::json!(true);
@@ -1509,7 +1520,13 @@ fn refresh_interactive_global(
     config_error: &mut Option<String>,
 ) {
     match load_global(config_path) {
-        Ok(refreshed) => {
+        Ok(mut refreshed) => {
+            // 重新加载配置不得丢弃 --log-dir 显式覆盖：配置初始化/重载后
+            // 日志目录仍必须留在用户指定位置。
+            refreshed.log_dir_override = global.log_dir_override.clone();
+            if let Some(log_dir) = &global.log_dir_override {
+                refreshed.log_dir = log_dir.clone();
+            }
             *global = refreshed;
             *config_error = None;
         }

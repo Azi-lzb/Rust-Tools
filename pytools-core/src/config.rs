@@ -35,6 +35,9 @@ pub struct GlobalConfig {
     /// 开发期审核用的计划 JSON 等附带文件是否落盘；实际使用可在全局配置
     /// 以 `输出附带计划文件=否` 关闭，仅保留候选副本等核心输出。
     pub emit_plan_files: bool,
+    /// `--log-dir` 显式覆盖。交互菜单在启动、配置初始化与重载之间必须
+    /// 保留它，否则重新加载配置会把日志目录悄悄改回配置值或用户状态目录。
+    pub log_dir_override: Option<PathBuf>,
 }
 
 impl GlobalConfig {
@@ -51,6 +54,7 @@ impl GlobalConfig {
             source_exts: vec![".xlsx".to_owned(), ".xlsm".to_owned(), ".csv".to_owned()],
             timeline_rule_match_mode: "all_match".to_owned(),
             emit_plan_files: true,
+            log_dir_override: None,
         }
     }
 }
@@ -162,7 +166,8 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
     Ok(GlobalConfig {
         input_dir: resolve("输入目录", "input"),
         output_dir: resolve("输出目录", "output"),
-        log_dir: resolve("日志目录", "logs"),
+        log_dir,
+        log_dir_override: None,
         log_retention_days: values.get("日志保留天数").and_then(|value| positive_config_integer(value)),
         log_max_bytes: values.get("日志最大占用MB").and_then(|value| positive_config_integer(value)).and_then(|mb| mb.checked_mul(1024 * 1024)),
         log_view: match values.get("日志模式").map(|value| value.trim()) {

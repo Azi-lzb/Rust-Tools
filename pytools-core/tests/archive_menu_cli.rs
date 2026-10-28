@@ -243,14 +243,16 @@ fn create_app_config(root: &Path) -> Result<PathBuf> {
 
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let global = workbook.add_worksheet();
+    // 加载器契约（config::load_global）：键在 A 列、值在 B 列；此前用
+    // 序号/配置项/配置值三列布局写出的键值从未被读到，断言只因旧的
+    // "logs" 默认值与夹具路径巧合一致而通过。
     global.set_name("全局配置")?;
-    global.write_string(0, 0, "序号")?;
-    global.write_string(0, 1, "配置项")?;
-    global.write_string(0, 2, "配置值")?;
-    global.write_string(1, 1, "输出目录")?;
-    global.write_string(1, 2, app_dir.join("output").to_string_lossy())?;
-    global.write_string(2, 1, "日志目录")?;
-    global.write_string(2, 2, app_dir.join("logs").to_string_lossy())?;
+    global.write_string(0, 0, "键")?;
+    global.write_string(0, 1, "值")?;
+    global.write_string(1, 0, "输出目录")?;
+    global.write_string(1, 1, app_dir.join("output").to_string_lossy())?;
+    global.write_string(2, 0, "日志目录")?;
+    global.write_string(2, 1, app_dir.join("logs").to_string_lossy())?;
 
     let archive = workbook.add_worksheet();
     archive.set_name("归档类型配置")?;
