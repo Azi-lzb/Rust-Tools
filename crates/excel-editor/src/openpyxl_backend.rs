@@ -7,6 +7,7 @@
 use crate::{
     BackendCapability, BackendFailure, EditBackend, EditOperation, EditOperationKind,
     ExcelEditPlan, OutputValidator, PreservationRequirement, RangeStyleMode, WorkbookFormat,
+    worker_process::WorkerProcess,
 };
 use anyhow::{bail, Context, Result};
 use excel_reader::{read_workbook, SheetDump};
@@ -14,7 +15,7 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    io::{Read, Seek, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::atomic::{AtomicU64, Ordering},
@@ -25,6 +26,13 @@ use std::{
 static SCRATCH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const SPREADSHEET_MAIN_NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+/// 单个日志流（stdout/stderr 各自）在单次 worker 运行中的最大字节数；
+/// 超出即终止进程树，防止 worker 无限输出耗尽磁盘与内存。
+const MAX_WORKER_STREAM_BYTES: u64 = 64 * 1024 * 1024;
+/// IPC 响应文件的最大字节数；超出即拒绝解析并给出明确诊断。
+const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
+/// 失败诊断中携带的 stderr 摘要保留字节数（首尾各半，超出插入 TRUNCATED 标记）。
+const DIAGNOSTIC_KEEP_BYTES: usize = 2048;
 
 #[derive(Clone, Debug)]
 pub struct OpenpyxlWorkerConfig {
@@ -85,48 +93,90 @@ impl OpenpyxlWorkerConfig {
     /// 中的 WORKER_PROTOCOL_VERSION。
     pub const PROTOCOL_VERSION: u32 = 1;
 
+    /// 启动一次轻量握手探测（带共享缓存）。预检与实际执行共用同一实现，
+    /// 保证“预检确认可用”意味着“执行使用同一运行时并通过同一握手”。
+    /// 成功结果按运行时身份缓存；失败不缓存，下次调用会重新探测。
+    pub fn verify_handshake(&self) -> Result<(), String> {
+        verify_handshake_cached(self)
+    }
+}
+
+/// 运行时解析所依赖的进程环境快照。显式注入以支持无全局环境副作用的测试。
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeResolution {
+    /// 当前程序目录（current_exe 的父目录）；None 表示无法定位。
+    pub exe_dir: Option<PathBuf>,
+    /// PYTOOLS_OPENPYXL_PYTHON 显式覆盖。
+    pub python_override: Option<PathBuf>,
+    /// PYTOOLS_OPENPYXL_WORKER 显式覆盖。
+    pub worker_override: Option<PathBuf>,
+    /// 是否允许开发树回退（仅 Debug 构建，或 PYTOOLS_OPENPYXL_DEV_TREE=1）。
+    pub allow_dev_tree: bool,
+}
+
+impl RuntimeResolution {
+    /// 从真实进程环境构造解析输入。
+    pub fn from_process() -> Self {
+        Self {
+            exe_dir: std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(Path::to_path_buf)),
+            python_override: std::env::var_os("PYTOOLS_OPENPYXL_PYTHON").map(PathBuf::from),
+            worker_override: std::env::var_os("PYTOOLS_OPENPYXL_WORKER").map(PathBuf::from),
+            allow_dev_tree: cfg!(debug_assertions)
+                || std::env::var_os("PYTOOLS_OPENPYXL_DEV_TREE")
+                    .is_some_and(|value| value == "1"),
+        }
+    }
+}
+
+impl OpenpyxlWorkerConfig {
     /// 依次按以下顺序解析 openpyxl 运行时（第一个齐全者胜出）：
     /// 1) PYTOOLS_OPENPYXL_PYTHON + PYTOOLS_OPENPYXL_WORKER 显式覆盖
-    ///    （两者必须同时有效，否则视为配置错误并给出明确消息）；
+    ///    （两者必须同时有效；仅设置一个或路径无效均返回清晰配置错误）；
     /// 2) `<安装根>/libexec/<product>/openpyxl/...`（Linux deb 布局）；
     /// 3) `<exe目录>/python/{python.exe|python3, openpyxl_worker.py}`
     ///    （Windows ZIP 布局，同时兼容 runtime/bin 变体）；
-    /// 4) 开发树回退（仅 debug 构建或存在 Cargo.toml 工作区标记时启用）。
+    /// 4) 开发树回退（仅 debug 构建或 PYTOOLS_OPENPYXL_DEV_TREE=1 时启用；
+    ///    解释器必须由 PYTOOLS_OPENPYXL_PYTHON 显式提供）。
     ///
     /// 永远不做 PATH 裸 python 回退——“系统恰好装了 Python”不构成能力可用。
     /// 返回 Err 时携带具体的查找位置与缺失项，供预检与执行共用同一消息。
-    pub fn resolve_runtime(
+    pub fn resolve_runtime(binary: impl AsRef<Path>, product: &str) -> Result<Self> {
+        Self::resolve_runtime_with(&RuntimeResolution::from_process(), binary, product)
+    }
+
+    /// 解析核心：环境快照由调用方注入（测试不得触碰全局环境变量）。
+    pub fn resolve_runtime_with(
+        env: &RuntimeResolution,
         binary: impl AsRef<Path>,
         product: &str,
     ) -> Result<Self> {
         let mut searched: Vec<String> = Vec::new();
 
-        // 1) 显式覆盖：两个变量必须同时有效。
-        let python_override = std::env::var_os("PYTOOLS_OPENPYXL_PYTHON")
-            .map(PathBuf::from);
-        let worker_override = std::env::var_os("PYTOOLS_OPENPYXL_WORKER")
-            .map(PathBuf::from);
-        match (python_override, worker_override) {
+        // 1) 显式覆盖：两者必须同时有效；无效即配置错误，不得静默回退。
+        match (&env.python_override, &env.worker_override) {
             (Some(python), Some(worker)) => {
-                let config = Self::new(python, worker)?;
+                let config = Self::new(python.clone(), worker.clone())?;
                 if config.python_executable.is_file() && config.worker_script.is_file() {
                     return Ok(config);
                 }
-                searched.push(format!(
-                    "显式覆盖：PYTOOLS_OPENPYXL_PYTHON={}、PYTOOLS_OPENPYXL_WORKER={}（文件缺失）",
+                bail!(
+                    "PYTOOLS_OPENPYXL_PYTHON / PYTOOLS_OPENPYXL_WORKER 显式覆盖无效：{} 或 {} 不存在。\
+                     请修正两个环境变量指向的路径，或同时取消设置以使用发行包自带运行时。",
                     config.python_executable.display(),
                     config.worker_script.display()
-                ));
+                );
             }
             (Some(python), None) => {
                 searched.push(format!(
-                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_PYTHON={} 但缺少 PYTOOLS_OPENPYXL_WORKER",
+                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_PYTHON={} 但缺少 PYTOOLS_OPENPYXL_WORKER（两个变量必须同时设置）",
                     python.display()
                 ));
             }
             (None, Some(worker)) => {
                 searched.push(format!(
-                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_WORKER={} 但缺少 PYTOOLS_OPENPYXL_PYTHON",
+                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_WORKER={} 但缺少 PYTOOLS_OPENPYXL_PYTHON（两个变量必须同时设置）",
                     worker.display()
                 ));
             }
@@ -145,11 +195,8 @@ impl OpenpyxlWorkerConfig {
             ));
         }
 
-        // 3) Windows ZIP / 开发布局：<exe目录>/python/（兼容 runtime/bin 变体）。
-        if let Some(exe_dir) = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(Path::to_path_buf))
-        {
+        // 3) Windows ZIP / 分发布局 与 4) 开发树回退。
+        if let Some(exe_dir) = &env.exe_dir {
             let python_names: &[&str] = if cfg!(windows) {
                 &["python.exe"]
             } else {
@@ -168,39 +215,45 @@ impl OpenpyxlWorkerConfig {
                 }
             }
             searched.push(format!(
-                "ZIP/开发布局：{}\\python\\（或 python/runtime/bin/）",
+                "ZIP/分发布局：{}\\python\\（或 python/runtime/bin/）",
                 exe_dir.display()
             ));
 
-            // 4) 开发树回退：仅 debug 构建且能找到工作区标记时启用。
-            if cfg!(debug_assertions) {
+            // 4) 开发树回退：仅在 debug 构建（或显式 PYTOOLS_OPENPYXL_DEV_TREE=1）
+            // 且能找到工作区标记时启用；解释器必须显式提供。
+            if env.allow_dev_tree {
                 let mut cursor = Some(exe_dir.as_path());
                 while let Some(dir) = cursor {
                     if dir.join("Cargo.toml").is_file() {
-                        let python = dir
-                            .join("crates/excel-editor/python/openpyxl_worker.py");
-                        // 开发树没有独立解释器；仅在宿主已显式提供 python 时可用，
-                        // 且消息明确标注“非受支持分发方式”。
-                        let host_python = std::env::var_os("PYTOOLS_OPENPYXL_PYTHON")
-                            .map(PathBuf::from);
-                        if let Some(host_python) = host_python {
-                            if host_python.is_file() {
-                                return Ok(Self::new(host_python, python)?);
+                        let worker =
+                            dir.join("crates/excel-editor/python/openpyxl_worker.py");
+                        if let Some(python) = &env.python_override {
+                            if python.is_file() {
+                                return Ok(Self::new(python.clone(), worker)?);
                             }
+                            searched.push(format!(
+                                "开发树：PYTOOLS_OPENPYXL_PYTHON={} 不存在",
+                                python.display()
+                            ));
+                        } else {
+                            searched.push(format!(
+                                "开发树（{}）：需要同时设置 PYTOOLS_OPENPYXL_PYTHON 指向可用解释器；系统 PATH 上的 Python 不构成受支持分发",
+                                worker.display()
+                            ));
                         }
-                        searched.push(format!(
-                            "开发树（debug）：{}（需要 PYTOOLS_OPENPYXL_PYTHON 指向宿主 Python；系统 PATH 上的 Python 不构成受支持分发）",
-                            python.display()
-                        ));
                         break;
                     }
                     cursor = dir.parent();
                 }
             }
+        } else {
+            searched.push("无法定位当前程序目录（current_exe 不可用）".to_owned());
         }
 
         Err(anyhow::anyhow!(
-            "未找到可用的 openpyxl 运行时（openpyxl worker 不可用）。已按顺序查找：{}。             请安装包含 openpyxl 运行时的发行包（deb / ZIP），或同时设置              PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER 显式指定。",
+            "未找到可用的 openpyxl 运行时（openpyxl worker 不可用），不做 PATH 回退。已按顺序查找：{}。\
+             请安装包含 openpyxl 运行时的发行包（deb / ZIP），或同时设置 \
+             PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER 显式指定。",
             searched.join("；")
         ))
     }
@@ -240,35 +293,116 @@ impl OpenpyxlWorkerConfig {
     }
 }
 
-/// worker --version 探测：校验协议版本一致。失败返回人类可读原因。
+/// 握手探测超时：`--version` 是轻量操作；挂死的运行时同样必须能被终止，
+/// 否则一次损坏的环境会把整个修改流程卡死。
+const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// worker --version 探测：校验协议版本一致并确认 openpyxl 可用。
+/// 环境问题（启动失败、缺少 openpyxl、worker 过旧、探测超时）与协议问题
+/// （版本不匹配、非法版本输出）在错误文本中明确区分。
 fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<(), String> {
-    let output = Command::new(&config.python_executable)
+    let expected = format!("protocol={}", OpenpyxlWorkerConfig::PROTOCOL_VERSION);
+    let stdout_scratch = ScratchFile::create(&std::env::temp_dir(), "openpyxl-probe-stdout")
+        .map_err(|error| format!("环境问题：无法缓存握手输出：{error:#}"))?;
+    let stderr_scratch = ScratchFile::create(&std::env::temp_dir(), "openpyxl-probe-stderr")
+        .map_err(|error| format!("环境问题：无法缓存握手输出：{error:#}"))?;
+    let stdout_handle = File::create(stdout_scratch.path())
+        .map_err(|error| format!("环境问题：无法写入握手输出：{error}"))?;
+    let stderr_handle = File::create(stderr_scratch.path())
+        .map_err(|error| format!("环境问题：无法写入握手输出：{error}"))?;
+    let mut command = Command::new(&config.python_executable);
+    command
         .arg("-I")
         .arg(&config.worker_script)
         .arg("--version")
         .stdin(Stdio::null())
-        .output();
-    let output = match output {
-        Ok(output) => output,
+        .stdout(Stdio::from(stdout_handle))
+        .stderr(Stdio::from(stderr_handle));
+    let mut worker = match WorkerProcess::spawn(command) {
+        Ok(worker) => worker,
         Err(error) => {
             return Err(format!(
-                "无法启动 worker（{}）：{error}",
+                "环境问题：无法启动 Python 运行时（{}）：{error}。\
+                 请确认发行包包含完整 openpyxl 运行时，或同时设置 \
+                 PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER。",
                 config.python_executable.display()
             ));
         }
     };
-    if !output.status.success() {
+    let started = Instant::now();
+    let status = loop {
+        match worker.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) if started.elapsed() < PROBE_TIMEOUT => {
+                if stream_over_cap(stdout_scratch.path(), "stdout").is_some()
+                    || stream_over_cap(stderr_scratch.path(), "stderr").is_some()
+                {
+                    let cleanup = terminate_and_reap(&mut worker);
+                    break Err(format!(
+                        "环境问题：worker --version 输出超过单次运行上限 \
+                         （{MAX_WORKER_STREAM_BYTES} 字节），已终止进程树；清理结果：{cleanup}"
+                    ));
+                }
+                thread::sleep(Duration::from_millis(10))
+            }
+            Ok(None) => {
+                let cleanup = terminate_and_reap(&mut worker);
+                break Err(format!(
+                    "环境问题：worker --version 探测超时（{} ms），已终止进程树；清理结果：{cleanup}；\
+                     Python={}，worker={}",
+                    PROBE_TIMEOUT.as_millis(),
+                    config.python_executable.display(),
+                    config.worker_script.display()
+                ));
+            }
+            Err(error) => {
+                let cleanup = terminate_and_reap(&mut worker);
+                break Err(format!("环境问题：等待 worker --version 失败：{error}；清理结果：{cleanup}"));
+            }
+        }
+    };
+    let stdout = String::from_utf8_lossy(&fs::read(stdout_scratch.path()).unwrap_or_default())
+        .to_string();
+    let stderr = truncate_text(
+        &String::from_utf8_lossy(&fs::read(stderr_scratch.path()).unwrap_or_default()),
+        512,
+    );
+    let status = match status {
+        Ok(status) => status,
+        Err(message) => return Err(message),
+    };
+    if !status.success() {
+        if stdout.contains("openpyxl=missing") {
+            return Err(format!(
+                "环境问题：Python 运行时缺少 openpyxl（{}）。\
+                 请重新安装包含 openpyxl 的运行时；stderr: {stderr}",
+                truncate_text(stdout.trim(), 256)
+            ));
+        }
+        if status.code() == Some(2) {
+            // 旧版 worker 没有 --version（argparse 退出码 2），或解释器
+            // 打不开脚本：统一归为环境/版本过旧问题并附 stderr。
+            return Err(format!(
+                "环境问题：worker 不支持 --version（openpyxl_worker.py 版本过旧、\
+                 损坏或脚本无法打开，请更新与程序匹配的发行包）；stderr: {stderr}"
+            ));
+        }
         return Err(format!(
-            "worker --version 退出码 {:?}；stderr: {}",
-            output.status.code(),
-            truncate_text(&String::from_utf8_lossy(&output.stderr), 512)
+            "环境问题：worker --version 退出码 {:?}；stderr: {stderr}",
+            status.code()
         ));
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let expected = format!("protocol={}", OpenpyxlWorkerConfig::PROTOCOL_VERSION);
+    if stdout.contains("openpyxl=missing") {
+        return Err(format!(
+            "环境问题：Python 运行时缺少 openpyxl（{}）。请重新安装包含 openpyxl 的运行时。",
+            truncate_text(stdout.trim(), 256)
+        ));
+    }
     if !stdout.contains(&expected) {
         return Err(format!(
-            "worker 协议版本不匹配：期望包含 {expected:?}，实际 {stdout:?}；请确认 openpyxl_worker.py 与程序版本一致"
+            "协议问题：worker 协议版本不匹配——期望包含 {expected:?}，实际输出 {:?}；\
+             openpyxl_worker.py 与程序版本不一致，请重新部署匹配的发行包",
+            truncate_text(stdout.trim(), 256)
         ));
     }
     Ok(())
@@ -284,10 +418,71 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     truncated
 }
 
-/// 版本握手结果缓存：(python 路径, 结果)。避免每个工作簿重复探测。
-static HANDSHAKE_CACHE: std::sync::Mutex<
-    Option<(PathBuf, Result<(), String>)>,
-> = std::sync::Mutex::new(None);
+/// 握手缓存身份：解释器路径 + worker 路径 + 各自的文件版本标识（mtime+大小）。
+/// 不得仅用 Python 解释器路径作为缓存键——worker 或运行时被替换后必须重新握手。
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RuntimeIdentity {
+    python: PathBuf,
+    python_marker: Option<(u64, u64)>,
+    worker: PathBuf,
+    worker_marker: Option<(u64, u64)>,
+}
+
+/// 文件版本标识：修改时间（纳秒）+ 大小。读不到时返回 None（视为已变化）。
+fn file_identity(path: &Path) -> Option<(u64, u64)> {
+    let metadata = fs::metadata(path).ok()?;
+    let modified = metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    Some((modified.as_nanos() as u64, metadata.len()))
+}
+
+impl RuntimeIdentity {
+    fn of(config: &OpenpyxlWorkerConfig) -> Self {
+        Self {
+            python: config.python_executable.clone(),
+            python_marker: file_identity(&config.python_executable),
+            worker: config.worker_script.clone(),
+            worker_marker: file_identity(&config.worker_script),
+        }
+    }
+}
+
+/// 版本握手结果缓存：按完整运行时身份缓存成功结果。
+/// 失败结果不缓存——环境问题是瞬时的可能性更高，重复探测代价可接受且
+/// 能在下一次调用中反映环境修复。
+static HANDSHAKE_CACHE: std::sync::Mutex<Option<(RuntimeIdentity, Result<(), String>)>> =
+    std::sync::Mutex::new(None);
+
+/// 轻量握手（带共享缓存）：验证 worker 可启动、协议版本一致、openpyxl 可用。
+fn verify_handshake_cached(config: &OpenpyxlWorkerConfig) -> Result<(), String> {
+    let identity = RuntimeIdentity::of(config);
+    {
+        let cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
+        if let Some((cached_identity, cached_result)) = cached.as_ref() {
+            if *cached_identity == identity {
+                return match cached_result {
+                    Ok(()) => Ok(()),
+                    // 失败不缓存；此分支仅为类型完整保留。
+                    Err(message) => Err(message.clone()),
+                };
+            }
+        }
+    }
+    let result = run_worker_version_probe(config);
+    if result.is_ok() {
+        let mut cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
+        *cached = Some((identity, result.clone()));
+    }
+    result
+}
+
+#[cfg(test)]
+fn reset_handshake_cache_for_tests() {
+    *HANDSHAKE_CACHE.lock().expect("handshake cache poisoned") = None;
+}
 
 pub struct OpenpyxlXlsxBackend {
     capability: BackendCapability,
@@ -321,6 +516,19 @@ impl OpenpyxlXlsxBackend {
     ) -> Result<Self> {
         let config = OpenpyxlWorkerConfig::resolve_runtime(binary, product)?;
         Self::build(capability, Some(config))
+    }
+
+    /// 预检用：在已解析配置上执行轻量握手（带共享缓存，重复调用开销低）。
+    /// 预检通过意味着运行时与 worker 可以实际启动并完成协议版本协商，
+    /// 而不只是文件存在。
+    pub fn verify_worker_handshake(&self) -> Result<(), String> {
+        match self.config.as_ref() {
+            Some(config) if config.available() => config.verify_handshake(),
+            Some(_) => Err(
+                "bundled Python/openpyxl worker paths are missing or not executable".to_owned(),
+            ),
+            None => Err("bundled Python/openpyxl worker paths could not be resolved".to_owned()),
+        }
     }
 
     fn build(
@@ -509,31 +717,12 @@ impl EditBackend for OpenpyxlXlsxBackend {
             }
         }
 
-        // 版本握手（按配置缓存）：worker 协议版本不匹配时在派发前直接判为
-        // 能力不可用，而不是等到解析响应才失败。
-        {
-            let mut cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
-            let cached_match = cached
-                .as_ref()
-                .map(|(python, _)| *python == config.python_executable)
-                .unwrap_or(false);
-            if cached_match {
-                if let Some((_, Err(message))) = cached.as_ref() {
-                    return Err(BackendFailure::unsupported_before_write(format!(
-                        "openpyxl worker 版本握手失败（缓存）：{message}"
-                    )));
-                }
-            } else if let Err(message) = run_worker_version_probe(config) {
-                *cached = Some((
-                    config.python_executable.clone(),
-                    Err(message.clone()),
-                ));
-                return Err(BackendFailure::unsupported_before_write(format!(
-                    "openpyxl worker 版本握手失败：{message}"
-                )));
-            } else {
-                *cached = Some((config.python_executable.clone(), Ok(())));
-            }
+        // 版本握手（按运行时身份缓存成功结果）：worker 协议版本不匹配或运行
+        // 环境不完整时，在派发前直接判为能力不可用，而不是等到解析响应才发现。
+        if let Err(message) = verify_handshake_cached(config) {
+            return Err(BackendFailure::unsupported_before_write(format!(
+                "openpyxl worker 版本握手失败：{message}"
+            )));
         }
 
         let parent = plan
@@ -593,7 +782,8 @@ impl EditBackend for OpenpyxlXlsxBackend {
         let stderr = File::create(stderr_file.path()).map_err(|error| {
             BackendFailure::failed(format!("open worker stderr capture: {error}"))
         })?;
-        let mut child = Command::new(&config.python_executable)
+        let mut command = Command::new(&config.python_executable);
+        command
             .arg("-I")
             .arg(&config.worker_script)
             .arg("--request")
@@ -602,72 +792,141 @@ impl EditBackend for OpenpyxlXlsxBackend {
             .arg(response_file.path())
             .stdin(Stdio::null())
             .stdout(Stdio::from(stdout))
-            .stderr(Stdio::from(stderr))
-            .spawn()
-            .map_err(|error| {
-                BackendFailure::unsupported_before_write(format!(
-                    "start bundled openpyxl worker: {error}"
-                ))
-            })?;
+            .stderr(Stdio::from(stderr));
         let started = Instant::now();
+        let mut worker = match WorkerProcess::spawn(command) {
+            Ok(worker) => worker,
+            Err(error) => {
+                return Err(BackendFailure::unsupported_before_write(format!(
+                    "启动 openpyxl worker 失败（类别=运行环境不完整）：{error}；\
+                     Python={}，worker={}。请确认发行包运行时完整，或同时设置 \
+                     PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER。",
+                    config.python_executable.display(),
+                    config.worker_script.display()
+                )));
+            }
+        };
+        let mut timed_out = false;
         let status = loop {
-            match child.try_wait() {
+            match worker.try_wait() {
                 Ok(Some(status)) => break status,
                 Ok(None) if started.elapsed() < config.timeout => {
+                    // 日志容量治理：轮询期间限制 stdout/stderr 的磁盘增长。
+                    if let Some(label) = stream_over_cap(stdout_file.path(), "stdout")
+                        .or_else(|| stream_over_cap(stderr_file.path(), "stderr"))
+                    {
+                        let cleanup = terminate_and_reap(&mut worker);
+                        return Err(BackendFailure::failed(format!(
+                            "openpyxl worker 的 {label} 输出超过单次运行上限 \
+                             （{MAX_WORKER_STREAM_BYTES} 字节），已终止进程树，\
+                             防止内存与磁盘无界增长；清理结果：{cleanup}；候选输出已废弃。{}",
+                            worker_run_diagnostics(
+                                config,
+                                &plan.request_id,
+                                None,
+                                true,
+                                started.elapsed(),
+                            )
+                        )));
+                    }
                     thread::sleep(Duration::from_millis(10))
                 }
                 Ok(None) => {
-                    // 超时清理：kill -> wait 回收 -> 宽限后补杀。worker 自身
-                    // 不再派生孙进程（见 openpyxl_worker.py 头部约束），此处理
-                    // 覆盖 kill 信号未立即生效的窗口；跨平台进程组/Job Object
-                    // 治理如未来需要，须另行评估依赖。
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    // 超时清理：终止整棵受控进程树（Windows Job Object /
+                    // Unix 进程组）并回收直接子进程；候选输出废弃。
+                    let cleanup = terminate_and_reap(&mut worker);
                     return Err(BackendFailure::failed(format!(
-                        "openpyxl worker timed out after {} ms; candidate discarded and fallback stopped",
-                        config.timeout.as_millis()
+                        "openpyxl worker 超时（{} ms）：已终止整棵受控进程树；\
+                         清理结果：{cleanup}；候选输出已废弃，不会发布。{}",
+                        config.timeout.as_millis(),
+                        worker_run_diagnostics(
+                            config,
+                            &plan.request_id,
+                            None,
+                            true,
+                            started.elapsed(),
+                        )
                     )));
                 }
                 Err(error) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    let cleanup = terminate_and_reap(&mut worker);
                     return Err(BackendFailure::failed(format!(
-                        "wait for openpyxl worker: {error}"
+                        "等待 openpyxl worker 失败：{error}；清理结果：{cleanup}。{}",
+                        worker_run_diagnostics(
+                            config,
+                            &plan.request_id,
+                            None,
+                            false,
+                            started.elapsed(),
+                        )
                     )));
                 }
             }
         };
+        let elapsed = started.elapsed();
+        // 响应文件容量限制：异常巨大的响应不是合法 IPC 输出。
+        let response_size = fs::metadata(response_file.path()).map_or(0, |meta| meta.len());
+        if response_size > MAX_RESPONSE_BYTES {
+            return Err(BackendFailure::failed(format!(
+                "openpyxl worker 响应文件 {response_size} 字节，超过单次运行上限 \
+                 {MAX_RESPONSE_BYTES} 字节，已拒绝解析；候选输出不会发布。{}",
+                worker_run_diagnostics(
+                    config,
+                    &plan.request_id,
+                    status.code(),
+                    timed_out,
+                    elapsed,
+                )
+            )));
+        }
         let response_bytes = fs::read(response_file.path()).unwrap_or_default();
         let response: WorkerResponse =
             serde_json::from_slice(&response_bytes).map_err(|error| {
-                let diagnostic = truncate_text(&read_diagnostic(stderr_file.path()), 1024);
+                let diagnostic =
+                    read_diagnostic_bounded(stderr_file.path(), DIAGNOSTIC_KEEP_BYTES);
                 BackendFailure::failed(format!(
-                    "invalid openpyxl worker response (exit {:?}): {error}; {diagnostic}",
-                    status.code()
+                    "openpyxl worker 响应解析失败（类别=IPC 输出异常）：退出码 {:?}，\
+                     响应 {response_size} 字节，JSON 解析错误：{error}；\
+                     输出不会发布；stderr 摘要：{diagnostic}。{}",
+                    status.code(),
+                    worker_run_diagnostics(
+                        config,
+                        &plan.request_id,
+                        status.code(),
+                        timed_out,
+                        elapsed,
+                    )
                 ))
             })?;
         if response.schema_version != 1
             || response.request_id.as_deref() != Some(plan.request_id.as_str())
         {
             return Err(BackendFailure::failed(
-                "openpyxl worker response version/request_id mismatch",
+                "openpyxl worker 响应的协议版本或 request_id 与本次请求不一致（类别=IPC 输出异常）",
             ));
         }
         if response.status == "unsupported_before_write" {
             let error = response
                 .error
-                .map(|error| format!("{}: {}", error.kind, error.message))
-                .unwrap_or_else(|| "worker rejected operation before writing".to_owned());
+                .map(|error| worker_failure_message(&error.kind, &error.message))
+                .unwrap_or_else(|| "worker 在写入前拒绝了本次修改计划".to_owned());
             return Err(BackendFailure::unsupported_before_write(error));
         }
         if response.status != "applied" || !status.success() {
             let error = response
                 .error
-                .map(|error| format!("{}: {}", error.kind, error.message))
-                .unwrap_or_else(|| format!("worker exited with {:?}", status.code()));
-            let diagnostic = read_diagnostic(stderr_file.path());
+                .map(|error| worker_failure_message(&error.kind, &error.message))
+                .unwrap_or_else(|| format!("worker 异常退出（退出码 {:?}）", status.code()));
+            let diagnostic = read_diagnostic_bounded(stderr_file.path(), DIAGNOSTIC_KEEP_BYTES);
             return Err(BackendFailure::failed(format!(
-                "openpyxl worker failed: {error}; {diagnostic}"
+                "{error}；stderr 摘要：{diagnostic}。{}",
+                worker_run_diagnostics(
+                    config,
+                    &plan.request_id,
+                    status.code(),
+                    timed_out,
+                    elapsed,
+                )
             )));
         }
         if response.operation_count != Some(plan.operations.len()) {
@@ -4171,17 +4430,674 @@ impl Drop for ScratchFile {
     }
 }
 
-fn read_diagnostic(path: &Path) -> String {
-    fs::read_to_string(path)
-        .unwrap_or_default()
-        .chars()
-        .take(4096)
-        .collect()
+/// 有界读取诊断文本：保留开头与结尾各 keep_bytes，超出时插入 TRUNCATED 标记
+/// （读取阶段即控制内存占用，不整读大文件）。非 UTF-8 字节按 lossy 处理。
+fn read_diagnostic_bounded(path: &Path, keep_bytes: usize) -> String {
+    let Ok(metadata) = fs::metadata(path) else {
+        return String::new();
+    };
+    let size = metadata.len();
+    if size == 0 {
+        return String::new();
+    }
+    let truncated = size > 2 * keep_bytes as u64;
+    let mut bytes = if !truncated {
+        fs::read(path).unwrap_or_default()
+    } else {
+        let mut head = Vec::with_capacity(keep_bytes);
+        if let Ok(mut file) = File::open(path) {
+            let _ = Read::take(&mut file, keep_bytes as u64).read_to_end(&mut head);
+        }
+        let mut tail = Vec::with_capacity(keep_bytes);
+        if let Ok(mut file) = File::open(path) {
+            if file.seek(std::io::SeekFrom::End(-(keep_bytes as i64))).is_ok() {
+                let _ = file.read_to_end(&mut tail);
+            }
+        }
+        let mut bytes = head;
+        bytes.extend_from_slice(
+            format!(
+                "\n...[TRUNCATED：stderr 共 {size} 字节，仅保留首尾各 {keep_bytes} 字节]...\n"
+            )
+            .as_bytes(),
+        );
+        bytes.extend_from_slice(&tail);
+        bytes
+    };
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// 单个日志流是否超过容量上限；超过时返回流名称供错误信息引用。
+fn stream_over_cap(path: &Path, label: &str) -> Option<&'static str> {
+    let over = fs::metadata(path).map_or(false, |meta| meta.len() > MAX_WORKER_STREAM_BYTES);
+    if over {
+        // 静态化标签：只有 stdout/stderr 两个调用点。
+        Some(if label == "stdout" { "stdout" } else { "stderr" })
+    } else {
+        None
+    }
+}
+
+/// 终止整棵受控进程树并回收直接子进程；返回人类可读的清理结果。
+fn terminate_and_reap(worker: &mut WorkerProcess) -> String {
+    let terminate = worker.terminate_tree();
+    let reaped = worker.wait();
+    match (terminate, reaped) {
+        (Ok(()), Ok(status)) => format!("进程树已终止并回收（退出码 {:?}）", status.code()),
+        (Ok(()), Err(error)) => format!("进程树已终止，但回收失败：{error}"),
+        (Err(error), Ok(status)) => {
+            format!("进程树终止失败：{error}（已回收，退出码 {:?}）", status.code())
+        }
+        (Err(terminate_error), Err(reap_error)) => format!(
+            "进程树终止失败：{terminate_error}；回收失败：{reap_error}"
+        ),
+    }
+}
+
+/// 开发者诊断行：覆盖 run_id、运行时与 worker 路径、协议版本、退出码、
+/// 超时与耗时。不包含业务工作簿的单元格内容。
+fn worker_run_diagnostics(
+    config: &OpenpyxlWorkerConfig,
+    run_id: &str,
+    exit_code: Option<i32>,
+    timed_out: bool,
+    elapsed: Duration,
+) -> String {
+    format!(
+        "诊断：run_id={run_id}；Python={}; worker={}；协议版本={}；退出码={exit_code:?}；\
+         超时={}; 耗时={} ms",
+        config.python_executable.display(),
+        config.worker_script.display(),
+        OpenpyxlWorkerConfig::PROTOCOL_VERSION,
+        if timed_out { "是" } else { "否" },
+        elapsed.as_millis(),
+    )
+}
+
+/// 把 worker 错误类型映射为用户可读的类别与修复建议（不含业务单元格内容）。
+fn worker_failure_context(kind: &str) -> (&'static str, &'static str) {
+    match kind {
+        "worker_unavailable" => (
+            "运行环境不完整",
+            "请重新安装包含 openpyxl 运行时的发行包",
+        ),
+        "unsupported_format"
+        | "unsupported_operation"
+        | "unsupported_workbook_structure"
+        | "unsupported_import_source"
+        | "unsupported_formula_kind"
+        | "unsupported_whitespace_semantics"
+        | "partial_merge_copy"
+        | "formula_cache_not_preserved"
+        | "unknown_package_parts" => (
+            "当前引擎不支持该修改",
+            "请改用其他引擎或调整修改内容",
+        ),
+        "invalid_request" | "invalid_operation" | "invalid_range" | "invalid_paths"
+        | "invalid_output" | "invalid_xml" => ("修改计划无效", "请检查输入与修改内容后重试"),
+        "workbook_open_failed" | "invalid_workbook" => (
+            "工作簿打开失败",
+            "请确认文件未损坏且未被其他程序独占",
+        ),
+        "operation_failed" => ("操作执行失败", "请查看运行日志定位失败步骤"),
+        "save_failed" | "source_changed" | "output_reopen_failed" | "style_table_corrupted" => (
+            "保存或校验失败",
+            "输出未发布；请重试，若复现请携带运行日志反馈",
+        ),
+        "input_missing" => ("输入文件缺失", "请确认源工作簿存在"),
+        "output_exists" => ("输出文件已存在", "请先清理候选输出文件"),
+        _ => ("执行失败", "请查看运行日志获取详情"),
+    }
+}
+
+/// 组装用户可读的失败信息：阶段（由调用方上下文体现）、类别、原因与建议。
+fn worker_failure_message(kind: &str, message: &str) -> String {
+    let (category, suggestion) = worker_failure_context(kind);
+    format!(
+        "openpyxl worker 失败（类别={category}）：{}；建议：{suggestion}",
+        truncate_text(message, 1024)
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 运行时解析 / 握手 / 有界输出的测试工具与用例。
+    mod runtime {
+        use super::super::*;
+        use std::io::Write as _;
+
+        /// 测试用受控 Python：优先隔离测试运行时环境变量，其次仓库 dist 运行时。
+        fn test_python() -> Option<PathBuf> {
+            for name in ["RUST_WORKSPACE_OPENPYXL_PYTHON", "PYTOOLS_OPENPYXL_PYTHON"] {
+                if let Some(path) = std::env::var_os(name) {
+                    let path = PathBuf::from(path);
+                    if path.is_file() {
+                        return Some(path);
+                    }
+                }
+            }
+            let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
+            let dist_python = if cfg!(windows) {
+                workspace.join("dist/python/python.exe")
+            } else {
+                workspace.join("dist/python/python3")
+            };
+            dist_python.is_file().then_some(dist_python)
+        }
+
+        fn temp_dir(name: &str) -> PathBuf {
+            let path = std::env::temp_dir().join(format!(
+                "excel-editor-resolve-{}-{name}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            path
+        }
+
+        /// 创建可执行占位解释器（Unix 上需要权限位才能通过 available()）。
+        fn write_executable(path: &Path) {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(path, b"placeholder").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+
+        /// 布置 Windows ZIP 布局：<exe>/python/{python.exe, openpyxl_worker.py}。
+        fn make_zip_layout(exe_dir: &Path) {
+            write_executable(&exe_dir.join("python/python.exe"));
+            fs::write(
+                exe_dir.join("python/openpyxl_worker.py"),
+                b"print('pytools-openpyxl-worker protocol=1')",
+            )
+            .unwrap();
+        }
+
+        /// 布置 Linux deb 布局：<root>/usr/{bin/pytools,
+        /// libexec/pytools/openpyxl/{runtime/bin/python3, worker/openpyxl_worker.py}}。
+        fn make_libexec_layout(root: &Path) {
+            write_executable(&root.join("usr/bin/pytools"));
+            write_executable(&root.join("usr/libexec/pytools/openpyxl/runtime/bin/python3"));
+            fs::create_dir_all(root.join("usr/libexec/pytools/openpyxl/worker")).unwrap();
+            fs::write(
+                root.join("usr/libexec/pytools/openpyxl/worker/openpyxl_worker.py"),
+                b"worker",
+            )
+            .unwrap();
+        }
+
+        fn empty_env(exe_dir: &Path) -> RuntimeResolution {
+            RuntimeResolution {
+                exe_dir: Some(exe_dir.to_path_buf()),
+                python_override: None,
+                worker_override: None,
+                allow_dev_tree: false,
+            }
+        }
+
+        #[test]
+        fn resolves_linux_libexec_layout_only() {
+            let root = temp_dir("libexec");
+            make_libexec_layout(&root);
+            let empty = temp_dir("libexec-empty");
+            let env = empty_env(&empty);
+            let config = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                root.join("usr/bin/pytools"),
+                "pytools",
+            )
+            .expect("libexec layout must resolve");
+            assert_eq!(
+                config.python_executable,
+                root.join("usr/libexec/pytools/openpyxl/runtime/bin/python3")
+            );
+            assert_eq!(
+                config.worker_script,
+                root.join("usr/libexec/pytools/openpyxl/worker/openpyxl_worker.py")
+            );
+            let _ = fs::remove_dir_all(&root);
+            let _ = fs::remove_dir_all(&empty);
+        }
+
+        #[test]
+        fn resolves_windows_zip_layout_only() {
+            let exe = temp_dir("zip");
+            make_zip_layout(&exe);
+            let env = empty_env(&exe);
+            let config = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("unrelated/bin/pytools"),
+                "pytools",
+            )
+            .expect("zip layout must resolve");
+            assert_eq!(config.python_executable, exe.join("python/python.exe"));
+            assert_eq!(config.worker_script, exe.join("python/openpyxl_worker.py"));
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn resolves_zip_runtime_bin_variant() {
+            let exe = temp_dir("zip-runtime-bin");
+            let interpreter = if cfg!(windows) { "python.exe" } else { "python3" };
+            write_executable(&exe.join("python/runtime/bin").join(interpreter));
+            fs::create_dir_all(exe.join("python")).unwrap();
+            fs::write(exe.join("python/openpyxl_worker.py"), b"worker").unwrap();
+            let env = empty_env(&exe);
+            let config = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("unrelated"),
+                "pytools",
+            )
+            .expect("runtime/bin variant must resolve");
+            assert_eq!(
+                config.python_executable,
+                exe.join("python/runtime/bin").join(interpreter)
+            );
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn path_python_alone_is_never_a_runtime() {
+            // 只有“裸散落在程序目录根”的 python3（不在 python/ 布局里）且无
+            // worker：不允许把 PATH 或任意位置的 Python 当作正式运行时。
+            let exe = temp_dir("path-only");
+            write_executable(&exe.join("python3"));
+            let env = empty_env(&exe);
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("pytools"),
+                "pytools",
+            )
+            .expect_err("a stray interpreter must not resolve as a runtime");
+            let text = format!("{error:#}");
+            assert!(text.contains("不做 PATH 回退"), "{text}");
+            assert!(text.contains("ZIP/分发布局"), "{text}");
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn dev_tree_fallback_requires_explicit_python() {
+            // 合成开发树：<root>/Cargo.toml + crates/excel-editor/python/worker。
+            let root = temp_dir("devtree");
+            fs::create_dir_all(root.join("target/debug")).unwrap();
+            fs::write(root.join("Cargo.toml"), b"[workspace]").unwrap();
+            let worker = root.join("crates/excel-editor/python/openpyxl_worker.py");
+            fs::create_dir_all(worker.parent().unwrap()).unwrap();
+            fs::write(&worker, b"worker").unwrap();
+            let exe_dir = root.join("target/debug");
+
+            // 无解释器覆盖：明确报错且不得使用 PATH。
+            let env = RuntimeResolution {
+                exe_dir: Some(exe_dir.clone()),
+                python_override: None,
+                worker_override: None,
+                allow_dev_tree: true,
+            };
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe_dir.join("app"),
+                "pytools",
+            )
+            .expect_err("dev tree without explicit python must not resolve");
+            assert!(format!("{error:#}").contains("PYTOOLS_OPENPYXL_PYTHON"), "{error:#}");
+
+            // 提供解释器覆盖：走开发树 worker。
+            let python = test_python().expect("dist runtime required for dev-tree test");
+            let env = RuntimeResolution {
+                exe_dir: Some(exe_dir.clone()),
+                python_override: Some(python.clone()),
+                worker_override: None,
+                allow_dev_tree: true,
+            };
+            let config = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe_dir.join("app"),
+                "pytools",
+            )
+            .expect("dev tree with explicit python must resolve");
+            assert_eq!(config.python_executable, python);
+            assert_eq!(config.worker_script, worker);
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn python_override_without_worker_names_the_missing_variable() {
+            let exe = temp_dir("only-python");
+            let env = RuntimeResolution {
+                exe_dir: Some(exe.clone()),
+                python_override: Some(exe.join("host-python.exe")),
+                worker_override: None,
+                allow_dev_tree: false,
+            };
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("app"),
+                "pytools",
+            )
+            .expect_err("python-only override must fail");
+            let text = format!("{error:#}");
+            assert!(
+                text.contains("PYTOOLS_OPENPYXL_PYTHON") && text.contains("PYTOOLS_OPENPYXL_WORKER"),
+                "{text}"
+            );
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn worker_override_without_python_names_the_missing_variable() {
+            let exe = temp_dir("only-worker");
+            let env = RuntimeResolution {
+                exe_dir: Some(exe.clone()),
+                python_override: None,
+                worker_override: Some(exe.join("worker.py")),
+                allow_dev_tree: false,
+            };
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("app"),
+                "pytools",
+            )
+            .expect_err("worker-only override must fail");
+            let text = format!("{error:#}");
+            assert!(
+                text.contains("PYTOOLS_OPENPYXL_PYTHON") && text.contains("PYTOOLS_OPENPYXL_WORKER"),
+                "{text}"
+            );
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn invalid_override_paths_are_config_errors_even_with_other_layouts() {
+            // 两个变量都设置但路径无效：显式覆盖必须被遵守，即使存在可用
+            // 的打包布局也不得静默回退。
+            let exe = temp_dir("bad-override");
+            make_zip_layout(&exe);
+            let env = RuntimeResolution {
+                exe_dir: Some(exe.clone()),
+                python_override: Some(exe.join("missing-python.exe")),
+                worker_override: Some(exe.join("missing-worker.py")),
+                allow_dev_tree: false,
+            };
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("app"),
+                "pytools",
+            )
+            .expect_err("invalid explicit override must fail");
+            assert!(format!("{error:#}").contains("显式覆盖无效"), "{error:#}");
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        #[test]
+        fn preflight_and_execution_share_the_same_resolution() {
+            // 预检（from_environment_or_product_layout / resolve_runtime）与执行
+            // （for_product_binary）必须对同一布局得出同一组路径。
+            let root = temp_dir("consistent");
+            make_libexec_layout(&root);
+            let empty = temp_dir("consistent-empty");
+            let binary = root.join("usr/bin/pytools");
+            let resolved = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &empty_env(&empty),
+                &binary,
+                "pytools",
+            )
+            .expect("resolve for preflight");
+            let via_backend =
+                OpenpyxlWorkerConfig::for_product_binary(&binary, "pytools")
+                    .expect("resolve for execution");
+            assert_eq!(resolved.python_executable, via_backend.python_executable);
+            assert_eq!(resolved.worker_script, via_backend.worker_script);
+            let _ = fs::remove_dir_all(&root);
+            let _ = fs::remove_dir_all(&empty);
+        }
+
+        #[test]
+        fn unicode_and_space_paths_resolve() {
+            let base = temp_dir("unicode-base");
+            let exe = base.join("中文 目录 #测试");
+            make_zip_layout(&exe);
+            let env = empty_env(&exe);
+            let config = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("app.exe"),
+                "pytools",
+            )
+            .expect("unicode/space paths must resolve");
+            assert!(config.python_executable.display().to_string().contains("中文 目录"));
+            let _ = fs::remove_dir_all(&base);
+        }
+
+        #[test]
+        fn missing_worker_is_reported_with_searched_locations() {
+            let exe = temp_dir("missing-worker");
+            write_executable(&exe.join("python/python.exe"));
+            // 故意不写 openpyxl_worker.py。
+            let env = empty_env(&exe);
+            let error = OpenpyxlWorkerConfig::resolve_runtime_with(
+                &env,
+                exe.join("app.exe"),
+                "pytools",
+            )
+            .expect_err("incomplete zip layout must fail");
+            let text = format!("{error:#}");
+            assert!(text.contains("ZIP/分发布局"), "{text}");
+            assert!(text.contains("发行包"), "{text}");
+            let _ = fs::remove_dir_all(&exe);
+        }
+
+        fn handshake_lock() -> &'static std::sync::Mutex<()> {
+            static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            &LOCK
+        }
+
+        /// 允许前序测试 panic 后继续使用（否则毒化会级联失败）。
+        fn handshake_guard() -> std::sync::MutexGuard<'static, ()> {
+            handshake_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        }
+
+        fn write_worker_script(path: &Path, body: &str) {
+            fs::write(path, body).unwrap();
+        }
+
+        #[test]
+        fn handshake_success_caches_until_worker_changes() {
+            let _guard = handshake_guard();
+            let Some(python) = test_python() else {
+                eprintln!("SKIP: no local python runtime for handshake tests");
+                return;
+            };
+            reset_handshake_cache_for_tests();
+            let dir = temp_dir("handshake");
+            let worker = dir.join("worker.py");
+            write_worker_script(
+                &worker,
+                "import sys\nprint('pytools-openpyxl-worker protocol=1')\nprint('openpyxl=3.1.5')\n",
+            );
+            let config = OpenpyxlWorkerConfig::new(python, worker.clone()).unwrap();
+            config.verify_handshake().expect("fresh handshake must pass");
+            // 缓存命中路径：结果仍为成功。
+            config.verify_handshake().expect("cached handshake must pass");
+
+            // 替换 worker（内容/大小变化 => 身份变化）：不得继续使用过期缓存。
+            write_worker_script(
+                &worker,
+                "import sys\nprint('pytools-openpyxl-worker protocol=999')\nprint('openpyxl=3.1.5')\n",
+            );
+            let error = config
+                .verify_handshake()
+                .expect_err("changed worker must invalidate the cache and re-probe");
+            assert!(error.contains("协议问题"), "{error}");
+            reset_handshake_cache_for_tests();
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn handshake_cache_isolates_worker_combinations() {
+            let _guard = handshake_guard();
+            let Some(python) = test_python() else {
+                eprintln!("SKIP: no local python runtime for handshake tests");
+                return;
+            };
+            reset_handshake_cache_for_tests();
+            let dir = temp_dir("handshake-isolation");
+            let good = dir.join("good.py");
+            let bad = dir.join("bad.py");
+            write_worker_script(
+                &good,
+                "print('pytools-openpyxl-worker protocol=1')\nprint('openpyxl=3.1.5')\n",
+            );
+            write_worker_script(
+                &bad,
+                "print('pytools-openpyxl-worker protocol=999')\nprint('openpyxl=3.1.5')\n",
+            );
+            let good_config = OpenpyxlWorkerConfig::new(python.clone(), good).unwrap();
+            let bad_config = OpenpyxlWorkerConfig::new(python, bad).unwrap();
+            good_config.verify_handshake().expect("good worker passes");
+            let error = bad_config
+                .verify_handshake()
+                .expect_err("bad worker must not inherit the good worker's cache entry");
+            assert!(error.contains("协议问题"), "{error}");
+            good_config.verify_handshake().expect("good cache entry survives");
+            reset_handshake_cache_for_tests();
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn handshake_reports_protocol_mismatch_and_legacy_worker() {
+            let _guard = handshake_guard();
+            let Some(python) = test_python() else {
+                eprintln!("SKIP: no local python runtime for handshake tests");
+                return;
+            };
+            reset_handshake_cache_for_tests();
+            let dir = temp_dir("handshake-classify");
+
+            // 非法版本输出。
+            let worker = dir.join("garbage.py");
+            write_worker_script(&worker, "print('hello world')\n");
+            let config = OpenpyxlWorkerConfig::new(python.clone(), worker).unwrap();
+            let error = config.verify_handshake().expect_err("garbage output must fail");
+            assert!(error.contains("协议问题"), "{error}");
+
+            // 旧版 worker 不支持 --version（argparse 退出码 2）。
+            let legacy = dir.join("legacy.py");
+            write_worker_script(
+                &legacy,
+                "import argparse\nparser = argparse.ArgumentParser()\n\
+                 parser.add_argument('--request', required=True)\n\
+                 parser.add_argument('--response', required=True)\n\
+                 parser.parse_args()\n",
+            );
+            let config = OpenpyxlWorkerConfig::new(python, legacy).unwrap();
+            let error = config
+                .verify_handshake()
+                .expect_err("worker without --version must fail");
+            assert!(error.contains("不支持 --version"), "{error}");
+            reset_handshake_cache_for_tests();
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn handshake_detects_missing_openpyxl() {
+            let _guard = handshake_guard();
+            let Some(python) = test_python() else {
+                eprintln!("SKIP: no local python runtime for handshake tests");
+                return;
+            };
+            reset_handshake_cache_for_tests();
+            let dir = temp_dir("handshake-openpyxl");
+            let worker = dir.join("missing_openpyxl.py");
+            write_worker_script(
+                &worker,
+                "import sys\n\
+                 print('pytools-openpyxl-worker protocol=1')\n\
+                 print('openpyxl=missing (simulated)')\n\
+                 sys.exit(3)\n",
+            );
+            let config = OpenpyxlWorkerConfig::new(python, worker).unwrap();
+            let error = config
+                .verify_handshake()
+                .expect_err("missing openpyxl must fail the handshake");
+            assert!(error.contains("环境问题") && error.contains("openpyxl"), "{error}");
+            reset_handshake_cache_for_tests();
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn missing_interpreter_is_an_environment_problem() {
+            let _guard = handshake_guard();
+            reset_handshake_cache_for_tests();
+            let dir = temp_dir("handshake-missing-python");
+            let worker = dir.join("worker.py");
+            write_worker_script(&worker, "print('anything')\n");
+            let config = OpenpyxlWorkerConfig::new(dir.join("missing-python.exe"), worker).unwrap();
+            let error = config.verify_handshake().expect_err("missing python must fail");
+            assert!(error.contains("环境问题"), "{error}");
+            reset_handshake_cache_for_tests();
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn bounded_diagnostic_reader_keeps_head_and_tail() {
+            let dir = temp_dir("bounded");
+            let path = dir.join("diagnostic.txt");
+            let head = "HEAD-".repeat(64);
+            let tail = "-TAIL".repeat(64);
+            let mut file = File::create(&path).unwrap();
+            for _ in 0..64 {
+                file.write_all(head.as_bytes()).unwrap();
+            }
+            for _ in 0..64 {
+                file.write_all(tail.as_bytes()).unwrap();
+            }
+            drop(file);
+            let text = read_diagnostic_bounded(&path, 256);
+            assert!(text.contains("TRUNCATED"), "oversized stderr must be marked: {text}");
+            assert!(text.starts_with(&head[..head.len().min(200)]));
+            assert!(text.trim_end().ends_with(&tail[tail.len() - 100..]));
+
+            // 小文件不截断。
+            fs::write(&path, b"short diagnostic").unwrap();
+            let text = read_diagnostic_bounded(&path, 256);
+            assert_eq!(text, "short diagnostic");
+
+            // 非 UTF-8 字节安全处理。
+            fs::write(&path, [0xff, 0xfe, b'a', b'b']).unwrap();
+            let text = read_diagnostic_bounded(&path, 256);
+            assert!(text.contains("ab"), "lossy decoding must keep ascii: {text}");
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn stream_cap_reports_oversized_streams() {
+            let dir = temp_dir("stream-cap");
+            let path = dir.join("stderr.txt");
+            fs::write(&path, vec![b'x'; (MAX_WORKER_STREAM_BYTES + 1) as usize]).unwrap();
+            assert_eq!(stream_over_cap(&path, "stderr"), Some("stderr"));
+            fs::write(&path, b"tiny").unwrap();
+            assert_eq!(stream_over_cap(&path, "stderr"), None);
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn worker_failure_messages_carry_category_and_suggestion() {
+            let message = worker_failure_message("worker_unavailable", "openpyxl import failed: boom");
+            assert!(message.contains("运行环境不完整"), "{message}");
+            assert!(message.contains("重新安装"), "{message}");
+            let message = worker_failure_message("save_failed", "disk full");
+            assert!(message.contains("保存或校验失败"), "{message}");
+        }
+    }
 
     fn defined_name(scope: Option<&str>, name: &str, text: &str) -> CanonicalDefinedName {
         CanonicalDefinedName {

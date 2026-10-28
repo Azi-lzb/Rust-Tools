@@ -148,17 +148,19 @@ fn capability_for_plain_xlsx(binary: &Path) -> excel_editor::BackendCapability {
 
 /// openpyxl 运行时预检：复用 excel-editor 的统一解析入口
 /// （`OpenpyxlWorkerConfig::resolve_runtime`），保证“预检结论”与“执行解析”
-/// 永远一致；失败消息包含按顺序的查找位置与缺失项。
+/// 永远一致；失败消息包含按顺序的查找位置与缺失项。预检通过不仅代表
+/// 文件存在，还实际启动运行时与 worker 完成协议版本握手（带缓存）。
 fn openpyxl_runtime_error(binary: &Path) -> Option<String> {
     let capability = capability_for_plain_xlsx(binary);
-    match excel_editor::OpenpyxlXlsxBackend::from_environment_or_product_layout(
+    let backend = match excel_editor::OpenpyxlXlsxBackend::from_environment_or_product_layout(
         capability,
         binary,
         "pytools",
     ) {
-        Ok(_) => None,
-        Err(error) => Some(format!("{error:#}")),
-    }
+        Ok(backend) => backend,
+        Err(error) => return Some(format!("{error:#}")),
+    };
+    backend.verify_worker_handshake().err()
 }
 
 /// 执行条目：每个工作簿一条执行记录。

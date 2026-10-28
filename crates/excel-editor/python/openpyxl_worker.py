@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import posixpath
+import re
 import sys
 import time
 import traceback
@@ -403,7 +404,7 @@ def _range_snapshot(source: Any, data_only_source: Any, address: str) -> Tuple[A
 def _copy_cells(source: Any, cached: Any, target: Any, bounds: Tuple[int, int, int, int],
                 target_start: str, copy_values: bool, copy_formulas: bool,
                 style_mode: str, copy_comments: bool, materialize_blanks: bool,
-                hide_zero: bool) -> None:
+                hide_zero: bool, materialized: Optional[Dict[int, Set[str]]] = None) -> None:
     from openpyxl.utils.cell import coordinate_to_tuple
     from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
     min_row, min_col, max_row, max_col = bounds
@@ -448,6 +449,11 @@ def _copy_cells(source: Any, cached: Any, target: Any, bounds: Tuple[int, int, i
             else:
                 from openpyxl.comments import Comment
                 dst.comment = Comment(comment[0], comment[1])
+        if materialized is not None:
+            # openpyxl 的写入器会跳过“无值且样式为默认”的单元格；记录显式
+            # 具体化的坐标，保存后由 _materialize_tracked_cells 补写，
+            # 保证读取端能看到与计划一致的存在性。
+            materialized.setdefault(id(target), set()).add(dst.coordinate)
 
 
 def _copy_merges(source: Any, target: Any, bounds: Tuple[int, int, int, int],
@@ -470,7 +476,23 @@ def _copy_merges(source: Any, target: Any, bounds: Tuple[int, int, int, int],
         )
         if any(existing.coord == new_range for existing in target.merged_cells.ranges):
             continue
+        # openpyxl 的 merge_cells 会把非锚点单元格替换为无样式的 MergedCell，
+        # 抹掉 _copy_cells 刚从源复制来的成员样式；先快照、合并后恢复，
+        # 保证输出与源工作簿的成员样式语义一致。
+        anchor_coordinate = "{}{}".format(
+            get_column_letter(merged.min_col + offset_col),
+            merged.min_row + offset_row,
+        )
+        member_styles: Dict[str, Any] = {}
+        for row in target[new_range]:
+            for cell in row:
+                if cell.coordinate != anchor_coordinate:
+                    member_styles[cell.coordinate] = cell._style
         target.merge_cells(new_range)
+        for row in target[new_range]:
+            for cell in row:
+                if cell.coordinate != anchor_coordinate and cell.coordinate in member_styles:
+                    cell._style = member_styles[cell.coordinate]
 
 
 def _copy_dimensions(source: Any, target: Any, bounds: Tuple[int, int, int, int],
@@ -512,7 +534,8 @@ def _copy_dimensions(source: Any, target: Any, bounds: Tuple[int, int, int, int]
                     destination.outlineLevel = dimension.outlineLevel
 
 
-def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, Any]) -> None:
+def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, Any],
+                     materialized: Optional[Dict[int, Set[str]]] = None) -> None:
     from openpyxl.comments import Comment
     from openpyxl.styles import PatternFill
     from openpyxl.utils.cell import get_column_letter, coordinate_to_tuple, range_boundaries
@@ -589,7 +612,7 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
         _copy_cells(
             source, cached_source_sheet, target, bounds, payload["target_start"],
             payload.get("copy_values", False), payload.get("copy_formulas", False),
-            style_mode, copy_comments, materialize, hide_zero,
+            style_mode, copy_comments, materialize, hide_zero, materialized,
         )
         if copy_merges:
             _copy_merges(source, target, bounds, payload["target_start"])
@@ -787,6 +810,311 @@ def _verify_style_table_integrity(output_path: Path) -> None:
         )
 
 
+def _materialize_merged_member_style_attributes(path: Path) -> None:
+    """Give every merged-range cell an explicit style attribute.
+
+    OOXML treats an omitted ``s`` attribute as style index 0. openpyxl writes
+    merged-range members without ``s`` whenever their style table entry is the
+    default, but the Rust readback (umya) reports an EMPTY style instead of the
+    default xf for such cells. Excel itself writes an explicit style attribute
+    on every member of a merged range; mirror that canonical behaviour by
+    adding ``s="0"`` where openpyxl omitted it inside merged ranges only.
+    """
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    replacement = path.with_name(path.name + ".mergestyle.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "merge-style temporary output already exists")
+
+    def patch_part(data: bytes) -> bytes:
+        try:
+            root = ElementTree.fromstring(data)
+        except ElementTree.ParseError:
+            return data
+        member_coordinates = set()
+        for merge_element in root.iter("{%s}mergeCell" % main_ns):
+            reference = merge_element.attrib.get("ref")
+            if not reference:
+                continue
+            from openpyxl.utils.cell import get_column_letter, range_boundaries
+            try:
+                min_col, min_row, max_col, max_row = range_boundaries(reference)
+            except (TypeError, ValueError):
+                continue
+            if not all((min_col, min_row, max_col, max_row)):
+                continue
+            for row in range(min_row, max_row + 1):
+                for column in range(min_col, max_col + 1):
+                    member_coordinates.add(
+                        "{}{}".format(get_column_letter(column), row)
+                    )
+        if not member_coordinates:
+            return data
+        pattern = re.compile(r'<c r="([A-Z]+[0-9]+)"([^>]*?)(/?)>')
+
+        def patch(match: "re.Match[str]") -> str:
+            coordinate, attributes, closing = match.groups()
+            if coordinate not in member_coordinates or " s=" in attributes:
+                return match.group(0)
+            return '<c r="{}" s="0"{}{}>'.format(coordinate, attributes, closing)
+
+        return pattern.sub(patch, data.decode("utf-8")).encode("utf-8")
+
+    try:
+        changed_parts = set()
+        with zipfile.ZipFile(str(path), "r") as source:
+            for item in source.infolist():
+                if not (
+                    item.filename.startswith("xl/worksheets/")
+                    and item.filename.endswith(".xml")
+                ):
+                    continue
+                if patch_part(source.read(item.filename)) != source.read(item.filename):
+                    changed_parts.add(item.filename)
+        if not changed_parts:
+            return
+        with zipfile.ZipFile(str(path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename in changed_parts:
+                    data = patch_part(data)
+                target.writestr(item, data)
+        os.replace(str(replacement), str(path))
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        if isinstance(error, WorkerError):
+            raise
+        raise WorkerError(
+            "save_failed",
+            "could not materialize merged member style attributes: " + str(error),
+        )
+
+
+def _worksheet_parts_by_title(package: zipfile.ZipFile) -> Dict[str, str]:
+    """Map worksheet titles to their package part names (workbook rels order)."""
+    document_rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    workbook = ElementTree.fromstring(package.read("xl/workbook.xml"))
+    relationships = ElementTree.fromstring(package.read("xl/_rels/workbook.xml.rels"))
+    targets = {
+        relationship.attrib["Id"]: relationship.attrib["Target"]
+        for relationship in relationships.findall("{%s}Relationship" % package_rel_ns)
+        if relationship.attrib.get("TargetMode") != "External"
+    }
+    mapping: Dict[str, str] = {}
+    sheets = workbook.find("{%s}sheets" % main_ns)
+    if sheets is None:
+        return mapping
+    for sheet in sheets.findall("{%s}sheet" % main_ns):
+        name = sheet.attrib.get("name")
+        target = targets.get(sheet.attrib.get("{%s}id" % document_rel_ns) or "")
+        if not name or not target:
+            continue
+        part = posixpath.normpath(
+            target.lstrip("/") if target.startswith("/") else posixpath.join("xl", target)
+        )
+        if not part.startswith("../") and part.startswith("xl/"):
+            mapping[name] = part
+    return mapping
+
+
+def _ensure_cells_present(xml_text: str, wanted: Set[str]) -> str:
+    """Insert `<c r="..." s="0"/>` elements for tracked coordinates that
+    openpyxl's writer skipped (empty value + default style).
+
+    Row and cell elements are inserted at their OOXML-sorted positions so the
+    part stays schema-valid; existing elements are never modified.
+    """
+    from openpyxl.utils.cell import column_index_from_string, coordinate_to_tuple, get_column_letter
+
+    if not wanted:
+        return xml_text
+    row_pattern = re.compile(
+        r'<row\b[^>]*?\br="([0-9]+)"[^>]*?(?:/>|>(?:(?!</row>).)*?</row>)',
+        re.DOTALL,
+    )
+    # 匹配完整单元格元素（自闭合或带子元素），保证切片与插入点落在元素边界。
+    cell_pattern = re.compile(
+        r'<c r="([A-Z]+)([0-9]+)"[^>]*?(?:/>|>(?:(?!</c>).)*?</c>)',
+        re.DOTALL,
+    )
+
+    wanted_rows: Dict[int, Set[int]] = {}
+    for coordinate in wanted:
+        row, column = coordinate_to_tuple(coordinate)
+        wanted_rows.setdefault(row, set()).add(column)
+
+    def row_cell_text(row_index: int, column: int) -> str:
+        return '<c r="{}{}" s="0"/>'.format(get_column_letter(column), row_index)
+
+    def force_style_zero(cell_text: str) -> str:
+        """给缺省 s 属性的受跟踪单元格补 s="0"（OOXML 语义等价，
+        修复 umya 读取端把缺省 s 视为空样式的偏差）。"""
+        open_end = cell_text.find(">")
+        if open_end < 0:
+            return cell_text
+        open_tag = cell_text[:open_end]
+        if " s=" in open_tag:
+            return cell_text
+        return open_tag + ' s="0"' + cell_text[open_end:]
+
+    def replace_row(match: "re.Match[str]") -> str:
+        row_text = match.group(0)
+        row_index = int(match.group(1))
+        columns = wanted_rows.get(row_index)
+        if not columns:
+            return row_text
+        coordinates = {"{}{}".format(name, digits) for name, digits in cell_pattern.findall(row_text)}
+        present = {
+            column_index_from_string(name)
+            for name, digits in cell_pattern.findall(row_text)
+            if "{}{}".format(name, digits) in wanted
+        }
+        missing = sorted(columns - present)
+        if not missing and not (coordinates & wanted):
+            return row_text
+        if row_text.endswith("/>"):
+            head = row_text[:-2]
+            insertion = "".join(row_cell_text(row_index, column) for column in missing)
+            return head + ">" + insertion + "</row>"
+        open_tag_end = row_text.index(">") + 1
+        content = row_text[open_tag_end:-len("</row>")]
+        existing = [
+            (match.start(), match.end(), match.group(1), match.group(2))
+            for match in cell_pattern.finditer(content)
+        ]
+        pieces: List[str] = []
+        cursor = 0
+        missing_index = 0
+        for start, end, name, digits in existing:
+            while missing_index < len(missing) and missing[missing_index] < column_index_from_string(name):
+                pieces.append(content[cursor:start])
+                pieces.append(row_cell_text(row_index, missing[missing_index]))
+                missing_index += 1
+                cursor = start
+            piece = content[cursor:end]
+            cursor = end
+            if "{}{}".format(name, digits) in wanted:
+                piece = force_style_zero(piece)
+            pieces.append(piece)
+        while missing_index < len(missing):
+            pieces.append(row_cell_text(row_index, missing[missing_index]))
+            missing_index += 1
+        pieces.append(content[cursor:])
+        return row_text[:open_tag_end] + "".join(pieces) + "</row>"
+
+    sheet_data_match = re.search(
+        r"<sheetData\b[^>]*?/>|<sheetData\b[^>]*?>(.*)</sheetData>",
+        xml_text,
+        re.DOTALL,
+    )
+    if sheet_data_match is None:
+        return xml_text
+    empty_sheet_data = sheet_data_match.group(0).endswith("/>")
+    body = "" if empty_sheet_data else (sheet_data_match.group(1) or "")
+
+    body = row_pattern.sub(replace_row, body)
+    present_rows = {int(match.group(1)) for match in row_pattern.finditer(body)}
+    pending = sorted(row for row in wanted_rows if row not in present_rows)
+    if pending:
+        segments = [(match.start(), match.end(), int(match.group(1)))
+                    for match in row_pattern.finditer(body)]
+        pieces: List[str] = []
+        cursor = 0
+        pending_index = 0
+        for start, end, row_index in segments:
+            while pending_index < len(pending) and pending[pending_index] < row_index:
+                row = pending[pending_index]
+                pieces.append(body[cursor:start])
+                pieces.append(
+                    "<row r=\"{}\">{}</row>".format(
+                        row,
+                        "".join(row_cell_text(row, column) for column in sorted(wanted_rows[row])),
+                    )
+                )
+                pending_index += 1
+                cursor = start
+            pieces.append(body[cursor:end])
+            cursor = end
+        while pending_index < len(pending):
+            row = pending[pending_index]
+            pieces.append(
+                "<row r=\"{}\">{}</row>".format(
+                    row,
+                    "".join(row_cell_text(row, column) for column in sorted(wanted_rows[row])),
+                )
+            )
+            pending_index += 1
+        pieces.append(body[cursor:])
+        body = "".join(pieces)
+
+    start, end = sheet_data_match.span()
+    if empty_sheet_data:
+        return xml_text[:start] + "<sheetData>" + body + "</sheetData>" + xml_text[end:]
+    return xml_text[:start] + "<sheetData>" + body + "</sheetData>" + xml_text[end:]
+
+
+def _materialize_tracked_cells(path: Path, tracked: Dict[str, Set[str]]) -> None:
+    """Write explicit (empty, default-styled) cells for coordinates that the
+    plan materialized but openpyxl's writer skipped.
+
+    openpyxl skips cells with no value and the default style; the plan's
+    materialize semantics require them to exist so the Rust readback observes
+    the same cell inventory as the source."""
+    if not tracked:
+        return
+    replacement = path.with_name(path.name + ".cells.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "materialized-cells temporary output already exists")
+    try:
+        changed_parts = set()
+        with zipfile.ZipFile(str(path), "r") as source:
+            title_to_part = _worksheet_parts_by_title(source)
+            wanted_by_part: Dict[str, Set[str]] = {}
+            for title, coordinates in tracked.items():
+                part = title_to_part.get(title)
+                if not part or part not in source.namelist():
+                    continue
+                wanted_by_part.setdefault(part, set()).update(coordinates)
+            for item in source.infolist():
+                wanted = wanted_by_part.get(item.filename)
+                if not wanted:
+                    continue
+                if _ensure_cells_present(
+                    source.read(item.filename).decode("utf-8"), wanted
+                ) != source.read(item.filename).decode("utf-8"):
+                    changed_parts.add(item.filename)
+        if not changed_parts:
+            return
+        with zipfile.ZipFile(str(path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename in changed_parts:
+                    data = _ensure_cells_present(
+                        data.decode("utf-8"),
+                        wanted_by_part[item.filename],
+                    ).encode("utf-8")
+                target.writestr(item, data)
+        os.replace(str(replacement), str(path))
+    except WorkerError:
+        raise
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError(
+            "save_failed", "could not materialize tracked cells: " + str(error)
+        )
+
+
 def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
     started = time.monotonic()
     input_path, output_path, operations = _preflight(request)
@@ -802,15 +1130,23 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         raise WorkerError("workbook_open_failed", str(error))
     try:
         initial_sheet_names = list(workbook.sheetnames)
+        materialized_by_sheet: Dict[int, Set[str]] = {}
         for operation in operations:
             try:
-                _apply_operation(workbook, cached_workbook, operation)
+                _apply_operation(workbook, cached_workbook, operation, materialized_by_sheet)
             except WorkerError:
                 raise
             except Exception as error:
                 raise WorkerError("operation_failed", "{}: {}".format(operation.get("operation"), error))
         if not workbook.worksheets:
             raise WorkerError("invalid_output", "workbook must retain at least one worksheet")
+        # 就地修改计划：把 id 键控的具体化坐标转换为最终工作表标题键控
+        # （重命名/删除操作之后仍指向最终输出中的正确工作表）。
+        tracked_cells: Dict[str, Set[str]] = {}
+        for worksheet in workbook.worksheets:
+            coordinates = materialized_by_sheet.get(id(worksheet))
+            if coordinates:
+                tracked_cells[worksheet.title] = coordinates
         try:
             workbook.save(str(output_path))
         except Exception as error:
@@ -819,6 +1155,8 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         workbook.close()
         cached_workbook.close()
     _preserve_significant_string_whitespace(output_path)
+    _materialize_merged_member_style_attributes(output_path)
+    _materialize_tracked_cells(output_path, tracked_cells)
     after_hash = _sha256(input_path)
     if after_hash != before_hash:
         raise WorkerError("source_changed", "worker input changed while applying the edit plan")
@@ -1035,6 +1373,13 @@ def main() -> int:
     args = parser.parse_args()
     if args.version:
         print(f"pytools-openpyxl-worker protocol={WORKER_PROTOCOL_VERSION}")
+        try:
+            import openpyxl
+        except Exception as error:  # noqa: BLE001 - 环境诊断必须捕获所有导入失败
+            print(f"openpyxl=missing ({error})")
+            # 退出码 3：运行环境缺少 openpyxl（Rust 侧据此区分环境问题与协议问题）。
+            return 3
+        print(f"openpyxl={openpyxl.__version__}")
         return 0
     if not args.request or not args.response:
         parser.error("--request and --response are required")

@@ -55,6 +55,35 @@ if not exist "%DIST_DIR%\python\python.exe" (
     echo Refusing to build a package without the openpyxl runtime.
     exit /b 5
 )
+echo Verifying bundled openpyxl worker protocol handshake...
+"%DIST_DIR%\python\python.exe" -I "%DIST_DIR%\python\openpyxl_worker.py" --version > "%TEMP%\pytools-worker-version.txt" 2>&1
+if errorlevel 1 (
+    type "%TEMP%\pytools-worker-version.txt"
+    echo Bundled openpyxl worker failed --version. Re-stage the runtime:
+    echo   python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    exit /b 7
+)
+findstr /C:"protocol=1" "%TEMP%\pytools-worker-version.txt" >nul
+if errorlevel 1 (
+    type "%TEMP%\pytools-worker-version.txt"
+    echo Bundled openpyxl worker reports an unexpected protocol version.
+    echo Refusing to package a stale worker.
+    exit /b 7
+)
+findstr /B /C:"openpyxl=" "%TEMP%\pytools-worker-version.txt" | findstr /V /C:"openpyxl=missing" >nul
+if errorlevel 1 (
+    type "%TEMP%\pytools-worker-version.txt"
+    echo Bundled runtime cannot import openpyxl. Re-stage the runtime:
+    echo   python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    exit /b 7
+)
+"%DIST_DIR%\python\python.exe" -I -c "import openpyxl, et_xmlfile" >nul 2>&1
+if errorlevel 1 (
+    echo Bundled runtime cannot import openpyxl/et_xmlfile. Re-stage the runtime:
+    echo   python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    exit /b 7
+)
+del "%TEMP%\pytools-worker-version.txt" >nul 2>&1
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $root=$env:PROJECT_ROOT; $dist=Join-Path $root 'dist'; $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'; $archive=Join-Path $dist ('pytools-windows-x64-' + $env:PACKAGE_SUFFIX + '-' + $stamp + '.zip'); if (Test-Path -LiteralPath $archive) { throw 'Package already exists: ' + $archive }; $stage=Join-Path ([IO.Path]::GetTempPath()) ('pytools-package-' + [Guid]::NewGuid().ToString('N')); try { New-Item -ItemType Directory -Path $stage | Out-Null; $stageDist=Join-Path $stage 'dist'; New-Item -ItemType Directory -Path $stageDist | Out-Null; Copy-Item -LiteralPath (Join-Path $dist 'pytools.exe') -Destination $stageDist; Copy-Item -LiteralPath (Join-Path $root 'run.bat') -Destination $stage; Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage; Copy-Item -LiteralPath (Join-Path $root 'config.xlsx') -Destination $stage; Copy-Item -Path (Join-Path $dist 'python') -Destination $stageDist -Recurse; Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive; Write-Host ('Package created: ' + $archive) } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }"
 if errorlevel 1 exit /b %ERRORLEVEL%

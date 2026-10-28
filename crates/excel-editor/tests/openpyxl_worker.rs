@@ -431,7 +431,15 @@ fn worker_timeout_is_terminal_and_does_not_publish_output() -> Result<()> {
     let delayed_worker = dir.path("delayed.py");
     make_source(&input)?;
     make_import_source(&import_source)?;
-    fs::write(&delayed_worker, "import time\ntime.sleep(2)\n")?;
+    fs::write(
+        &delayed_worker,
+        "import sys, time\n\
+         if '--version' in sys.argv:\n\
+         \x20   print('pytools-openpyxl-worker protocol=1')\n\
+         \x20   print('openpyxl=3.1.5')\n\
+         \x20   sys.exit(0)\n\
+         time.sleep(2)\n",
+    )?;
     let edit_plan = plan(
         &input,
         &output,
@@ -466,7 +474,15 @@ fn abnormal_worker_exit_is_not_mistaken_for_unsupported_input() -> Result<()> {
     let crashing_worker = dir.path("crash.py");
     make_source(&input)?;
     make_import_source(&import_source)?;
-    fs::write(&crashing_worker, "raise SystemExit(23)\n")?;
+    fs::write(
+        &crashing_worker,
+        "import sys\n\
+         if '--version' in sys.argv:\n\
+         \x20   print('pytools-openpyxl-worker protocol=1')\n\
+         \x20   print('openpyxl=3.1.5')\n\
+         \x20   sys.exit(0)\n\
+         raise SystemExit(23)\n",
+    )?;
     let edit_plan = plan(
         &input,
         &output,
@@ -490,5 +506,75 @@ fn abnormal_worker_exit_is_not_mistaken_for_unsupported_input() -> Result<()> {
         excel_editor::ExcelModifierErrorKind::BackendFailed
     );
     assert!(!output.exists());
+    Ok(())
+}
+
+/// .xlsm 就地修改不在本轮迁移范围（业务侧如实跳过，见 dedup_ops 与
+/// MIGRATION_INVENTORY）。本测试固定“写入前拒绝”的证据：包检查器在
+/// plan 构建阶段即拒绝 .xlsm，worker 预检亦只接受 .xlsx，任何到达
+/// openpyxl 执行层的 .xlsm 请求都不会触发写入。
+#[test]
+fn macro_workbook_profiles_are_rejected_before_write() -> Result<()> {
+    let dir = TestDir::new("xlsm-evidence");
+    let xlsx = dir.path("source.xlsx");
+    make_source(&xlsx)?;
+    // 用真实 XLSX 内容伪装 .xlsm 扩展名：包检查器按扩展名在读取前拒绝。
+    let xlsm = dir.path("source.xlsm");
+    fs::copy(&xlsx, &xlsm)?;
+    let error = inspect_xlsx_profile(&xlsm)
+        .expect_err("macro extension must be rejected by the package inspector");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains(".xlsx only"),
+        "inspector must name the .xlsx-only constraint: {message}"
+    );
+    // 反向确认同一内容按 .xlsx 可以正常检查（失败原因确实是扩展名门控）。
+    inspect_xlsx_profile(&xlsx)?;
+    Ok(())
+}
+
+/// 到达执行层的 .xlsm 请求（例如计划格式误标为 Xlsx）在 Rust 侧即被
+/// 多道写入前门控拦截（ExcelModifier 扩展名匹配规则 / 包检查器 .xlsx-only），
+/// 属于写入前失败：不会产生任何输出文件。
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn xlsm_input_is_rejected_before_write() -> Result<()> {
+    let python = required_python_path();
+    let dir = TestDir::new("xlsm-worker");
+    let xlsx = dir.path("source.xlsx");
+    make_source(&xlsx)?;
+    let xlsm = dir.path("source.xlsm");
+    fs::copy(&xlsx, &xlsm)?;
+    let output = dir.path("result.xlsm");
+    let mut edit_plan = single_value_plan(
+        &xlsm,
+        &output,
+        excel_editor::WorkbookProfile {
+            format: WorkbookFormat::Xlsx,
+            inventory_complete: true,
+            features_present: Default::default(),
+        },
+        "xlsm-before-write".into(),
+    );
+    edit_plan.workbook.features_present = inspect_xlsx_profile(&xlsx)?.features_present;
+    let backend = OpenpyxlXlsxBackend::new(
+        capability(&edit_plan, "test"),
+        OpenpyxlWorkerConfig::new(python, worker_path())?,
+    )?;
+    let modifier = ExcelModifier::new(
+        "wsl2-x86_64-test",
+        vec![std::sync::Arc::new(backend)],
+        std::sync::Arc::new(OpenpyxlXlsxValidator),
+    )?;
+    let error = modifier
+        .execute(&edit_plan)
+        .expect_err(".xlsm input must be rejected before any write");
+    let message = error.message.to_ascii_lowercase();
+    assert!(
+        message.contains("xlsx"),
+        "a before-write gate must name the .xlsx constraint: {}",
+        error.message
+    );
+    assert!(!output.exists(), "no output may be written for .xlsm input");
     Ok(())
 }

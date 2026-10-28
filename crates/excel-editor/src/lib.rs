@@ -8,6 +8,7 @@ mod openpyxl_backend;
 mod plan;
 mod umya_backend;
 mod workbook_profile;
+mod worker_process;
 
 pub use ooxml_header_backend::{OoxmlHeaderTextBackend, OoxmlHeaderTextValidator};
 pub use openpyxl_backend::{OpenpyxlWorkerConfig, OpenpyxlXlsxBackend, OpenpyxlXlsxValidator};

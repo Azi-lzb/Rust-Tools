@@ -539,12 +539,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "excel-reader",
+ "libc",
  "ooxml-patch",
  "roxmltree",
  "rust_xlsxwriter",
  "serde",
  "serde_json",
  "umya-spreadsheet",
+ "windows-sys",
  "zip 6.0.0",
 ]
 
