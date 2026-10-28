@@ -89,3 +89,6 @@ secrets.json
 *.xlsb
 *.et
 *.csv
+
+# 人工测试包的运行产物不入库（样本输入保留）
+testdata/manual-menu/output/
