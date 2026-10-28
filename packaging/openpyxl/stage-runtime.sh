@@ -55,7 +55,7 @@ while IFS= read -r -d '' link; do
     "$temporary/runtime"/*) ;;
     *) fail "runtime symlink escapes the bundled tree: $link -> $resolved_link" ;;
   esac
-done < <(find "$destination/runtime" -type l -print0)
+done < <(find "$temporary/runtime" -type l -print0)
 
 if command -v ldd >/dev/null 2>&1; then
   while IFS= read -r -d '' object; do
@@ -64,7 +64,9 @@ if command -v ldd >/dev/null 2>&1; then
       fail "unresolved dynamic dependency in $object: $dependencies"
     fi
     while IFS= read -r dependency_line; do
-      dependency_name=${dependency_line%% *}
+      # 去掉 ldd 行首缩进，再做名称解析，避免把制表符并入库名。
+      dependency_name=${dependency_line#"${dependency_line%%[![:space:]]*}"}
+      dependency_name=${dependency_name%% *}
       dependency_path=
       if [[ "$dependency_line" == *" => "* ]]; then
         dependency_path=${dependency_line#* => }
@@ -79,7 +81,11 @@ if command -v ldd >/dev/null 2>&1; then
         "$temporary/runtime"/*) ;;
         *)
           case "$dependency_name" in
-            libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|libutil.so.*|libresolv.so.*|ld-linux-x86-64.so.*) ;;
+            # 仅放行目标系统（麒麟 V10 / 统信 UOS V20，glibc 2.28）必然自带
+            # 的基础库；libcrypt.so.1（libxcrypt）自 glibc 2.28 时代即为系统
+            # 基础组件，Python 的 crypt 支持依赖它。捆绑新版 libxcrypt 会
+            # 引入 GLIBC_2.36+ 符号，违反交付上限，故依赖目标系统提供。
+            libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|libutil.so.*|libresolv.so.*|libcrypt.so.*|ld-linux-x86-64.so.*) ;;
             *) fail "non-glibc dependency is outside the bundled runtime: $dependency_name -> $resolved_dependency" ;;
           esac
           ;;
@@ -97,7 +103,7 @@ if command -v ldd >/dev/null 2>&1; then
         fi
       done < <(objdump -T "$object" 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -Vu)
     fi
-  done < <(find "$temporary/runtime" -type f \( -name 'python3' -o -name 'python3.*' -o -name '*.so' -o -name '*.so.*' \) -print0)
+  done < <(find "$temporary/runtime" -type f \( -name 'python3' -o \( -name 'python3.*' -a ! -name '*-config' \) -o -name '*.so' -o -name '*.so.*' \) -print0)
 fi
 
 [[ ! -e "$destination" ]] || fail "destination appeared during staging: $destination"

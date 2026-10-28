@@ -81,24 +81,48 @@ PT-1-2 时序提取、COM 批注版工作表提取、PDF 导出、跨类别转�
 
 `../docs/archive/MIGRATION_INVENTORY_20261027.md` 保留拆分前完整业务细节、历史测试、待确认事项与证据；`GPT修改记录/`、`probe/reports/` 和现有人工作业记录原样保留。历史阶段门、旧项目路径及分支同步描述只解释当时背景，不是当前指令。
 
-## openpyxl 运行时与就地修改（2026-10-28 状态）
+## openpyxl 运行时与就地修改（2026-10-29 状态）
 
 - openpyxl 子进程为 IPC（独立 Python 进程 + JSON 文件交换），非 FFI。
 - 运行时解析已统一到 `OpenpyxlWorkerConfig::resolve_runtime`（预检与执行共用）：
-  显式环境变量 → deb libexec 布局 → Windows ZIP `python/` 布局 → debug 开发树；
-  PATH 系统 Python 不构成受支持分发，缺失时列出全部查找位置。
-- worker 增加 `--version` 协议握手（`WORKER_PROTOCOL_VERSION = 1`，与 Rust
-  `PROTOCOL_VERSION` 须同步）；版本不匹配在派发前报“能力不可用”。
-- 超时清理为 kill + wait（含文档化边界）；stderr 诊断截断至 1024 字符。
-- **未验收**：上述改动尚未经人工在 deb/ZIP/开发树三场景逐一验证。
+  显式环境变量 → deb libexec 布局 → Windows ZIP `python/` 布局（兼容
+  `python/runtime/bin/` 变体）→ 开发树（仅 debug 构建，或
+  `PYTOOLS_OPENPYXL_DEV_TREE=1` 显式允许；解释器仍须 `PYTOOLS_OPENPYXL_PYTHON`
+  显式提供）；PATH 系统 Python 不构成受支持分发，缺失时列出全部查找位置。
+  显式覆盖两个变量必须同时设置且有效，否则返回明确配置错误。解析含 10 项
+  布局/覆盖/错误信息单元测试（含中文、空格与 Unicode 路径）。
+- worker `--version` 协议握手（`WORKER_PROTOCOL_VERSION = 1`，与 Rust
+  `PROTOCOL_VERSION` 须同步）：版本不匹配/环境不完整在派发前报“能力不可用”，
+  错误区分环境问题与协议问题；worker 还会报告 openpyxl 是否可用（缺失时
+  退出码 3）。握手成功按「解释器路径 + worker 路径 + 双方文件版本标识」
+  缓存，worker/运行时被替换后失效；探测本身有 30 秒超时与输出上限。
+- 跨平台进程树清理：Windows 用 Job Object（CREATE_SUSPENDED 先入 Job 再恢复
+  主线程，KILL_ON_JOB_CLOSE 兜底），Unix 用独立进程组（kill -pgid）。超时或
+  异常时终止整棵受控进程树并回收直接子进程；测试验证孙进程不再存活。
+  worker/响应日志各有 64 MiB 单次上限，超限终止进程树；响应 JSON 有大小
+  上限与解析诊断；stderr 诊断按首尾保留 + TRUNCATED 标记有界读取；失败
+  消息含类别、中文原因、修复建议与 run_id/协议/退出码/耗时诊断行。
+- 上述改动已由自动化测试覆盖（excel-editor 11 个测试目标全部通过，含
+  修复后通过的端到端 `rust_modifier_invokes_one_batch_worker_and_preserves_source`）。
 - 5-1 村镇银行拆分已支持 openpyxl/umya 引擎选择的就地修改（选择引擎后选文件）；
-  **5-1 的就地行为与 4 个既有测试待人工验收后改写**（当前标记 ignored）。
+  **5-1 的就地行为与 4 个既有测试待人工验收后改写**（当前标记 ignored，
+  需设置 RUST_WORKSPACE_OPENPYXL_PYTHON 后以 --ignored 运行）。
 - 5-2/5-7/5-8 保持原有副本/提交模式（就地执行代码已具备但未启用，见
   `inplace_edit.rs`）。
 - 5-3 保持副本（对齐旧 Python）；5-4 外汇页眉必须走 OOXML 补丁后端
   （实测 umya/openpyxl 无法完成），保持副本/安全替换；5-5/5-6 只读源新建结果。
 - `.xls` 不支持就地修改，明确提示先用 4-4 转换为 `.xlsx`。
-- Windows 打包已含 `dist/python/` 运行时（stage-windows-runtime.py，23.4 MiB，
-  自检通过，产物未提交仓库）；package.bat 在运行时缺失时拒绝打包。
-  Linux deb 打包已接线 stage-runtime.sh（需 OPENPYXL_RUNTIME_SOURCE），
-  并新增 worker `--version` 冒烟探测；**两条打包路径均未实际运行验证**。
+- `.xlsm` 就地修改不在迁移范围：包检查器在计划构建阶段即拒绝 `.xlsm`
+  （仅接受 `.xlsx`，有测试固定该写入前拒绝证据）；worker 预检同样只接受
+  `.xlsx`。5-6 提取可读取 `.xlsm` 并输出新的 `.xlsx`（不保留源 VBA）。
+- Windows 打包已含 `dist/python/` 运行时（stage-windows-runtime.py，
+  CPython embeddable 3.12.10 + openpyxl 3.1.5，23.4 MiB）；package.bat 在
+  运行时缺失或握手失败时拒绝打包，并修复了 %~dp0 尾反斜杠导致 git 探测
+  失败的既有缺陷。ZIP 实际生成并用 verify-windows-zip.py 完成解压验证
+  （握手、import、合成 ExcelEditPlan 经打包内 pytools.exe 执行 + 回读 +
+  输入快照全部通过）。Linux deb 打包已接线 stage-runtime.sh（需
+  OPENPYXL_RUNTIME_SOURCE；锁定 Python 3.8.18 + openpyxl 3.1.5），含 GLIBC
+  2.28 符号上限、ldd 基础库白名单与 worker `--version` 冒烟；脚本修复了
+  CRLF shebang、符号链接检查路径、ldd 行首空白与 libcrypt 白名单四处缺陷。
+  运行时构建方法见 `packaging/openpyxl/README.md`；**deb/ZIP 均未做目标
+  系统人工验收**。

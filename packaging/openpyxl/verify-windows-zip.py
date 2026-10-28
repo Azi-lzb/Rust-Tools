@@ -122,7 +122,7 @@ def main() -> None:
             "workbook": {
                 "format": "xlsx",
                 "inventory_complete": True,
-                "features_present": ["relationships"],
+                "features_present": ["relationships", "defined_names"],
             },
             "operations": [
                 {"operation": "set_cell_value", "sheet": "Data", "cell": "A1",
@@ -138,7 +138,7 @@ def main() -> None:
             "status": "passed",
             "format": "xlsx",
             "operations": ["set_cell_value", "set_column_width"],
-            "supported_features": ["relationships"],
+            "supported_features": ["relationships", "defined_names"],
             "preserved": ["cell_values_and_types"],
             "platform": "windows-x86_64",
             "evidence": {
