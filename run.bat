@@ -8,7 +8,8 @@ if not defined PYTOOLS_CONFIG_PATH set "PYTOOLS_CONFIG_PATH=%PROJECT_ROOT%config
 
 if not exist "%PYTOOLS_EXE%" (
     echo PyTools EXE is missing: %PYTOOLS_EXE%
-    echo This script never invokes Cargo. Run build-release.bat explicitly to build from source.
+    echo This script never invokes Cargo and only checks this worktree's dist directory.
+    echo To build this worktree explicitly, run build-release.bat.
     pause
     exit /b 2
 )
@@ -19,7 +20,7 @@ if errorlevel 1 (
     exit /b 4
 )
 echo Starting the existing PyTools EXE: %PYTOOLS_EXE%
-echo For development with incremental compilation, use run-dev.bat.
+echo Running the EXE from this worktree only.
 "%PYTOOLS_EXE%" menu %*
 set "RUN_EXIT_CODE=%ERRORLEVEL%"
 
