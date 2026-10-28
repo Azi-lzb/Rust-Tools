@@ -72,6 +72,8 @@ fn is_zero(value: &usize) -> bool {
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct SummaryProgress {
     pub total_inputs: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_input_index: Option<usize>,
     pub total_files: usize,
     pub current_file: Option<usize>,
     pub processed_files: usize,
@@ -81,6 +83,20 @@ pub struct SummaryProgress {
     pub total_rows: usize,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub processed_sheets: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_sheet: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_config_row: Option<usize>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sheets_discovered: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sheets_attempted: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sheets_succeeded: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sheets_failed: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sheets_skipped: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -227,6 +243,7 @@ fn summarize_used_ranges_inner(
     let mut files = 0usize;
     let mut read_elapsed = Duration::ZERO;
     for (input_index, path) in sources.iter().enumerate() {
+        progress.current_input_index = Some(input_index + 1);
         if !supported(path) {
             emitter.emit(
                 "input_filter",
@@ -304,6 +321,7 @@ fn summarize_used_ranges_inner(
             .iter()
             .map(|extent| (extent.name.clone(), summary_bounds(extent)))
             .collect::<BTreeMap<_, _>>();
+        progress.sheets_discovered += bounds_by_sheet.len();
         read_elapsed += read_started.elapsed();
         emitter.emit(
             "extent_scan",
@@ -328,7 +346,7 @@ fn summarize_used_ranges_inner(
         }
         progress.processed_files = files;
         progress.total_rows = rows_written;
-        workbooks.push((path.clone(), bounds_by_sheet));
+        workbooks.push((input_index + 1, path.clone(), bounds_by_sheet));
     }
     if files == 0 || rows_written == 0 || max_col == 0 {
         let result = SummaryResult {
@@ -395,8 +413,9 @@ fn summarize_used_ranges_inner(
     let mut error_cells = Vec::new();
     let mut unknown_error_token_cells_normalized = 0usize;
     let mut read_elapsed_during_write = Duration::ZERO;
-    for (file_index, (path, bounds_by_sheet)) in workbooks.into_iter().enumerate() {
+    for (file_index, (input_index, path, bounds_by_sheet)) in workbooks.into_iter().enumerate() {
         let current_file = file_index + 1;
+        progress.current_input_index = Some(input_index);
         let file_name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -488,6 +507,9 @@ fn summarize_used_ranges_inner(
             .unwrap_or_default();
         let mut seen_sheets = BTreeSet::new();
         for ws in &dump.sheets {
+            progress.current_sheet = Some(ws.name.clone());
+            progress.sheets_attempted += 1;
+            emitter.emit("sheet_process", "started", format!("正在处理工作表 {}", ws.name), &progress, Some(&path), None, &["pytools-core"], None, None);
             let (min_row, min_col, max_row, max_col) =
                 *bounds_by_sheet.get(&ws.name).with_context(|| {
                     format!("worksheet {:?} is missing from the extent scan", ws.name)
@@ -496,6 +518,8 @@ fn summarize_used_ranges_inner(
                 .with_context(|| format!("parse merge regions for worksheet {:?}", ws.name))?;
             seen_sheets.insert(ws.name.clone());
             if min_row == 0 || max_row < min_row || max_col < min_col {
+                progress.sheets_skipped += 1;
+                emitter.emit("sheet_process", "skipped", "工作表没有可汇总的使用区域", &progress, Some(&path), None, &["pytools-core"], None, None);
                 continue;
             }
             for row in min_row..=max_row {
@@ -548,7 +572,10 @@ fn summarize_used_ranges_inner(
                     );
                 }
             }
+            progress.sheets_succeeded += 1;
+            emitter.emit("sheet_process", "succeeded", format!("工作表 {} 处理完成", ws.name), &progress, Some(&path), None, &["pytools-core"], None, None);
         }
+        progress.current_sheet = None;
         anyhow::ensure!(
             seen_sheets.len() == bounds_by_sheet.len(),
             "worksheet set changed between extent scan and value read for {}",
@@ -1130,6 +1157,9 @@ fn summarize_by_comments_inner(
     let mut files_hit = 0usize;
     let mut unknown_error_token_cells_normalized = 0usize;
     for (input_index, source) in sources.iter().enumerate() {
+        progress.current_input_index = Some(input_index + 1);
+        progress.current_sheet = None;
+        progress.current_config_row = None;
         if !supported(source) || !source.is_file() {
             let reason = if supported(source) {
                 "输入文件不存在"
@@ -1268,6 +1298,7 @@ fn summarize_by_comments_inner(
                 Some((sheet, spec_key.to_owned()))
             })
             .collect::<Vec<_>>();
+        progress.sheets_discovered += applicable_sheets.len();
         let source_row_count = applicable_sheets
             .iter()
             .map(|(_, spec_key)| {
@@ -1284,6 +1315,8 @@ fn summarize_by_comments_inner(
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
         for (sheet, spec_key) in applicable_sheets {
+            progress.current_sheet = Some(sheet.name.clone());
+            progress.sheets_attempted += 1;
             let spec = &specs[&spec_key];
             let values = data
                 .get_mut(&spec_key)
@@ -1327,7 +1360,9 @@ fn summarize_by_comments_inner(
                     }
                 }
             }
+            progress.sheets_succeeded += 1;
         }
+        progress.current_sheet = None;
         progress.completed_files += 1;
         emitter.emit(
             "row_extract",
@@ -1788,6 +1823,8 @@ fn summarize_by_named_ranges_inner(
     let mut read_elapsed = template_started.elapsed();
     let mut unknown_error_token_cells_normalized = 0usize;
     for (input_index, source) in sources.iter().enumerate() {
+        progress.current_input_index = Some(input_index + 1);
+        progress.current_sheet = None;
         if !supported(source) || !source.is_file() {
             let reason = if supported(source) {
                 "输入文件不存在"
@@ -1889,6 +1926,7 @@ fn summarize_by_named_ranges_inner(
         let mut rows_for_file: BTreeMap<String, Vec<Vec<serde_json::Value>>> = BTreeMap::new();
         let mut structure_failure = None;
         for source_sheet in &dump.sheets {
+            progress.current_sheet = Some(source_sheet.name.clone());
             let spec_name = if spec_names.contains(&source_sheet.name) {
                 Some(source_sheet.name.as_str())
             } else if template_fallback {
@@ -1965,6 +2003,7 @@ fn summarize_by_named_ranges_inner(
             }
             continue;
         }
+        progress.current_sheet = None;
         let file_row_count = rows_for_file.values().map(Vec::len).sum::<usize>();
         for spec in &mut sheet_specs {
             if let Some(rows) = rows_for_file.remove(&spec.template_sheet) {
@@ -2873,8 +2912,13 @@ fn patch_worksheet_error_cells(xml: &[u8], errors: &[PendingErrorCell]) -> Resul
                     && node.attribute("r") == Some(row_text.as_str())
             })
             .with_context(|| format!("summary output row {row_number} is missing"))?;
+        let markup = format!(
+            "<{cell_tag} r=\"{}\" t=\"e\"><{value_tag}>{}</{value_tag}></{cell_tag}>",
+            error.address, error.excel_value
+        );
         let mut last_cell = None;
         let mut insertion = None;
+        let mut replacement = None;
         for cell in row
             .children()
             .filter(|node| is_xml_element(*node, SPREADSHEET_MAIN_NS, "c"))
@@ -2884,31 +2928,45 @@ fn patch_worksheet_error_cells(xml: &[u8], errors: &[PendingErrorCell]) -> Resul
                 .context("summary output contains a cell without an address")?;
             let (_, cell_column) = parse_a1(cell_address)
                 .with_context(|| format!("invalid summary output cell {cell_address}"))?;
-            anyhow::ensure!(
-                cell_address != error.address,
-                "summary error cell {} already exists",
-                error.address
-            );
+            if cell_address == error.address {
+                // The area-extraction writer stores the error text as a plain
+                // string before this patch step, so an existing non-typed cell
+                // is converted in place; a real typed error means a genuine
+                // double write and stays a hard failure.
+                anyhow::ensure!(
+                    cell.attribute("t") != Some("e"),
+                    "summary error cell {} already contains a typed error",
+                    error.address
+                );
+                replacement = Some(cell.range());
+                break;
+            }
             if cell_column > column_number {
                 insertion = Some(cell.range().start);
                 break;
             }
             last_cell = Some(cell);
         }
+        if let Some(range) = replacement {
+            edits.push((range.start, range.end, column_number, markup));
+            continue;
+        }
         let offset = insertion
             .or_else(|| last_cell.map(|cell| cell.range().end))
             .with_context(|| format!("summary output row {row_number} has no cell anchor"))?;
-        let markup = format!(
-            "<{cell_tag} r=\"{}\" t=\"e\"><{value_tag}>{}</{value_tag}></{cell_tag}>",
-            error.address, error.excel_value
-        );
-        edits.push((offset, column_number, markup));
+        edits.push((offset, offset, column_number, markup));
     }
 
-    edits.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
+    edits.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| right.1.cmp(&left.1))
+            .then_with(|| right.2.cmp(&left.2))
+    });
     let mut patched = source.to_owned();
-    for (offset, _, markup) in edits {
-        patched.insert_str(offset, &markup);
+    for (start, end, _, markup) in edits {
+        patched.replace_range(start..end, &markup);
     }
     roxmltree::Document::parse(&patched).context("validate patched summary worksheet XML")?;
     Ok(patched.into_bytes())

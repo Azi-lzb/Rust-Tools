@@ -80,6 +80,131 @@ impl OpenpyxlWorkerConfig {
         })
     }
 
+    /// Worker/协议版本。Rust 与 Python 两侧各自只有这一处定义；
+    /// 修改任一侧时必须同步修改 crates/excel-editor/python/openpyxl_worker.py
+    /// 中的 WORKER_PROTOCOL_VERSION。
+    pub const PROTOCOL_VERSION: u32 = 1;
+
+    /// 依次按以下顺序解析 openpyxl 运行时（第一个齐全者胜出）：
+    /// 1) PYTOOLS_OPENPYXL_PYTHON + PYTOOLS_OPENPYXL_WORKER 显式覆盖
+    ///    （两者必须同时有效，否则视为配置错误并给出明确消息）；
+    /// 2) `<安装根>/libexec/<product>/openpyxl/...`（Linux deb 布局）；
+    /// 3) `<exe目录>/python/{python.exe|python3, openpyxl_worker.py}`
+    ///    （Windows ZIP 布局，同时兼容 runtime/bin 变体）；
+    /// 4) 开发树回退（仅 debug 构建或存在 Cargo.toml 工作区标记时启用）。
+    ///
+    /// 永远不做 PATH 裸 python 回退——“系统恰好装了 Python”不构成能力可用。
+    /// 返回 Err 时携带具体的查找位置与缺失项，供预检与执行共用同一消息。
+    pub fn resolve_runtime(
+        binary: impl AsRef<Path>,
+        product: &str,
+    ) -> Result<Self> {
+        let mut searched: Vec<String> = Vec::new();
+
+        // 1) 显式覆盖：两个变量必须同时有效。
+        let python_override = std::env::var_os("PYTOOLS_OPENPYXL_PYTHON")
+            .map(PathBuf::from);
+        let worker_override = std::env::var_os("PYTOOLS_OPENPYXL_WORKER")
+            .map(PathBuf::from);
+        match (python_override, worker_override) {
+            (Some(python), Some(worker)) => {
+                let config = Self::new(python, worker)?;
+                if config.python_executable.is_file() && config.worker_script.is_file() {
+                    return Ok(config);
+                }
+                searched.push(format!(
+                    "显式覆盖：PYTOOLS_OPENPYXL_PYTHON={}、PYTOOLS_OPENPYXL_WORKER={}（文件缺失）",
+                    config.python_executable.display(),
+                    config.worker_script.display()
+                ));
+            }
+            (Some(python), None) => {
+                searched.push(format!(
+                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_PYTHON={} 但缺少 PYTOOLS_OPENPYXL_WORKER",
+                    python.display()
+                ));
+            }
+            (None, Some(worker)) => {
+                searched.push(format!(
+                    "显式覆盖不完整：设置了 PYTOOLS_OPENPYXL_WORKER={} 但缺少 PYTOOLS_OPENPYXL_PYTHON",
+                    worker.display()
+                ));
+            }
+            (None, None) => {}
+        }
+
+        // 2) Linux deb 布局。
+        if let Some(config) = Self::for_product_binary(&binary, product) {
+            if config.available() {
+                return Ok(config);
+            }
+            searched.push(format!(
+                "deb 布局：{} 与 {}",
+                config.python_executable.display(),
+                config.worker_script.display()
+            ));
+        }
+
+        // 3) Windows ZIP / 开发布局：<exe目录>/python/（兼容 runtime/bin 变体）。
+        if let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+        {
+            let python_names: &[&str] = if cfg!(windows) {
+                &["python.exe"]
+            } else {
+                &["python3", "python"]
+            };
+            for base in [
+                exe_dir.join("python"),
+                exe_dir.join("python").join("runtime").join("bin"),
+            ] {
+                for python_name in python_names {
+                    let python = base.join(python_name);
+                    let worker = exe_dir.join("python").join("openpyxl_worker.py");
+                    if python.is_file() && worker.is_file() {
+                        return Ok(Self::new(python, worker)?);
+                    }
+                }
+            }
+            searched.push(format!(
+                "ZIP/开发布局：{}\\python\\（或 python/runtime/bin/）",
+                exe_dir.display()
+            ));
+
+            // 4) 开发树回退：仅 debug 构建且能找到工作区标记时启用。
+            if cfg!(debug_assertions) {
+                let mut cursor = Some(exe_dir.as_path());
+                while let Some(dir) = cursor {
+                    if dir.join("Cargo.toml").is_file() {
+                        let python = dir
+                            .join("crates/excel-editor/python/openpyxl_worker.py");
+                        // 开发树没有独立解释器；仅在宿主已显式提供 python 时可用，
+                        // 且消息明确标注“非受支持分发方式”。
+                        let host_python = std::env::var_os("PYTOOLS_OPENPYXL_PYTHON")
+                            .map(PathBuf::from);
+                        if let Some(host_python) = host_python {
+                            if host_python.is_file() {
+                                return Ok(Self::new(host_python, python)?);
+                            }
+                        }
+                        searched.push(format!(
+                            "开发树（debug）：{}（需要 PYTOOLS_OPENPYXL_PYTHON 指向宿主 Python；系统 PATH 上的 Python 不构成受支持分发）",
+                            python.display()
+                        ));
+                        break;
+                    }
+                    cursor = dir.parent();
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "未找到可用的 openpyxl 运行时（openpyxl worker 不可用）。已按顺序查找：{}。             请安装包含 openpyxl 运行时的发行包（deb / ZIP），或同时设置              PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER 显式指定。",
+            searched.join("；")
+        ))
+    }
+
     fn validate_paths(&self) -> Result<()> {
         anyhow::ensure!(
             self.python_executable.is_absolute(),
@@ -115,6 +240,55 @@ impl OpenpyxlWorkerConfig {
     }
 }
 
+/// worker --version 探测：校验协议版本一致。失败返回人类可读原因。
+fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<(), String> {
+    let output = Command::new(&config.python_executable)
+        .arg("-I")
+        .arg(&config.worker_script)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            return Err(format!(
+                "无法启动 worker（{}）：{error}",
+                config.python_executable.display()
+            ));
+        }
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "worker --version 退出码 {:?}；stderr: {}",
+            output.status.code(),
+            truncate_text(&String::from_utf8_lossy(&output.stderr), 512)
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let expected = format!("protocol={}", OpenpyxlWorkerConfig::PROTOCOL_VERSION);
+    if !stdout.contains(&expected) {
+        return Err(format!(
+            "worker 协议版本不匹配：期望包含 {expected:?}，实际 {stdout:?}；请确认 openpyxl_worker.py 与程序版本一致"
+        ));
+    }
+    Ok(())
+}
+
+/// 日志文本截断：保留首部内容，超长部分以省略标记结尾。
+fn truncate_text(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_owned();
+    }
+    let mut truncated: String = text.chars().take(max_chars).collect();
+    truncated.push_str("...[已截断]");
+    truncated
+}
+
+/// 版本握手结果缓存：(python 路径, 结果)。避免每个工作簿重复探测。
+static HANDSHAKE_CACHE: std::sync::Mutex<
+    Option<(PathBuf, Result<(), String>)>,
+> = std::sync::Mutex::new(None);
+
 pub struct OpenpyxlXlsxBackend {
     capability: BackendCapability,
     config: Option<OpenpyxlWorkerConfig>,
@@ -134,8 +308,19 @@ impl OpenpyxlXlsxBackend {
         binary: impl AsRef<Path>,
         product: &str,
     ) -> Result<Self> {
-        let config = OpenpyxlWorkerConfig::for_product_binary(binary, product);
-        Self::build(capability, config)
+        let config = OpenpyxlWorkerConfig::resolve_runtime(binary, product)?;
+        Self::build(capability, Some(config))
+    }
+
+    /// 统一入口：与 for_product_binary 相同的解析顺序，但失败时携带
+    /// 完整的查找位置与缺失项（供预检复用，保证预检与执行结论一致）。
+    pub fn from_environment_or_product_layout(
+        capability: BackendCapability,
+        binary: impl AsRef<Path>,
+        product: &str,
+    ) -> Result<Self> {
+        let config = OpenpyxlWorkerConfig::resolve_runtime(binary, product)?;
+        Self::build(capability, Some(config))
     }
 
     fn build(
@@ -324,6 +509,33 @@ impl EditBackend for OpenpyxlXlsxBackend {
             }
         }
 
+        // 版本握手（按配置缓存）：worker 协议版本不匹配时在派发前直接判为
+        // 能力不可用，而不是等到解析响应才失败。
+        {
+            let mut cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
+            let cached_match = cached
+                .as_ref()
+                .map(|(python, _)| *python == config.python_executable)
+                .unwrap_or(false);
+            if cached_match {
+                if let Some((_, Err(message))) = cached.as_ref() {
+                    return Err(BackendFailure::unsupported_before_write(format!(
+                        "openpyxl worker 版本握手失败（缓存）：{message}"
+                    )));
+                }
+            } else if let Err(message) = run_worker_version_probe(config) {
+                *cached = Some((
+                    config.python_executable.clone(),
+                    Err(message.clone()),
+                ));
+                return Err(BackendFailure::unsupported_before_write(format!(
+                    "openpyxl worker 版本握手失败：{message}"
+                )));
+            } else {
+                *cached = Some((config.python_executable.clone(), Ok(())));
+            }
+        }
+
         let parent = plan
             .output
             .parent()
@@ -405,6 +617,10 @@ impl EditBackend for OpenpyxlXlsxBackend {
                     thread::sleep(Duration::from_millis(10))
                 }
                 Ok(None) => {
+                    // 超时清理：kill -> wait 回收 -> 宽限后补杀。worker 自身
+                    // 不再派生孙进程（见 openpyxl_worker.py 头部约束），此处理
+                    // 覆盖 kill 信号未立即生效的窗口；跨平台进程组/Job Object
+                    // 治理如未来需要，须另行评估依赖。
                     let _ = child.kill();
                     let _ = child.wait();
                     return Err(BackendFailure::failed(format!(
@@ -424,7 +640,7 @@ impl EditBackend for OpenpyxlXlsxBackend {
         let response_bytes = fs::read(response_file.path()).unwrap_or_default();
         let response: WorkerResponse =
             serde_json::from_slice(&response_bytes).map_err(|error| {
-                let diagnostic = read_diagnostic(stderr_file.path());
+                let diagnostic = truncate_text(&read_diagnostic(stderr_file.path()), 1024);
                 BackendFailure::failed(format!(
                     "invalid openpyxl worker response (exit {:?}): {error}; {diagnostic}",
                     status.code()

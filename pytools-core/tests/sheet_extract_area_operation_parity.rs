@@ -4,7 +4,7 @@ use excel_editor::{
     EditOperationKind, EngineId, PreservationRequirement, WorkbookFormat,
 };
 use excel_reader::{
-    read_ooxml_comments, read_value_columns_with_iso_dates, read_workbook,
+    read_ooxml_comments, read_value_columns, read_value_columns_with_iso_dates, read_workbook,
     read_xlsx_cell_number_formats, read_xlsx_worksheet_extents, CellNumberFormatRequest, CellValue,
 };
 use pytools_core::config::ExtractTask;
@@ -74,7 +74,7 @@ fn temporary_directory(label: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let path =
-        std::env::temp_dir().join(format!("pytools-{label}-{}-{unique}", std::process::id()));
+        std::env::temp_dir().join(format!("pytools-{label}-{}-{unique}-{:?}",  std::process::id(), std::thread::current().id()));
     fs::create_dir_all(&path).unwrap();
     path
 }
@@ -750,7 +750,7 @@ fn interactive_menu_routes_area_extraction_matches_python_and_records_engines() 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("6  工作表数据提取（普通无批注版）"));
-    assert!(stdout.contains("PT-7-6 当前仅验收 .xlsx"));
+    assert!(stdout.contains("PT-7-6 区域提取仅接受 .xlsx/.xlsm"));
     assert!(stdout.contains("\"files\": 2"));
     assert!(stdout.contains("\"extracted_sheets\": 4"));
     assert!(stdout.contains("\"output_files\": 1"));

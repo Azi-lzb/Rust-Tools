@@ -142,9 +142,11 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
         "per-file elapsed time must include its sequential phase durations"
     );
     assert_eq!(file["execution"]["attempts"][0]["outcome"], "succeeded");
-    assert_eq!(
+    // 4-5 改为就地修改：源工作簿被改写，配置保持不变。
+    assert_ne!(
         pytools_core::file_commit::sha256_file(&input)?,
-        original_hash
+        original_hash,
+        "in-place sheet rename must rewrite the source workbook"
     );
     assert_eq!(
         pytools_core::file_commit::sha256_file(&config)?,
@@ -159,11 +161,14 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
     let output_path = PathBuf::from(
         file["output"]
             .as_str()
-            .context("published copy path missing")?,
+            .context("renamed workbook path missing")?,
     );
+    // 就地模式：输出路径即源工作簿本身。
+    let canonical_input = fs::canonicalize(&input)?;
+    let canonical_output = fs::canonicalize(&output_path)?;
     assert_eq!(
-        output_path.parent().and_then(Path::file_name),
-        Some(std::ffi::OsStr::new(SHEET_RENAME_OUTPUT_DIRECTORY))
+        canonical_output, canonical_input,
+        "in-place rename must target the source"
     );
     assert!(output_path.is_file());
     assert_ne!(
@@ -323,11 +328,9 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     let second_report: Value = serde_json::from_slice(&second_output.stdout)?;
     assert_eq!(second_report["files_scanned"], 3);
     assert_eq!(second_report["workbooks"], 2);
-    assert_eq!(pytools_core::file_commit::sha256_file(&first)?, first_hash);
-    assert_eq!(
-        pytools_core::file_commit::sha256_file(&second)?,
-        second_hash
-    );
+    // 就地模式：源文件在首轮已被改写，此处只要求它们仍存在且可读。
+    assert!(first.is_file());
+    assert!(second.is_file());
     let second_files = second_report["files"]
         .as_array()
         .context("repeat results missing")?;
@@ -336,23 +339,19 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
             .as_str()
             .is_some_and(|input| !input.contains(SHEET_RENAME_OUTPUT_DIRECTORY))
     }));
-    for (original_output, original_output_hash) in &original_outputs {
-        assert_eq!(
-            pytools_core::file_commit::sha256_file(original_output)?,
-            *original_output_hash
+    // 就地模式：第二轮可重复执行且不破坏源文件（每次改名幂等或按映射再处理）。
+    for file in second_files {
+        let status = file["status"].as_str().unwrap_or_default();
+        assert!(
+            matches!(status, "renamed" | "unchanged" | "skipped"),
+            "unexpected repeat status: {status}"
         );
-        let expected_stem = format!(
-            "{}_1",
-            original_output.file_stem().unwrap().to_string_lossy()
-        );
-        assert!(second_files.iter().any(|file| {
-            file["output"].as_str().is_some_and(|output| {
-                PathBuf::from(output) != *original_output
-                    && Path::new(output)
-                        .file_stem()
-                        .is_some_and(|stem| stem.to_string_lossy() == expected_stem)
-            })
-        }));
+        if let Some(output) = file["output"].as_str() {
+            assert!(
+                Path::new(output).is_file(),
+                "reported output must exist: {output}"
+            );
+        }
     }
     Ok(())
 }

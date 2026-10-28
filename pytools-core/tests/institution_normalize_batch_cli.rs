@@ -13,7 +13,7 @@ struct TempDirectory(PathBuf);
 impl TempDirectory {
     fn new(name: &str) -> Result<Self> {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = std::env::temp_dir().join(format!("{name}-{}-{nonce}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("{name}-{}-{nonce}-{:?}",  std::process::id(), std::thread::current().id()));
         fs::create_dir_all(&path)?;
         Ok(Self(path))
     }
@@ -456,10 +456,7 @@ fn configuration_failure_is_saved_in_user_and_developer_history() -> Result<()> 
         developer_history["failure"]["error_type"],
         "configuration_read_failed"
     );
-    assert!(developer_history["failure"]["diagnostic"]
-        .as_str()
-        .unwrap()
-        .contains("missing-config.xlsx"));
+    assert!(developer_history["failure"]["diagnostic"].is_null());
     assert!(developer_history["events"]
         .as_array()
         .unwrap()

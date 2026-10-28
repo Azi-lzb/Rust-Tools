@@ -7,7 +7,12 @@ use excel_editor::{
     UmyaXlsxBackend, UmyaXlsxValidator,
 };
 use serde::Deserialize;
-use std::{fs, path::Path, sync::Arc};
+use crate::file_commit::TargetCommitReport;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -40,6 +45,67 @@ pub fn apply_plan_file(
         CapabilityDocument::One(value) => vec![value],
     };
     apply_plan(&plan, &capabilities, platform)
+}
+
+/// 就地执行：把 plan 的编辑结果写回目标工作簿本身。
+///
+/// 安全语义：先在临时候选文件上执行并验证（复用 ExcelModifier 的既有校验），
+/// 再用带规划期 sha256 的替换提交覆盖目标；若目标在规划后被改动则拒绝写入。
+/// 会话中断时目标保持原样，不会出现半写状态。
+pub fn apply_plan_in_place(
+    plan: &ExcelEditPlan,
+    capabilities: &[BackendCapability],
+    platform: &str,
+) -> Result<(EditExecutionReport, TargetCommitReport)> {
+    let target = plan.input.clone();
+    let original_hash = crate::file_commit::sha256_file(&target)?;
+    // 候选文件放在目标同目录，保证同卷重命名语义。
+    let candidate = unique_in_place_candidate(&target)?;
+    let mut candidate_plan = plan.clone();
+    candidate_plan.output = candidate.clone();
+
+    let result = apply_plan(&candidate_plan, capabilities, platform);
+    let execution = match result {
+        Ok(execution) => execution,
+        Err(error) => {
+            let _ = fs::remove_file(&candidate);
+            return Err(error);
+        }
+    };
+    let commit = match crate::file_commit::replace_target_from_candidate(
+        &candidate,
+        &target,
+        &original_hash,
+    ) {
+        Ok(commit) => commit,
+        Err(error) => {
+            let _ = fs::remove_file(&candidate);
+            return Err(error).with_context(|| {
+                format!("就地提交修改结果到 {} 失败", target.display())
+            });
+        }
+    };
+    let _ = fs::remove_file(&candidate);
+    Ok((execution, commit))
+}
+
+fn unique_in_place_candidate(target: &Path) -> Result<PathBuf> {
+    let parent = target
+        .parent()
+        .context("in-place edit target has no parent directory")?;
+    for _ in 0..256 {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos();
+        let candidate = parent.join(format!(
+            ".pytools-inplace-{}-{nonce}.xlsx",
+            std::process::id()
+        ));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    anyhow::bail!("cannot allocate an in-place candidate beside {}", target.display())
 }
 
 pub fn apply_plan_with_capability_file(

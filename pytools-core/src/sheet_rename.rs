@@ -3,7 +3,8 @@
 use crate::{
     edit_plan::apply_plan_with_capability_file,
     file_commit::{
-        create_target_from_candidate, sha256_file, verify_planning_snapshot, TargetCommitReport,
+        create_target_from_candidate, replace_target_from_candidate, sha256_file,
+        verify_planning_snapshot, TargetCommitReport,
     },
 };
 use anyhow::{bail, Context, Result};
@@ -241,12 +242,17 @@ pub fn run_batch_sheet_rename_candidate(
             let editing_ms = editing_started.elapsed().as_millis();
             let commit_started = Instant::now();
             verify_planning_snapshot(&input, Some(&input_hash))?;
-            let output_dir = output
-                .parent()
-                .context("sheet rename result path has no parent directory")?;
-            ensure_result_directory(output_dir, true)?;
-            let mut commit = create_target_from_candidate(&candidate, &output)
-                .with_context(|| format!("safely publish renamed copy to {}", output.display()))?;
+            // 就地模式：目标就是源文件本身，用带规划哈希校验的替换提交，
+            // 若源在规划后被改动则拒绝写入（保持数据保护语义）。
+            let mut commit = if output == input {
+                replace_target_from_candidate(&candidate, &output, &input_hash).with_context(
+                    || format!("safely replace renamed workbook {}", output.display()),
+                )?
+            } else {
+                create_target_from_candidate(&candidate, &output).with_context(|| {
+                    format!("safely publish renamed copy to {}", output.display())
+                })?
+            };
             commit.elapsed_ms = commit_started.elapsed().as_millis();
             Ok((execution, commit, editing_ms))
         })();
@@ -328,37 +334,12 @@ fn candidate_path(input: &Path) -> Result<PathBuf> {
 }
 
 fn sheet_rename_output_path(input: &Path) -> Result<PathBuf> {
-    let parent = input
-        .parent()
-        .context("input workbook has no parent directory")?;
-    let result_dir = parent.join(SHEET_RENAME_OUTPUT_DIRECTORY);
-    ensure_result_directory(&result_dir, false)?;
-    let file_name = input
+    // 4-5 改为就地修改：输出即源文件本身，不再生成结果目录副本。
+    // 执行前有 sha256 快照校验，执行后经候选文件验证再替换，源数据仍受保护。
+    input
         .file_name()
         .context("input workbook has no file name")?;
-    let target = result_dir.join(file_name);
-    if !path_exists_including_symlink(&target) {
-        return Ok(target);
-    }
-
-    let stem = input
-        .file_stem()
-        .context("input workbook has no file stem")?
-        .to_string_lossy();
-    let extension = input
-        .extension()
-        .context("input workbook has no extension")?
-        .to_string_lossy();
-    for index in 1..=9999 {
-        let target = result_dir.join(format!("{stem}_{index}.{extension}"));
-        if !path_exists_including_symlink(&target) {
-            return Ok(target);
-        }
-    }
-    bail!(
-        "could not allocate a non-overwriting sheet rename output for {}",
-        input.display()
-    )
+    Ok(input.to_path_buf())
 }
 
 fn ensure_result_directory(path: &Path, create: bool) -> Result<()> {

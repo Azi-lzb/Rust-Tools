@@ -20,8 +20,9 @@ struct TestDir(PathBuf);
 impl TestDir {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
-            "pytools-number-format-repro-{}-{}",
+            "pytools-number-format-repro-{}-{:?}-{}",
             std::process::id(),
+            std::thread::current().id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

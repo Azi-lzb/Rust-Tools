@@ -723,7 +723,6 @@ impl ExcelEditPlan {
 pub enum EngineId {
     OoxmlPatch,
     UmyaSpreadsheet,
-    ExcelizeWorker,
     OpenpyxlWorker,
 }
 
@@ -732,7 +731,6 @@ impl std::fmt::Display for EngineId {
         formatter.write_str(match self {
             Self::OoxmlPatch => "ooxml_patch",
             Self::UmyaSpreadsheet => "umya_spreadsheet",
-            Self::ExcelizeWorker => "excelize_worker",
             Self::OpenpyxlWorker => "openpyxl_worker",
         })
     }
@@ -1582,7 +1580,7 @@ mod tests {
             capability(EngineId::UmyaSpreadsheet, [EditOperationKind::SetCellValue]);
         unverified.status = CapabilityStatus::Unverified;
         let mut unsupported =
-            capability(EngineId::ExcelizeWorker, [EditOperationKind::SetCellValue]);
+            capability(EngineId::OoxmlPatch, [EditOperationKind::SetCellValue]);
         unsupported.status = CapabilityStatus::Unsupported;
         let modifier = ExcelModifier::new(
             "test-linux-x86_64",

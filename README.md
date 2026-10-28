@@ -1,90 +1,34 @@
-# PyTools Rust project
+# Rust-Tools
 
-This repository is an independent Cargo workspace for `py_statistics_tools`. Its Excel-Core copies live under `crates/`; business code, configuration, probes, fixtures, and acceptance records live here. It has no path dependency on the former combined workspace or Audit.
+Rust-Tools 是独立维护的 PyTools Rust 项目。正式源码目录为 `C:\Users\AZI\Desktop\VibeCode\Rust-Tools`；业务代码位于 `pytools-core/`，本项目独立维护的 Excel-Core 位于 `crates/`。七类菜单、业务范围和已知限制见 [功能清单](pytools-core/MIGRATION_INVENTORY.md)。
 
-## Windows development launchers
+## Windows 启动与构建
 
-- `run.bat` runs only `dist\pytools.exe menu`; it never invokes Cargo. `run-pytools-dev.bat` is a compatibility alias.
-- `build-release.bat` is the explicit source build. It uses `F:\RustBuild\pytools` and copies the Release `pytools.exe` plus `lo-convert.exe` into `dist\` only after both builds succeed. `build-pytools-dev.bat` is a compatibility alias.
-- `package.bat` creates a Windows x64 ZIP from the `dist\` executables, local `config.xlsx`, `run.bat`, and this README. It does not compile.
-- The local `config.xlsx` in this project is ignored by Git. The retained `F:\PyToolsRustV2\run-pytools-dev.bat` wrapper uses the existing config beside that wrapper and forwards to this repository.
+- `run.bat` 只运行本项目 `dist\pytools.exe menu`；EXE 不存在时明确报错，不自动编译。
+- `run-dev.bat` 从当前项目运行 Debug 菜单：调用 `cargo run --offline -p pytools-core --bin pytools -- menu`，复用 `F:\RustBuild\pytools` 增量缓存，并默认读取项目根目录的 `config.xlsx`。首次编译可能较慢；后续按源码变化增量重编译，不打 Release 包。
+- `build-release.bat` 是用户明确要求构建时使用的唯一构建入口，Cargo 输出目录为 `F:\RustBuild\pytools`；成功后将 `pytools.exe` 复制到本项目 `dist\`。
+- `package.bat` 使用已有的 `dist\` 产物、本地配置、启动脚本和 README 创建 Windows ZIP，不构建。
+- 格式转换（XLS/ET→XLSX、DOC→DOCX）由 pytools 内置转换引擎直接完成：Windows 优先本机 Office/WPS COM（Excel→WPS 顺序），非 Windows 使用本机 LibreOffice `soffice`（可选）；没有独立 sidecar EXE。
+- 项目根目录的 `config.xlsx` 是本地用户配置，已被 Git 忽略；不要将业务文件或本地配置提交到仓库。
 
-- excel-reader: pure Rust Calamine values, formulas, sheet names and supported merges; namespace-aware OOXML supplements read comments, conditional formatting and data-validation structure.
-- excel-writer: rust_xlsxwriter for new xlsx workbooks.
-- excel-editor: ExcelEditPlan/ExcelModifier boundary for existing-workbook changes; OOXML Patch, umya-spreadsheet and a bundled Excelize worker remain operation-specific candidates selected by preservation evidence.
-- ooxml-patch: narrow namespace-aware OOXML changes for verified gaps.
+日常开发和人工测试使用 `run-dev.bat`。修改 Rust 源码后，先退出正在运行的程序，再次双击即可按需增量编译并启动；修改配置无需重新编译，重新加载配置或重启程序即可。两个启动脚本在程序退出后都会显示退出码并等待按键，便于查看错误信息。
 
-Keep PyTools fixtures, probe configuration and reports under this repository. Probe inputs, baseline results and reports are not shared with Audit. Python comparison scripts remain baselines/test helpers; the only planned production Python exceptions are an isolated, capability-gated openpyxl worker for existing-workbook edits and a future Windows-only pywin32 worker for explicitly selected, validated Excel/WPS COM modification or calculation. Neither worker may contain PyTools business logic; Linux does not depend on COM.
+## openpyxl 运行时（就地修改类功能）
 
-The initial Rust modules include shared-vector date/path helpers, configuration loaders for global/timeline/path-map sheets, a single-worksheet timeline extractor, and a candidate workbook adapter for institution-name normalization. The normalization adapter matches the source helper on one synthetic xlsx fixture and preserves that fixture's values, formula text, merge, comment, styles, dimensions, and page metadata; it remains outside the default edit path pending real-template verification and does not yet support xlsm. Timeline batch scheduling, CSV input, result writing, target append, full menu integration, and real business templates remain unverified.
+部分就地修改功能依赖 openpyxl 子进程。三种分发场景的运行时查找顺序一致（由
+`OpenpyxlWorkerConfig::resolve_runtime` 统一实现，预检与执行共用同一入口）：
 
-## Worksheet area extraction candidate
+1. 显式覆盖：`PYTOOLS_OPENPYXL_PYTHON` + `PYTOOLS_OPENPYXL_WORKER`（须同时设置）；
+2. Linux deb：`/usr/libexec/pytools/openpyxl/{runtime/bin/python3, worker/openpyxl_worker.py}`；
+3. Windows ZIP：`<程序目录>\python\{python.exe, openpyxl_worker.py}`；
+4. 开发树（仅 debug 构建）：需同时设置 `PYTOOLS_OPENPYXL_PYTHON` 指向宿主 Python。
 
-The `pytools` binary has an explicit area-only extraction command and the V2 menu entry `5 → 6`:
+PATH 上的系统 Python 不构成受支持分发。运行时缺失时，功能会明确报错并列出
+已查找位置，不会回退到系统 Python。Windows 打包：先执行
+`python packaging/openpyxl/stage-windows-runtime.py --dist dist` 暂存运行时，
+`package.bat` 会在运行时缺失时拒绝打包。Linux 打包：`build_deb.sh` 需要
+`OPENPYXL_RUNTIME_SOURCE` 指向 relocatable Python 运行时，缺失时中止。
 
-```text
-pytools extract-sheets-area --config <config.xlsx> [--output-dir <directory>] <source.xlsx>...
-```
+后续以用户逐项人工测试和反馈为主，按功能修复；实施、测试和各平台验收状态分别记录。未经用户明确授权，不编译、运行 Rust 程序、打包或推送。详细规则见 [AGENTS.md](AGENTS.md)、[当前开发目标](DEVELOPMENT_GOAL.md) 和 [业务范围](pytools-core/MIGRATION_PLAN.md)。
 
-It loads the existing worksheet-extraction config, reads values through the local Calamine adapter, and creates a new XLSX with rust_xlsxwriter. Area extraction accepts XLSX and XLSM input; the new XLSX output does not retain VBA. Full-sheet style import remains a separate capability-gated operation and accepts XLSX only. Existing date/time and duration handling is described in `MIGRATION_INVENTORY.md`. Typed Excel error preservation and Python-compatible merged-child handling were added during the repository split with focused tests, but were not run in this split and remain unverified. Non-finite and unsupported date serial values still fail closed.
-
-## Regional total check
-
-The `pytools` binary also exposes the Rust non-COM version of the original regional total check:
-
-```text
-pytools region-sum-check [--config <workbook.xlsx>] [--output-dir <directory>] [--log-dir <directory>] <source.xlsx>...
-```
-
-When `--config` is supplied, output and log directories default to the global configuration; explicit directory arguments override them. Without a configuration workbook, defaults are `./output` and `./logs`. The command uses the shared Calamine reader and rust_xlsxwriter result writer. Its synthetic Python parity suite checks result statistics and workbook values/formulas, and verifies that source files remain unchanged. Real templates, non-XLSX inputs, the original GUI menu, and target Linux packaging remain unverified; see `MIGRATION_INVENTORY.md`.
-
-## Local filename mapping
-
-Operation 4-8 is callable from the Rust binary:
-
-```text
-pytools rename-local-map --config <workbook.xlsx> <file>...
-```
-
-The command reads ordered M:N mappings from the existing rename-configuration sheet and renames the explicitly listed files. It accepts regular files of any extension, reserves destinations without overwriting them, and returns JSON counts and per-file results. Its 10-path synthetic Python parity suite passes through the CLI; the original GUI menu, real configuration, target Linux filesystems, and non-UTF-8 filenames remain unverified.
-
-## Configuration-driven batch rename
-
-Operation 3-3 is available through the Rust CLI:
-
-```text
-pytools rename-batch --config <workbook.xlsx> [--log-dir <directory>] [<file-or-directory>...]
-```
-
-It reads the `重命名配置` sheet with the shared Calamine reader, applies ordered short-name matching and full-name/code mapping, and renames each explicitly supplied file or directory. Destination collisions receive `_1`, `_2`, ... suffixes. The command writes JSON counts/per-path results and a timestamped log. The command accepts an empty path list to validate configuration without renaming files. Synthetic Python parity is recorded in `probe/reports/batch_rename_parity.json`; a smoke test also used one valid alias from the original read-only configuration with a synthetic file in a temporary directory. No real business file was renamed. Target Linux behavior and the original Python GUI menu remain unverified.
-
-## Content-prefix renaming
-
-Operations 4-6 and 4-7 are available through the Rust CLI:
-
-```text
-pytools rename-by-content --config <workbook.xlsx> <file>...
-pytools unrename-by-content --config <workbook.xlsx> <file>...
-```
-
-Both commands read the configured cell values from `.xlsx`/`.xlsm` files with the shared Calamine reader, rename files without overwriting occupied destinations, and emit JSON statistics and per-file results. They do not save workbook contents. Synthetic parity checks compare the Rust API and CLI with the Python baseline for the tested text-cell cases. The source `.xls`/`.xlt` COM path, real macro-enabled workbooks, date/formula-cache values, GUI dispatcher, real directories, Windows-native Rust, and target Linux filesystems remain unverified.
-
-## File-sort prefix
-
-Operation 4-9 is also callable from the Rust binary:
-
-```text
-pytools file-sort-prefix --config <workbook.xlsx> [--output-dir <directory>] [--log-dir <directory>] <file>...
-```
-
-It reads the existing file-sort rules, applies the first matching rule to each explicit file path, preserves occupied destinations, and writes the result workbook. `--output-dir` defaults to `./output`; `--log-dir` defaults to `./logs`. The CLI writes success/failure log events to a timestamped file and stderr. The synthetic CLI parity test verifies the generated report is readable, matches the Python baseline's counts and final filename set, and emits the expected success-log entries. Exact logger timestamp/concurrency behavior, the original GUI dispatcher, real directories, and target Linux deployment remain unverified.
-
-## Remove file-sort prefix
-
-Operation 4-10 is callable from the Rust binary:
-
-```text
-pytools remove-file-sort-prefix --config <workbook.xlsx> [--output-dir <directory>] [--log-dir <directory>] [<file>...]
-```
-
-It removes a configured sorting prefix, preserving a preceding content prefix when the configured workbook content matches. It writes the result workbook and timestamped success/failure logs; an empty file list produces the source-compatible blank report. The synthetic CLI parity tests cover ten file/path cases and the empty-input report. `.xls`/`.xlt` content-cell parity, the original GUI dispatcher, exact logger timing/concurrency, real directories, and target Linux deployment remain unverified.
+历史拆分来源及早期说明保留在 [归档](docs/archive/README.md)，不作为运行路径或当前任务。Linux 交付目标仍为 x86_64、glibc 2.28 兼容和离线 deb，外部引擎是按功能明确选择的可选项。

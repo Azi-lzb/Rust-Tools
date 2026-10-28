@@ -1,27 +1,12 @@
-# pytools-core migration rules
+# pytools-core 业务规则
 
-This directory contains the `py_statistics_tools` business crate inside the independent PyTools-Rust Cargo workspace. The original project at `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` is read-only.
+本目录是独立 Rust-Tools 仓库的 PyTools 业务实现。先遵守根 `AGENTS.md`；业务范围与状态分别见 `MIGRATION_PLAN.md` 和 `MIGRATION_INVENTORY.md`，历史记录不安排新任务。
 
-## Applicable workspace rules
-
-- Follow the repository-root `AGENTS.md` and Excel contract in `../rules/13_Rust_Excel读写修改与引擎路由规范.md`.
-- Use Excel primitives and cross-product reusable capabilities through shared libraries under `crates/`. Generic third-party dependencies must be declared through workspace root Cargo.toml. Do not depend on `audit-core` or duplicate shared Excel engine implementations here.
-- Product business logic, reading, and new-workbook output are Rust. Go may be used only under the workspace's conditional Excel modifier policy. Python baselines/helpers under `probe/` or tests are not product dependencies. Runtime exceptions are limited to the isolated `openpyxl_worker` for capability-gated XLSX edits and a future Windows-only pywin32 / `win32com.client` Office COM worker for separately validated edits/calculation; neither may import PyTools business code or use system Python/PATH. COM is not a Linux dependency.
-- Keep business behavior and configuration semantics in `pytools-core`; keep Excel primitives in shared crates. Use `ExcelEditPlan`/`ExcelModifier` for existing-workbook changes rather than coupling business rules to a concrete engine.
-- `src/institution_normalize.rs` has a Rust CLI and `build_institution_normalize_plan`, which emits `ExcelEditPlan` cell updates and has synthetic Python-baseline parity. A separate ignored integration test exercises the CLI's `--apply` path through `ExcelModifier` using a fixture-scoped temporary capability; the synthetic fixture selected the isolated `openpyxl_worker` and passed semantic/file-preservation checks. This is test evidence only: there is no production Passed capability, no authorized real sample, and no Windows-native or glibc 2.28/deb validation. The older `run_normalize_institution` candidate still calls umya directly; this remains a documented gap, not an approved production pattern or default backend. Do not copy that pattern into new business modules.
-- Keep fixtures, probe configuration, comparison baselines, and reports under this directory. Do not mix them with Audit evidence.
-- Treat `MIGRATION_PLAN.md` as sequencing guidance and `MIGRATION_INVENTORY.md` as the migration status record. A listed candidate or parity on a synthetic fixture does not mean the whole menu feature is migrated or accepted.
-- Formula calculation belongs to a future independent ExcelCalculator and remains off by default; same-category conversion remains explicit. Windows COM editing/calculation are future, separately capability-gated options. These optional capabilities must not become core startup dependencies; do not add PDF rendering/export or unvalidated Office dependencies.
-
-## Current migration stage and acceptance (2026-10-26)
-
-This policy changes execution order only. It does not change the confirmed PyTools business scope or existing exclusions; PT-1-2 remains excluded. The detailed feature inventory remains in `MIGRATION_PLAN.md` and `MIGRATION_INVENTORY.md`. This policy supersedes any sequencing text that defers all functional checks until every module is implemented or makes Linux/deb acceptance a per-feature migration step.
-
-Current shared Excel-Core priorities are: Calamine for reading, rust_xlsxwriter for new workbooks, and OOXML Patch/umya-spreadsheet first for new edit capabilities. Preserve existing openpyxl compatibility paths and pause adding operations; defer Excelize worker/FFI. Formula-reference translation is explicit opt-in; formula calculation targets LibreOffice Calc and Windows Microsoft Excel COM. These priorities do not change a production default or capability status without feature-specific validation.
-
-1. **Feature migration (current):** implement each confirmed Rust business capability with a usable Rust CLI/menu path, configuration read/save behavior, progress/errors, and safe file operations. Do not leave placeholder front ends. Write focused tests and check the actual entry and input/output safety in code. Any Cargo compile/check/test/run or program smoke requires explicit user authorization in the current request and is limited to its stated scope; without authorization, do not run it and record the result as unverified. `cargo fmt` and `cargo fmt --check` are allowed without that authorization. Use synthetic parity when needed to resolve behavior while real samples are unavailable. Fix known data-loss, formula, or workbook-fidelity defects as soon as found. If a shared-engine gap blocks one feature, record evidence and continue independent work.
-2. **Windows acceptance:** after in-scope capabilities are runnable through their real user paths, perform the user's operational review, real-sample Python/Rust comparisons, integration/regression checks, and fix failures. Implementation or synthetic tests alone do not count as Windows business acceptance.
-3. **Linux acceptance:** after key Windows business acceptance is stable, run the concentrated Linux stage: x86_64/glibc 2.28 compatibility, offline `pytools.deb`, runtime dependencies, LibreOffice calculation where in scope, and Kylin V10/UOS V20 targets. A Linux-specific risk may receive a focused earlier check; do not run full WSL builds for every feature or remove existing cross-platform constraints.
-4. **Delivery:** address remaining acceptance defects, prepare release packages/docs, then evaluate nonessential performance or architecture changes. This repository is already the independent PyTools project; keep its business code and internal Excel-Core crates self-contained, with no dependency on the former combined workspace.
-
-Lifecycle labels in `MIGRATION_INVENTORY.md` are: `未开始`, `迁移中`, `已实现，待 Windows 真实验收`, `Windows 真实验收通过`, `Linux 目标环境验收通过`, and `受阻`. Keep synthetic evidence, real-sample acceptance, and platform acceptance distinct; do not upgrade status based on compilation alone.
+- 保留七类菜单及既有子功能，围绕用户明确指定的功能和反馈做最小修改。不得因人工验收尚未进行就删除、重写或重新安排全量迁移。
+- 产品逻辑、配置语义、读取和新工作簿输出由 Rust 业务代码实现；Excel 原语使用本仓库 `crates/`。通用第三方依赖由本项目根 Cargo.toml 管理，不依赖其他项目的业务 crate 或外部共享源码。
+- 既有工作簿的编辑按 `ExcelEditPlan`/`ExcelModifier` 和具体能力证据处理，保护源文件、数据、公式及必要结构；不得自行伪造生产能力或因为普通外观差异要求全面样式对拍。
+- Python 原项目只读；`probe/` 和测试辅助仅供比较。隔离 openpyxl worker 仅用于受能力门控的既有 XLSX 修改，不进行业务计算、新建报表或通用读取，不使用系统 Python/PATH。未来 Windows COM 仅可作为单独验证、显式选择的可选能力，不成为 Linux 依赖。
+- 工作表提取保留普通无批注版；PT-1-2 时序提取、COM 批注提取、PDF 导出和 Python 运行模式切换保持已明确排除。公式重算默认关闭，同类格式转换须明确触发。保留既有代码，不因排除项而自动删除。
+- 已确认的业务安全语义继续有效：宽表对既有目标 sheet 的替换、去重追加到已有目标、工作表提取追加分别遵守各自契约，不统一为整簿重建；结构性行变动应保护相关合并、批注与公式引用。静态打印只向新目标发布，已有目标应拒绝覆盖。
+- `institution_normalize` 的旧直接 umya 候选不是新业务模块的默认模板；其合成测试不代表生产能力、真实业务样本或目标平台已验收。
+- 功能状态仅用清单规定的四类；单元/冒烟、Windows 用户或真实样本、Linux/deb 验证分别留痕。仅在用户明确授权时运行所需 Rust 命令，未运行的测试注明未验证。

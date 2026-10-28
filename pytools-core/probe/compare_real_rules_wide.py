@@ -1,4 +1,8 @@
-"""Real-rules × synthetic-data wide-summary parity.
+"""Historical, optional real-rules × synthetic-data wide-summary parity.
+
+This comparison is not part of the current default validation workflow.
+The imported helper invokes ``cargo run`` when ``PYTOOLS_RUST_CLI`` is unset;
+any Rust execution requires explicit authorization for that operation.
 
 Uses the 15 real timeline rules and 146 real path maps from the user's VBA
 toolbox workbook (tests/fixtures/vba_config) through a bridge config (those
@@ -13,15 +17,13 @@ import tempfile
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-PROBE = Path(r"C:/Users/AZI/Desktop/VibeCode/pytools-dev/pytools-core/probe")
+PROBE = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROBE))
 
 import compare_wide_summary as cws  # noqa: E402
 from openpyxl import Workbook, load_workbook  # noqa: E402
 
-VBA_BOOK = Path(
-    r"C:/Users/AZI/Desktop/VibeCode/pytools-dev/pytools-core/tests/fixtures/vba_config/VbaV2.4.2.xlsm"
-)
+VBA_BOOK = PROBE.parent / "tests" / "fixtures" / "vba_config" / "VbaV2.4.2.xlsm"
 
 
 def make_bridge_config(path: Path, output: Path) -> None:
@@ -235,10 +237,11 @@ def main() -> int:
                 "Not real-sample acceptance; outputs were temporary.",
             ],
         }
-        report_path = PROBE / "reports" / "real_rules_wide_parity_20261025.json"
-        report_path.write_text(
-            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        report_path = PROBE / "reports" / (
+            f"real_rules_wide_parity_{dt.datetime.now():%Y%m%d_%H%M%S_%f}.json"
         )
+        with report_path.open("x", encoding="utf-8") as report_file:
+            report_file.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         print(
             "REAL_RULES_RESULT="
             + json.dumps(

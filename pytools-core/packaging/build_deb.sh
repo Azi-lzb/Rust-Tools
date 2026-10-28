@@ -32,6 +32,11 @@ if [[ "$max_glibc" != "2.28" ]]; then
     exit 1
 fi
 
+echo "== staging openpyxl runtime (required; failure aborts the deb) =="
+# 复用统一暂存脚本：把 relocatable Python + openpyxl + worker 装进 deb。
+# 运行时产物未提交到仓库时（README 所述），此处会明确失败，不产出缺 worker 的包。
+"$WORKSPACE/packaging/openpyxl/stage-runtime.sh" pytools     "${OPENPYXL_RUNTIME_SOURCE:?set OPENPYXL_RUNTIME_SOURCE to the relocatable python runtime root}"     "$STAGING"
+
 echo "== assembling package tree =="
 install -D -m 0755 "$binary" "$STAGING/usr/bin/pytools"
 install -d -m 0755 "$STAGING/usr/share/doc/pytools" "$STAGING/DEBIAN"
@@ -64,5 +69,7 @@ fixture="$WORKSPACE/$CRATE/tests/fixtures/summary_used_range/error_token_matrix.
     --output-dir "$smoke_dir/out" --log-dir "$smoke_dir/out/logs" --log-view off \
     "$fixture" | head -c 400
 echo
+echo "== smoke test: openpyxl worker availability =="
+"$smoke_dir/usr/libexec/pytools/openpyxl/runtime/bin/python3" -I     "$smoke_dir/usr/libexec/pytools/openpyxl/worker/openpyxl_worker.py" --version
 rm -rf "$smoke_dir" "$STAGING"
 echo "== done: $deb =="

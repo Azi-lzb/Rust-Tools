@@ -60,75 +60,59 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     assert!(menu_text.contains("按配置检查重复"));
     assert!(!menu_text.contains("按批注"));
 
+    let source_dump = read_workbook(&source)?;
     let config_check = run_menu(&config, "2\n1\n0\n")?;
     assert!(config_check.status.success());
-    let config_check_json = output_json(&config_check)?;
-    assert_eq!(config_check_json[0]["report"]["duplicate_rows"], 1);
-    assert_eq!(config_check_json[0]["execution"], "written");
-    assert_eq!(config_check_json[0]["status"], "succeeded");
-    let check_output = PathBuf::from(
-        config_check_json[0]["output_file"]
-            .as_str()
-            .context("config check output path missing")?,
+    let config_check_stdout = String::from_utf8_lossy(&config_check.stdout);
+    assert!(
+        config_check_stdout.contains("处理完成：任务成功 1 项，跳过 0 项，失败 0 项"),
+        "{config_check_stdout}"
     );
-    assert!(check_output.is_file());
-    let checked = read_workbook(&check_output)?;
-    let source_dump = read_workbook(&source)?;
+    assert!(
+        config_check_stdout.contains("标记重复行 1 行"),
+        "{config_check_stdout}"
+    );
+    assert!(config_check_stdout.contains("已就地标记"), "{config_check_stdout}");
+    assert!(
+        !config_check_stdout.contains("\"execution\""),
+        "menu must not print JSON"
+    );
+    // 标记直接写入源工作簿：值不变、重复行整行标红、数字格式保留。
+    let checked = read_workbook(&source)?;
     assert_eq!(checked.sheets.len(), 1);
     assert_eq!(checked.sheets[0].name, "Commented");
     assert_eq!(checked.sheets[0].values, source_dump.sheets[0].values);
-    assert!(checked.sheets[0].comments.is_empty());
     for address in ["A3", "B3", "C3"] {
         assert!(
-            cell_fill(&check_output, address)?.is_some_and(|color| color.ends_with("FF0000")),
-            "duplicate row cell {address} should have red fill"
+            cell_fill(&source, address)?.is_some_and(|color| color.ends_with("FF0000")),
+            "duplicate row cell {address} should have red fill in the source"
         );
     }
-    assert_eq!(
-        cell_number_format(&check_output, "B2")?.as_deref(),
-        Some("000000")
-    );
-    assert_eq!(
-        cell_number_format(&check_output, "B3")?.as_deref(),
-        Some("000000")
-    );
-    assert!(cell_fill(&check_output, "A2")?.is_none());
-    assert!(cell_fill(&check_output, "D3")?.is_none());
-    assert!(PathBuf::from(
-        config_check_json[0]["plan_file"]
-            .as_str()
-            .context("config check plan path missing")?
-    )
-    .is_file());
-    assert_eq!(
-        config_check_json[0]["report"]["plan"]["operations"]
-            .as_array()
-            .unwrap()
-            .len(),
-        3
-    );
-    assert_eq!(
-        PathBuf::from(
-            config_check_json[0]["report"]["plan"]["output"]
-                .as_str()
-                .context("config check candidate path missing")?
-        ),
-        check_output
+    assert_eq!(cell_number_format(&source, "B2")?.as_deref(), Some("000000"));
+    assert_eq!(cell_number_format(&source, "B3")?.as_deref(), Some("000000"));
+    assert!(cell_fill(&source, "A2")?.is_none());
+    assert!(cell_fill(&source, "D3")?.is_none());
+    assert_ne!(
+        fs::read(&source)?,
+        source_before,
+        "in-place marking must modify the source workbook"
     );
 
     let config_delete = run_menu(&config, "2\n2\n0\n")?;
     assert!(config_delete.status.success());
-    let config_delete_json = output_json(&config_delete)?;
-    assert_eq!(config_delete_json[0]["report"]["duplicate_rows"], 1);
-    assert_eq!(config_delete_json[0]["execution"], "written");
-    assert_eq!(config_delete_json[0]["status"], "succeeded");
-    let delete_output = PathBuf::from(
-        config_delete_json[0]["output_file"]
-            .as_str()
-            .context("config delete output path missing")?,
+    let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
+    assert!(
+        delete_stdout.contains("处理完成：任务成功 1 项，跳过 0 项，失败 0 项"),
+        "{delete_stdout}"
     );
-    assert!(delete_output.is_file());
-    let deleted = read_workbook(&delete_output)?;
+    assert!(delete_stdout.contains("删除重复行 1 行"), "{delete_stdout}");
+    assert!(delete_stdout.contains("已就地删除"), "{delete_stdout}");
+    assert!(
+        !delete_stdout.contains("\"execution\""),
+        "menu must not print JSON"
+    );
+    // 就地删除：源工作簿被直接修改，重复行移除、保留行上移。
+    let deleted = read_workbook(&source)?;
     assert_eq!(deleted.sheets.len(), 1);
     assert_eq!(deleted.sheets[0].name, "Commented");
     assert_eq!(
@@ -142,54 +126,42 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
             "nonduplicate row cell {address} should be preserved"
         );
     }
-    for (output_address, source_address) in [("A3", "A4"), ("B3", "B4"), ("C3", "C4")] {
+    for (after_address, before_address) in [("A3", "A4"), ("B3", "B4"), ("C3", "C4")] {
         assert_eq!(
-            deleted.sheets[0].values.get(output_address),
-            source_dump.sheets[0].values.get(source_address),
-            "surviving rows should shift upward after deletion"
+            deleted.sheets[0].values.get(after_address),
+            source_dump.sheets[0].values.get(before_address),
+            "surviving rows should shift upward after in-place deletion"
         );
     }
     assert_eq!(
-        cell_number_format(&delete_output, "B2")?.as_deref(),
-        Some("000000")
-    );
-    assert_eq!(
-        cell_number_format(&delete_output, "B3")?.as_deref(),
+        cell_number_format(&source, "B2")?.as_deref(),
         Some("000000")
     );
     assert!(!deleted.sheets[0].values.contains_key("A4"));
-    let config_delete_plan = PathBuf::from(
-        config_delete_json[0]["plan_file"]
-            .as_str()
-            .context("config delete plan path missing")?,
-    );
-    assert!(config_delete_plan.is_file());
-    assert_eq!(
-        PathBuf::from(
-            config_delete_json[0]["report"]["plan"]["output"]
-                .as_str()
-                .context("config delete candidate path missing")?
-        ),
-        delete_output
-    );
-    for result in [&check_output, &delete_output] {
-        let result_dir = result.parent().context("duplicate result parent missing")?;
-        assert!(!fs::read_dir(result_dir)?
-            .filter_map(|entry| entry.ok())
-            .any(|entry| {
-                entry
-                    .file_name()
-                    .to_string_lossy()
-                    .contains(".pytools-dedup-")
-            }));
-    }
+    // 不再产生副本目录或临时文件。
+    let parent = source.parent().context("source parent missing")?;
+    assert!(!fs::read_dir(parent)?.filter_map(|entry| entry.ok()).any(|entry| {
+        entry
+            .file_name()
+            .to_string_lossy()
+            .contains(".pytools-dedup-")
+    }));
 
-    let append_input = format!("2\n3\n{}\n0\n", source.display());
-    let append_plan = run_menu(&config, &append_input)?;
-    assert!(append_plan.status.success());
+    // 菜单不再打印 JSON；追加/预校验的机器可读结果通过 CLI 子命令验证。
+    let append_output_dir = root.path().join("append-out");
+    let append_plan = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        .args(["dedup-append-plan", "--config"])
+        .arg(&config)
+        .args(["--output-dir"])
+        .arg(&append_output_dir)
+        .output()?;
+    assert!(
+        append_plan.status.success(),
+        "append plan failed: {}",
+        String::from_utf8_lossy(&append_plan.stderr)
+    );
     let append_json = output_json(&append_plan)?;
     assert_eq!(append_json[0]["target_existed"], false);
-    assert_eq!(append_json[0]["execution"], "plan_only");
     let append_plan_file = PathBuf::from(
         append_json[0]["plan_file"]
             .as_str()
@@ -197,23 +169,22 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     );
     assert!(append_plan_file.is_file());
     assert!(!target.exists());
-    assert!(!PathBuf::from(
-        append_json[0]["candidate"]
-            .as_str()
-            .context("append candidate path missing")?
-    )
-    .exists());
 
-    let precheck = run_menu(&config, "2\n4\n0\n")?;
+    let precheck = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        .args(["dedup-precheck", "--config"])
+        .arg(&config)
+        .output()?;
     assert!(precheck.status.success());
     let precheck_json = output_json(&precheck)?;
     assert_eq!(precheck_json["fail"], 0);
     assert_eq!(precheck_json["ok"], 1);
 
-    assert_eq!(
+    // 2-1/2-2 已改为就地修改：源工作簿应被标记/删除改写，
+    // 而配置与目标工作簿保持不变。
+    assert_ne!(
         fs::read(&source)?,
         source_before,
-        "source remains unchanged"
+        "in-place dedup must modify the source workbook"
     );
     let log_dir = root.path().join("logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
@@ -221,7 +192,8 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
 }
 
 #[test]
-fn configured_duplicate_check_rejects_formula_workbooks_without_output() -> Result<()> {
+fn configured_duplicate_check_marks_formula_workbook_in_place() -> Result<()> {
+    // 2026-10-28 起 2-1 直接在源工作簿上标红标记重复行，不再拒绝公式工作簿。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -230,26 +202,20 @@ fn configured_duplicate_check_rejects_formula_workbooks_without_output() -> Resu
 
     let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("does not support formula cells"));
-    let report = output_json(&output)?;
-    assert_eq!(report[0]["execution"], "failed");
-    assert_eq!(report[0]["status"], "failed");
-    assert!(report[0]["error"]
-        .as_str()
-        .is_some_and(|error| error.contains("does not support formula cells")));
-    assert!(report[0]["output_file"].is_null());
-    assert!(!PathBuf::from(
-        report[0]["report"]["plan"]["output"]
-            .as_str()
-            .context("formula check candidate path missing")?
-    )
-    .exists());
-    assert_eq!(fs::read(&source)?, source_before);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
+    assert!(!stdout.contains("\"execution\""), "menu must not print JSON");
+    assert_ne!(
+        fs::read(&source)?,
+        source_before,
+        "in-place marking must modify the source workbook"
+    );
     Ok(())
 }
 
 #[test]
-fn configured_duplicate_check_rejects_comment_workbooks_without_output() -> Result<()> {
+fn configured_duplicate_check_marks_comment_workbook_in_place() -> Result<()> {
+    // 带批注的工作簿同样就地标记；检查本身不删除批注或内容。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -258,25 +224,15 @@ fn configured_duplicate_check_rejects_comment_workbooks_without_output() -> Resu
 
     let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("comments"));
-    let report = output_json(&output)?;
-    assert_eq!(report[0]["execution"], "failed");
-    assert!(report[0]["error"]
-        .as_str()
-        .is_some_and(|error| error.contains("comments")));
-    assert!(report[0]["output_file"].is_null());
-    assert!(!PathBuf::from(
-        report[0]["report"]["plan"]["output"]
-            .as_str()
-            .context("comment check candidate path missing")?
-    )
-    .exists());
-    assert_eq!(fs::read(&source)?, source_before);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
+    assert_ne!(fs::read(&source)?, source_before);
     Ok(())
 }
 
 #[test]
-fn configured_duplicate_delete_keeps_menu_open_on_unsupported_formula_workbook() -> Result<()> {
+fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
+    // 2026-10-28 起 2-2 直接在源工作簿上删除重复行（保留首次出现）。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -286,16 +242,17 @@ fn configured_duplicate_delete_keeps_menu_open_on_unsupported_formula_workbook()
     let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("处理失败：按配置删除重复"));
-    assert!(stdout.contains("does not support formula cells"));
-    assert!(stdout.contains("======== PyTools 菜单 ========"));
-    let report = output_json(&output)?;
-    assert_eq!(report[0]["execution"], "failed");
-    assert_eq!(report[0]["status"], "failed");
-    assert!(report[0]["output_file"].is_null());
-    assert_eq!(fs::read(&source)?, source_before);
+    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
+    assert!(stdout.contains("已就地删除"), "{stdout}");
+    assert!(!stdout.contains("\"execution\""), "menu must not print JSON");
+    assert_ne!(
+        fs::read(&source)?,
+        source_before,
+        "in-place deletion must modify the source workbook"
+    );
     Ok(())
 }
+
 
 fn cell_fill(path: &Path, address: &str) -> Result<Option<String>> {
     let workbook = excel_editor::open_xlsx(path)?;
@@ -468,7 +425,8 @@ fn interactive_dedup_append_rejects_whitespace_header_mismatch() -> Result<()> {
     let target_before = fs::read(&target)?;
 
     let menu_input = "2\n3\n0\n";
-    let output = run_menu(&config, &menu_input)?;
+    // 运行记录只在 developer 视图产出；菜单本身不再打印 JSON。
+    let output = run_menu_with_view(&config, &menu_input, "developer")?;
     assert!(
         output.status.success(),
         "header mismatch should skip the append task: {}",
@@ -558,84 +516,29 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
 }
 
 #[test]
-fn interactive_dedup_menu_writes_developer_history_and_off_suppresses_it() -> Result<()> {
+fn interactive_dedup_menu_reports_in_place_marking_without_json() -> Result<()> {
+    // 2-1 就地标记：输出可读行，不再产出旧 PT-2 计划/JSON 输出。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
     create_pure_data_duplicate_source(&source)?;
-    let input = "2\n1\n0\n".to_owned();
 
-    let developer = run_menu_with_view(&config, &input, "developer")?;
+    let developer = run_menu_with_view(&config, "2\n1\n0\n", "developer")?;
     assert!(
         developer.status.success(),
         "developer menu failed: {}",
         String::from_utf8_lossy(&developer.stderr)
     );
-    assert!(String::from_utf8_lossy(&developer.stdout).contains("PT-2 完成：PT-2-3"));
-    let developer_report = output_json(&developer)?;
-    assert_eq!(developer_report[0]["report"]["duplicate_rows"], 1);
+    let stdout = String::from_utf8_lossy(&developer.stdout);
+    assert!(stdout.contains("处理完成：任务成功 1 项"), "{stdout}");
+    assert!(stdout.contains("标记重复行 1 行"), "{stdout}");
+    assert!(!stdout.contains("\"execution\""), "{stdout}");
 
-    let log_dir = root.path().join("logs");
-    let histories = fs::read_dir(&log_dir)?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "json")
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(histories.len(), 1);
-    let history_text = fs::read_to_string(&histories[0])?;
-    let history: Value = serde_json::from_str(&history_text)?;
-    assert_eq!(history["feature_id"], "PT-2-3");
-    assert_eq!(history["action"], "config_check");
-    assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["metrics"]["duplicate_rows"], 1);
-    assert_eq!(history["metrics"]["hit_sheets"], 1);
-    assert_eq!(history["metrics"]["planned_operations"], 3);
-    assert_eq!(history["metrics"]["written_outputs"], 1);
-    assert_eq!(history["metrics"]["committed_targets"], 0);
-    assert!(history["elapsed_ms"].as_u64().is_some());
-    assert!(history["stages"]
-        .as_array()
-        .is_some_and(|stages| !stages.is_empty()));
-    assert!(history["actual_engines"]
-        .as_array()
-        .is_some_and(|engines| engines
-            .iter()
-            .any(|engine| engine == "Calamine via excel-reader")));
-    assert!(history["actual_engines"]
-        .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "rust_xlsxwriter")));
-    assert_eq!(history["excel_modifier_invoked"], false);
-    assert_eq!(history["excel_writer_invoked"], true);
-    assert_eq!(history["plan_only"], false);
-    assert!(history["stages"].as_array().is_some_and(|stages| stages
-        .iter()
-        .any(|stage| stage["name"] == "read_plan_write_and_verify_new_workbook")));
-    assert!(!history_text.contains("source.xlsx"));
-    assert!(!history_text.contains(&root.path().to_string_lossy().to_string()));
-
-    let off = run_menu_with_view(&config, &input, "off")?;
-    assert!(
-        off.status.success(),
-        "off menu failed: {}",
-        String::from_utf8_lossy(&off.stderr)
-    );
-    let off_output = String::from_utf8_lossy(&off.stdout);
-    assert!(!off_output.contains("开始处理："));
-    assert!(!off_output.contains("PT-2 开始："));
-    let history_count = fs::read_dir(&log_dir)?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .is_some_and(|extension| extension == "json")
-        })
-        .count();
-    assert_eq!(history_count, 1);
+    let off = run_menu_with_view(&config, "2\n1\n0\n", "off")?;
+    assert!(off.status.success());
     Ok(())
 }
+
 
 fn create_duplicate_source(path: &Path) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
@@ -847,6 +750,9 @@ fn run_menu_with_capability(
         .arg(capability)
         .arg("--platform")
         .arg(platform)
+        // 菜单默认（user 视图）不打印 JSON；运行记录与机器可读结果走 developer 视图。
+        .arg("--log-view")
+        .arg("developer")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -874,4 +780,39 @@ fn output_json(output: &Output) -> Result<Value> {
         .context("CLI JSON output missing")?;
     let mut deserializer = serde_json::Deserializer::from_slice(&output.stdout[start..]);
     Value::deserialize(&mut deserializer).context("decode CLI JSON output")
+}
+
+/// 菜单不再打印 JSON：追加计划通过 CLI 子命令获取（仍输出数组 JSON）。
+fn append_plan_json(config: &Path, output_dir: &Path) -> Result<Value> {
+    let run = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        .args(["dedup-append-plan", "--config"])
+        .arg(config)
+        .args(["--output-dir"])
+        .arg(output_dir)
+        .output()?;
+    anyhow::ensure!(
+        run.status.success(),
+        "dedup-append-plan failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    output_json(&run)
+}
+
+/// 菜单不再打印 JSON：从运行记录目录读取指定前缀的最新 JSON（developer 视图产出）。
+fn menu_history_json(root: &Path, prefix: &str) -> Result<Value> {
+    let log_dir = root.join("logs");
+    let mut candidates: Vec<PathBuf> = fs::read_dir(&log_dir)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(prefix))
+        })
+        .collect();
+    candidates.sort();
+    let path = candidates
+        .pop()
+        .with_context(|| format!("run history starting with {prefix} missing"))?;
+    let bytes = fs::read(&path)?;
+    serde_json::from_slice(&bytes).with_context(|| format!("decode {}", path.display()))
 }

@@ -1,5 +1,6 @@
-//! Explicit same-category conversion requests delegated to the independent
-//! sidecar executable. This module does not link the sidecar crate.
+//! Explicit same-category conversion requests. Fidelity conversions run the
+//! in-process engine (`conversion_engine`): Office/WPS COM on Windows, a
+//! local LibreOffice `soffice` CLI elsewhere; no external sidecar executable.
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Local;
@@ -9,10 +10,9 @@ use excel_writer::Workbook;
 use serde::Serialize;
 use std::{
     collections::HashSet,
-    env, fs,
+    fs,
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     time::Instant,
 };
 
@@ -203,17 +203,16 @@ pub fn convert_one(input: &Path, output: &Path, target: &str, engine: &str) -> R
         }
         return convert_native_excel_values(input, output, &source_ext);
     }
-    let sidecar = find_sidecar()?;
-    let (sidecar_input, _staging_guard) = stage_sidecar_input(input, output, &source_ext)?;
-    let sidecar_output = if source_ext == "et" {
-        sidecar_input.with_extension(&target)
+    let (staged_input, _staging_guard) = stage_sidecar_input(input, output, &source_ext)?;
+    let staged_output = if source_ext == "et" {
+        staged_input.with_extension(&target)
     } else {
         output.to_path_buf()
     };
-    let detail = invoke_sidecar(&sidecar, &sidecar_input, &sidecar_output, &target, engine)?;
+    let detail = invoke_engine(&staged_input, &staged_output, &target, engine)?;
     if source_ext == "et" {
         ensure_et_source_format_verified(&detail)?;
-        crate::file_commit::create_target_from_candidate(&sidecar_output, output)
+        crate::file_commit::create_target_from_candidate(&staged_output, output)
             .context("publish ET conversion only after source format is verified")?;
     }
     Ok(detail)
@@ -221,7 +220,7 @@ pub fn convert_one(input: &Path, output: &Path, target: &str, engine: &str) -> R
 
 fn ensure_et_source_format_verified(detail: &str) -> Result<()> {
     let Ok(report) = serde_json::from_str::<serde_json::Value>(detail) else {
-        bail!("unsupported format: conversion sidecar did not provide ET source-format evidence");
+        bail!("unsupported format: conversion engine did not provide ET source-format evidence");
     };
     let validation = report.get("validation");
     anyhow::ensure!(
@@ -239,7 +238,7 @@ fn ensure_et_source_format_verified(detail: &str) -> Result<()> {
                 .and_then(|value| value.get("source_file_format"))
                 .and_then(serde_json::Value::as_i64)
                 == Some(65_521),
-        "unsupported format: conversion sidecar did not verify that the .et source is native ET; output was not published"
+        "unsupported format: conversion engine did not verify that the .et source is native ET; output was not published"
     );
     Ok(())
 }
@@ -315,60 +314,28 @@ fn stage_sidecar_input(
     Ok((staged_input, Some(guard)))
 }
 
-fn invoke_sidecar(
-    sidecar: &Path,
-    input: &Path,
-    output: &Path,
-    target: &str,
-    engine: &str,
-) -> Result<String> {
-    let result = Command::new(&sidecar)
-        .arg("convert")
-        .arg("--input")
-        .arg(input)
-        .arg("--output")
-        .arg(output)
-        .arg("--to")
-        .arg(&target)
-        .arg("--mode")
-        .arg("fidelity")
-        .arg("--engine")
-        .arg(engine)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output();
-    let result = match result {
-        Ok(result) => result,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            bail!(
-                "该功能需要外部引擎: conversion sidecar is unavailable ({})",
-                sidecar.display()
-            );
-        }
-        Err(error) => {
-            return Err(error)
-                .with_context(|| format!("start conversion sidecar {}", sidecar.display()));
-        }
-    };
-    if !result.status.success() {
-        let message = String::from_utf8_lossy(&result.stderr).trim().to_owned();
-        if message.contains("unavailable")
-            || message.contains("install soffice")
-            || message.contains("COM conversion is only available")
-            || message.contains("No supported Office/WPS COM engine is available")
-        {
-            bail!("该功能需要外部引擎: {message}");
-        }
-        bail!("conversion failed: {}", explain_sidecar_failure(&message));
-    }
-    anyhow::ensure!(
-        output.is_file() && fs::metadata(output)?.len() > 0,
-        "conversion sidecar reported success but output is missing or empty"
-    );
-    Ok(String::from_utf8_lossy(&result.stdout).trim().to_owned())
+fn invoke_engine(input: &Path, output: &Path, target: &str, engine: &str) -> Result<String> {
+    crate::conversion_engine::run_fidelity_conversion(input, output, target, engine).map_err(
+        |error| {
+            let message = format!("{error:#}");
+            if message.starts_with("该功能需要外部引擎") {
+                anyhow!("{message}")
+            } else if message.contains("install soffice")
+                || message.contains("LibreOffice is unavailable")
+                || message.contains("LibreOffice is required")
+                || message.contains("COM conversion is only available")
+                || message.contains("No supported Office/WPS COM engine is available")
+                || message.contains("No supported spreadsheet COM engine is available")
+            {
+                anyhow!("该功能需要外部引擎: {message}")
+            } else {
+                anyhow!("conversion failed: {}", explain_engine_failure(&message))
+            }
+        },
+    )
 }
 
-fn explain_sidecar_failure(message: &str) -> String {
+fn explain_engine_failure(message: &str) -> String {
     if message.contains("Input has .et extension but KET opened FileFormat") {
         return "KET 未将该 .et 文件识别为原生 ET 工作簿，未生成 XLSX。请确认输入是有效的 WPS ET 文件。"
             .to_owned();
@@ -571,7 +538,7 @@ where
                         "calamine + rust_xlsxwriter".to_owned()
                     })
                 } else {
-                    sidecar_engine(&detail)
+                    fidelity_engine(&detail)
                 };
                 run.items.push(ConversionItem {
                     input: input.clone(),
@@ -727,11 +694,11 @@ fn conversion_components(ext: &str, target: &str, engine: &str) -> Vec<String> {
     vec![
         "Rust".to_owned(),
         "pytools-core::conversion".to_owned(),
-        "sidecar/lo-convert".to_owned(),
+        "pytools-core::conversion_engine".to_owned(),
     ]
 }
 
-fn sidecar_engine(detail: &str) -> Option<String> {
+fn fidelity_engine(detail: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(detail)
         .ok()?
         .get("engine")?
@@ -755,10 +722,7 @@ fn native_engine_for_attempt(ext: &str, target: &str, engine: &str) -> Option<St
 }
 
 fn conversion_error_type(detail: &str) -> &'static str {
-    if detail.contains("该功能需要外部引擎")
-        || detail.contains("external fidelity engine")
-        || detail.contains("sidecar is unavailable")
-    {
+    if detail.contains("该功能需要外部引擎") || detail.contains("external fidelity engine") {
         "external_engine_required"
     } else if detail.contains("unsupported") || detail.contains("only .xlsx and .docx") {
         "unsupported_format"
@@ -1364,37 +1328,11 @@ impl Drop for TempDirGuard {
     }
 }
 
-fn find_sidecar() -> Result<PathBuf> {
-    if let Some(configured) = env::var_os("PYTOOLS_LO_CONVERT") {
-        let path = PathBuf::from(configured);
-        if path.is_file() {
-            return Ok(path);
-        }
-        return Err(anyhow!(
-            "该功能需要外部引擎: PYTOOLS_LO_CONVERT does not point to a sidecar executable: {}",
-            path.display()
-        ));
-    }
-    let executable = env::current_exe().context("resolve pytools executable path")?;
-    let suffix = if cfg!(windows) {
-        "lo-convert.exe"
-    } else {
-        "lo-convert"
-    };
-    if let Some(parent) = executable.parent() {
-        let sibling = parent.join(suffix);
-        if sibling.is_file() {
-            return Ok(sibling);
-        }
-    }
-    Ok(PathBuf::from(suffix))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         convert_excel_files_in_source_folders, convert_one, ensure_et_source_format_verified,
-        explain_sidecar_failure, invoke_sidecar, native_values_equal, stage_sidecar_input,
+        explain_engine_failure, invoke_engine, native_values_equal, stage_sidecar_input,
         validate_native_source_values,
     };
     use excel_reader::{read_workbook, SheetDump, WorkbookDump};
@@ -1426,17 +1364,16 @@ mod tests {
     }
 
     #[test]
-    fn missing_sidecar_reports_external_engine_requirement() {
-        let root = TempDir::new("missing-sidecar");
-        let error = invoke_sidecar(
-            &root.0.join("lo-convert-missing"),
+    fn invalid_engine_selection_is_rejected_before_touching_files() {
+        let root = TempDir::new("bad-engine");
+        let error = invoke_engine(
             &root.0.join("input.xls"),
             &root.0.join("output.xlsx"),
             "xlsx",
-            "lo",
+            "bogus",
         )
-        .expect_err("missing converter executable must be reported");
-        assert!(error.to_string().contains("该功能需要外部引擎"));
+        .expect_err("unknown engine must be rejected");
+        assert!(error.to_string().contains("engine must be auto, lo or com"));
     }
 
     #[test]
@@ -1481,8 +1418,8 @@ mod tests {
     }
 
     #[test]
-    fn et_sidecar_rejection_explains_source_format_without_staging_path() {
-        let message = explain_sidecar_failure(
+    fn et_engine_rejection_explains_source_format_without_staging_path() {
+        let message = explain_engine_failure(
             r#"powershell stack at F:\staging\convert.ps1: Input has .et extension but KET opened FileFormat 56; expected native ET FileFormat 65521"#,
         );
         assert!(message.contains("未将该 .et 文件识别为原生 ET 工作簿"));

@@ -844,17 +844,14 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         continue;
                     }
                     let source_top_left = a1_address(merge_first_row, merge_first_column);
-                    let Some(text) = source
+                    // 合并区必须整块保留（原 Python 复制所有完全落在区域内的合并）。
+                    // 锚点可能不是字符串（数字/日期），按显示文本取锚点值。
+                    let text = source
                         .values
                         .get(&source_top_left)
-                        .filter(|value| {
-                            value.get("type").and_then(serde_json::Value::as_str) == Some("string")
-                        })
                         .and_then(|value| value.get("value"))
-                        .and_then(serde_json::Value::as_str)
-                    else {
-                        continue;
-                    };
+                        .map(display_text_of_value)
+                        .unwrap_or_default();
                     if source.formulas.contains_key(&source_top_left) {
                         formulas_materialized += 1;
                     }
@@ -888,12 +885,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         let Some(value) = source.values.get(&address) else {
                             continue;
                         };
-                        anyhow::ensure!(
-                            value.get("type").and_then(serde_json::Value::as_str) != Some("error"),
-                            "cannot print Excel error value at {}!{}",
-                            source_sheet,
-                            address
-                        );
+                        // 原 PyTools print_310.py 不拒绝错误值，按显示文本输出。
                         if source.formulas.contains_key(&address) {
                             formulas_materialized += 1;
                         }
@@ -1133,10 +1125,32 @@ fn write_static_print_cell(
                 data.as_bool().context("static print boolean is invalid")?,
             )?;
         }
-        "error" => anyhow::bail!("Excel error values cannot be written to static print output"),
+        "error" => {
+            // 原 Python 打印工具原样输出错误值（如 #DIV/0!）。xlsxwriter 无
+            // 类型化错误写入 API，按旧版可见文本写入，保持与源表显示一致。
+            worksheet.write_string(row, column, data.as_str().unwrap_or("#N/A"))?;
+        }
         other => anyhow::bail!("unsupported static print cell type {other:?}"),
     }
     Ok(())
+}
+
+
+/// 单元格显示文本（用于合并区锚点；数字/日期/错误值都可取到字符串）。
+fn display_text_of_value(value: &serde_json::Value) -> String {
+    if let Some(text) = value.as_str() {
+        return text.to_owned();
+    }
+    if let Some(number) = value.as_f64() {
+        if number.fract() == 0.0 && number.abs() < 1e15 {
+            return format!("{number:.0}");
+        }
+        return number.to_string();
+    }
+    if let Some(boolean) = value.as_bool() {
+        return if boolean { "TRUE" } else { "FALSE" }.to_owned();
+    }
+    String::new()
 }
 
 fn static_print_is_numeric_zero(value: &serde_json::Value) -> bool {
@@ -1380,15 +1394,9 @@ fn validate_static_print_values(
         if address_in_ranges(address, ranges)
             && value.get("type").and_then(serde_json::Value::as_str) == Some("error")
         {
-            anyhow::bail!(
-                "Excel error value at {}!{}: {}",
-                sheet.name,
-                address,
-                value
-                    .get("value")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("unknown")
-            );
+            // 原 PyTools print_310.py 不拒绝错误值，直接输出其显示文本；
+            // 这里仅记录性放行，保持与旧工具一致的可用性。
+            let _ = (address, value);
         }
     }
     Ok(())
@@ -1506,7 +1514,7 @@ mod tests {
     }
 
     #[test]
-    fn static_print_rejects_excel_error_cells_in_selected_ranges() {
+    fn static_print_allows_excel_error_cells_in_selected_ranges() {
         let mut values = BTreeMap::new();
         values.insert("B2".to_owned(), json!({"type": "error", "value": "Div0"}));
         let sheet = SheetDump {
@@ -1524,8 +1532,9 @@ mod tests {
             data_validations_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
         };
 
-        let error = validate_static_print_values(&sheet, &[(1, 2, 3, 4)])
-            .expect_err("Excel error cells must prevent static print output");
-        assert!(error.to_string().contains("Excel error value at Source!B2"));
+        // 原 PyTools print_310.py 不拒绝错误值，直接输出其显示文本；
+        // 因此这里要求放行而不是报错。
+        validate_static_print_values(&sheet, &[(1, 2, 3, 4)])
+            .expect("Excel error cells must not block static print output");
     }
 }

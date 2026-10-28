@@ -17,8 +17,9 @@ impl TestDirectory {
             .expect("clock must be after Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "pytools-batch-rename-{label}-{}-{nonce}",
-            std::process::id()
+            "pytools-batch-rename-{label}-{}-{nonce}-{:?}", 
+            std::process::id(),
+            std::thread::current().id()
         ));
         fs::create_dir_all(&path).expect("create isolated test directory");
         Self(path)

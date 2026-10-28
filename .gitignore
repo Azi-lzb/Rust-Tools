@@ -80,3 +80,12 @@ secrets.json
 /audit-core/config/**/外部文件-大集中相关数据20261016.xlsx
 /pytools-core/tests/fixtures/季度报表_县区报表_2024-12-31.xlsx
 !/pytools-core/packaging/target_fixtures/*.xlsx
+
+# Untracked data files require explicit review before adding.
+# Existing tracked configuration and fixtures remain tracked.
+*.xlsx
+*.xlsm
+*.xls
+*.xlsb
+*.et
+*.csv

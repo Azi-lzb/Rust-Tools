@@ -1,7 +1,8 @@
+//! 报表打印菜单（3-1 umya / 3-2 openpyxl / 3-3 预校验）的端到端测试。
+//!
+//! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口。
+
 use anyhow::{Context, Result};
-use excel_editor::{
-    BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId, ExcelEditPlan,
-};
 use excel_reader::read_workbook;
 use serde::Deserialize;
 use serde_json::Value;
@@ -45,170 +46,7 @@ impl Drop for TestDirectory {
 }
 
 #[test]
-fn interactive_print_menu_routes_static_report_and_precheck() -> Result<()> {
-    let root = TestDirectory::new()?;
-    let source = root.path().join("source.xlsx");
-    let target = root.path().join("printed.xlsx");
-    let config = create_print_config(root.path(), &source, &target)?;
-    create_print_source(&source)?;
-    let source_before = fs::read(&source)?;
-
-    let menu = run_menu(&config, "3\n0\n0\n")?;
-    assert!(menu.status.success());
-    let menu_text = String::from_utf8_lossy(&menu.stdout);
-    assert!(menu_text.contains("按配置生成静态打印报表"));
-    assert!(!menu_text.contains("按批注"));
-    assert!(!menu_text.contains("PDF"));
-
-    let config_plan = run_menu(&config, "3\n1\n0\n")?;
-    assert!(config_plan.status.success());
-    let config_response = output_json(&config_plan)?;
-    assert_eq!(config_response[0]["execution"], "plan_only");
-    let config_plan_path = PathBuf::from(
-        config_response[0]["plan_file"]
-            .as_str()
-            .context("config print plan path missing")?,
-    );
-    assert!(config_plan_path.is_file());
-    assert!(!target.exists());
-    assert!(!PathBuf::from(
-        config_response[0]["report"]["output"]
-            .as_str()
-            .context("config print candidate path missing")?
-    )
-    .exists());
-
-    let precheck = run_menu(&config, "3\n2\n0\n")?;
-    assert!(precheck.status.success());
-    let precheck_response = output_json(&precheck)?;
-    assert_eq!(precheck_response["failed"], 0);
-    assert_eq!(precheck_response["ok"], 1);
-
-    assert_eq!(
-        fs::read(&source)?,
-        source_before,
-        "source remains unchanged"
-    );
-    Ok(())
-}
-
-#[test]
-fn configured_static_print_failure_shows_reason_and_returns_to_main_menu() -> Result<()> {
-    let root = TestDirectory::new()?;
-    let source = root.path().join("source.xlsx");
-    let target = root.path().join("printed.xlsx");
-    let config = create_print_config(root.path(), &source, &target)?;
-    create_print_source(&source)?;
-    create_print_source(&target)?;
-    let source_before = fs::read(&source)?;
-    let target_before = fs::read(&target)?;
-
-    let output = run_menu(&config, "3\n1\ny\n0\n")?;
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("处理失败：按配置生成静态打印文件"));
-    assert!(stdout.contains("print target already exists"));
-    assert!(stdout.contains("======== PyTools 菜单 ========"));
-    assert_eq!(fs::read(&source)?, source_before);
-    assert_eq!(fs::read(&target)?, target_before);
-    Ok(())
-}
-
-#[test]
-fn interactive_static_print_executes_only_after_capability_and_user_confirmation() -> Result<()> {
-    let root = TestDirectory::new()?;
-    let source = root.path().join("source.xlsx");
-    let target = root.path().join("printed.xlsx");
-    let config = create_print_config(root.path(), &source, &target)?;
-    create_print_source(&source)?;
-    let source_before = fs::read(&source)?;
-
-    let plan_run = run_menu(&config, "3\n1\n0\n")?;
-    assert!(plan_run.status.success());
-    assert!(String::from_utf8_lossy(&plan_run.stdout).contains("本次仅生成计划"));
-    assert!(
-        !target.exists(),
-        "plan-only menu must not create a workbook"
-    );
-    let plan_response = output_json(&plan_run)?;
-    assert_eq!(plan_response[0]["execution"], "plan_only");
-    let plan: ExcelEditPlan = serde_json::from_value(plan_response[0]["report"]["plan"].clone())?;
-    let capabilities = root.path().join("print-capabilities.json");
-    fs::write(
-        &capabilities,
-        serde_json::to_vec_pretty(&print_capability_for(&plan))?,
-    )?;
-
-    let execution =
-        run_menu_with_capability(&config, &capabilities, "3\n1\ny\n0\n0\n", "developer")?;
-    assert!(
-        execution.status.success(),
-        "confirmed static print failed: {}",
-        String::from_utf8_lossy(&execution.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&execution.stdout);
-    assert!(stdout.contains("只使用源工作簿已保存的公式缓存"));
-    assert!(stdout.contains("实际生成 1 组静态打印工作簿"));
-    let response = output_json(&execution)?;
-    assert_eq!(response[0]["execution"]["engine"], "umya_spreadsheet");
-    assert!(target.is_file(), "confirmed print target was not created");
-    let printed = read_workbook(&target)?;
-    assert_eq!(printed.sheets.len(), 1);
-    assert_eq!(printed.sheets[0].name, "Printed");
-    assert!(
-        !printed.sheets[0].values.contains_key("A1"),
-        "numeric zero must be blank"
-    );
-    assert_eq!(
-        printed.sheets[0].values["B3"]["type"], "number",
-        "small nonzero numbers must stay numeric"
-    );
-    assert_eq!(
-        printed.sheets[0].values["B3"]["value"].as_f64(),
-        Some(0.0001),
-        "small nonzero numbers must not be hidden as zero"
-    );
-    assert_eq!(
-        printed.sheets[0].values["C3"]["type"], "string",
-        "text zero must remain text"
-    );
-    assert_eq!(
-        printed.sheets[0].values["C3"]["value"], "0",
-        "text zero must not be hidden"
-    );
-    assert!(
-        printed.sheets[0].comments.is_empty(),
-        "static print must remove comments"
-    );
-    assert_eq!(fs::read(&source)?, source_before);
-
-    let histories = fs::read_dir(root.path().join("logs"))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("pytools-print-config_plan-"))
-        })
-        .collect::<Vec<_>>();
-    let execution_history = histories
-        .iter()
-        .map(|path| fs::read(path))
-        .collect::<std::io::Result<Vec<_>>>()?
-        .into_iter()
-        .filter_map(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .find(|history| history["excel_modifier_invoked"] == true)
-        .context("static print execution history missing")?;
-    assert_eq!(execution_history["feature_id"], "PT-3-3");
-    assert_eq!(execution_history["plan_only"], false);
-    assert!(execution_history["actual_engines"]
-        .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "umya_spreadsheet")));
-    Ok(())
-}
-
-#[test]
-fn interactive_static_print_uses_rust_writer_without_modifier_capability() -> Result<()> {
+fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
@@ -217,195 +55,271 @@ fn interactive_static_print_uses_rust_writer_without_modifier_capability() -> Re
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
-    let execution = run_menu_with_view(&config, "3\n1\ny\n", "developer")?;
+    let menu = run_menu(&config, "3\n0\n0\n")?;
+    assert!(menu.status.success());
+    let menu_text = String::from_utf8_lossy(&menu.stdout);
     assert!(
-        execution.status.success(),
-        "Rust static print failed: {}",
-        String::from_utf8_lossy(&execution.stderr)
+        menu_text.contains("1  按打印配置生成：umya-spreadsheet"),
+        "{menu_text}"
     );
-    let stdout = String::from_utf8_lossy(&execution.stdout);
-    assert!(stdout.contains("Rust 将生成全新的静态打印 XLSX"));
-    assert!(stdout.contains("实际生成 1 组静态打印工作簿"));
-    let response = output_json(&execution)?;
-    assert_eq!(response[0]["execution"]["engine"], "rust_xlsxwriter");
-    assert_eq!(response[0]["execution"]["worksheet_count"], 1);
-    assert_eq!(response[0]["execution"]["formulas_materialized"], 1);
-    assert!(target.is_file(), "confirmed print target was not created");
+    assert!(
+        menu_text.contains("2  按打印配置生成：openpyxl"),
+        "{menu_text}"
+    );
+    assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
+    assert!(!menu_text.contains("PDF"), "PDF entry must stay removed");
+    assert!(!menu_text.contains("按批注"), "comment print entries are removed");
 
-    let printed = read_workbook(&target)?;
-    assert_eq!(printed.sheets.len(), 1);
-    let sheet = &printed.sheets[0];
-    assert_eq!(sheet.name, "Printed");
+    // 3-1：直接执行，无 y 确认。
+    let umya = run_menu(&config, "3\n1\n0\n0\n")?;
     assert!(
-        !sheet.values.contains_key("A1"),
-        "configured numeric zero must be blank"
+        umya.status.success(),
+        "umya print failed: {}",
+        String::from_utf8_lossy(&umya.stderr)
     );
-    assert_eq!(sheet.values["A2"]["value"], 2.0);
-    assert_eq!(sheet.values["A3"]["value"], 3.0);
-    assert_eq!(sheet.values["B3"]["type"], "number");
-    assert_eq!(sheet.values["B3"]["value"], 0.0001);
-    assert_eq!(sheet.values["C3"]["type"], "string");
-    assert_eq!(sheet.values["C3"]["value"], "0");
-    assert!(
-        sheet.formulas.is_empty(),
-        "print output must be static values"
-    );
-    assert!(
-        sheet.comments.is_empty(),
-        "print output must not copy comments"
-    );
-    assert_eq!(sheet.merges, vec!["B2:C2".to_owned()]);
-    assert_eq!(
-        fs::read(&source)?,
-        source_before,
-        "source must remain unchanged"
-    );
+    let umya_stdout = String::from_utf8_lossy(&umya.stdout);
+    assert!(!umya_stdout.contains("输入 y/yes/是"), "{umya_stdout}");
+    assert!(umya_stdout.contains("处理完成：成功 1 项"), "{umya_stdout}");
+    // 统一日志要求：开始与完成行都带本机时间戳。
+    let start_line = umya_stdout
+        .lines()
+        .find(|line| line.contains("开始处理：按配置生成静态打印文件"))
+        .context("start line missing")?;
+    assert!(starts_with_timestamp(start_line), "{start_line}");
+    let done_line = umya_stdout
+        .lines()
+        .find(|line| line.contains("处理完成：成功"))
+        .context("done line missing")?;
+    assert!(starts_with_timestamp(done_line), "{done_line}");
+    let history_path = umya_stdout.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("print run summary missing")?;
+    let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert_eq!(history["task_stats"]["succeeded"], 1);
+    assert_eq!(history["task_stats"]["failed"], 0);
+    assert_eq!(history["input_stats_available"], false);
+    let events_path = root.path().join("logs").join(history["diagnostic_log_path"].as_str().context("print diagnostic log missing")?);
+    let events = fs::read_to_string(events_path)?;
+    let events = events.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(events.iter().all(|event| event["run_id"] == history["run_id"]));
+    assert!(events.iter().any(|event| event["event_name"] == "run_finished"));
+    let printed = root.path().join("3-4-umya").join("printed.xlsx");
+    assert!(printed.is_file(), "umya print output missing");
+    assert_eq!(fs::read(&source)?, source_before, "source must stay unchanged");
 
-    let histories = fs::read_dir(root.path().join("logs"))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("pytools-print-config_plan-"))
-        })
-        .collect::<Vec<_>>();
-    let history = histories
-        .iter()
-        .map(fs::read)
-        .collect::<std::io::Result<Vec<_>>>()?
-        .into_iter()
-        .filter_map(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .find(|history| history["excel_writer_invoked"] == true)
-        .context("Rust static print execution history missing")?;
-    assert_eq!(history["plan_only"], false);
-    assert_eq!(history["excel_modifier_invoked"], false);
-    assert!(history["actual_engines"]
-        .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "rust_xlsxwriter")));
+    // 3-3：配置预校验（机器可读 JSON 仅 developer 视图输出）。
+    let precheck = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
+    assert!(precheck.status.success());
+    let precheck_response = output_json(&precheck)?;
+    assert_eq!(precheck_response["failed"], 0);
+    assert_eq!(precheck_response["ok"], 1);
     Ok(())
 }
 
 #[test]
-fn interactive_compact_print_sizes_a_text_zero_column() -> Result<()> {
+fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("source.xlsx");
+    // 目标扩展名不受支持，引擎必须明确失败且不产出文件。
+    let target = root.path().join("printed.xls");
+    let config = create_print_config(root.path(), &source, &target)?;
+    create_print_source(&source)?;
+    let source_before = fs::read(&source)?;
+
+    let output = run_menu(&config, "3\n1\n0\n0\n")?;
+    assert!(output.status.success(), "menu must stay usable after a failure");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let failure_line = stdout
+        .lines()
+        .find(|line| line.contains("处理失败"))
+        .context("failure summary line missing")?;
+    assert!(
+        failure_line.contains("处理失败：打印任务中断，无法统计完整的成功、跳过和失败数量"),
+        "{failure_line}"
+    );
+    assert!(
+        starts_with_timestamp(failure_line),
+        "failure line must carry a timestamp: {failure_line}"
+    );
+    assert!(stdout.contains(".xlsx"), "{stdout}");
+    assert!(stdout.contains("======== PyTools 菜单 ========"), "{stdout}");
+    assert_eq!(fs::read(&source)?, source_before);
+    assert!(!target.exists(), "failed print must not create a target");
+    Ok(())
+}
+
+#[test]
+fn interactive_static_print_executes_without_confirmation() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
     let config =
-        create_print_config_with_settings(root.path(), &source, &target, "2", "D4:D4", "是")?;
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
     create_print_source(&source)?;
+    let source_before = fs::read(&source)?;
 
-    let planned = run_menu(&config, "3\n1\n0\n")?;
+    let execution = run_menu(&config, "3\n1\n0\n0\n")?;
     assert!(
-        planned.status.success(),
-        "compact print planning failed: {}",
-        String::from_utf8_lossy(&planned.stderr)
+        execution.status.success(),
+        "static print failed: {}",
+        String::from_utf8_lossy(&execution.stderr)
     );
-    let response = output_json(&planned)?;
-    let plan: ExcelEditPlan = serde_json::from_value(response[0]["report"]["plan"].clone())?;
-    let text_zero_column_width = plan
-        .operations
-        .iter()
-        .find_map(|operation| match operation {
-            EditOperation::SetColumnWidth {
-                column_index: 1,
-                width,
-                ..
-            } => Some(*width),
-            _ => None,
-        });
+    let stdout = String::from_utf8_lossy(&execution.stdout);
+    let start_line = stdout
+        .lines()
+        .find(|line| line.contains("开始处理：按配置生成静态打印文件"))
+        .context("start line missing")?;
+    assert!(
+        start_line.contains("（umya-spreadsheet）"),
+        "{start_line}"
+    );
+    assert!(starts_with_timestamp(start_line), "{start_line}");
+    assert!(!stdout.contains("输入 y/yes/是"), "no confirmation expected");
+    // 同一输出文件只显示一次。
+    let output_line_count = stdout.lines().filter(|line| line.contains("输出：")).count();
+    assert_eq!(output_line_count, 1, "{stdout}");
+
+    let printed_path = root.path().join("3-4-umya").join("printed.xlsx");
+    assert!(printed_path.is_file(), "print target was not created");
+    let printed = read_workbook(&printed_path)?;
+    assert_eq!(printed.sheets.len(), 1);
+    let sheet = &printed.sheets[0];
+    assert_eq!(sheet.name, "Printed");
+    // 数值 0 被隐藏（零值不输出=是），文本 "0" 保留，0.0001 保持数值。
+    assert!(
+        !sheet.values.contains_key("A1"),
+        "numeric zero must be blank: {:?}",
+        sheet.values.get("A1")
+    );
+    assert_eq!(sheet.values["A2"]["value"], 2.0);
+    assert_eq!(sheet.values["A3"]["value"], 3.0, "formula must become its cached value");
+    assert_eq!(sheet.values["B3"]["type"], "number");
+    assert_eq!(sheet.values["B3"]["value"], 0.0001);
+    assert_eq!(sheet.values["C3"]["type"], "string");
+    assert_eq!(sheet.values["C3"]["value"], "0");
+    assert!(sheet.formulas.is_empty(), "print output must be static values");
+    assert!(sheet.comments.is_empty(), "print output must drop comments");
     assert_eq!(
-        text_zero_column_width,
-        Some(6.5),
-        "text \"0\" counts as visible content when estimating compact print width"
+        sheet.merges,
+        vec!["B2:C2".to_owned()],
+        "merged range must be preserved and shifted"
     );
-    assert!(
-        !target.exists(),
-        "plan-only printing must not create output"
-    );
+    assert_eq!(fs::read(&source)?, source_before, "source must stay unchanged");
     Ok(())
 }
 
 #[test]
-fn interactive_print_menu_logs_all_actions_and_off_suppresses_progress() -> Result<()> {
+fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("printed.xlsx");
+    let config =
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
+    create_print_source(&source)?;
+    let source_before = fs::read(&source)?;
+
+    let output = run_menu(&config, "3\n2\n0\n0\n")?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let printed = root.path().join("3-5-openpyxl").join("printed.xlsx");
+    if printed.is_file() {
+        assert!(stdout.contains("处理完成"), "{stdout}");
+        let dump = read_workbook(&printed)?;
+        assert_eq!(dump.sheets[0].name, "Printed");
+        assert_eq!(dump.sheets[0].values["B3"]["value"], 0.0001);
+        assert_eq!(dump.sheets[0].values["C3"]["value"], "0");
+        assert_eq!(fs::read(&source)?, source_before);
+    } else {
+        // 本机无 python/openpyxl 时必须是明确的环境提示，而不是伪造成功。
+        assert!(
+            stdout.contains("该功能需要外部环境") || stdout.contains("处理失败"),
+            "unexpected openpyxl outcome: {stdout}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
     let config = create_print_config(root.path(), &source, &target)?;
     create_print_source(&source)?;
-
-    let cases = [
-        ("PT-3-3", "config_plan", "3\n1\n0\n".to_owned()),
-        ("PT-3-4", "config_precheck", "3\n2\n0\n".to_owned()),
-    ];
     let log_dir = root.path().join("logs");
-    for (index, (feature_id, action, input)) in cases.iter().enumerate() {
-        let result = run_menu_with_view(&config, input, "developer")?;
-        assert!(
-            result.status.success(),
-            "{feature_id} developer menu failed: {}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        let stdout = String::from_utf8_lossy(&result.stdout);
-        assert!(stdout.contains(&format!("PT-3 开始：{feature_id} {action}")));
-        assert!(stdout.contains(&format!("PT-3 完成：{feature_id}")));
-        let _ = output_json(&result)?;
 
-        let histories = fs::read_dir(&log_dir)?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with(&format!("pytools-print-{action}-")))
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(histories.len(), 1, "one history per {feature_id}");
-        let all_history_count = fs::read_dir(&log_dir)?.count();
-        assert_eq!(all_history_count, index + 1);
-        let history_text = fs::read_to_string(&histories[0])?;
-        assert!(!history_text.contains(&source.to_string_lossy().to_string()));
-        assert!(!history_text.contains(&config.to_string_lossy().to_string()));
-        let history: Value = serde_json::from_str(&history_text)?;
-        assert_eq!(history["feature_id"], *feature_id);
-        assert_eq!(history["action"], *action);
-        assert_eq!(history["status"], "succeeded");
-        assert!(history["elapsed_ms"].as_u64().is_some());
-        assert!(history["actual_engines"]
-            .as_array()
-            .is_some_and(|engines| engines.iter().any(|engine| engine == "calamine")));
-        assert_eq!(history["excel_modifier_invoked"], false);
-        assert_eq!(history["excel_writer_invoked"], false);
-        match *action {
-            "config_plan" => {
-                assert_eq!(history["metrics"]["planned_groups"], 1);
-                assert_eq!(history["metrics"]["plan_files"], 1);
-                assert_eq!(history["plan_only"], true);
-            }
-            "config_precheck" => {
-                assert_eq!(history["metrics"]["passed_tasks"], 1);
-                assert_eq!(history["metrics"]["failed_tasks"], 0);
-                assert_eq!(history["plan_only"], false);
-            }
-            _ => unreachable!(),
-        }
-    }
+    let developer = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
+    assert!(
+        developer.status.success(),
+        "precheck failed: {}",
+        String::from_utf8_lossy(&developer.stderr)
+    );
+    let developer_stdout = String::from_utf8_lossy(&developer.stdout);
+    assert!(
+        developer_stdout.contains("PT-3 开始：PT-3-4 config_precheck"),
+        "{developer_stdout}"
+    );
+    assert!(
+        developer_stdout.contains("PT-3 完成：PT-3-4"),
+        "{developer_stdout}"
+    );
+    let _ = output_json(&developer)?;
 
-    let user_result = run_menu_with_view(&config, "3\n2\n0\n", "user")?;
-    assert!(user_result.status.success());
-    let user_output = String::from_utf8_lossy(&user_result.stdout);
-    assert!(user_output.contains("开始处理：按配置预校验打印任务"));
-    assert!(user_output.contains("处理完成：通过 1 项、警告 0 项、失败 0 项"));
+    let histories = fs::read_dir(&log_dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("pytools-print-config_precheck-"))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(histories.len(), 1, "precheck must write one run history");
+    let history_text = fs::read_to_string(&histories[0])?;
+    assert!(!history_text.contains(&source.to_string_lossy().to_string()));
+    assert!(!history_text.contains(&config.to_string_lossy().to_string()));
+    let history: Value = serde_json::from_str(&history_text)?;
+    assert_eq!(history["feature_id"], "PT-3-4");
+    assert_eq!(history["action"], "config_precheck");
+    assert_eq!(history["status"], "succeeded");
+
+    let user = run_menu_with_view(&config, "3\n3\n0\n0\n", "user")?;
+    assert!(user.status.success());
+    let user_stdout = String::from_utf8_lossy(&user.stdout);
+    assert!(user_stdout.contains("开始处理：按配置预校验打印任务"));
+    assert!(user_stdout.contains("处理完成：通过 1 项、警告 0 项、失败 0 项"));
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
-    let off_result = run_menu_with_view(&config, "3\n2\n0\n", "off")?;
-    assert!(off_result.status.success());
-    let off_output = String::from_utf8_lossy(&off_result.stdout);
-    assert!(!off_output.contains("PT-3 开始："));
-    assert!(!off_output.contains("PT-3 完成："));
-    assert!(!off_output.contains("开始处理："));
-    assert!(!off_output.contains("处理完成："));
-    assert_eq!(fs::read_dir(&log_dir)?.count(), history_count_before_off);
+    let off = run_menu_with_view(&config, "3\n3\n0\n0\n", "off")?;
+    assert!(off.status.success());
+    let off_stdout = String::from_utf8_lossy(&off.stdout);
+    assert!(!off_stdout.contains("PT-3 开始："));
+    assert!(!off_stdout.contains("开始处理："));
+    assert_eq!(
+        fs::read_dir(&log_dir)?.count(),
+        history_count_before_off,
+        "off view must not write history"
+    );
+    Ok(())
+}
+
+#[test]
+fn v2_print_menu_hides_removed_pdf_entry() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("unused-source.xlsx");
+    let target = root.path().join("must-not-be-created.xlsx");
+    let config = create_print_config(root.path(), &source, &target)?;
+
+    let output = run_menu(&config, "3\n0\n0\n")?;
+    assert!(
+        output.status.success(),
+        "print menu failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("打印配置预校验"));
+    assert!(!stdout.contains("PDF"));
+    assert!(!stdout.contains("按批注"));
+    assert!(!target.exists(), "menu listing must not create output");
     Ok(())
 }
 
@@ -548,57 +462,6 @@ fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Outp
         .context("wait for interactive menu")
 }
 
-fn run_menu_with_capability(
-    config: &Path,
-    capabilities: &Path,
-    input: &str,
-    log_view: &str,
-) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
-        .arg("menu")
-        .arg("--config")
-        .arg(config)
-        .arg("--log-view")
-        .arg(log_view)
-        .arg("--capabilities")
-        .arg(capabilities)
-        .arg("--platform")
-        .arg("synthetic-pt-3-3-menu-test")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("start interactive menu with print test capability")?;
-    child
-        .stdin
-        .take()
-        .context("interactive stdin missing")?
-        .write_all(input.as_bytes())
-        .context("send interactive print selections")?;
-    child
-        .wait_with_output()
-        .context("wait for capability-gated print execution")
-}
-
-fn print_capability_for(plan: &ExcelEditPlan) -> BackendCapability {
-    BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: plan.format,
-        operations: plan.operations.iter().map(EditOperation::kind).collect(),
-        supported_features: plan.workbook.features_present.clone(),
-        preserved: plan.preserve.clone(),
-        platform: "synthetic-pt-3-3-menu-test".to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-3-3-menu".to_owned(),
-            report_path: "pytools-core/tests/print_menu_cli.rs".to_owned(),
-            adapter_version: "umya-spreadsheet-3.1.1".to_owned(),
-            engine_version: "umya-spreadsheet-3.1.1".to_owned(),
-            platform: "synthetic-pt-3-3-menu-test".to_owned(),
-        }),
-    }
-}
-
 fn output_json(output: &Output) -> Result<Value> {
     let start = output
         .stdout
@@ -612,26 +475,22 @@ fn output_json(output: &Output) -> Result<Value> {
     Value::deserialize(&mut deserializer).context("decode CLI JSON output")
 }
 
-#[test]
-fn v2_print_menu_hides_removed_pdf_entry() -> Result<()> {
-    let root = TestDirectory::new()?;
-    let source = root.path().join("unused-source.xlsx");
-    let target = root.path().join("must-not-be-created.xlsx");
-    let config = create_print_config(root.path(), &source, &target)?;
-
-    let output = run_menu(&config, "3\n0\n0\n")?;
-    assert!(
-        output.status.success(),
-        "print menu failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("按配置生成静态打印报表"));
-    assert!(!stdout.contains("PDF"));
-    assert!(!stdout.contains("按批注"));
-    assert!(
-        !target.exists(),
-        "PDF placeholder must not create an output"
-    );
-    Ok(())
+/// 统一日志时间戳：行内出现 `[YYYY-MM-DD HH:MM:SS] ` 前缀（沿用旧版 PyTools 时间格式）。
+/// 菜单提示符（如 `子菜单选择> `）可能出现在时间戳之前。
+fn starts_with_timestamp(line: &str) -> bool {
+    let line = match line.find('[') {
+        Some(index) => &line[index..],
+        None => return false,
+    };
+    let bytes = line.as_bytes();
+    bytes.len() >= 22
+        && bytes[0] == b'['
+        && bytes[5] == b'-'
+        && bytes[8] == b'-'
+        && bytes[11] == b' '
+        && bytes[14] == b':'
+        && bytes[17] == b':'
+        && bytes[20] == b']'
+        && bytes[4].is_ascii_digit()
+        && bytes[21] == b' '
 }

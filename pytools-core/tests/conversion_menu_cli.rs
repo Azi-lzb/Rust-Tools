@@ -67,26 +67,25 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     assert!(renamed.is_file(), "folder input must expand to its files");
     assert_eq!(fs::read(&renamed)?, b"rename payload");
 
-    let missing_sidecar = root.path().join("missing-lo-convert.exe");
-    let legacy_excel_source = sources.join("needs-sidecar.xls");
+    let legacy_excel_source = sources.join("needs-engine.xls");
     fs::write(&legacy_excel_source, b"synthetic xls payload")?;
     let excel_before = fs::read(&legacy_excel_source)?;
-    let excel_sidecar_failure =
-        run_action_with_sidecar(&config, 2, 1, &legacy_excel_source, &missing_sidecar)?;
+    let excel_engine_failure =
+        run_action_with_engines_disabled(&config, 2, 1, &legacy_excel_source)?;
     assert!(
-        excel_sidecar_failure.status.success(),
+        excel_engine_failure.status.success(),
         "a handled conversion failure should return to the menu: {}",
-        stderr(&excel_sidecar_failure)
+        stderr(&excel_engine_failure)
     );
     assert!(
-        String::from_utf8_lossy(&excel_sidecar_failure.stdout).contains("文件处理菜单仍可继续操作")
+        String::from_utf8_lossy(&excel_engine_failure.stdout).contains("文件处理菜单仍可继续操作")
     );
     assert!(
-        String::from_utf8_lossy(&excel_sidecar_failure.stdout).contains("------ 文件处理 ------")
+        String::from_utf8_lossy(&excel_engine_failure.stdout).contains("------ 文件处理 ------")
     );
-    assert!(stderr(&excel_sidecar_failure).contains("needs-sidecar.xls"));
-    assert!(stderr(&excel_sidecar_failure).contains("该功能需要外部引擎"));
-    let excel_failure_report = output_json(&excel_sidecar_failure)?;
+    assert!(stderr(&excel_engine_failure).contains("needs-engine.xls"));
+    assert!(stderr(&excel_engine_failure).contains("该功能需要外部引擎"));
+    let excel_failure_report = output_json(&excel_engine_failure)?;
     assert_eq!(excel_failure_report["failed"], 1);
     assert_eq!(excel_failure_report["items"][0]["status"], "failed");
     assert!(excel_failure_report["items"][0]["detail"]
@@ -96,22 +95,22 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     assert_eq!(fs::read(&legacy_excel_source)?, excel_before);
     assert!(excel_failure_report["items"][0]["output"].is_null());
 
-    let legacy_word_source = sources.join("needs-sidecar.doc");
+    let legacy_word_source = sources.join("needs-engine.doc");
     fs::write(&legacy_word_source, b"synthetic doc payload")?;
     let word_before = fs::read(&legacy_word_source)?;
-    let word_sidecar_failure =
-        run_action_with_sidecar(&config, 3, 1, &legacy_word_source, &missing_sidecar)?;
+    let word_engine_failure =
+        run_action_with_engines_disabled(&config, 3, 1, &legacy_word_source)?;
     assert!(
-        word_sidecar_failure.status.success(),
+        word_engine_failure.status.success(),
         "a handled conversion failure should return to the menu: {}",
-        stderr(&word_sidecar_failure)
+        stderr(&word_engine_failure)
     );
     assert!(
-        String::from_utf8_lossy(&word_sidecar_failure.stdout).contains("文件处理菜单仍可继续操作")
+        String::from_utf8_lossy(&word_engine_failure.stdout).contains("文件处理菜单仍可继续操作")
     );
-    assert!(stderr(&word_sidecar_failure).contains("needs-sidecar.doc"));
-    assert!(stderr(&word_sidecar_failure).contains("该功能需要外部引擎"));
-    let word_failure_report = output_json(&word_sidecar_failure)?;
+    assert!(stderr(&word_engine_failure).contains("needs-engine.doc"));
+    assert!(stderr(&word_engine_failure).contains("该功能需要外部引擎"));
+    let word_failure_report = output_json(&word_engine_failure)?;
     assert_eq!(word_failure_report["failed"], 1);
     assert!(word_failure_report["items"][0]["detail"]
         .as_str()
@@ -303,7 +302,6 @@ fn conversion_cli_rejects_xlsx_payload_mislabeled_as_et() -> Result<()> {
     fs::copy(&xlsx, &mislabeled_et)?;
     let source_before = fs::read(&mislabeled_et)?;
     let output_dir = root.path().join("output");
-    let missing_sidecar = root.path().join("missing-lo-convert.exe");
 
     let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
         .arg("convert-excel")
@@ -318,7 +316,6 @@ fn conversion_cli_rejects_xlsx_payload_mislabeled_as_et() -> Result<()> {
         .arg("--log-view")
         .arg("developer")
         .arg(&mislabeled_et)
-        .env("PYTOOLS_LO_CONVERT", &missing_sidecar)
         .output()?;
 
     let report = output_json(&output)?;
@@ -332,14 +329,14 @@ fn conversion_cli_rejects_xlsx_payload_mislabeled_as_et() -> Result<()> {
     assert!(!report["items"][0]["detail"]
         .as_str()
         .unwrap_or_default()
-        .contains("sidecar is unavailable"));
+        .contains("engine is unavailable"));
     assert!(!output_dir.join("mislabeled.xlsx").exists());
     assert_eq!(fs::read(&mislabeled_et)?, source_before);
     Ok(())
 }
 
 #[test]
-#[ignore = "requires Windows WPS COM and a built lo-convert.exe sibling; run explicitly for PT-4-4 source-format regression"]
+#[ignore = "requires Windows Office/WPS COM; run explicitly for PT-4-4 source-format regression"]
 fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
@@ -351,16 +348,6 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
     fs::copy(&xls_fixture, &mislabeled_et)?;
     let source_before = fs::read(&mislabeled_et)?;
     let output_dir = root.path().join("output");
-    let sidecar = Path::new(env!("CARGO_BIN_EXE_pytools")).with_file_name(if cfg!(windows) {
-        "lo-convert.exe"
-    } else {
-        "lo-convert"
-    });
-    anyhow::ensure!(
-        sidecar.is_file(),
-        "conversion sidecar is missing: {}",
-        sidecar.display()
-    );
 
     let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
         .arg("convert-excel")
@@ -375,7 +362,6 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
         .arg("--log-view")
         .arg("off")
         .arg(&mislabeled_et)
-        .env("PYTOOLS_LO_CONVERT", &sidecar)
         .output()?;
 
     let report = output_json(&output)?;
@@ -383,7 +369,10 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
     assert_eq!(report["failed"], 1);
     let detail = report["items"][0]["detail"].as_str().unwrap_or_default();
     assert!(
-        detail.contains("native ET") || detail.contains("FileFormat") || detail.contains("65521"),
+        detail.contains("native ET")
+            || detail.contains("原生 ET")
+            || detail.contains("FileFormat")
+            || detail.contains("65521"),
         "failure must identify the unverified/mismatched ET source format: {detail}"
     );
     assert!(!output_dir.join("mislabeled.xlsx").exists());
@@ -393,10 +382,10 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
 }
 
 #[test]
-#[ignore = "requires Windows WPS COM and a verified native ET fixture; set LO_CONVERT_NATIVE_ET_FIXTURE"]
+#[ignore = "requires Windows Office/WPS COM and a verified native ET fixture; set PYTOOLS_NATIVE_ET_FIXTURE"]
 fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<()> {
-    let fixture = env::var_os("LO_CONVERT_NATIVE_ET_FIXTURE")
-        .context("set LO_CONVERT_NATIVE_ET_FIXTURE to a verified native ET workbook")?;
+    let fixture = env::var_os("PYTOOLS_NATIVE_ET_FIXTURE")
+        .context("set PYTOOLS_NATIVE_ET_FIXTURE to a verified native ET workbook")?;
     let fixture = PathBuf::from(fixture);
     let fixture_before = fs::read(&fixture)?;
     let root = TestDirectory::new()?;
@@ -407,16 +396,6 @@ fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<(
     fs::copy(&fixture, &native_et)?;
     let source_before = fs::read(&native_et)?;
     let output_dir = root.path().join("output");
-    let sidecar = Path::new(env!("CARGO_BIN_EXE_pytools")).with_file_name(if cfg!(windows) {
-        "lo-convert.exe"
-    } else {
-        "lo-convert"
-    });
-    anyhow::ensure!(
-        sidecar.is_file(),
-        "conversion sidecar is missing: {}",
-        sidecar.display()
-    );
 
     let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
         .arg("convert-excel")
@@ -431,7 +410,6 @@ fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<(
         .arg("--log-view")
         .arg("off")
         .arg(&native_et)
-        .env("PYTOOLS_LO_CONVERT", &sidecar)
         .output()?;
 
     assert!(
@@ -502,7 +480,18 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     assert!(user_stderr.contains("正在处理第 1/1 个文件"));
     assert!(user_stderr.contains("转换结束：成功 1，失败 0"));
     assert!(!user_stderr.contains("user-private-report"));
-    assert_eq!(fs::read_dir(&log_dir)?.count(), 0);
+    let user_report = output_json(&user)?;
+    let unified_path = PathBuf::from(user_report["run_summary_path"].as_str().context("unified summary path missing")?);
+    let unified: Value = serde_json::from_slice(&fs::read(unified_path)?)?;
+    assert_eq!(unified["run_id"], user_report["run_id"]);
+    assert_eq!(unified["overall_status"], "SUCCESS");
+    assert_eq!(unified["input_stats"]["selected"], 1);
+    assert_eq!(unified["input_stats"]["succeeded"], 1);
+    let events_path = log_dir.join(unified["diagnostic_log_path"].as_str().context("diagnostic path missing")?);
+    let structured = fs::read_to_string(events_path)?;
+    let lines = structured.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(lines.iter().all(|event| event["run_id"] == unified["run_id"]));
+    assert!(lines.iter().any(|event| event["file_name"] == "user-private-report.csv"));
 
     let native_source = sources.join("native-private.csv");
     fs::write(&native_source, "Region,Value\nNorth,17\n")?;
@@ -569,16 +558,14 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     assert!(stderr(&off).is_empty());
     assert_eq!(fs::read_dir(&log_dir)?.count(), history_count);
 
-    let failed_source = sources.join("private-needs-sidecar.xls");
+    let failed_source = sources.join("private-needs-engine.xls");
     fs::write(&failed_source, b"synthetic legacy workbook")?;
     let before = fs::read(&failed_source)?;
-    let missing_sidecar = root.path().join("missing-lo-convert.exe");
-    let failed = run_action_with_sidecar_and_log_view(
+    let failed = run_action_with_engines_disabled_and_log_view(
         &config,
         2,
         1,
         &failed_source,
-        &missing_sidecar,
         "developer",
     )?;
     assert!(
@@ -586,7 +573,7 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
         "interactive conversion failure should not close the menu: {}",
         stderr(&failed)
     );
-    assert!(stderr(&failed).contains("private-needs-sidecar.xls"));
+    assert!(stderr(&failed).contains("private-needs-engine.xls"));
     assert_eq!(fs::read(&failed_source)?, before);
     let failed_report = output_json(&failed)?;
     assert_eq!(failed_report["failed"], 1);
@@ -639,16 +626,22 @@ fn sheet_rename_menu_executes_only_after_capability_and_confirmation() -> Result
         "umya_spreadsheet"
     );
 
-    assert_eq!(fs::read(&input)?, original);
+    // 4-5 改为就地修改：源工作簿被改写，不再生成结果目录副本。
+    assert_ne!(
+        fs::read(&input)?,
+        original,
+        "in-place sheet rename must rewrite the source workbook"
+    );
     let output_path = PathBuf::from(
         report["files"][0]["output"]
             .as_str()
-            .context("renamed copy path missing")?,
+            .context("renamed workbook path missing")?,
     );
     assert!(output_path.is_file());
     assert_eq!(
-        output_path.parent().and_then(Path::file_name),
-        Some(std::ffi::OsStr::new("PyTools_Sheet改名结果"))
+        fs::canonicalize(&output_path)?,
+        fs::canonicalize(&input)?,
+        "output must be the source workbook itself"
     );
     let workbook = read_workbook(&output_path)?;
     let names = workbook
@@ -926,11 +919,12 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("Bank-user-report"));
-    let user_report = output_json(&user)?;
-    assert_eq!(user_report["ok"], 1);
-    assert!(user_report.get("run_history_path").is_none());
+    let user_history_path = user_stderr.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("unified rename summary missing")?;
+    let user_report: Value = serde_json::from_slice(&fs::read(user_history_path)?)?;
+    assert_eq!(user_report["input_stats"]["succeeded"], 1);
+    assert_eq!(user_report["overall_status"], "SUCCESS");
     assert!(find_files_with_extension(&log_dir, "log")?.len() == 1);
-    assert!(find_files_with_extension(&log_dir, "json")?.is_empty());
+    assert_eq!(find_files_with_extension(&log_dir, "json")?.len(), 1);
 
     let developer_dir = sources.join("developer");
     fs::create_dir_all(&developer_dir)?;
@@ -975,6 +969,7 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     }));
     assert!(stderr(&developer).contains("\"feature_id\":\"PT-4-1\""));
 
+    let json_count_before_off = find_files_with_extension(&log_dir, "json")?.len();
     let off_dir = sources.join("off");
     fs::create_dir_all(&off_dir)?;
     let off_source = off_dir.join("Bank-off-report.txt");
@@ -985,7 +980,7 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
         .join("2026-10-24 B01 Example Bank Monthly.txt")
         .is_file());
     assert!(stderr(&off).is_empty());
-    assert_eq!(find_files_with_extension(&log_dir, "json")?.len(), 1);
+    assert_eq!(find_files_with_extension(&log_dir, "json")?.len(), json_count_before_off);
 
     Ok(())
 }
@@ -1221,31 +1216,29 @@ fn run_action_with_log_view(
     finish_menu(child, &input)
 }
 
-fn run_action_with_sidecar(
+fn run_action_with_engines_disabled(
     config: &Path,
     action: u8,
     mode: u8,
     selected: &Path,
-    sidecar: &Path,
 ) -> Result<Output> {
     let input = menu_input_for_action(action, mode, selected);
     let mut child = menu_command(config);
-    child.env("PYTOOLS_LO_CONVERT", sidecar);
+    child.env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1");
     finish_menu(child, &input)
 }
 
-fn run_action_with_sidecar_and_log_view(
+fn run_action_with_engines_disabled_and_log_view(
     config: &Path,
     action: u8,
     mode: u8,
     selected: &Path,
-    sidecar: &Path,
     log_view: &str,
 ) -> Result<Output> {
     let input = menu_input_for_action(action, mode, selected);
     let mut child = menu_command(config);
     child
-        .env("PYTOOLS_LO_CONVERT", sidecar)
+        .env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1")
         .arg("--log-view")
         .arg(log_view);
     finish_menu(child, &input)

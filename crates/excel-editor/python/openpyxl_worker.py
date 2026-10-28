@@ -23,6 +23,9 @@ from xml.etree import ElementTree
 from xml.parsers import expat
 
 SCHEMA_VERSION = 1
+# 与 Rust 侧 openpyxl_backend.rs 的 OpenpyxlWorkerConfig::PROTOCOL_VERSION
+# 必须保持一致；修改任一侧时必须同步修改另一侧。
+WORKER_PROTOCOL_VERSION = 1
 SUPPORTED_OPERATIONS = {
     "set_cell_value",
     "set_formula_text",
@@ -1022,9 +1025,19 @@ def _run(request_path: Path, response_path: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--request", required=True)
-    parser.add_argument("--response", required=True)
+    parser.add_argument("--request", required=False)
+    parser.add_argument("--response", required=False)
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="print worker protocol version and exit",
+    )
     args = parser.parse_args()
+    if args.version:
+        print(f"pytools-openpyxl-worker protocol={WORKER_PROTOCOL_VERSION}")
+        return 0
+    if not args.request or not args.response:
+        parser.error("--request and --response are required")
     return _run(Path(args.request), Path(args.response))
 
 

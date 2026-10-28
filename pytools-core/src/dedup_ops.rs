@@ -2210,3 +2210,386 @@ mod tests {
         }
     }
 }
+
+/// 2-2 按配置删除重复：在源工作簿上就地删除重复行（保留首次出现）。
+/// 语义对齐旧 PyTools `dedup_311.py::_delete_duplicates`：按标识列复合键判断，
+/// 标识列全空的行保留；删除后保存回源文件。
+#[derive(Debug, Default)]
+pub struct DeleteDuplicatesRun {
+    pub task_ok: usize,
+    pub task_skipped: usize,
+    pub task_failed: usize,
+    pub deleted_rows: usize,
+    pub saved_books: Vec<PathBuf>,
+    pub issues: Vec<String>,
+    pub events: Vec<crate::engine_diag::DiagEvent>,
+}
+
+pub fn delete_duplicates_in_place(tasks: &[DedupTask]) -> Result<DeleteDuplicatesRun> {
+    use umya_spreadsheet as umya;
+    let mut run = DeleteDuplicatesRun::default();
+    let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
+    anyhow::ensure!(
+        !enabled.is_empty(),
+        "未找到启用的去重任务，请检查“去重追加数据配置”工作表和“是否启用”列"
+    );
+    let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
+    for task in enabled {
+        let Some(source) = task.source_wb.as_ref() else {
+            run.task_skipped += 1;
+            run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
+            continue;
+        };
+        grouped.entry(source.clone()).or_default().push(task);
+    }
+    for (path, group) in grouped {
+        let read_started = std::time::Instant::now();
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if extension != "xlsx" {
+            run.task_skipped += group.len();
+            let message = if extension == "xlsm" {
+                "xlsm 就地删除暂不支持，已跳过".to_owned()
+            } else {
+                format!("不支持的源扩展名 .{extension}")
+            };
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::ModifyWorkbook,
+                    crate::engine_diag::DiagOutcome::Skipped,
+                )
+                .with_file(path.to_string_lossy().into_owned())
+                .with_message(message.clone()),
+            );
+            run.issues.push(format!("{}：{message}", path.display()));
+            continue;
+        }
+        let mut book = match umya::reader::xlsx::read(&path) {
+            Ok(book) => book,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "umya-spreadsheet",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：umya 读取源工作簿失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+        run.events.push(crate::excel_core_diag::read_event(
+            &path,
+            group.first().map(|task| task.row_no),
+            read_started.elapsed().as_millis(),
+            None,
+        ));
+        let mut deleted_in_book = 0usize;
+        let mut changed = false;
+        for task in group {
+            let task_started = std::time::Instant::now();
+            let sheet = match book.get_sheet_by_name_mut(&task.source_ws) {
+                Ok(sheet) => sheet,
+                Err(_) => {
+                    run.task_failed += 1;
+                    run.events.push(
+                        crate::engine_diag::DiagEvent::new(
+                            "umya-spreadsheet",
+                            crate::engine_diag::DiagStage::CopySheet,
+                            crate::engine_diag::DiagOutcome::Failed,
+                        )
+                        .with_row(task.row_no)
+                        .with_file(path.to_string_lossy().into_owned())
+                        .with_sheet(task.source_ws.clone())
+                        .with_message("源工作簿中不存在该工作表"),
+                    );
+                    run.issues.push(format!(
+                        "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                        task.row_no,
+                        path.display(),
+                        task.source_ws
+                    ));
+                    continue;
+                }
+            };
+            let (max_col, max_row) = sheet.get_highest_column_and_row();
+            let used_cols = max_col.max(1);
+            let key_cols: Vec<u32> = if task.key_cols.is_empty() {
+                (1..=used_cols).collect()
+            } else {
+                task.key_cols.iter().map(|column| *column as u32).collect()
+            };
+            let mut seen: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+            let mut to_delete: Vec<u32> = Vec::new();
+            for row in 2..=(max_row as u32) {
+                let key: Vec<String> = key_cols
+                    .iter()
+                    .map(|column| umya_cell_text(sheet, *column, row))
+                    .collect();
+                if key.iter().all(|part| part.is_empty()) {
+                    continue;
+                }
+                if seen.contains(&key) {
+                    to_delete.push(row);
+                } else {
+                    seen.insert(key);
+                }
+            }
+            // 自下而上删除，避免行号位移。
+            for row in to_delete.iter().rev() {
+                sheet.remove_row(*row, 1);
+            }
+            let deleted = to_delete.len();
+            deleted_in_book += deleted;
+            run.deleted_rows += deleted;
+            run.task_ok += 1;
+            if deleted > 0 {
+                changed = true;
+            }
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::ModifyWorkbook,
+                    crate::engine_diag::DiagOutcome::Ok,
+                )
+                .with_row(task.row_no)
+                .with_file(path.to_string_lossy().into_owned())
+                .with_sheet(task.source_ws.clone())
+                .with_elapsed_ms(task_started.elapsed().as_millis())
+                .with_message(format!("删除重复行 {deleted} 行")),
+            );
+        }
+        if changed {
+            umya::writer::xlsx::write(&book, &path)
+                .with_context(|| format!("就地保存删除结果 {} 失败", path.display()))?;
+            run.saved_books.push(path.clone());
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::SaveOutput,
+                    crate::engine_diag::DiagOutcome::Ok,
+                )
+                .with_file(path.to_string_lossy().into_owned())
+                .with_message(format!("已就地删除 {deleted_in_book} 行")),
+            );
+        }
+    }
+    Ok(run)
+}
+
+/// 2-1 按配置检查重复：在源工作簿上就地标记重复行（整行红色填充）。
+/// 语义对齐旧 PyTools `dedup_311.py::_mark_duplicates`：首次出现不标记，
+/// 后续重复行从第 1 列标到已用列；标识列全部为空的行跳过；标记后保存回源文件。
+/// 仅支持 .xlsx 源（.xlsm 就地保存涉及宏保留，暂不支持并如实跳过）。
+#[derive(Debug, Default)]
+pub struct MarkDuplicatesRun {
+    pub task_ok: usize,
+    pub task_skipped: usize,
+    pub task_failed: usize,
+    pub marked_rows: usize,
+    pub saved_books: Vec<PathBuf>,
+    pub issues: Vec<String>,
+    pub events: Vec<crate::engine_diag::DiagEvent>,
+}
+
+fn umya_cell_text(sheet: &mut umya_spreadsheet::Worksheet, column: u32, row: u32) -> String {
+    let mut letters = String::new();
+    let mut rest = column;
+    while rest > 0 {
+        letters.insert(0, (b'A' + ((rest - 1) % 26) as u8) as char);
+        rest = (rest - 1) / 26;
+    }
+    let address = format!("{letters}{row}");
+    sheet
+        .get_cell(address.as_str())
+        .map(|cell| cell.get_raw_value().to_string())
+        .unwrap_or_default()
+        .trim()
+        .to_owned()
+}
+
+fn umya_mark_row_red(sheet: &mut umya_spreadsheet::Worksheet, used_cols: u32, row: u32) {
+    for column in 1..=used_cols {
+        let cell = sheet.cell_mut((column, row));
+        let mut style = cell.get_style().clone();
+        {
+            let pattern = style.get_fill_mut().get_pattern_fill_mut();
+            pattern.set_pattern_type(umya_spreadsheet::PatternValues::Solid);
+            pattern.get_foreground_color_mut().set_argb_str("FFFF0000");
+        }
+        cell.set_style(style);
+    }
+}
+
+pub fn mark_duplicates_in_place(tasks: &[DedupTask]) -> Result<MarkDuplicatesRun> {
+    use umya_spreadsheet as umya;
+    let mut run = MarkDuplicatesRun::default();
+    let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
+    anyhow::ensure!(
+        !enabled.is_empty(),
+        "未找到启用的去重任务，请检查“去重追加数据配置”工作表和“是否启用”列"
+    );    let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
+    for task in enabled {
+        let Some(source) = task.source_wb.as_ref() else {
+            run.task_skipped += 1;
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::ReadSource,
+                    crate::engine_diag::DiagOutcome::Skipped,
+                )
+                .with_row(task.row_no)
+                .with_message("配置的源工作簿路径为空"),
+            );
+            run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
+            continue;
+        };
+        grouped.entry(source.clone()).or_default().push(task);
+    }
+    for (path, group) in grouped {
+        let book_read_started = std::time::Instant::now();
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if extension != "xlsx" {
+            run.task_skipped += group.len();
+            let message = if extension == "xlsm" {
+                "xlsm 就地标记暂不支持，已跳过".to_owned()
+            } else {
+                format!("不支持的源扩展名 .{extension}")
+            };
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::ModifyWorkbook,
+                    crate::engine_diag::DiagOutcome::Skipped,
+                )
+                .with_file(path.to_string_lossy().into_owned())
+                .with_message(message.clone()),
+            );
+            run.issues.push(format!("{}：{message}", path.display()));
+            continue;
+        }
+        let mut book = match umya::reader::xlsx::read(&path) {
+            Ok(book) => book,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "umya-spreadsheet",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：umya 读取源工作簿失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+        // 读取成功事件（经统一适配层构造，引擎名与阶段口径统一）。
+        run.events.push(crate::excel_core_diag::read_event(
+            &path,
+            group.first().map(|task| task.row_no),
+            book_read_started.elapsed().as_millis(),
+            None,
+        ));
+        let mut marked_in_book = 0usize;
+        let mut changed = false;
+        for task in group {
+            let task_started = std::time::Instant::now();
+            let sheet = match book.get_sheet_by_name_mut(&task.source_ws) {
+                Ok(sheet) => sheet,
+                Err(_) => {
+                    run.task_failed += 1;
+                    run.events.push(
+                        crate::engine_diag::DiagEvent::new(
+                            "umya-spreadsheet",
+                            crate::engine_diag::DiagStage::CopySheet,
+                            crate::engine_diag::DiagOutcome::Failed,
+                        )
+                        .with_row(task.row_no)
+                        .with_file(path.to_string_lossy().into_owned())
+                        .with_sheet(task.source_ws.clone())
+                        .with_message("源工作表中不存在该工作表"),
+                    );
+                    run.issues.push(format!(
+                        "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                        task.row_no,
+                        path.display(),
+                        task.source_ws
+                    ));
+                    continue;
+                }
+            };
+            let (max_col, max_row) = sheet.get_highest_column_and_row();
+            let used_cols = max_col.max(1);
+            let key_cols: Vec<u32> = if task.key_cols.is_empty() {
+                (1..=used_cols).collect()
+            } else {
+                task.key_cols.iter().map(|column| *column as u32).collect()
+            };
+            let mut seen: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+            let mut marked = 0usize;
+            for row in 2..=(max_row as u32) {
+                let key: Vec<String> = key_cols
+                    .iter()
+                    .map(|column| umya_cell_text(sheet, *column, row))
+                    .collect();
+                if key.iter().all(|part| part.is_empty()) {
+                    continue;
+                }
+                if seen.contains(&key) {
+                    umya_mark_row_red(sheet, used_cols, row);
+                    marked += 1;
+                } else {
+                    seen.insert(key);
+                }
+            }
+            marked_in_book += marked;
+            run.marked_rows += marked;
+            run.task_ok += 1;
+            if marked > 0 {
+                changed = true;
+            }
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::ModifyWorkbook,
+                    crate::engine_diag::DiagOutcome::Ok,
+                )
+                .with_row(task.row_no)
+                .with_file(path.to_string_lossy().into_owned())
+                .with_sheet(task.source_ws.clone())
+                .with_elapsed_ms(task_started.elapsed().as_millis())
+                .with_message(format!("标记重复行 {marked} 行")),
+            );
+        }
+        if changed {
+            umya::writer::xlsx::write(&book, &path)
+                .with_context(|| format!("就地保存标记结果 {} 失败", path.display()))?;
+            run.saved_books.push(path.clone());
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    "umya-spreadsheet",
+                    crate::engine_diag::DiagStage::SaveOutput,
+                    crate::engine_diag::DiagOutcome::Ok,
+                )
+                .with_file(path.to_string_lossy().into_owned())
+                .with_message(format!("已就地标记 {marked_in_book} 行")),
+            );
+        }
+    }
+    Ok(run)
+}

@@ -83,6 +83,19 @@ fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<
     assert_eq!(history["total_inputs"], 2);
     assert_eq!(history["summary"]["rows"], 4);
     assert_eq!(history["summary"]["files"], 2);
+    assert_eq!(history["input_stats"]["selected"], 2);
+    assert_eq!(history["input_stats"]["attempted"], 2);
+    assert_eq!(history["input_stats"]["succeeded"], 2);
+    assert_eq!(history["input_stats"]["failed"], 0);
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert_eq!(history["sheet_stats"]["succeeded"], 2);
+    assert_eq!(history["output_stats"]["workbooks_saved"], 1);
+    let diagnostic_path = logs.join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?);
+    let diagnostic = fs::read_to_string(diagnostic_path)?;
+    let structured_events = diagnostic.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(structured_events.iter().all(|event| event["run_id"] == history["run_id"]));
+    assert!(structured_events.iter().any(|event| event["sheet_name"] == "Data" && event["event_name"] == "sheet_process"));
+    assert!(structured_events.iter().any(|event| event["event_name"] == "run_finished"));
     assert_eq!(history["summary"]["execution"]["reader_engine"], "calamine");
     assert_eq!(
         history["summary"]["execution"]["writer_engine"],
@@ -191,6 +204,14 @@ fn interactive_v2_named_range_summary_uses_named_regions_and_skips_bad_structure
     assert_eq!(history["status"], "succeeded");
     assert_eq!(history["summary"]["rows"], 8);
     assert_eq!(history["summary"]["files"], 3);
+    assert_eq!(history["input_stats"]["selected"], 3);
+    assert_eq!(history["input_stats"]["attempted"], 3);
+    assert_eq!(history["input_stats"]["succeeded"], 2);
+    assert_eq!(history["input_stats"]["skipped"], 1);
+    assert_eq!(history["overall_status"], "SUCCESS");
+    let diagnostics = fs::read_to_string(logs.join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?))?;
+    let diagnostics = diagnostics.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(diagnostics.iter().any(|event| event["run_id"] == history["run_id"] && event["event_name"] == "source_structure" && event["status"] == "skipped"));
     assert_eq!(
         history["summary"]["skipped_sources"]
             .as_array()

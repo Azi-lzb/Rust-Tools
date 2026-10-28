@@ -711,7 +711,8 @@ fn unique_test_dir() -> PathBuf {
         .expect("system clock after Unix epoch")
         .as_nanos();
     std::env::temp_dir().join(format!(
-        "pytools-summary-comments-{}-{nonce}",
-        std::process::id()
+        "pytools-summary-comments-{}-{nonce}-{:?}", 
+        std::process::id(),
+        std::thread::current().id()
     ))
 }

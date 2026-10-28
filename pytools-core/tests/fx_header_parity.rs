@@ -21,8 +21,9 @@ fn temp_dir() -> PathBuf {
         .expect("clock after epoch")
         .as_nanos();
     let path = std::env::temp_dir().join(format!(
-        "pytools_fx_header_{}_{}",
+        "pytools_fx_header_{}_{:?}_{}",
         std::process::id(),
+        std::thread::current().id(),
         nonce
     ));
     fs::create_dir_all(&path).expect("create temporary test directory");

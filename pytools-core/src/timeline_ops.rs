@@ -74,6 +74,8 @@ pub struct WideSummaryRunEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_index: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_input_index: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workbook_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worksheet_name: Option<String>,
@@ -137,6 +139,7 @@ struct WideSummaryProgressEmitter<'a> {
     current_worksheet_name: Option<String>,
     current_rule_name: Option<String>,
     current_workbook_started: Option<Instant>,
+    source_input_index: Option<usize>,
     callback: Option<&'a mut dyn FnMut(WideSummaryRunEvent)>,
 }
 
@@ -168,6 +171,7 @@ impl WideSummaryProgressEmitter<'_> {
             user_message: user_message.into(),
             progress: self.progress.clone(),
             input_index,
+            source_input_index: self.source_input_index,
             workbook_name: self.current_workbook_name.clone(),
             worksheet_name: self.current_worksheet_name.clone(),
             rule_name: self.current_rule_name.clone(),
@@ -1496,12 +1500,23 @@ fn run_wide_summary_inner(
 ) -> Result<Option<PathBuf>> {
     let sources = source_paths
         .iter()
-        .filter(|path| is_wide_summary_source(path, global))
+        .enumerate()
+        .filter(|(_, path)| is_wide_summary_source(path, global))
+        .filter(|(_, path)| {
+            row_suffix_enabled || !pick_rules_for_workbook(rules, &file_name(path), &global.timeline_rule_match_mode)
+                .is_empty()
+        })
         .collect::<Vec<_>>();
+    let unmatched_sources = source_paths
+        .iter()
+        .filter(|path| is_wide_summary_source(path, global))
+        .count()
+        .saturating_sub(sources.len());
     let skipped_sources = source_paths
         .iter()
-        .filter_map(|path| {
-            wide_summary_source_skip_reason(path, global).map(|reason| (path.as_path(), reason))
+        .enumerate()
+        .filter_map(|(index, path)| {
+            wide_summary_source_skip_reason(path, global).map(|reason| (index + 1, path.as_path(), reason))
         })
         .collect::<Vec<_>>();
     let feature_id = if row_suffix_enabled { "PT-1-3" } else { "1-1" };
@@ -1511,16 +1526,35 @@ fn run_wide_summary_inner(
         feature_id: feature_id.to_owned(),
         progress: WideSummaryProgress {
             total_inputs: sources.len(),
-            skipped_inputs: skipped_sources.len(),
+            skipped_inputs: skipped_sources.len() + unmatched_sources,
             ..WideSummaryProgress::default()
         },
         current_workbook_name: None,
         current_worksheet_name: None,
         current_rule_name: None,
         current_workbook_started: None,
+        source_input_index: None,
         callback,
     };
-    for (path, reason) in skipped_sources {
+    emitter.emit(
+        "source_match",
+        "completed",
+        if row_suffix_enabled {
+            format!("所选 {} 个，支持读取 {} 个，路径无效或格式不支持 {} 个", source_paths.len(), sources.len(), skipped_sources.len())
+        } else {
+            format!(
+                "已按启用规则的工作簿关键字筛选：所选 {} 个，匹配 {} 个，未匹配 {} 个，路径无效或格式不支持 {} 个；开始读取匹配文件",
+                source_paths.len(), sources.len(), unmatched_sources, skipped_sources.len()
+            )
+        },
+        None,
+        None,
+        &["pytools-core", "rule_engine"],
+        None,
+        None,
+    );
+    for (index, path, reason) in skipped_sources {
+        emitter.source_input_index = Some(index);
         let filename = file_name(path);
         emitter.current_workbook_name = Some(filename.clone());
         emitter.current_worksheet_name = None;
@@ -1537,10 +1571,21 @@ fn run_wide_summary_inner(
             Some("unsupported_or_missing_input"),
         );
     }
+    if !row_suffix_enabled {
+        for (index, path) in source_paths.iter().enumerate().filter(|(_, path)| {
+            is_wide_summary_source(path, global)
+                && pick_rules_for_workbook(rules, &file_name(path), &global.timeline_rule_match_mode).is_empty()
+        }) {
+            emitter.source_input_index = Some(index + 1);
+            emitter.current_workbook_name = Some(file_name(path));
+            emitter.emit("source_filter", "skipped", "工作簿名称未匹配启用规则", None, None, &["pytools-core", "rule_engine"], None, None);
+        }
+    }
     let mut rule_states = HashMap::<String, WideRuleState>::new();
     let mut rule_order = Vec::<String>::new();
-    for (source_index, path) in sources.iter().enumerate() {
+    for (source_index, (original_index, path)) in sources.iter().enumerate() {
         let input_index = source_index + 1;
+        emitter.source_input_index = Some(*original_index + 1);
         let filename = file_name(path);
         emitter.current_workbook_name = Some(filename.clone());
         emitter.current_worksheet_name = None;
@@ -1585,7 +1630,7 @@ fn run_wide_summary_inner(
                     "source_read",
                     "failed",
                     format!(
-                        "工作簿 {filename}（第 {input_index}/{} 个）读取失败，{}，已按继续策略跳过",
+                        "工作簿 {filename}（第 {input_index}/{} 个）读取失败；{}，已按继续策略跳过",
                         sources.len(),
                         WORKBOOK_READ_FAILURE_GUIDANCE,
                     ),
@@ -1604,7 +1649,7 @@ fn run_wide_summary_inner(
                     "source_read",
                     "failed",
                     format!(
-                        "工作簿 {filename}（第 {input_index}/{} 个）读取失败，{}，本次汇总已停止",
+                        "工作簿 {filename}（第 {input_index}/{} 个）读取失败；{}，本次汇总已停止",
                         sources.len(),
                         WORKBOOK_READ_FAILURE_GUIDANCE,
                     ),
@@ -1643,7 +1688,7 @@ fn run_wide_summary_inner(
                         "elapsed_duration_metadata",
                         "failed",
                         format!(
-                            "第 {input_index}/{} 个工作簿无法读取累计时长格式，跳过该工作簿",
+                            "工作簿 {filename}（第 {input_index}/{} 个）无法读取累计时长格式，跳过该工作簿",
                             sources.len()
                         ),
                         Some(input_index),
@@ -1723,7 +1768,7 @@ fn run_wide_summary_inner(
                     "calendar_date_projection",
                     "failed",
                     format!(
-                        "第 {input_index}/{} 个工作簿日期系统投影失败，继续处理",
+                            "工作簿 {filename}（第 {input_index}/{} 个）日期系统投影失败，跳过该工作簿",
                         sources.len()
                     ),
                     Some(input_index),
@@ -2082,6 +2127,10 @@ fn run_wide_summary_inner(
         );
     }
     if rule_order.is_empty() {
+        emitter.current_workbook_name = None;
+        emitter.current_worksheet_name = None;
+        emitter.current_rule_name = None;
+        emitter.source_input_index = None;
         emitter.emit(
             "summary_write",
             "skipped",
@@ -2095,6 +2144,7 @@ fn run_wide_summary_inner(
         return Ok(None);
     }
     emitter.current_workbook_name = None;
+    emitter.source_input_index = None;
     emitter.current_worksheet_name = None;
     emitter.current_rule_name = None;
     emitter.current_workbook_started = None;

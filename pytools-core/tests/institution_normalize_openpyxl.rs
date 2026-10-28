@@ -22,8 +22,9 @@ impl TestDirectory {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "pytools-pt-7-2-openpyxl-{}-{nonce}",
-            std::process::id()
+            "pytools-pt-7-2-openpyxl-{}-{nonce}-{:?}", 
+            std::process::id(),
+            std::thread::current().id()
         ));
         fs::create_dir_all(&path)?;
         Ok(Self(path))

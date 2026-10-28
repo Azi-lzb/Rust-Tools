@@ -2112,15 +2112,25 @@ mod tests {
     use std::path::PathBuf;
     use zip::{write::SimpleFileOptions, ZipWriter};
 
+    // Fixture names must stay unique across parallel test threads: a shared
+    // pid+timestamp tick previously let one thread delete the file another
+    // thread was about to open.
+    fn unique_test_fixture_path(prefix: &str, extension: &str) -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        std::env::temp_dir().join(format!(
+            "{prefix}-{}-{sequence}-{nonce}.{extension}",
+            std::process::id()
+        ))
+    }
+
     fn cell_number_format_fixture(extension: &str) -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-number-formats-{}-{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos(),
-            extension
-        ));
+        let path = unique_test_fixture_path("excel-reader-number-formats", extension);
         let package_relationships = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
         );
@@ -2153,14 +2163,8 @@ mod tests {
     }
 
     fn inherited_number_format_fixture(extension: &str, worksheet: &str) -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-inherited-number-format-{}-{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos(),
-            extension
-        ));
+        let path =
+            unique_test_fixture_path("excel-reader-inherited-number-format", extension);
         let package_relationships = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
         );
@@ -2486,13 +2490,7 @@ mod tests {
     }
 
     fn nonstandard_header_fixture() -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-header-{}-{}.xlsx",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
-        ));
+        let path = unique_test_fixture_path("excel-reader-header", "xlsx");
         let package_relationships = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="workbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="custom/books/main.xml"/></Relationships>"#
         );
@@ -2522,13 +2520,7 @@ mod tests {
     }
 
     fn comment_records_fixture() -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-comment-records-{}-{}.xlsx",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
-        ));
+        let path = unique_test_fixture_path("excel-reader-comment-records", "xlsx");
         let package_relationships = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
         );
@@ -2567,14 +2559,7 @@ mod tests {
     }
 
     fn sheet_name_ooxml_fixture(extension: &str) -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-sheet-names-{}-{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos(),
-            extension
-        ));
+        let path = unique_test_fixture_path("excel-reader-sheet-names", extension);
         let workbook = format!(
             r#"<s:workbook xmlns:s="{SPREADSHEET_MAIN_NS}" xmlns:x="urn:unrelated"><s:sheets><s:sheet name="单位贷款" sheetId="1"/><s:sheet name="图表页" sheetId="2"/><x:sheet name="must-be-ignored" sheetId="3"/></s:sheets></s:workbook>"#
         );
@@ -2586,14 +2571,7 @@ mod tests {
     }
 
     fn date_epoch_ooxml_fixture(extension: &str, workbook_properties: &str) -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-date-epoch-{}-{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos(),
-            extension
-        ));
+        let path = unique_test_fixture_path("excel-reader-date-epoch", extension);
         let workbook = format!(
             r#"<s:workbook xmlns:s="{SPREADSHEET_MAIN_NS}">{workbook_properties}<s:sheets/></s:workbook>"#
         );
@@ -2605,13 +2583,7 @@ mod tests {
     }
 
     fn defined_names_ooxml_fixture() -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-defined-names-{}-{}.xlsx",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
-        ));
+        let path = unique_test_fixture_path("excel-reader-defined-names", "xlsx");
         let root_rels = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="custom/book.xml"/></Relationships>"#
         );
@@ -2635,13 +2607,7 @@ mod tests {
     }
 
     fn worksheet_extent_fixture() -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!(
-            "excel-reader-worksheet-extents-{}-{}.xlsx",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
-        ));
+        let path = unique_test_fixture_path("excel-reader-worksheet-extents", "xlsx");
         let package_rels = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
         );
@@ -2855,7 +2821,7 @@ mod tests {
     #[test]
     fn value_column_projection_matches_dump_and_keeps_absolute_coordinates() {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../audit-core/tests/fixtures/synthetic_probe.xlsx");
+            .join("tests/fixtures/synthetic_probe.xlsx");
         let dump = read_workbook(&fixture).expect("read full probe fixture");
         let projected = read_value_columns(&fixture, 3).expect("read first three columns");
 

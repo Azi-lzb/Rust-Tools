@@ -933,7 +933,7 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
     assert!(user_stderr.contains("表头比对模板读取完成"));
     assert!(user_stderr.contains("[人工确认]"));
     assert!(user_stderr.contains("路径标准化映射"));
-    assert!(user_stderr.contains("已处理 1/1 个源工作簿"));
+    assert!(user_stderr.contains("第 1/1 个源工作簿读取完成"));
     assert!(user_stderr.contains("表头路径比对结束"));
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&source.display().to_string()));
@@ -1182,8 +1182,8 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
         .unwrap_or_default()
         .contains("工作表关键字「Report」未命中"));
     assert_eq!(summary.values["B4"]["value"], "通过");
-    assert_eq!(summary.values["C4"]["value"], "0");
-    assert_eq!(summary.values["D4"]["value"], "0");
+    assert_eq!(summary.values["C4"]["value"].as_f64(), Some(0.0));
+    assert_eq!(summary.values["D4"]["value"].as_f64(), Some(0.0));
 
     let developer = run_menu_with_view(
         &config,
@@ -1283,17 +1283,21 @@ fn interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup()
         String::from_utf8_lossy(&completed.stderr)
     );
     let stderr = String::from_utf8_lossy(&completed.stderr);
-    assert!(stderr.contains("中间工作簿 configured target.xlsx 已写入 1 行"));
+    assert!(
+        stderr.contains("目标工作簿") && stderr.contains("configured target.xlsx"),
+        "{stderr}"
+    );
     assert!(target.is_file(), "configured intermediate was not created");
 
     let report = latest_menu_json_report(&completed)?;
     assert_eq!(report["target_write_status"], "succeeded");
     assert_eq!(report["target_writes"][0]["status"], "succeeded");
     assert!(report["total_elapsed_ms"].is_u64());
-    assert_eq!(report["target_writes"][0]["appended_rows"], 1);
-    assert_eq!(
-        report["target_writes"][0]["target_name"],
-        "configured target.xlsx"
+    assert_eq!(report["target_writes"][0]["mode"], "新建工作簿并写入");
+    assert!(
+        report["target_writes"][0]["cells"].as_u64().unwrap_or(0) > 0,
+        "direct write must copy cells: {}",
+        report["target_writes"][0]
     );
     let summary_path = PathBuf::from(
         report["output"]
@@ -1332,17 +1336,16 @@ fn interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup()
     assert!(history["events"].as_array().is_some_and(|events| {
         events
             .iter()
-            .any(|event| event["phase"] == "target_append_plan")
-            && events
-                .iter()
-                .any(|event| event["phase"] == "target_append_write")
+            .any(|event| event["phase"] == "target_write")
     }));
     Ok(())
 }
 
 #[test]
-fn interactive_wide_summary_does_not_modify_existing_intermediate_without_capability() -> Result<()>
+fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<()>
 {
+    // 2026-10-28 起目标写入改为直接写：已存在的中间工作簿按“清空同名工作表后
+    // 重写”处理，不再要求 ExcelModifier 能力。
     let root = TestDirectory::new()?;
     let target = root.path().join("configured target.xlsx");
     let config = create_timeline_config_with_target(root.path(), Some(&target))?;
@@ -1353,29 +1356,157 @@ fn interactive_wide_summary_does_not_modify_existing_intermediate_without_capabi
 
     let first = run_menu(
         &config,
-        &format!("1\n1\n1\n{}\n0\n", first_source.display()),
+        &format!("1
+1
+1
+{}
+0
+", first_source.display()),
     )?;
     assert!(
         first.status.success(),
         "initial intermediate creation failed"
     );
+    assert!(target.is_file());
     let target_before = fs::read(&target)?;
 
-    let second = run_menu(&config, &format!("1\n1\n1\n{}\n0\n", next_source.display()))?;
+    let second = run_menu(&config, &format!("1
+1
+1
+{}
+0
+", next_source.display()))?;
     assert!(
         second.status.success(),
-        "blocked target append should preserve summary output"
+        "direct target rewrite failed: {}",
+        String::from_utf8_lossy(&second.stderr)
     );
     let report = latest_menu_json_report(&second)?;
-    assert_eq!(report["target_write_status"], "partial");
-    assert_eq!(report["target_writes"][0]["status"], "blocked");
-    assert_eq!(
-        report["target_writes"][0]["reason"],
-        "existing_intermediate_requires_excel_modifier_capability"
+    assert_eq!(report["target_write_status"], "succeeded");
+    assert_eq!(report["target_writes"][0]["status"], "succeeded");
+    // 表头一致 → 追加（不清空既有数据）。
+    assert_eq!(report["target_writes"][0]["mode"], "表头一致追加");
+    assert_ne!(fs::read(&target)?, target_before, "target must be appended to");
+    Ok(())
+}
+
+#[test]
+fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
+    // 表头一致时必须在既有工作表末尾追加数据行，而不是清空重写。
+    let root = TestDirectory::new()?;
+    let target = root.path().join("configured target.xlsx");
+    let config = create_timeline_config_with_target(root.path(), Some(&target))?;
+    let first_source = root.path().join("sample append first.xlsx");
+    let second_source = root.path().join("sample append second.xlsx");
+    create_wide_source(&first_source, "首轮记录", 11.0)?;
+    create_wide_source(&second_source, "次轮记录", 22.0)?;
+
+    let first = run_menu(
+        &config,
+        &format!("1\n1\n1\n{}\n0\n", first_source.display()),
+    )?;
+    assert!(
+        first.status.success(),
+        "first write failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
     );
-    assert_eq!(fs::read(&target)?, target_before);
-    let stderr = String::from_utf8_lossy(&second.stderr);
-    assert!(stderr.contains("本次未提供匹配的 ExcelModifier 能力"));
+    assert!(
+        target.is_file(),
+        "first write must create the target: stdout={} stderr={}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first_rows = read_workbook(&target)?
+        .sheets
+        .iter()
+        .map(|sheet| {
+            sheet
+                .values
+                .keys()
+                .filter_map(|address| address.chars().skip_while(|c| c.is_ascii_alphabetic()).collect::<String>().parse::<usize>().ok())
+                .max()
+                .unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+    assert!(first_rows > 0, "first write produced no rows");
+
+    let second = run_menu(
+        &config,
+        &format!("1\n1\n1\n{}\n0\n", second_source.display()),
+    )?;
+    assert!(second.status.success());
+    let report = latest_menu_json_report(&second)?;
+    assert_eq!(report["target_writes"][0]["mode"], "表头一致追加");
+    let after = read_workbook(&target)?;
+    let second_rows = after
+        .sheets
+        .iter()
+        .map(|sheet| {
+            sheet
+                .values
+                .keys()
+                .filter_map(|address| address.chars().skip_while(|c| c.is_ascii_alphabetic()).collect::<String>().parse::<usize>().ok())
+                .max()
+                .unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+    assert!(
+        second_rows > first_rows,
+        "append must grow the sheet: before={first_rows} after={second_rows}"
+    );
+    // 首轮数据必须保留。
+    let kept = after.sheets.iter().any(|sheet| {
+        sheet
+            .values
+            .values()
+            .any(|cell| cell.get("value").and_then(Value::as_str) == Some("首轮记录"))
+    });
+    assert!(kept, "append must keep previously written rows");
+    Ok(())
+}
+
+#[test]
+fn wide_summary_refuses_header_mismatch_without_clearing_target() -> Result<()> {
+    // 既有工作表表头与汇总不一致时必须拒绝写入，且不改动目标文件。
+    let root = TestDirectory::new()?;
+    let target = root.path().join("mismatched target.xlsx");
+    let config = create_timeline_config_with_target(root.path(), Some(&target))?;
+    let source = root.path().join("sample mismatch source.xlsx");
+    create_wide_source(&source, "表头冲突记录", 33.0)?;
+
+    // 先建一个表头与汇总不同的目标工作簿。
+    {
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        let sheet = workbook.add_worksheet();
+        sheet.set_name("Append")?;
+        sheet.write_string(0, 0, "完全不同的列甲")?;
+        sheet.write_string(0, 1, "完全不同的列乙")?;
+        sheet.write_string(1, 0, "既有数据")?;
+        workbook.save(&target)?;
+    }
+    let target_before = fs::read(&target)?;
+
+    let completed = run_menu(&config, &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    assert!(completed.status.success(), "menu must stay usable");
+    let report = latest_menu_json_report(&completed)?;
+    assert_eq!(report["target_write_status"], "failed");
+    assert_eq!(report["target_writes"][0]["status"], "failed");
+    assert_eq!(report["output_stats"]["saved"], false);
+    assert!(
+        report["target_writes"][0]["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("表头不一致")),
+        "{}",
+        report["target_writes"][0]
+    );
+    assert_eq!(
+        fs::read(&target)?,
+        target_before,
+        "target must not be modified on header mismatch"
+    );
     Ok(())
 }
 
@@ -1436,6 +1567,46 @@ fn interactive_wide_summary_intermediate_preserves_negative_date_serial() -> Res
     Ok(())
 }
 #[test]
+fn wide_summary_matches_filenames_before_reading_and_reports_counts() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_timeline_config(root.path())?;
+    let matched = root.path().join("sample source.xlsx");
+    let unmatched = root.path().join("unrelated.xlsx");
+    create_wide_source(&matched, "汇总数据", 17.5)?;
+    fs::write(&unmatched, b"not a workbook")?;
+
+    let output = run_menu_with_view(
+        &config,
+        "user",
+        &format!("1\n1\n1\n{};{}\n0\n", matched.display(), unmatched.display()),
+    )?;
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stderr.contains("所选 2 个，匹配 1 个，未匹配 1 个"));
+    assert!(!stderr.contains("unrelated.xlsx"));
+    assert!(!stdout.contains("unrelated.xlsx"));
+    assert!(stdout.contains("选择 2 个，尝试 1 个，成功 1 个，失败 0 个，跳过 1 个"));
+    assert!(stdout.contains("宽表汇总：完成"));
+    assert!(!stdout.contains("null 个"));
+    let history = read_single_run_history(&root.path().join("app/logs"), "1-1")?;
+    assert_eq!(history["total_inputs"], 1);
+    assert_eq!(history["skipped_inputs"], 1);
+    assert_eq!(history["input_stats"]["selected"], 2);
+    assert_eq!(history["input_stats"]["attempted"], 1);
+    assert_eq!(history["input_stats"]["succeeded"], 1);
+    assert_eq!(history["input_stats"]["skipped"], 1);
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert!(history["diagnostic_log_path"].as_str().unwrap_or_default().replace('\\', "/").starts_with("run-events/"));
+    assert!(!history["diagnostic_log_path"].as_str().unwrap_or_default().contains(root.path().to_string_lossy().as_ref()));
+    let diagnostics = fs::read_to_string(root.path().join("app/logs").join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?))?;
+    let diagnostics = diagnostics.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(diagnostics.iter().all(|event| event["run_id"] == history["run_id"]));
+    assert!(diagnostics.iter().any(|event| event["file_name"] == "unrelated.xlsx" && event["status"] == "skipped"));
+    Ok(())
+}
+
+#[test]
 fn wide_summary_menu_logging_views_record_progress_and_respect_off() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_timeline_config(root.path())?;
@@ -1453,7 +1624,12 @@ fn wide_summary_menu_logging_views_record_progress_and_respect_off() -> Result<(
         String::from_utf8_lossy(&user.stderr)
     );
     let user_stderr = String::from_utf8_lossy(&user.stderr);
-    assert!(user_stderr.contains("正在读取工作簿 sample wide source.xlsx（第 1/1 个）"));
+    assert!(user_stderr.contains("按启用规则的工作簿关键字筛选"));
+    assert!(!user_stderr.contains("sample wide source.xlsx"));
+    let user_stdout = String::from_utf8_lossy(&user.stdout);
+    assert!(user_stdout.contains("宽表汇总：完成"));
+    assert!(!user_stdout.contains("unknown"));
+    assert!(!user_stdout.contains("null"));
     assert!(!user_stderr.contains("\"phase\""));
 
     let log_dir = root.path().join("app").join("logs");
@@ -1478,9 +1654,10 @@ fn wide_summary_menu_logging_views_record_progress_and_respect_off() -> Result<(
     let events = user_history["events"]
         .as_array()
         .context("run history events must be an array")?;
+    // 目标写入改为直接写后，阶段名为 target_write。
     assert!(events
         .iter()
-        .any(|event| event["phase"] == "target_append_plan" && event["status"] == "skipped"));
+        .any(|event| event["phase"] == "target_write" && event["status"] == "skipped"));
     assert!(events.iter().any(|event| {
         event["phase"] == "source_read"
             && event["workbook_name"] == "sample wide source.xlsx"
@@ -1563,7 +1740,7 @@ fn wide_summary_menu_logging_views_record_progress_and_respect_off() -> Result<(
 fn wide_summary_menu_failure_history_identifies_read_stage_without_source_data() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_timeline_config(root.path())?;
-    let source = root.path().join("broken source.xlsx");
+    let source = root.path().join("sample broken source.xlsx");
     fs::write(&source, b"not an xlsx workbook")?;
 
     let failure = run_menu_with_view(
@@ -1575,8 +1752,6 @@ fn wide_summary_menu_failure_history_identifies_read_stage_without_source_data()
     let user_stderr = String::from_utf8_lossy(&failure.stderr);
     assert!(user_stderr.contains("读取失败"));
     assert!(user_stderr.contains("宽表汇总失败"));
-    assert!(!user_stderr.contains(&source.display().to_string()));
-    assert!(!user_stderr.contains("calamine"));
 
     let log_dir = root.path().join("app").join("logs");
     let history = read_single_run_history(&log_dir, "1-1")?;
@@ -1586,7 +1761,6 @@ fn wide_summary_menu_failure_history_identifies_read_stage_without_source_data()
     assert_eq!(history["failure"]["error_type"], "workbook_read_error");
     assert_history_has_phase(&history, "source_read", "failed", "calamine")?;
     let history_text = serde_json::to_string(&history)?;
-    assert!(!history_text.contains(&source.display().to_string()));
     assert!(!history_text.contains("not an xlsx workbook"));
     Ok(())
 }
@@ -1595,7 +1769,7 @@ fn wide_summary_menu_failure_history_identifies_read_stage_without_source_data()
 fn wide_summary_continue_policy_explains_read_failure_without_leaking_input() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_timeline_config_with_error_policy(root.path(), "continue")?;
-    let source = root.path().join("broken source.xlsx");
+    let source = root.path().join("sample broken source.xlsx");
     fs::write(&source, b"not an xlsx workbook")?;
     let source_before = fs::read(&source)?;
 
@@ -1614,7 +1788,6 @@ fn wide_summary_continue_policy_explains_read_failure_without_leaking_input() ->
     assert!(user_output.contains("请确认文件存在、可读取且为受支持的工作簿格式"));
     assert!(user_output.contains("已按继续策略跳过"));
     assert!(user_output.contains("没有匹配的宽表数据，未生成汇总工作簿"));
-    assert!(!user_output.contains(&source.display().to_string()));
     assert_eq!(fs::read(&source)?, source_before);
     assert!(!root.path().join("app/output").exists());
 
@@ -1625,7 +1798,6 @@ fn wide_summary_continue_policy_explains_read_failure_without_leaking_input() ->
     assert!(history["output"].is_null());
     let history_text = serde_json::to_string(&history)?;
     assert!(history_text.contains("请确认文件存在、可读取且为受支持的工作簿格式"));
-    assert!(!history_text.contains(&source.display().to_string()));
     assert!(!history_text.contains("not an xlsx workbook"));
     Ok(())
 }
@@ -1812,6 +1984,9 @@ fn create_timeline_config_inner_with_header_rows(
         for (column, value) in values.iter().enumerate() {
             timeline.write_string(1, column as u16, *value)?;
         }
+        if target.is_some() {
+            timeline.write_number(1, 15, 1.0)?;
+        }
     }
     {
         let path_maps = workbook.add_worksheet();
@@ -1934,7 +2109,8 @@ fn create_legacy_xls_timeline_config(root: &Path) -> Result<PathBuf> {
 }
 
 fn latest_menu_json_report(output: &Output) -> Result<Value> {
-    String::from_utf8_lossy(&output.stdout)
+    // 菜单默认输出可读行；完整报告在运行记录 JSON 中。
+    if let Some(report) = String::from_utf8_lossy(&output.stdout)
         .lines()
         .rev()
         .find_map(|line| {
@@ -1942,7 +2118,18 @@ fn latest_menu_json_report(output: &Output) -> Result<Value> {
                 .ok()
                 .filter(|value| value.get("output").is_some())
         })
-        .context("interactive menu did not print a wide-summary report")
+    {
+        return Ok(report);
+    }
+    // 运行记录路径打印在 stderr：`运行记录已保存：<path>`
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let path = stderr
+        .lines()
+        .rev()
+        .find_map(|line| line.split_once("运行记录已保存：").map(|(_, path)| path.trim()))
+        .context("interactive menu did not print a wide-summary report or run-record path")?;
+    let bytes = fs::read(path).with_context(|| format!("read run record {path}"))?;
+    serde_json::from_slice(&bytes).with_context(|| format!("decode run record {path}"))
 }
 
 fn latest_timeline_compare_report(output: &Output) -> Result<Value> {

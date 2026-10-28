@@ -656,6 +656,9 @@ where
 
     for (index, source_path) in source_workbooks.iter().enumerate() {
         emitter.progress.current_file = Some(index + 1);
+        emitter.progress.current_input_index = Some(index + 1);
+        emitter.progress.current_sheet = None;
+        emitter.progress.current_config_row = None;
         if !source_path
             .extension()
             .and_then(|extension| extension.to_str())
@@ -724,6 +727,9 @@ where
 
     for (source_index, source_path) in source_workbooks.iter().enumerate() {
         emitter.progress.current_file = Some(source_index + 1);
+        emitter.progress.current_input_index = Some(source_index + 1);
+        emitter.progress.current_sheet = None;
+        emitter.progress.current_config_row = None;
         let source_started = Instant::now();
         emitter.emit(
             "source_read",
@@ -907,6 +913,10 @@ where
             );
             for sheet_index in matched_indexes {
                 let source_sheet = &sparse_sheets[sheet_index];
+                emitter.progress.current_sheet = Some(source_sheet.name.clone());
+                emitter.progress.current_config_row = Some(task.row_no);
+                emitter.progress.sheets_discovered += 1;
+                emitter.progress.sheets_attempted += 1;
                 let full_sheet = is_full_sheet_task(task);
                 let values = if full_sheet {
                     None
@@ -929,10 +939,12 @@ where
                             None,
                             Some("invalid_area_spec"),
                         );
+                        emitter.progress.sheets_skipped += 1;
                         continue;
                     };
                     let values = compact(&values);
                     if values.is_empty() {
+                        emitter.progress.sheets_skipped += 1;
                         continue;
                     }
                     Some(values)
@@ -1126,8 +1138,11 @@ where
                     full_sheet,
                 });
                 result.extracted_sheets += 1;
+                emitter.progress.sheets_succeeded += 1;
             }
         }
+        emitter.progress.current_sheet = None;
+        emitter.progress.current_config_row = None;
         emitter.progress.processed_files = source_index + 1;
         emitter.progress.completed_files = source_index + 1;
         emitter.progress.failed_files = result.failed_files;
@@ -2492,46 +2507,3 @@ mod merged_child_values_tests {
     }
 }
 
-#[cfg(test)]
-mod merged_child_values_tests {
-    use super::*;
-
-    #[test]
-    fn suppresses_stored_values_in_merged_children_but_keeps_anchor() -> Result<()> {
-        let mut values = BTreeMap::new();
-        values.insert(
-            (1, 1),
-            serde_json::json!({"type":"string", "value":"anchor"}),
-        );
-        values.insert(
-            (1, 2),
-            serde_json::json!({"type":"string", "value":"child"}),
-        );
-        values.insert(
-            (2, 1),
-            serde_json::json!({"type":"string", "value":"child"}),
-        );
-        values.insert(
-            (2, 2),
-            serde_json::json!({"type":"string", "value":"child"}),
-        );
-        values.insert(
-            (3, 2),
-            serde_json::json!({"type":"string", "value":"outside"}),
-        );
-        let mut sheet = SparseSheet {
-            name: "Merged".to_owned(),
-            max_row: 3,
-            max_column: 2,
-            values,
-        };
-
-        let suppressed = suppress_merged_child_values(&mut sheet, &["A1:B2".to_owned()])?;
-
-        assert_eq!(suppressed, 3);
-        assert_eq!(sheet.values.len(), 2);
-        assert!(sheet.values.contains_key(&(1, 1)));
-        assert!(sheet.values.contains_key(&(3, 2)));
-        Ok(())
-    }
-}

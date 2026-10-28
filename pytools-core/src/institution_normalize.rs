@@ -62,6 +62,10 @@ pub struct InstitutionNormalizeRunOptions {
     pub capabilities: Option<PathBuf>,
     pub platform: Option<String>,
     pub plan_dir: Option<PathBuf>,
+    /// 就地修改：直接把规范化结果写回源工作簿（不再生成结果目录副本）。
+    pub in_place: bool,
+    /// 就地修改使用的引擎名称（"umya" 或 "openpyxl"）。
+    pub engine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -238,7 +242,9 @@ where
         feature_id: "PT-7-2".to_owned(),
         run_id: run_id.clone(),
         started_at,
-        mode: if options.apply {
+        mode: if options.in_place {
+            "in_place".to_owned()
+        } else if options.apply {
             "apply".to_owned()
         } else {
             "plan_only".to_owned()
@@ -936,15 +942,20 @@ fn build_and_optionally_apply_institution_plan(
         });
     }
 
-    let output_path = institution_normalize_output_path(input).map_err(|error| {
-        normalize_file_failure(
-            "copy_target_reservation",
-            "copy_target_unavailable",
-            format!("reserve normalized copy path: {error:#}"),
-            None,
-        )
-        .attach_state(&timings, &stage_components, actual_engine.as_deref())
-    })?;
+    let output_path = if options.in_place {
+        // 就地模式：输出即源文件，不再预留副本路径。
+        input.to_path_buf()
+    } else {
+        institution_normalize_output_path(input).map_err(|error| {
+            normalize_file_failure(
+                "copy_target_reservation",
+                "copy_target_unavailable",
+                format!("reserve normalized copy path: {error:#}"),
+                None,
+            )
+            .attach_state(&timings, &stage_components, actual_engine.as_deref())
+        })?
+    };
 
     let source_check_started = Instant::now();
     let expected_source_hash = source_hash.expect("apply mode computes source hash");
@@ -1069,7 +1080,27 @@ fn build_and_optionally_apply_institution_plan(
         None,
         None,
     );
-    let execution_result = if let (Some(capability_file), Some(platform)) =
+    let execution_result = if options.in_place {
+        let engine = match options.engine.as_deref() {
+            Some("openpyxl") => crate::inplace_edit::InPlaceEngine::Openpyxl,
+            _ => crate::inplace_edit::InPlaceEngine::Umya,
+        };
+        crate::inplace_edit::execute_in_place(&plan, engine).map(|outcome| {
+            let engine_name = engine.label().to_owned();
+            let mut components = vec!["Rust".to_owned(), "in-place".to_owned()];
+            components.push(engine_name.clone());
+            (
+                Some(serde_json::json!({
+                    "engine": engine_name,
+                    "mode": "in_place",
+                    "execution": outcome.execution,
+                    "commit": outcome.commit,
+                })),
+                engine_name,
+                components,
+            )
+        })
+    } else if let (Some(capability_file), Some(platform)) =
         (options.capabilities.as_deref(), options.platform.as_deref())
     {
         crate::edit_plan::apply_plan_with_capability_file(&plan, capability_file, platform).map(
@@ -2594,7 +2625,6 @@ fn user_message_for_normalize_failure(
 fn engine_language(engine: &str) -> &'static str {
     match engine {
         "openpyxl_worker" => "Python",
-        "excelize_worker" => "Go",
         _ => "Rust",
     }
 }

@@ -24,6 +24,10 @@ pub struct GlobalConfig {
     pub input_dir: PathBuf,
     pub output_dir: PathBuf,
     pub log_dir: PathBuf,
+    /// 仅对受管理的已完成诊断 JSONL 生效；未配置时不自动清理。
+    pub log_retention_days: Option<u64>,
+    pub log_max_bytes: Option<u64>,
+    pub log_view: String,
     pub error_policy: String,
     pub default_encoding: String,
     pub source_exts: Vec<String>,
@@ -39,6 +43,9 @@ impl GlobalConfig {
             input_dir,
             output_dir,
             log_dir,
+            log_retention_days: None,
+            log_max_bytes: None,
+            log_view: "user".to_owned(),
             error_policy: "continue".to_owned(),
             default_encoding: "utf-8".to_owned(),
             source_exts: vec![".xlsx".to_owned(), ".xlsm".to_owned(), ".csv".to_owned()],
@@ -156,6 +163,13 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
         input_dir: resolve("输入目录", "input"),
         output_dir: resolve("输出目录", "output"),
         log_dir: resolve("日志目录", "logs"),
+        log_retention_days: values.get("日志保留天数").and_then(|value| positive_config_integer(value)),
+        log_max_bytes: values.get("日志最大占用MB").and_then(|value| positive_config_integer(value)).and_then(|mb| mb.checked_mul(1024 * 1024)),
+        log_view: match values.get("日志模式").map(|value| value.trim()) {
+            Some("详细" | "developer") => "developer".to_owned(),
+            Some("关闭" | "off") => "off".to_owned(),
+            _ => "user".to_owned(),
+        },
         error_policy: values
             .get("错误策略")
             .filter(|value| !value.is_empty())
@@ -173,6 +187,15 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
             .map(|value| !matches!(value.trim(), "否" | "N" | "n" | "false" | "FALSE"))
             .unwrap_or(true),
     })
+}
+
+fn positive_config_integer(value: &str) -> Option<u64> {
+    let number = value.trim().parse::<f64>().ok()?;
+    if number.is_finite() && number >= 1.0 && number.fract() == 0.0 && number < u64::MAX as f64 {
+        Some(number as u64)
+    } else {
+        None
+    }
 }
 
 /// Return one global setting, using the first matching key just like the source loader.
@@ -237,7 +260,8 @@ pub fn load_timeline_rules(config_path: impl AsRef<Path>) -> Result<Vec<Timeline
         let (set_items, set_parse_error) =
             parse_set_items(&field_text(sheet, &headers, row, "set区域"));
         let target_write_enabled = if has_target_write_column {
-            truthy(&field_text(sheet, &headers, row, "启用目标写入"))
+            let value = field_text(sheet, &headers, row, "启用目标写入");
+            truthy(&value) || value == "1.0"
         } else {
             true
         };

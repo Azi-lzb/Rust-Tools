@@ -1,9 +1,5 @@
-# PyTools independent repository baseline
+# 独立仓库拆分基线
 
-- Baseline source: `C:\Users\AZI\.codex\worktrees\pytools-cli-menu-entry\1.rust-workspace`, branch `codex/pytools-menu-entry`, HEAD `a3f12e69c27c13303cbad450167a6fc200593e01`.
-- This was the source tree used by `F:\PyToolsRustV2\run-pytools-dev.bat` for manual testing. Its tracked and untracked work was copied; the source worktree remains unchanged.
-- The formal `pytools-dev` snapshot at `C:\Users\AZI\Desktop\VibeCode\pytools-dev`, branch `pytools-dev`, HEAD `4a7c56b10cba57ec4431b5d8a71d594fc749004c`, was compared for product-specific additions. PT-7-6 area extraction deltas selected for targeted inclusion: `.xlsm` area input, Python-compatible merged-child semantics, typed Excel error preservation, and a user-visible warning when configured areas are invalid. Source commits are `8671b1e`, `d1c7d9b`, and `47979ac`; the full formal branch was not replayed.
-- Existing executables under `F:\RustBuild\pytools` are not used by `run.bat`; it launches only `dist\pytools.exe`. The first Release EXE must be built from this repository using `build-release.bat` after explicit user authorization.
-- `config.xlsx` at the project root is a local ignored copy of the configuration used by the previous launcher. It is not part of the initial Git commit. `F:\PyToolsRustV2\config.xlsx` remains untouched.
-- All five original worktrees and their work-in-progress snapshots are preserved in `F:\RustWorkspaceSplitSnapshots\baseline-20261027`. The repository bundle, original paths/HEADs, status files, tracked WIP patches, and complete non-build tree copies are documented in its `manifest.txt`.
-- Cargo build, test, check, run, clippy, and executable validation were intentionally not performed for this split. The added PT-7-6 behavior remains unverified until explicitly authorized Windows validation.
+拆分时记录的来源、旧路径、分支及快照已保留在 [历史归档](docs/archive/SPLIT_BASELINE_20261027.md)，只用于追溯，不是开发路径、运行入口或同步任务。
+
+当前唯一正式目录、开发方式、构建授权和交付路径以 [AGENTS.md](AGENTS.md) 与 [DEVELOPMENT_GOAL.md](DEVELOPMENT_GOAL.md) 为准。拆分时新增的 PT-7-6 特定测试当时未运行；具体限制见 [功能清单](pytools-core/MIGRATION_INVENTORY.md)。

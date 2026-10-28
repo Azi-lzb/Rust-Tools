@@ -1,0 +1,43 @@
+{
+  "request_id": "pytools-pt-7-4-2200-1793185483349908700-0001",
+  "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\tmp_fx.xlsx",
+  "output": "\\\\?\\C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\testdata\\manual-menu\\output\\tmp_fx_fx_header_45ba54f7.xlsx",
+  "format": "xlsx",
+  "workbook": {
+    "format": "xlsx",
+    "inventory_complete": true,
+    "features_present": [
+      "comments",
+      "conditional_formatting",
+      "data_validations",
+      "merged_cells",
+      "defined_names",
+      "formulas",
+      "relationships",
+      "headers_footers"
+    ]
+  },
+  "operations": [
+    {
+      "operation": "replace_header_text",
+      "sheet": "外汇报表",
+      "search": "万元",
+      "replacement": "万美元"
+    }
+  ],
+  "preserve": [
+    "cell_values_and_types",
+    "formula_text",
+    "comments_and_positions",
+    "styles",
+    "merged_ranges",
+    "defined_names",
+    "row_and_column_dimensions",
+    "page_settings",
+    "header_footer_text",
+    "relationships",
+    "unmodified_package_parts",
+    "sheet_identity_and_order"
+  ],
+  "drop_allowed": {}
+}

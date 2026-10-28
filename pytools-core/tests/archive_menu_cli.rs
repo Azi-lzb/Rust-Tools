@@ -67,6 +67,14 @@ fn interactive_archive_menu_routes_all_five_workflows() -> Result<()> {
     assert_eq!(date_history["status"], "succeeded");
     assert_eq!(date_history["result"]["files"], 1);
     assert_eq!(date_history["result"]["copied"], 0);
+    let unified_path = log_dir.join("run-unified").join(format!("PT-8-1_{}.json", date_history["run_id"].as_str().context("archive run ID missing")?));
+    let unified: Value = serde_json::from_slice(&fs::read(unified_path)?)?;
+    assert_eq!(unified["run_id"], date_history["run_id"]);
+    assert_eq!(unified["input_stats"]["selected"], 1);
+    assert_eq!(unified["input_stats"]["succeeded"], 1);
+    let lines = fs::read_to_string(log_dir.join(unified["diagnostic_log_path"].as_str().context("archive diagnostics missing")?))?;
+    let events = lines.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(events.iter().any(|event| event["event_name"] == "file_result" && event["run_id"] == unified["run_id"]));
     assert!(date_history["total_elapsed_ms"].is_number());
     assert!(date_history["events"][1]["stage_elapsed_ms"].is_number());
     assert_history_sanitized(&date_history, &date_source);

@@ -19,8 +19,9 @@ struct TestDir(PathBuf);
 impl TestDir {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
-            "pytools-dedup-comment-openpyxl-{}-{}",
+            "pytools-dedup-comment-openpyxl-{}-{:?}-{}",
             std::process::id(),
+            std::thread::current().id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

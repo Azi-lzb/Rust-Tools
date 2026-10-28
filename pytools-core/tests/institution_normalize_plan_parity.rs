@@ -36,8 +36,9 @@ fn edit_plan_matches_python_baseline_without_modifying_source() -> Result<()> {
 
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let output = std::env::temp_dir().join(format!(
-        "pytools-institution-normalize-plan-{}-{unique}.xlsx",
-        std::process::id()
+        "pytools-institution-normalize-plan-{}-{unique}-{:?}.xlsx",
+        std::process::id(),
+        std::thread::current().id()
     ));
     let original_bytes = fs::read(&fixture)?;
     let profile = WorkbookProfile {
