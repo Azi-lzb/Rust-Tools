@@ -102,8 +102,16 @@ PT-1-2 时序提取、COM 批注版工作表提取、PDF 导出、跨类别转�
   worker/响应日志各有 64 MiB 单次上限，超限终止进程树；响应 JSON 有大小
   上限与解析诊断；stderr 诊断按首尾保留 + TRUNCATED 标记有界读取；失败
   消息含类别、中文原因、修复建议与 run_id/协议/退出码/耗时诊断行。
-- 上述改动已由自动化测试覆盖（excel-editor 11 个测试目标全部通过，含
-  修复后通过的端到端 `rust_modifier_invokes_one_batch_worker_and_preserves_source`）。
+- 上述改动已由自动化测试覆盖（excel-editor 11 个测试目标 79 项全部通过，
+  Windows 与 WSL Linux 双平台执行；含修复后通过的端到端
+  `rust_modifier_invokes_one_batch_worker_and_preserves_source`、
+  Linux 进程组终止 + 孙进程不再存活断言的
+  `timeout_terminates_tree_and_descendants`，以及"清理时发生错误"注入用例
+  `cleanup_error_is_reported_in_the_result_message`）。
+- 交互菜单运行记录目录：`--log-dir` 显式覆盖现已在配置初始化、重载与
+  视图分支之间保留（GlobalConfig::log_dir_override），`archive_menu_cli`
+  与 `config_menu_cli` 全绿；archive 测试夹具同步修正为加载器契约的
+  键/值布局（原三列布局从未被读取，旧断言仅因默认值巧合通过）。
 - 5-1 村镇银行拆分已支持 openpyxl/umya 引擎选择的就地修改（选择引擎后选文件）；
   **5-1 的就地行为与 4 个既有测试待人工验收后改写**（当前标记 ignored，
   需设置 RUST_WORKSPACE_OPENPYXL_PYTHON 后以 --ignored 运行）。
