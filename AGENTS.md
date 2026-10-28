@@ -2,6 +2,8 @@
 
 ## Worktree 角色与协作
 
+- 多 Agent / Worktree 的完整职责、启动检查、构建路径和集成规则见 `docs/WORKTREE_DEVELOPMENT.md`。本文件中的业务安全和授权约束仍然适用；规则更新不会自动传播到其他分支。
+
 | 工作目录 | 分支 | 主要用途 | `CARGO_TARGET_DIR` |
 | --- | --- | --- | --- |
 | `C:\Users\AZI\Desktop\VibeCode\Rust-Tools` | `main` | 正式集成、回归和 Release 发布 | `F:\RustBuild\pytools` |
