@@ -5,7 +5,7 @@ use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
     read_workbook_with_unknown_error_tokens_as_text, read_xlsx_worksheet_extents, CellValue,
-    DefinedNameParseStatus, DefinedNameRecord, SheetDump, WorksheetExtent,
+    DefinedNameParseStatus, DefinedNameRecord, SheetDump, WorkbookDump, WorksheetExtent,
 };
 use excel_writer::{Format, Workbook, Worksheet};
 use serde::Serialize;
@@ -796,12 +796,17 @@ pub struct NamedRangeSummaryResult {
     pub execution: Option<SummaryExecution>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum NamedRegionKind {
     Header,
     FixedRows,
     AnyRows,
-    Structure,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum NamedSummaryMode {
+    AnyRows,
+    FixedRows,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -823,8 +828,10 @@ impl NamedRegionBounds {
         let (end_row, end_column) =
             parse_a1(end).with_context(|| format!("invalid named-range end {end:?}"))?;
         anyhow::ensure!(
-            start_row <= end_row && start_column <= end_column,
-            "named range has reversed bounds: {reference:?}"
+            start_row >= 1 && start_column >= 1
+                && start_row <= end_row && start_column <= end_column
+                && end_row <= 1_048_576 && end_column <= 16_384,
+            "命名区域坐标无效或超出 Excel 范围：{reference:?}"
         );
         Ok(Self {
             start_row,
@@ -834,17 +841,15 @@ impl NamedRegionBounds {
         })
     }
 
-    fn as_header_range(self) -> (usize, usize, usize, usize) {
-        (
-            self.start_row,
-            self.end_row,
-            self.start_column,
-            self.end_column,
-        )
-    }
-
-    fn contains_columns(self, other: Self) -> bool {
-        other.start_column >= self.start_column && other.end_column <= self.end_column
+    fn intersect_columns(self, other: Self) -> Option<Self> {
+        let start_column = self.start_column.max(other.start_column);
+        let end_column = self.end_column.min(other.end_column);
+        (start_column <= end_column).then_some(Self {
+            start_row: other.start_row,
+            start_column,
+            end_row: other.end_row,
+            end_column,
+        })
     }
 }
 
@@ -853,25 +858,43 @@ struct NamedRegionGroupBuilder {
     header: Option<NamedRegionBounds>,
     fixed_rows: Option<NamedRegionBounds>,
     any_rows: Option<NamedRegionBounds>,
-    structure: Option<NamedRegionBounds>,
 }
 
 #[derive(Clone, Debug)]
 struct NamedRegionGroup {
-    id: usize,
+    id: String,
+    order: usize,
+    header: NamedRegionBounds,
     headers_by_column: BTreeMap<usize, String>,
     fixed_rows: Option<NamedRegionBounds>,
     any_rows: Option<NamedRegionBounds>,
-    structure: Option<NamedRegionBounds>,
 }
 
 #[derive(Clone, Debug)]
 struct NamedSheetSpec {
     template_sheet: String,
+    output_key: String,
+    mode: NamedSummaryMode,
+    fallback_output: bool,
     groups: Vec<NamedRegionGroup>,
-    field_positions: BTreeMap<(usize, usize), usize>,
+    field_positions: BTreeMap<(String, usize), usize>,
     output_headers: Vec<String>,
-    rows: Vec<Vec<serde_json::Value>>,
+    extra_fields: Vec<NamedSummaryField>,
+    rows: Vec<NamedSummaryRow>,
+}
+
+#[derive(Clone, Debug)]
+struct NamedSummaryRow {
+    group_order: usize,
+    values: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug)]
+struct NamedSummaryField {
+    name: String,
+    sheet: String,
+    bounds: NamedRegionBounds,
+    global: bool,
 }
 
 pub fn summarize_by_named_ranges(
@@ -1762,30 +1785,41 @@ fn summarize_by_named_ranges_inner(
         "named-range summary template does not exist: {}",
         template_path.display()
     );
-    let mut template = read_workbook(template_path)
+    let template = read_workbook(template_path)
         .with_context(|| format!("read named-range template {}", template_path.display()))?;
-    overlay_template_iso_dates(template_path, &mut template.sheets)
-        .context("read ISO date values from named-range template")?;
-    let template_elapsed_cells = read_elapsed_time_cells(template_path, &template.sheets)
-        .context("read elapsed-time formats from named-range template")?;
     let definitions = read_defined_names(template_path)
         .with_context(|| format!("read defined names from {}", template_path.display()))?;
     let (mut sheet_specs, skipped_template_sheets) =
-        build_named_sheet_specs(&template.sheets, &definitions, &template_elapsed_cells)
+        build_named_sheet_specs(&template.sheets, &definitions)
             .context("parse named-range summary template")?;
     anyhow::ensure!(
         !sheet_specs.is_empty(),
-        "模板中没有可用命名区域；名称需符合 表头区域_N、固定行汇总区域_N、任意行汇总区域_N、表结构区域_N"
+        "模板中没有可用命名区域；请配置表头区域和固定行或任意行汇总区域"
     );
-    let spec_names = sheet_specs
+    let template_spec_names = sheet_specs
         .iter()
         .map(|spec| spec.template_sheet.clone())
         .collect::<BTreeSet<_>>();
-    let template_sheets = spec_names
+    let template_sheets = template_spec_names
         .iter()
         .filter_map(|name| template.sheets.iter().find(|sheet| &sheet.name == name))
         .map(|sheet| (sheet.name.clone(), sheet))
         .collect::<BTreeMap<_, _>>();
+    let audit_fallbacks = sheet_specs.iter()
+        .filter(|spec| spec.template_sheet == "兜底模板")
+        .cloned().collect::<Vec<_>>();
+    if !audit_fallbacks.is_empty() {
+        let header_count = definitions.iter()
+            .filter(|definition| matches!(parse_named_region_name(&definition.name), Ok(Some((NamedRegionKind::Header, _)))))
+            .flat_map(|definition| &definition.areas)
+            .filter(|area| area.sheet_name == "兜底模板")
+            .map(|area| area.reference.replace('$', "").to_ascii_uppercase())
+            .collect::<BTreeSet<_>>().len();
+        anyhow::ensure!(header_count == 1 && audit_fallbacks.iter().all(|spec| spec.groups.len() == 1),
+            "兜底模板须配置一个表头区域，每种汇总方式最多配置一个汇总区域");
+        sheet_specs.retain(|spec| spec.template_sheet != "兜底模板");
+    }
+    let spec_names = sheet_specs.iter().map(|spec| spec.template_sheet.clone()).collect::<BTreeSet<_>>();
     let template_fallback = spec_names.contains("模板");
     let skipped_template_message = if skipped_template_sheets.is_empty() {
         String::new()
@@ -1923,70 +1957,13 @@ fn summarize_by_named_ranges_inner(
         );
 
         let extract_started = Instant::now();
-        let mut rows_for_file: BTreeMap<String, Vec<Vec<serde_json::Value>>> = BTreeMap::new();
-        let mut structure_failure = None;
-        for source_sheet in &dump.sheets {
-            progress.current_sheet = Some(source_sheet.name.clone());
-            let spec_name = if spec_names.contains(&source_sheet.name) {
-                Some(source_sheet.name.as_str())
-            } else if template_fallback {
-                Some("模板")
-            } else {
-                None
-            };
-            let Some(spec_name) = spec_name else {
-                continue;
-            };
-            let spec = sheet_specs
-                .iter()
-                .find(|spec| spec.template_sheet == spec_name)
-                .expect("resolved template sheet spec");
-            let template_sheet = template_sheets
-                .get(spec_name)
-                .expect("template sheet spec has source worksheet");
-            for group in &spec.groups {
-                if let Some(structure) = group.structure {
-                    if let Some(mismatch) =
-                        named_structure_mismatch(template_sheet, source_sheet, structure)?
-                    {
-                        structure_failure = Some(format!(
-                            "工作表 {:?} 的表结构区域_{} 不匹配：{mismatch}",
-                            source_sheet.name, group.id
-                        ));
-                        break;
-                    }
-                }
-            }
-            if structure_failure.is_some() {
-                break;
-            }
-            let workbook_name = source
-                .file_stem()
-                .map(|stem| stem.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let rows = extract_named_sheet_rows(spec, source_sheet, &workbook_name)?;
-            progress.total_rows += rows.len();
-            progress.processed_rows += rows.len();
-            total_rows += rows.len();
-            rows_for_file
-                .entry(spec_name.to_owned())
-                .or_default()
-                .extend(rows);
-        }
-        if let Some(reason) = structure_failure {
-            let file_name = source
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned();
-            skipped_sources.push(NamedRangeSourceSkip {
-                file_name: file_name.clone(),
-                reason: reason.clone(),
-            });
+        if let Some(reason) = named_summary_header_preflight(&sheet_specs, &template_sheets, &dump)? {
+            let file_name = source.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            skipped_sources.push(NamedRangeSourceSkip { file_name: file_name.clone(), reason: reason.clone() });
             emitter.emit(
                 "source_structure",
                 "skipped",
-                format!("因表结构校验失败跳过源文件 {file_name}：{reason}"),
+                format!("因表头结构校验失败跳过源文件 {file_name}：{reason}"),
                 &progress,
                 Some(source),
                 Some(extract_started.elapsed()),
@@ -1994,19 +1971,78 @@ fn summarize_by_named_ranges_inner(
                 Some("calamine"),
                 Some("source_structure_mismatch"),
             );
-            // No rows from a rejected source are published to the result.
-            for rows in rows_for_file.values() {
-                let count = rows.len();
-                progress.total_rows = progress.total_rows.saturating_sub(count);
-                progress.processed_rows = progress.processed_rows.saturating_sub(count);
-                total_rows = total_rows.saturating_sub(count);
-            }
             continue;
+        }
+        let mut rows_for_file: BTreeMap<(NamedSummaryMode, String), Vec<NamedSummaryRow>> = BTreeMap::new();
+        let mut pending_fallback_specs = BTreeMap::<(NamedSummaryMode, String), NamedSheetSpec>::new();
+        for source_sheet in &dump.sheets {
+            progress.current_sheet = Some(source_sheet.name.clone());
+            let direct_specs = sheet_specs.iter()
+                .filter(|spec| !spec.fallback_output && spec.template_sheet.eq_ignore_ascii_case(&source_sheet.name))
+                .cloned().collect::<Vec<_>>();
+            let mut specs = direct_specs.iter().cloned().map(|spec| (spec, false)).collect::<Vec<_>>();
+            for fallback in &audit_fallbacks {
+                if !direct_specs.iter().any(|spec| spec.mode == fallback.mode) {
+                    specs.push((fallback.clone(), true));
+                }
+            }
+            if specs.is_empty() && template_fallback {
+                specs.extend(sheet_specs.iter()
+                    .filter(|spec| !spec.fallback_output && spec.template_sheet == "模板")
+                    .cloned().map(|spec| (spec, false)));
+            }
+            for (spec, is_audit_fallback) in specs {
+                let workbook_name = source
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let workbook_name = normalize_named_summary_source_name(&workbook_name);
+                let placeholder_fields = vec![serde_json::Value::Null; spec.extra_fields.len()];
+                let mut rows = extract_named_sheet_rows(&spec, source_sheet, &workbook_name, &placeholder_fields)
+                    .with_context(|| format!("读取源工作簿 {} 的汇总区域失败", source.display()))?;
+                if rows.is_empty() { continue; }
+                let (extra_values, missing_fields) =
+                    read_named_summary_fields(&spec, &dump, source_sheet, spec.template_sheet != source_sheet.name)
+                        .with_context(|| format!("读取源工作簿 {} 的附加字段失败", source.display()))?;
+                if !missing_fields.is_empty() {
+                    emitter.emit(
+                        "metadata",
+                        "warning",
+                        format!("源文件 {} 的附加字段所在工作表缺失，已留空：{}", source.file_name().unwrap_or_default().to_string_lossy(), missing_fields.join("、")),
+                        &progress,
+                        Some(source),
+                        None,
+                        &["pytools-core", "excel-reader"],
+                        Some("calamine"),
+                        Some("metadata_sheet_missing"),
+                    );
+                }
+                for row in &mut rows {
+                    row.values[2..2 + extra_values.len()].clone_from_slice(&extra_values);
+                }
+                let output_name = if is_audit_fallback { source_sheet.name.clone() } else { spec.output_key.clone() };
+                let key = (spec.mode, output_name.to_lowercase());
+                if is_audit_fallback {
+                    let mut output_spec = spec;
+                    output_spec.output_key = output_name;
+                    output_spec.fallback_output = true;
+                    pending_fallback_specs.entry(key.clone()).or_insert(output_spec);
+                }
+                progress.total_rows += rows.len();
+                progress.processed_rows += rows.len();
+                total_rows += rows.len();
+                rows_for_file.entry(key).or_default().extend(rows);
+            }
         }
         progress.current_sheet = None;
         let file_row_count = rows_for_file.values().map(Vec::len).sum::<usize>();
+        for ((mode, name), spec) in pending_fallback_specs {
+            if !sheet_specs.iter().any(|existing| existing.mode == mode && existing.output_key.to_lowercase() == name) {
+                sheet_specs.push(spec);
+            }
+        }
         for spec in &mut sheet_specs {
-            if let Some(rows) = rows_for_file.remove(&spec.template_sheet) {
+            if let Some(rows) = rows_for_file.remove(&(spec.mode, spec.output_key.to_lowercase())) {
                 spec.rows.extend(rows);
             }
         }
@@ -2024,40 +2060,9 @@ fn summarize_by_named_ranges_inner(
         );
     }
 
-    if total_rows == 0 {
-        let result = NamedRangeSummaryResult {
-            saved: false,
-            rows: 0,
-            files: files_hit,
-            skipped_sources,
-            path: None,
-            execution: Some(SummaryExecution {
-                reader_engine: Some(if unknown_error_token_cells_normalized > 0 {
-                    "calamine + OOXML error-token normalization"
-                } else {
-                    "calamine"
-                }),
-                writer_engine: None,
-                read_elapsed_ms: read_elapsed.as_millis(),
-                write_elapsed_ms: 0,
-                total_elapsed_ms: started.elapsed().as_millis(),
-                ooxml_error_cells_patched: 0,
-                unknown_error_token_cells_normalized,
-            }),
-        };
-        emitter.emit(
-            "run",
-            "skipped",
-            "没有可汇总的命名区域数据",
-            &progress,
-            None,
-            Some(started.elapsed()),
-            &["pytools-core"],
-            None,
-            None,
-        );
-        return Ok(result);
-    }
+    anyhow::ensure!(progress.completed_files > 0, "没有可汇总的源工作簿；请检查输入及表头结构");
+    progress.current_input_index = None;
+    progress.current_sheet = None;
 
     let output_started = Instant::now();
     if let Err(error) = fs::create_dir_all(output_dir) {
@@ -2109,19 +2114,28 @@ fn summarize_by_named_ranges_inner(
     let header_format = Format::new().set_bold();
     let mut error_cells = Vec::new();
     let mut workbook = Workbook::new();
-    for spec in &sheet_specs {
+    if sheet_specs.is_empty() { workbook.add_worksheet().set_name("汇总")?; }
+    sheet_specs.sort_by_key(|spec| (spec.mode, spec.fallback_output, spec.groups[0].order));
+    for spec in &mut sheet_specs {
+        spec.rows.sort_by_key(|row| row.group_order);
+    }
+    let mut used_sheet_names = BTreeSet::new();
+    let output_names = sheet_specs.iter()
+        .map(|spec| named_summary_output_sheet_name(&spec.output_key, &mut used_sheet_names))
+        .collect::<Vec<_>>();
+    for (spec, output_name) in sheet_specs.iter().zip(&output_names).rev() {
         let ws = workbook.add_worksheet();
-        ws.set_name(&spec.template_sheet)?;
+        ws.set_name(output_name)?;
         ws.set_margins(0.75, 0.75, 1.0, 1.0, 0.5, 0.5);
         ws.set_formula_result_default("");
-        let mut headers = vec!["工作簿".to_owned(), "工作表".to_owned()];
+        let mut headers = vec!["来源文件".to_owned(), "来源工作表".to_owned()];
+        headers.extend(spec.extra_fields.iter().map(|field| field.name.clone()));
         headers.extend(spec.output_headers.clone());
-        headers.push("行号".to_owned());
         for (column, header) in headers.iter().enumerate() {
             ws.write_string_with_format(0, column as u16, header, &header_format)?;
         }
-        for (row_index, values) in spec.rows.iter().enumerate() {
-            for (column, value) in values.iter().enumerate() {
+        for (row_index, row) in spec.rows.iter().enumerate() {
+            for (column, value) in row.values.iter().enumerate() {
                 if value.get("type").and_then(serde_json::Value::as_str) == Some("error") {
                     let reader_value = value
                         .get("value")
@@ -2129,7 +2143,7 @@ fn summarize_by_named_ranges_inner(
                         .unwrap_or_default()
                         .to_owned();
                     error_cells.push(PendingErrorCell {
-                        sheet_name: spec.template_sheet.clone(),
+                        sheet_name: output_name.clone(),
                         address: format!("{}{}", column_letters(column + 1), row_index + 2),
                         excel_value: excel_error_value(&reader_value)?,
                         reader_value,
@@ -2142,6 +2156,7 @@ fn summarize_by_named_ranges_inner(
         if !spec.rows.is_empty() {
             ws.set_freeze_panes(1, 0)?;
         }
+        ws.autofilter(0, 0, spec.rows.len() as u32, (headers.len() - 1) as u16)?;
     }
     emitter.emit(
         "output_workbook",
@@ -2155,34 +2170,31 @@ fn summarize_by_named_ranges_inner(
         None,
     );
     let save_started = Instant::now();
-    let staging_path = if error_cells.is_empty() {
-        None
-    } else {
-        Some(staging_path_for(&path)?)
-    };
-    let save_path = staging_path.as_deref().unwrap_or(&path);
-    if let Err(error) = workbook.save(save_path) {
-        if let Some(staging_path) = &staging_path {
-            let _ = fs::remove_file(staging_path);
-        }
+    let raw_candidate = unique_output(output_dir, ".named-summary-candidate")?;
+    let reserved = OpenOptions::new().write(true).create_new(true).open(&raw_candidate)
+        .with_context(|| format!("创建汇总候选文件失败：{}", raw_candidate.display()))?;
+    drop(reserved);
+    if let Err(error) = workbook.save(&raw_candidate) {
+        let _ = fs::remove_file(&raw_candidate);
         emitter.emit(
             "output_save",
             "failed",
             "命名区域汇总工作簿保存失败",
             &progress,
-            Some(save_path),
+            Some(&path),
             Some(save_started.elapsed()),
             &["rust_xlsxwriter"],
             Some("rust_xlsxwriter"),
             Some("output_save_error"),
         );
         return Err(error)
-            .with_context(|| format!("save named-range summary {}", save_path.display()));
+            .with_context(|| format!("save named-range summary candidate {}", raw_candidate.display()));
     }
-    if let Some(staging_path) = staging_path {
+    let candidate = if !error_cells.is_empty() {
         let patch_started = Instant::now();
-        if let Err(error) = patch_error_cells(&staging_path, &path, &error_cells) {
-            let _ = fs::remove_file(&staging_path);
+        let patched_candidate = unique_output(output_dir, ".named-summary-patched")?;
+        if let Err(error) = patch_error_cells(&raw_candidate, &patched_candidate, &error_cells) {
+            let _ = fs::remove_file(&raw_candidate);
             emitter.emit(
                 "ooxml_error_patch",
                 "failed",
@@ -2201,8 +2213,11 @@ fn summarize_by_named_ranges_inner(
                 )
             });
         }
-        let _ = fs::remove_file(&staging_path);
-        validate_error_cells(&path, &error_cells)?;
+        let _ = fs::remove_file(&raw_candidate);
+        if let Err(error) = validate_error_cells(&patched_candidate, &error_cells) {
+            let _ = fs::remove_file(&patched_candidate);
+            return Err(error).context("校验汇总候选文件中的 Excel 错误值失败");
+        }
         emitter.emit(
             "ooxml_error_patch",
             "succeeded",
@@ -2214,7 +2229,24 @@ fn summarize_by_named_ranges_inner(
             Some("OOXML Patch"),
             None,
         );
+        patched_candidate
+    } else {
+        raw_candidate
+    };
+    let publication = (|| -> Result<()> {
+        validate_named_summary_output(&candidate, &sheet_specs, &output_names)?;
+        crate::file_commit::create_target_from_candidate(&candidate, &path)
+            .context("发布命名区域汇总工作簿失败")?;
+        Ok(())
+    })();
+    if let Err(error) = publication {
+        let _ = fs::remove_file(&candidate);
+        emitter.emit("output_save", "failed", "命名区域汇总候选校验或保存失败", &progress,
+            Some(&path), Some(save_started.elapsed()), &["pytools-core", "excel-reader"],
+            Some("calamine"), Some("output_save_error"));
+        return Err(error);
     }
+    let _ = fs::remove_file(&candidate);
     emitter.emit(
         "output_save",
         "succeeded",
@@ -2229,7 +2261,7 @@ fn summarize_by_named_ranges_inner(
     let result = NamedRangeSummaryResult {
         saved: true,
         rows: total_rows,
-        files: files_hit,
+        files: progress.completed_files,
         skipped_sources,
         path: Some(path),
         execution: Some(SummaryExecution {
@@ -2269,39 +2301,91 @@ fn summarize_by_named_ranges_inner(
     Ok(result)
 }
 
-fn parse_named_region_name(name: &str) -> Result<Option<(NamedRegionKind, usize)>> {
+fn parse_named_region_name(name: &str) -> Result<Option<(NamedRegionKind, String)>> {
     let prefixes = [
         ("表头区域", NamedRegionKind::Header),
         ("固定行汇总区域", NamedRegionKind::FixedRows),
         ("任意行汇总区域", NamedRegionKind::AnyRows),
-        ("表结构区域", NamedRegionKind::Structure),
     ];
     for (prefix, kind) in prefixes {
         if name == prefix {
-            anyhow::bail!("named region {name:?} needs a numeric suffix, for example {prefix}_1");
+            return Ok(Some((kind, String::new())));
         }
         let Some(suffix) = name.strip_prefix(&format!("{prefix}_")) else {
             continue;
         };
-        anyhow::ensure!(
-            !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit()),
-            "named region {name:?} must use {prefix}_<positive number>"
-        );
-        let id = suffix
-            .parse::<usize>()
-            .with_context(|| format!("named region number is out of range: {name:?}"))?;
-        anyhow::ensure!(id > 0, "named region number must be positive: {name:?}");
+        let id = suffix.parse::<usize>()
+            .map(|value| value.to_string())
+            .unwrap_or_else(|_| suffix.to_lowercase());
         return Ok(Some((kind, id)));
     }
     Ok(None)
 }
 
+fn parse_named_summary_fields(
+    definitions: &[DefinedNameRecord],
+) -> Result<(Vec<NamedSummaryField>, BTreeMap<String, Vec<NamedSummaryField>>)> {
+    let mut global = Vec::new();
+    let mut local = BTreeMap::<String, Vec<NamedSummaryField>>::new();
+    for definition in definitions {
+        let (field_name, is_global) = if let Some(name) = definition.name.strip_prefix("全局单元格区域.") {
+            (name.trim(), true)
+        } else if let Some(name) = definition.name.strip_prefix("单元格区域.") {
+            (name.trim(), false)
+        } else {
+            continue;
+        };
+        if field_name.is_empty() {
+            continue;
+        }
+        anyhow::ensure!(
+            definition.parse_status == DefinedNameParseStatus::Areas && !definition.areas.is_empty(),
+            "附加字段名称 {:?} 无法解析为工作表单元格",
+            definition.name
+        );
+        for area in &definition.areas {
+            anyhow::ensure!(area.sheet_kind == "worksheet", "附加字段 {:?} 必须指向工作表", definition.name);
+            let bounds = NamedRegionBounds::from_reference(&area.reference)
+                .with_context(|| format!("解析附加字段 {:?} 失败", definition.name))?;
+            anyhow::ensure!(
+                bounds.start_row == bounds.end_row && bounds.start_column == bounds.end_column,
+                "附加字段 {:?} 必须只定位一个单元格",
+                definition.name
+            );
+            let field = NamedSummaryField {
+                name: field_name.to_owned(),
+                sheet: area.sheet_name.clone(),
+                bounds,
+                global: is_global,
+            };
+            if is_global {
+                global.push(field);
+            } else {
+                local.entry(area.sheet_name.to_lowercase()).or_default().push(field);
+            }
+        }
+    }
+    let sort_fields = |fields: &mut Vec<NamedSummaryField>| {
+        fields.sort_by(|left, right| {
+            (left.bounds.start_row, left.bounds.start_column, &left.name)
+                .cmp(&(right.bounds.start_row, right.bounds.start_column, &right.name))
+        });
+    };
+    sort_fields(&mut global);
+    for fields in local.values_mut() {
+        sort_fields(fields);
+    }
+    Ok((global, local))
+}
+
 fn build_named_sheet_specs(
     template_sheets: &[SheetDump],
     definitions: &[DefinedNameRecord],
-    elapsed_time_cells: &BTreeMap<String, BTreeSet<String>>,
 ) -> Result<(Vec<NamedSheetSpec>, Vec<String>)> {
-    let mut builders: BTreeMap<String, BTreeMap<usize, NamedRegionGroupBuilder>> = BTreeMap::new();
+    let (global_fields, local_fields) = parse_named_summary_fields(definitions)?;
+    let mut builders: BTreeMap<String, BTreeMap<String, NamedRegionGroupBuilder>> = BTreeMap::new();
+    let mut seen_regions = BTreeSet::new();
+    let mut region_orders = BTreeMap::new();
     for definition in definitions {
         let Some((kind, group_id)) = parse_named_region_name(&definition.name)? else {
             continue;
@@ -2311,38 +2395,49 @@ fn build_named_sheet_specs(
                 &definition.parse_status,
                 DefinedNameParseStatus::Areas
             )
-                && definition.areas.len() == 1,
-            "named region {:?} must refer to one continuous A1 area; current expression {:?} is unsupported",
+                && !definition.areas.is_empty(),
+            "named region {:?} must refer to worksheet A1 areas; current expression {:?} is unsupported",
             definition.name,
             definition.raw_reference
         );
-        let area = &definition.areas[0];
-        anyhow::ensure!(
-            area.sheet_kind == "worksheet",
-            "named region {:?} must refer to a worksheet, got {:?}",
-            definition.name,
-            area.sheet_kind
-        );
-        let bounds = NamedRegionBounds::from_reference(&area.reference)
-            .with_context(|| format!("parse named region {:?}", definition.name))?;
-        let group = builders
-            .entry(area.sheet_name.clone())
-            .or_default()
-            .entry(group_id)
-            .or_default();
-        let slot = match kind {
-            NamedRegionKind::Header => &mut group.header,
-            NamedRegionKind::FixedRows => &mut group.fixed_rows,
-            NamedRegionKind::AnyRows => &mut group.any_rows,
-            NamedRegionKind::Structure => &mut group.structure,
-        };
-        anyhow::ensure!(
-            slot.replace(bounds).is_none(),
-            "duplicate named region for worksheet {:?}, group {}, kind {:?}",
-            area.sheet_name,
-            group_id,
-            kind
-        );
+        for (area_index, area) in definition.areas.iter().enumerate() {
+            anyhow::ensure!(
+                area.sheet_kind == "worksheet",
+                "named region {:?} must refer to a worksheet, got {:?}",
+                definition.name,
+                area.sheet_kind
+            );
+            let bounds = NamedRegionBounds::from_reference(&area.reference)
+                .with_context(|| format!("parse named region {:?}", definition.name))?;
+            let identity = (kind, area.sheet_name.to_lowercase(), bounds.start_row,
+                bounds.start_column, bounds.end_row, bounds.end_column);
+            if !seen_regions.insert(identity.clone()) {
+                continue;
+            }
+            region_orders.insert(identity, region_orders.len());
+            let area_group_id = if definition.areas.len() > 1 {
+                format!("{group_id}#{area_index}")
+            } else {
+                group_id.clone()
+            };
+            let sheet_groups = builders.entry(area.sheet_name.clone()).or_default();
+            let mut key = area_group_id.clone();
+            let mut suffix = 2usize;
+            loop {
+                let group = sheet_groups.entry(key.clone()).or_default();
+                let slot = match kind {
+                    NamedRegionKind::Header => &mut group.header,
+                    NamedRegionKind::FixedRows => &mut group.fixed_rows,
+                    NamedRegionKind::AnyRows => &mut group.any_rows,
+                };
+                if slot.is_none() {
+                    *slot = Some(bounds);
+                    break;
+                }
+                key = format!("{area_group_id}~{suffix}");
+                suffix += 1;
+            }
+        }
     }
 
     // Summary schemas are worksheet-local. If a worksheet has exactly one
@@ -2360,83 +2455,107 @@ fn build_named_sheet_specs(
         let Some(groups) = builders.remove(&template_sheet.name) else {
             continue;
         };
-        // A template workbook may contain worksheets used for notes or other
-        // structures that have named data regions but no header area. A sheet
-        // is a summary schema only when it defines at least one header region;
-        // its schema and output rows remain isolated from other worksheets.
         if !groups.values().any(|builder| builder.header.is_some()) {
+            anyhow::ensure!(
+                !groups.values().any(|builder| builder.fixed_rows.is_some() || builder.any_rows.is_some()),
+                "工作表 {:?} 配置了汇总区域，但缺少表头区域",
+                template_sheet.name
+            );
             skipped_sheets_without_headers.push(template_sheet.name.clone());
             continue;
         }
+        let available_headers = groups.values().filter_map(|group| group.header).collect::<Vec<_>>();
         let mut parsed_groups = Vec::new();
         for (id, builder) in groups {
-            let header = builder.header.with_context(|| {
-                format!(
-                    "worksheet {:?}, group {id} has no 表头区域_{id}",
-                    template_sheet.name
-                )
-            })?;
-            anyhow::ensure!(
-                builder.fixed_rows.is_some() || builder.any_rows.is_some(),
-                "worksheet {:?}, group {id} needs 固定行汇总区域_{id} or 任意行汇总区域_{id}",
-                template_sheet.name
-            );
-            let labels = build_column_headers(
-                template_sheet,
-                &[header.as_header_range()],
-                elapsed_time_cells.get(&template_sheet.name),
-            );
-            let headers_by_column = labels
-                .into_iter()
-                .enumerate()
-                .map(|(offset, label)| (header.start_column + offset, label))
-                .collect::<BTreeMap<_, _>>();
-            for data_bounds in [builder.fixed_rows, builder.any_rows].into_iter().flatten() {
-                anyhow::ensure!(
-                    header.contains_columns(data_bounds),
-                    "worksheet {:?}, group {id} data columns {}:{} are outside header columns {}:{}",
-                    template_sheet.name,
-                    column_letters(data_bounds.start_column),
-                    column_letters(data_bounds.end_column),
-                    column_letters(header.start_column),
-                    column_letters(header.end_column)
-                );
+            for (mode, bounds) in [
+                (NamedSummaryMode::AnyRows, builder.any_rows),
+                (NamedSummaryMode::FixedRows, builder.fixed_rows),
+            ] {
+                let Some(bounds) = bounds else { continue };
+                let (header, intersected) = available_headers.iter().copied()
+                    .filter_map(|header| header.intersect_columns(bounds).map(|range| (header, range)))
+                    .reduce(|best, candidate| {
+                        let best_width = best.1.end_column - best.1.start_column;
+                        let candidate_width = candidate.1.end_column - candidate.1.start_column;
+                        if candidate_width > best_width { candidate } else { best }
+                    })
+                    .with_context(|| format!("工作表 {:?} 的汇总区域 {id:?} 没有相交的表头区域", template_sheet.name))?;
+                let selected_header = NamedRegionBounds {
+                    start_column: intersected.start_column,
+                    end_column: intersected.end_column,
+                    ..header
+                };
+                let labels = named_summary_header_labels(template_sheet, selected_header)?;
+                let headers_by_column = labels.into_iter().enumerate()
+                    .map(|(offset, label)| (selected_header.start_column + offset, label))
+                    .collect::<BTreeMap<_, _>>();
+                let kind = match mode {
+                    NamedSummaryMode::AnyRows => NamedRegionKind::AnyRows,
+                    NamedSummaryMode::FixedRows => NamedRegionKind::FixedRows,
+                };
+                let order = region_orders[&(kind, template_sheet.name.to_lowercase(), bounds.start_row,
+                    bounds.start_column, bounds.end_row, bounds.end_column)];
+                parsed_groups.push((mode, NamedRegionGroup {
+                    id: id.clone(),
+                    order,
+                    header,
+                    headers_by_column,
+                    fixed_rows: (mode == NamedSummaryMode::FixedRows).then_some(intersected),
+                    any_rows: (mode == NamedSummaryMode::AnyRows).then_some(intersected),
+                }));
             }
-            parsed_groups.push(NamedRegionGroup {
-                id,
-                headers_by_column,
-                fixed_rows: builder.fixed_rows,
-                any_rows: builder.any_rows,
-                structure: builder.structure,
+        }
+        parsed_groups.sort_by_key(|(_, group)| group.order);
+        let mut extra_fields = global_fields.clone();
+        if let Some(fields) = local_fields.get(&template_sheet.name.to_lowercase()) {
+            extra_fields.extend(fields.iter().cloned());
+        }
+        let mut field_names = BTreeSet::new();
+        for field in &extra_fields {
+            anyhow::ensure!(
+                field_names.insert(field.name.trim().to_lowercase()),
+                "工作表 {:?} 存在重复的单元格区域字段名：{}",
+                template_sheet.name,
+                field.name
+            );
+        }
+        for mode in [NamedSummaryMode::AnyRows, NamedSummaryMode::FixedRows] {
+            let groups = parsed_groups.iter()
+                .filter(|(group_mode, _)| *group_mode == mode)
+                .map(|(_, group)| group.clone())
+                .collect::<Vec<_>>();
+            if groups.is_empty() { continue; }
+            let mut output_headers = Vec::new();
+            let mut field_positions = BTreeMap::new();
+            for (group_index, group) in groups.iter().enumerate() {
+                let bounds = group.any_rows.or(group.fixed_rows).expect("summary group has data bounds");
+                let width = bounds.end_column - bounds.start_column + 1;
+                if group_index == 0 {
+                    output_headers.extend((bounds.start_column..=bounds.end_column)
+                        .map(|column| group.headers_by_column[&column].clone()));
+                } else {
+                    anyhow::ensure!(
+                        width == output_headers.len(),
+                        "工作表 {:?} 的同类汇总区域列数不一致",
+                        template_sheet.name
+                    );
+                }
+                for (position, column) in (bounds.start_column..=bounds.end_column).enumerate() {
+                    field_positions.insert((group.id.clone(), column), position);
+                }
+            }
+            result.push(NamedSheetSpec {
+                template_sheet: template_sheet.name.clone(),
+                output_key: template_sheet.name.clone(),
+                mode,
+                fallback_output: false,
+                groups,
+                field_positions,
+                output_headers,
+                extra_fields: extra_fields.clone(),
+                rows: Vec::new(),
             });
         }
-
-        let mut keys = Vec::new();
-        let mut labels = Vec::new();
-        for group in &parsed_groups {
-            let columns = [group.fixed_rows, group.any_rows]
-                .into_iter()
-                .flatten()
-                .flat_map(|bounds| bounds.start_column..=bounds.end_column)
-                .collect::<BTreeSet<_>>();
-            for column in columns {
-                keys.push((group.id, column));
-                labels.push(group.headers_by_column[&column].clone());
-            }
-        }
-        let output_headers = disambiguate(&labels);
-        let field_positions = keys
-            .into_iter()
-            .enumerate()
-            .map(|(position, key)| (key, position))
-            .collect();
-        result.push(NamedSheetSpec {
-            template_sheet: template_sheet.name.clone(),
-            groups: parsed_groups,
-            field_positions,
-            output_headers,
-            rows: Vec::new(),
-        });
     }
     anyhow::ensure!(
         builders.is_empty(),
@@ -2447,55 +2566,327 @@ fn build_named_sheet_specs(
 }
 
 fn align_single_named_region_pair_within_sheet(
-    groups: &mut BTreeMap<usize, NamedRegionGroupBuilder>,
+    groups: &mut BTreeMap<String, NamedRegionGroupBuilder>,
 ) {
     let header_ids = groups
         .iter()
-        .filter_map(|(id, group)| group.header.is_some().then_some(*id))
+        .filter_map(|(id, group)| group.header.is_some().then_some(id.clone()))
         .collect::<Vec<_>>();
     let data_only_ids = groups
         .iter()
         .filter_map(|(id, group)| {
             (group.header.is_none() && (group.fixed_rows.is_some() || group.any_rows.is_some()))
-                .then_some(*id)
+                .then_some(id.clone())
         })
         .collect::<Vec<_>>();
     if header_ids.len() != 1 || data_only_ids.len() != 1 {
         return;
     }
 
-    let header_id = header_ids[0];
-    let data_id = data_only_ids[0];
-    let Some(header_group) = groups.get(&header_id) else {
+    let header_id = &header_ids[0];
+    let data_id = &data_only_ids[0];
+    let Some(header_group) = groups.get(header_id) else {
         return;
     };
-    if header_group.fixed_rows.is_some()
-        || header_group.any_rows.is_some()
-        || (header_group.structure.is_some()
-            && groups
-                .get(&data_id)
-                .is_some_and(|data_group| data_group.structure.is_some()))
-    {
+    if header_group.fixed_rows.is_some() || header_group.any_rows.is_some() {
         return;
     }
 
-    let Some(mut data_group) = groups.remove(&data_id) else {
+    let Some(mut data_group) = groups.remove(data_id) else {
         return;
     };
-    if let Some(header_group) = groups.get_mut(&header_id) {
+    if let Some(header_group) = groups.get_mut(header_id) {
         header_group.fixed_rows = data_group.fixed_rows.take();
         header_group.any_rows = data_group.any_rows.take();
-        if header_group.structure.is_none() {
-            header_group.structure = data_group.structure.take();
+    }
+}
+
+fn validate_named_summary_output(
+    candidate: &Path,
+    specs: &[NamedSheetSpec],
+    output_names: &[String],
+) -> Result<()> {
+    let saved = read_workbook(candidate).context("重新读取汇总候选工作簿失败")?;
+    let expected_names = if specs.is_empty() {
+        vec!["汇总".to_owned()]
+    } else {
+        output_names.iter().rev().cloned().collect::<Vec<_>>()
+    };
+    anyhow::ensure!(
+        saved.sheets.iter().map(|sheet| &sheet.name).eq(expected_names.iter()),
+        "汇总候选工作簿的工作表名称或顺序不一致"
+    );
+    for (spec, name) in specs.iter().zip(output_names) {
+        let sheet = saved.sheets.iter().find(|sheet| sheet.name == *name)
+            .with_context(|| format!("汇总候选缺少工作表 {name:?}"))?;
+        let mut headers = vec!["来源文件".to_owned(), "来源工作表".to_owned()];
+        headers.extend(spec.extra_fields.iter().map(|field| field.name.clone()));
+        headers.extend(spec.output_headers.iter().cloned());
+        for (column, header) in headers.iter().enumerate() {
+            let address = format!("{}1", column_letters(column + 1));
+            anyhow::ensure!(
+                named_summary_value_matches(&serde_json::Value::String(header.clone()), sheet.values.get(&address)),
+                "汇总候选表头 {name:?}!{address} 回读不一致"
+            );
+        }
+        for (row_index, row) in spec.rows.iter().enumerate() {
+            anyhow::ensure!(row.values.len() == headers.len(), "汇总候选工作表 {name:?} 的行宽不一致");
+            for (column, value) in row.values.iter().enumerate() {
+                let address = format!("{}{}", column_letters(column + 1), row_index + 2);
+                anyhow::ensure!(
+                    named_summary_value_matches(value, sheet.values.get(&address)),
+                    "汇总候选单元格 {name:?}!{address} 回读不一致"
+                );
+            }
         }
     }
+    Ok(())
+}
+
+fn named_summary_value_matches(expected: &serde_json::Value, actual: Option<&serde_json::Value>) -> bool {
+    let actual_value = actual.and_then(|value| value.get("value"));
+    let actual_type = actual.and_then(|value| value.get("type")).and_then(serde_json::Value::as_str);
+    let kind = expected.get("type").and_then(serde_json::Value::as_str);
+    let value = expected.get("value").unwrap_or(expected);
+    if expected.is_null() || value.is_null() || value.as_str().is_some_and(str::is_empty) {
+        return actual.is_none() || actual_value.is_none_or(|value| value.is_null() || value.as_str().is_some_and(str::is_empty));
+    }
+    match kind {
+        Some("string" | "error") => actual_type == kind && actual_value == Some(value),
+        Some("boolean") => actual_type == Some("boolean") && actual_value == Some(value),
+        Some("number" | "integer" | "datetime_serial") => {
+            matches!(actual_type, Some("number" | "integer" | "datetime_serial"))
+                && value.as_f64().zip(actual_value.and_then(serde_json::Value::as_f64))
+                    .is_some_and(|(expected, actual)| expected == actual)
+        }
+        Some("datetime_iso" | "duration_iso") => {
+            let text = value.as_str().unwrap_or_default();
+            let serial = if kind == Some("datetime_iso") { iso_datetime_serial(text) } else { iso_duration_serial(text) };
+            match serial {
+                Some(expected) => actual_value.and_then(serde_json::Value::as_f64).is_some_and(|actual| actual == expected),
+                None => actual_type == Some("string") && actual_value == Some(value),
+            }
+        }
+        None if expected.is_string() => actual_type == Some("string") && actual_value == Some(expected),
+        None if expected.is_boolean() => actual_type == Some("boolean") && actual_value == Some(expected),
+        None if expected.is_number() => expected.as_f64().zip(actual_value.and_then(serde_json::Value::as_f64))
+            .is_some_and(|(expected, actual)| expected == actual),
+        _ => false,
+    }
+}
+
+fn named_summary_header_preflight(
+    specs: &[NamedSheetSpec],
+    templates: &BTreeMap<String, &SheetDump>,
+    source: &WorkbookDump,
+) -> Result<Option<String>> {
+    let mut expected = BTreeMap::<(String, String), (Option<String>, Option<serde_json::Value>)>::new();
+    let mut matched_sheet = false;
+    for spec in specs.iter().filter(|spec| !spec.fallback_output) {
+        let Some(source_sheet) = source.sheets.iter().find(|sheet| sheet.name.eq_ignore_ascii_case(&spec.template_sheet)) else { continue };
+        matched_sheet = true;
+        let template = templates.get(&spec.template_sheet).context("模板表头工作表不存在")?;
+        let merges = parse_merged_ranges(&template.merges)?;
+        for group in &spec.groups {
+            let header = group.header;
+            for address in template.values.keys().chain(template.formulas.keys()) {
+                let Some((row, column)) = parse_a1(address) else { continue };
+                if row < header.start_row || row > header.end_row
+                    || column < header.start_column || column > header.end_column
+                    || is_merged_non_anchor(&merges, row, column) { continue; }
+                let formula = template.formulas.get(address).cloned();
+                let value = template.values.get(address).cloned();
+                if formula.is_none() && value.as_ref().is_none_or(|value| {
+                    value.is_null() || value.get("value").and_then(serde_json::Value::as_str)
+                        .is_some_and(|text| text.trim().is_empty())
+                }) { continue; }
+                expected.insert((source_sheet.name.clone(), address.clone()), (formula, value));
+            }
+        }
+    }
+    if !matched_sheet { return Ok(None); }
+    if expected.is_empty() { return Ok(Some("模板表头区域没有可比对的固定值".to_owned())); }
+    let mut matched = 0usize;
+    let mut mismatches = Vec::new();
+    for ((sheet_name, address), (formula, value)) in &expected {
+        let sheet = source.sheets.iter().find(|sheet| sheet.name == *sheet_name).expect("matched source sheet");
+        let (row, column) = parse_a1(address).context("表头坐标无效")?;
+        let mut anchor = address.clone();
+        for (top, left, bottom, right) in parse_merged_ranges(&sheet.merges)? {
+            if row >= top && row <= bottom && column >= left && column <= right {
+                anchor = format!("{}{}", column_letters(left), top);
+                break;
+            }
+        }
+        let equal = if let Some(expected_formula) = formula {
+            sheet.formulas.get(&anchor).is_some_and(|actual|
+                actual.trim_start_matches('=') == expected_formula.trim_start_matches('='))
+        } else if sheet.formulas.contains_key(&anchor) {
+            false
+        } else if let (Some(expected), Some(actual)) = (value, sheet.values.get(&anchor)) {
+            let expected = CellValue::from_probe_json(expected)?;
+            let actual = CellValue::from_probe_json(actual)?;
+            match (&expected, &actual) {
+                (CellValue::Integer(left), CellValue::Number(right)) => named_summary_integer_matches_number(*left, *right),
+                (CellValue::Number(left), CellValue::Integer(right)) => named_summary_integer_matches_number(*right, *left),
+                _ => expected == actual,
+            }
+        } else { false };
+        if equal { matched += 1; } else if mismatches.len() < 3 { mismatches.push(format!("{sheet_name}!{address}")); }
+    }
+    let checked = expected.len();
+    let enough = if checked >= 5 { matched >= 3 } else { matched >= 1 };
+    if enough && matched.saturating_mul(10) >= checked.saturating_mul(9) {
+        Ok(None)
+    } else {
+        Ok(Some(format!("表头匹配 {matched}/{checked}，低于 S1F2 要求；差异位置：{}", mismatches.join("、"))))
+    }
+}
+
+fn named_summary_integer_matches_number(integer: i64, number: f64) -> bool {
+    number.is_finite() && number.fract() == 0.0
+        && number >= i64::MIN as f64 && number < 9_223_372_036_854_775_808.0
+        && number as i64 == integer
+}
+
+fn named_summary_output_sheet_name(base: &str, used: &mut BTreeSet<String>) -> String {
+    let mut candidate = base.chars()
+        .map(|character| if "[]:*?/\\".contains(character) { '_' } else { character })
+        .collect::<String>().trim().chars().take(31).collect::<String>();
+    if candidate.is_empty() { candidate = "汇总".to_owned(); }
+    let root = candidate.clone();
+    let mut suffix = 2usize;
+    while !used.insert(candidate.to_lowercase()) {
+        let marker = format!("_{suffix}");
+        let keep = 31usize.saturating_sub(marker.chars().count());
+        candidate = format!("{}{}", root.chars().take(keep).collect::<String>(), marker);
+        suffix += 1;
+    }
+    candidate
+}
+
+fn normalize_named_summary_source_name(value: &str) -> String {
+    let text = value.trim().trim_start_matches(|c| c == '!' || c == '！');
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut result = String::new();
+    let mut index = 0;
+    while index < characters.len() {
+        if characters.get(index) == Some(&'2') && characters.get(index + 1) == Some(&'0')
+            && characters.get(index + 2).is_some_and(|c| c.is_numeric())
+            && characters.get(index + 3).is_some_and(|c| c.is_numeric())
+        {
+            let mut end = index + 4;
+            let mut groups = 0;
+            while groups < 2 {
+                let mut next = end;
+                if characters.get(next).is_some_and(|c| matches!(c, '-' | '.' | '_')) { next += 1; }
+                if characters.get(next).is_some_and(|c| c.is_numeric())
+                    && characters.get(next + 1).is_some_and(|c| c.is_numeric())
+                {
+                    end = next + 2;
+                    groups += 1;
+                } else {
+                    break;
+                }
+            }
+            if groups > 0 { index = end; continue; }
+        }
+        result.push(characters[index]);
+        index += 1;
+    }
+    result.trim_end_matches(|c| matches!(c, ' ' | '_' | '.' | '-')).to_owned()
+}
+
+fn read_named_summary_fields(
+    spec: &NamedSheetSpec,
+    workbook: &WorkbookDump,
+    source_sheet: &SheetDump,
+    fallback: bool,
+) -> Result<(Vec<serde_json::Value>, Vec<String>)> {
+    let mut values = Vec::with_capacity(spec.extra_fields.len());
+    let mut missing = Vec::new();
+    for field in &spec.extra_fields {
+        let sheet_name = if fallback && !field.global {
+            &source_sheet.name
+        } else {
+            &field.sheet
+        };
+        let address = format!("{}{}", column_letters(field.bounds.start_column), field.bounds.start_row);
+        let Some(sheet) = workbook.sheets.iter().find(|sheet| sheet.name.eq_ignore_ascii_case(sheet_name)) else {
+            values.push(serde_json::Value::Null);
+            missing.push(format!("{}（{}!{}）", field.name, sheet_name, address));
+            continue;
+        };
+        let value = sheet.values.get(&address).cloned().unwrap_or(serde_json::Value::Null);
+        if sheet.formulas.contains_key(&address) {
+            anyhow::ensure!(
+                !value.is_null() && value.get("type").and_then(serde_json::Value::as_str) != Some("error"),
+                "附加字段 {} 的公式 {}!{} 没有可用的已保存结果；请先计算并保存源工作簿",
+                field.name,
+                sheet.name,
+                address
+            );
+        }
+        values.push(value);
+    }
+    Ok((values, missing))
+}
+
+fn ensure_named_summary_formula_cache(
+    sheet: &SheetDump,
+    bounds: NamedRegionBounds,
+    scope: &str,
+) -> Result<()> {
+    anyhow::ensure!(sheet.formula_status == "read_by_calamine", "无法确认{scope}的公式：{}", sheet.name);
+    for address in sheet.formulas.keys() {
+        let (row, column) = parse_a1(address).with_context(|| format!("公式坐标无效：{address}"))?;
+        if row < bounds.start_row || row > bounds.end_row
+            || column < bounds.start_column || column > bounds.end_column { continue; }
+        let value = sheet.values.get(address);
+        anyhow::ensure!(
+            value.is_some_and(|value| !value.is_null()
+                && value.get("type").and_then(serde_json::Value::as_str) != Some("error")),
+            "{scope}公式 {}!{} 没有可用的已保存结果；请先计算并保存工作簿",
+            sheet.name,
+            address
+        );
+    }
+    Ok(())
+}
+
+fn named_summary_header_labels(sheet: &SheetDump, bounds: NamedRegionBounds) -> Result<Vec<String>> {
+    anyhow::ensure!(sheet.merge_status == "read_by_calamine", "无法确认模板工作表 {:?} 的合并单元格", sheet.name);
+    ensure_named_summary_formula_cache(sheet, bounds, "模板表头")?;
+    let mut labels = Vec::new();
+    for column in bounds.start_column..=bounds.end_column {
+        let mut parts = Vec::new();
+        for row in bounds.start_row..=bounds.end_row {
+            let address = format!("{}{}", column_letters(column), row);
+            let value = cell_at_or_merged(sheet, &address);
+            let text = match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("number" | "integer" | "datetime_serial") => value["value"].as_f64()
+                    .map(|number| {
+                        let mut text = number.to_string();
+                        if !text.contains('.') && !text.contains('e') && !text.contains('E') { text.push_str(".0"); }
+                        text
+                    }).unwrap_or_default(),
+                Some("error" | "datetime_iso" | "duration_iso") => anyhow::bail!("模板表头 {}!{} 含不支持的值类型", sheet.name, address),
+                _ => probe_text(&value),
+            };
+            if !text.is_empty() { parts.push(text); }
+        }
+        labels.push(parts.join("_"));
+    }
+    Ok(labels)
 }
 
 fn extract_named_sheet_rows(
     spec: &NamedSheetSpec,
     source_sheet: &SheetDump,
     workbook_name: &str,
-) -> Result<Vec<Vec<serde_json::Value>>> {
+    extra_values: &[serde_json::Value],
+) -> Result<Vec<NamedSummaryRow>> {
+    anyhow::ensure!(extra_values.len() == spec.extra_fields.len(), "附加字段值与表头数量不一致");
     let mut result = Vec::new();
     for group in &spec.groups {
         for (bounds, dynamic) in [(group.fixed_rows, false), (group.any_rows, true)] {
@@ -2511,24 +2902,27 @@ fn extract_named_sheet_rows(
             if end_row < bounds.start_row {
                 continue;
             }
+            ensure_named_summary_formula_cache(source_sheet, NamedRegionBounds {
+                end_row,
+                ..bounds
+            }, "汇总区域")?;
             for row in bounds.start_row..=end_row {
-                let mut values = vec![serde_json::Value::Null; spec.output_headers.len() + 3];
+                let mut values = vec![serde_json::Value::Null; spec.output_headers.len() + extra_values.len() + 2];
                 values[0] = serde_json::Value::String(workbook_name.to_owned());
                 values[1] = serde_json::Value::String(source_sheet.name.clone());
+                values[2..2 + extra_values.len()].clone_from_slice(extra_values);
                 let mut has_data = false;
                 for column in bounds.start_column..=bounds.end_column {
                     let address = format!("{}{}", column_letters(column), row);
-                    let value = cell_at_or_merged(source_sheet, &address);
+                    let value = source_sheet.values.get(&address).cloned().unwrap_or(serde_json::Value::Null);
                     has_data |= named_region_cell_has_data(&value);
-                    let position = spec.field_positions[&(group.id, column)];
-                    values[position + 2] = value;
+                    let position = spec.field_positions[&(group.id.clone(), column)];
+                    values[position + 2 + extra_values.len()] = value;
                 }
-                if dynamic && !has_data {
+                if !has_data {
                     continue;
                 }
-                let row_number_index = values.len() - 1;
-                values[row_number_index] = serde_json::Value::from(row as u64);
-                result.push(values);
+                result.push(NamedSummaryRow { group_order: group.order, values });
             }
         }
     }
@@ -2547,6 +2941,11 @@ fn last_named_region_value_row(sheet: &SheetDump, bounds: NamedRegionBounds) -> 
                 && named_region_cell_has_data(value))
             .then_some(row)
         })
+        .chain(sheet.formulas.keys().filter_map(|address| {
+            let (row, column) = parse_a1(address)?;
+            (column >= bounds.start_column && column <= bounds.end_column && row >= bounds.start_row)
+                .then_some(row)
+        }))
         .max()
 }
 
@@ -2562,113 +2961,6 @@ fn named_region_cell_has_data(value: &serde_json::Value) -> bool {
         Some("empty") | Some("blank") => false,
         _ => true,
     }
-}
-
-fn named_structure_mismatch(
-    template: &SheetDump,
-    source: &SheetDump,
-    bounds: NamedRegionBounds,
-) -> Result<Option<String>> {
-    const DETAIL_LIMIT: usize = 20;
-    let mut addresses = BTreeMap::new();
-    for address in template
-        .values
-        .keys()
-        .chain(source.values.keys())
-        .chain(template.formulas.keys())
-        .chain(source.formulas.keys())
-    {
-        let Some((row, column)) = parse_a1(address) else {
-            continue;
-        };
-        if row >= bounds.start_row
-            && row <= bounds.end_row
-            && column >= bounds.start_column
-            && column <= bounds.end_column
-        {
-            addresses.insert((row, column), address.clone());
-        }
-    }
-    let mut details = Vec::new();
-    let mut mismatch_count = 0usize;
-    for (_, address) in addresses {
-        let template_formula = template.formulas.get(&address);
-        let source_formula = source.formulas.get(&address);
-        let mismatch = if (template_formula.is_some() || source_formula.is_some())
-            && template_formula != source_formula
-        {
-            Some(format!("公式 {address}"))
-        } else if template_formula.is_none()
-            && source_formula.is_none()
-            && cell_at_or_merged(template, &address) != cell_at_or_merged(source, &address)
-        {
-            Some(format!("单元格 {address}"))
-        } else {
-            None
-        };
-        if let Some(mismatch) = mismatch {
-            mismatch_count += 1;
-            if details.len() < DETAIL_LIMIT {
-                details.push(mismatch);
-            }
-        }
-    }
-
-    let template_merges = named_region_merges(template, bounds)?;
-    let source_merges = named_region_merges(source, bounds)?;
-    for merge in template_merges.difference(&source_merges) {
-        mismatch_count += 1;
-        if details.len() < DETAIL_LIMIT {
-            details.push(format!("模板多出合并区域 {}", format_merge_range(*merge)));
-        }
-    }
-    for merge in source_merges.difference(&template_merges) {
-        mismatch_count += 1;
-        if details.len() < DETAIL_LIMIT {
-            details.push(format!("源文件多出合并区域 {}", format_merge_range(*merge)));
-        }
-    }
-
-    if mismatch_count == 0 {
-        return Ok(None);
-    }
-    let omitted = mismatch_count.saturating_sub(details.len());
-    let suffix = if omitted > 0 {
-        format!("；另有 {omitted} 处未展开")
-    } else {
-        String::new()
-    };
-    Ok(Some(format!(
-        "共 {mismatch_count} 处不一致：{}{suffix}",
-        details.join("；")
-    )))
-}
-
-fn format_merge_range(
-    (start_row, start_column, end_row, end_column): (usize, usize, usize, usize),
-) -> String {
-    format!(
-        "{}{}:{}{}",
-        column_letters(start_column),
-        start_row,
-        column_letters(end_column),
-        end_row
-    )
-}
-
-fn named_region_merges(
-    sheet: &SheetDump,
-    bounds: NamedRegionBounds,
-) -> Result<BTreeSet<(usize, usize, usize, usize)>> {
-    Ok(parse_merged_ranges(&sheet.merges)?
-        .into_iter()
-        .filter(|(start_row, start_column, end_row, end_column)| {
-            *start_row <= bounds.end_row
-                && *end_row >= bounds.start_row
-                && *start_column <= bounds.end_column
-                && *end_column >= bounds.start_column
-        })
-        .collect())
 }
 
 fn supported(path: &Path) -> bool {
@@ -4289,26 +4581,29 @@ mod named_range_spec_tests {
     use super::*;
 
     #[test]
-    fn canonical_region_names_use_numeric_group_ids() -> Result<()> {
+    fn named_regions_accept_audit_and_numbered_names() -> Result<()> {
         assert_eq!(
             parse_named_region_name("表头区域_1")?,
-            Some((NamedRegionKind::Header, 1))
+            Some((NamedRegionKind::Header, "1".to_owned()))
         );
         assert_eq!(
             parse_named_region_name("固定行汇总区域_12")?,
-            Some((NamedRegionKind::FixedRows, 12))
+            Some((NamedRegionKind::FixedRows, "12".to_owned()))
         );
         assert_eq!(
             parse_named_region_name("任意行汇总区域_2")?,
-            Some((NamedRegionKind::AnyRows, 2))
+            Some((NamedRegionKind::AnyRows, "2".to_owned()))
+        );
+        assert_eq!(parse_named_region_name("表结构区域_4")?, None);
+        assert_eq!(parse_named_region_name("Print_Area")?, None);
+        assert_eq!(
+            parse_named_region_name("表头区域")?,
+            Some((NamedRegionKind::Header, String::new()))
         );
         assert_eq!(
-            parse_named_region_name("表结构区域_4")?,
-            Some((NamedRegionKind::Structure, 4))
+            parse_named_region_name("表头区域_first")?,
+            Some((NamedRegionKind::Header, "first".to_owned()))
         );
-        assert_eq!(parse_named_region_name("Print_Area")?, None);
-        assert!(parse_named_region_name("表头区域_0").is_err());
-        assert!(parse_named_region_name("表头区域_first").is_err());
         Ok(())
     }
 

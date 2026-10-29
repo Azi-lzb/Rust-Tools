@@ -179,7 +179,7 @@ fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<
 }
 
 #[test]
-fn interactive_v2_named_range_summary_uses_named_regions_and_skips_bad_structure() -> Result<()> {
+fn interactive_v2_named_range_summary_uses_headers_and_ignores_other_structure_regions() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_app_config(root.path())?;
     let template = root.path().join("named template.xlsx");
@@ -195,7 +195,7 @@ fn interactive_v2_named_range_summary_uses_named_regions_and_skips_bad_structure
     let shorter_source_before = fs::read(&shorter_source)?;
     let mismatched_before = fs::read(&mismatched)?;
     let input = format!(
-        "1\n3\n{}\n{};{};{}\n0\n0\n",
+        "1\n3\n{}\n1\n{};{};{}\n0\n0\n",
         template.display(),
         source.display(),
         shorter_source.display(),
@@ -218,31 +218,19 @@ fn interactive_v2_named_range_summary_uses_named_regions_and_skips_bad_structure
     assert_eq!(history["feature_id"], "PT-6-2");
     assert_eq!(history["function"], "summary-named-ranges");
     assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["summary"]["rows"], 8);
+    assert_eq!(history["summary"]["rows"], 10);
     assert_eq!(history["summary"]["files"], 3);
     assert_eq!(history["input_stats"]["selected"], 3);
     assert_eq!(history["input_stats"]["attempted"], 3);
-    assert_eq!(history["input_stats"]["succeeded"], 2);
-    assert_eq!(history["input_stats"]["skipped"], 1);
+    assert_eq!(history["input_stats"]["succeeded"], 3);
+    assert_eq!(history["input_stats"]["skipped"], 0);
     assert_eq!(history["overall_status"], "SUCCESS");
-    let diagnostics = fs::read_to_string(logs.join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?))?;
-    let diagnostics = diagnostics.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
-    assert!(diagnostics.iter().any(|event| event["run_id"] == history["run_id"] && event["event_name"] == "source_structure" && event["status"] == "skipped"));
     assert_eq!(
         history["summary"]["skipped_sources"]
             .as_array()
             .unwrap()
             .len(),
-        1
-    );
-    let structure_reason = history["summary"]["skipped_sources"][0]["reason"]
-        .as_str()
-        .unwrap();
-    assert!(structure_reason.contains("A1"), "{structure_reason}");
-    assert!(structure_reason.contains("B1"), "{structure_reason}");
-    assert!(
-        structure_reason.contains("共 2 处不一致"),
-        "{structure_reason}"
+        0
     );
     assert!(!history_text.contains("记录甲"));
     assert!(history_path.starts_with(&logs));
@@ -256,22 +244,24 @@ fn interactive_v2_named_range_summary_uses_named_regions_and_skips_bad_structure
         .find(|sheet| sheet.name == "数据")
         .context("named-range output must use the template sheet name")?;
     assert_eq!(sheet.values["C1"]["value"], "资产_贷款余额");
-    assert_eq!(sheet.values["F1"]["value"], "指标");
-    assert_eq!(sheet.values["G1"]["value"], "金额");
+    assert_eq!(sheet.values["A1"]["value"], "来源文件");
+    assert_eq!(sheet.values["B1"]["value"], "来源工作表");
     assert_eq!(sheet.values["C2"]["value"], "甲");
     assert_eq!(sheet.values["D2"]["value"], 0.0);
-    assert_eq!(sheet.values["H2"]["value"], 4.0);
     assert_eq!(sheet.values["C3"]["value"], "乙");
-    assert_eq!(sheet.values["H3"]["value"], 6.0);
     assert_eq!(sheet.values["D4"]["value"], 0.0);
-    assert_eq!(sheet.values["H4"]["value"], 7.0);
-    assert_eq!(sheet.values["F5"]["value"], "总计");
-    assert_eq!(sheet.values["G5"]["value"], 3.0);
-    assert_eq!(sheet.values["H6"]["value"], 11.0);
-    assert_eq!(sheet.values["A7"]["value"], "source branch short");
-    assert_eq!(sheet.values["C7"]["value"], "甲");
-    assert_eq!(sheet.values["H7"]["value"], 4.0);
-    assert_eq!(sheet.values["F8"]["value"], "总计");
+    assert_eq!(sheet.values["A5"]["value"], "source branch short");
+    assert_eq!(sheet.values["C5"]["value"], "甲");
+    assert_eq!(sheet.values["A6"]["value"], "mismatched branch");
+    let fixed = summary.sheets.iter().find(|sheet| sheet.name == "数据_2")
+        .context("fixed-row summary sheet missing")?;
+    assert_eq!(fixed.values["C1"]["value"], "指标");
+    assert_eq!(fixed.values["D1"]["value"], "金额");
+    assert_eq!(fixed.values["C2"]["value"], "总计");
+    assert_eq!(fixed.values["D2"]["value"], 3.0);
+    assert_eq!(fixed.values["C3"]["value"], "总计");
+    assert_eq!(fixed.values["C4"]["value"], "总计");
+    assert!(!fixed.values.contains_key("C5"));
     assert!(!sheet
         .values
         .values()
@@ -293,7 +283,7 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
     create_used_range_source(&source, "北区", 12.0)?;
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
-    let input = format!("1\n3\n{}\n{}\n0\n0\n", template.display(), source.display());
+    let input = format!("1\n3\n{}\n1\n{}\n0\n0\n", template.display(), source.display());
 
     let output = run_menu(&config, &input)?;
     assert!(
@@ -302,7 +292,7 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("worksheet \"1人民币\", group 2 has no 表头区域_2"));
+    assert!(stdout.contains("没有相交的表头区域"));
     assert!(stdout.matches("------ 数据提取与汇总 ------").count() >= 2);
 
     let logs = root.path().join("app").join("logs");
@@ -321,8 +311,8 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
         })
         .unwrap_or_default();
     assert!(
-        history_text.contains("group 2 has no 表头区域_2")
-            || diagnostic.contains("group 2 has no 表头区域_2"),
+        history_text.contains("没有相交的表头区域")
+            || diagnostic.contains("没有相交的表头区域"),
         "named-range failure detail missing from history and diagnostic log"
     );
     assert_eq!(fs::read(&template)?, template_before);
@@ -331,7 +321,7 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
 }
 
 #[test]
-fn named_range_summary_uses_each_header_sheet_and_skips_sheets_without_headers() -> Result<()> {
+fn named_range_summary_uses_each_header_sheet_and_ignores_unconfigured_sheets() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_app_config(root.path())?;
     let template = root.path().join("multi-sheet named-range template.xlsx");
@@ -340,7 +330,7 @@ fn named_range_summary_uses_each_header_sheet_and_skips_sheets_without_headers()
     create_multi_sheet_named_range_source(&source)?;
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
-    let input = format!("1\n3\n{}\n{}\n0\n0\n", template.display(), source.display());
+    let input = format!("1\n3\n{}\n1\n{}\n0\n0\n", template.display(), source.display());
 
     let output = run_menu(&config, &input)?;
     assert!(
@@ -348,8 +338,6 @@ fn named_range_summary_uses_each_header_sheet_and_skips_sheets_without_headers()
         "named-range menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("跳过未配置表头区域的工作表：说明"));
 
     let logs = root.path().join("app").join("logs");
     let (_, history, _) = read_single_history(&logs, "PT-6-2_")?;
@@ -400,7 +388,7 @@ fn named_range_summary_pairs_single_region_groups_by_worksheet() -> Result<()> {
     create_multi_sheet_named_range_source(&source)?;
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
-    let input = format!("1\n3\n{}\n{}\n0\n0\n", template.display(), source.display());
+    let input = format!("1\n3\n{}\n1\n{}\n0\n0\n", template.display(), source.display());
 
     let output = run_menu(&config, &input)?;
     assert!(
@@ -446,7 +434,7 @@ fn interactive_named_range_summary_collects_valid_rows_through_row_200() -> Resu
     let expected_rows = create_arbitrary_row_source(&source)?;
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
-    let input = format!("1\n3\n{}\n{}\n0\n0\n", template.display(), source.display());
+    let input = format!("1\n3\n{}\n1\n{}\n0\n0\n", template.display(), source.display());
 
     let output = run_menu(&config, &input)?;
     assert!(
@@ -484,6 +472,384 @@ fn interactive_named_range_summary_collects_valid_rows_through_row_200() -> Resu
 }
 
 #[test]
+fn named_summary_adds_global_and_local_single_cell_fields() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let first = root.path().join("first.xlsx");
+    let second = root.path().join("missing-meta.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 1, "编号")?;
+    sheet.write_string(0, 2, "金额")?;
+    book.add_worksheet().set_name("Meta")?;
+    book.define_name("表头区域_数据", "'数据'!$B$1:$C$1")?;
+    book.define_name("任意行汇总区域_数据", "'数据'!$B$2:$C$4")?;
+    book.define_name("全局单元格区域.批次", "'Meta'!$A$1")?;
+    book.define_name("单元格区域.机构", "'数据'!$F$1")?;
+    book.save(&template)?;
+    for (path, institution, with_meta) in [(&first, "东区", true), (&second, "西区", false)] {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("数据")?;
+        sheet.write_string(0, 1, "编号")?;
+        sheet.write_string(0, 2, "金额")?;
+        sheet.write_string(0, 5, institution)?;
+        sheet.write_string(1, 1, "A")?;
+        sheet.write_number(1, 2, 0.0)?;
+        if with_meta {
+            let meta = book.add_worksheet();
+            meta.set_name("Meta")?;
+            meta.write_string(0, 0, "批次甲")?;
+        }
+        book.save(path)?;
+    }
+    let template_before = fs::read(&template)?;
+    let first_before = fs::read(&first)?;
+    let second_before = fs::read(&second)?;
+    let mut events = Vec::new();
+    let result = pytools_core::summary_ops::summarize_by_named_ranges_with_progress(
+        &template, &[first.clone(), second.clone()], &root.path().join("output"),
+        |event| events.push(event),
+    )?;
+    assert_eq!(result.rows, 2);
+    let output = read_workbook(result.path.context("summary output missing")?)?;
+    let sheet = output.sheets.iter().find(|sheet| sheet.name == "数据").context("summary sheet missing")?;
+    assert_eq!(sheet.values["A1"]["value"], "来源文件");
+    assert_eq!(sheet.values["B1"]["value"], "来源工作表");
+    assert_eq!(sheet.values["C1"]["value"], "批次");
+    assert_eq!(sheet.values["D1"]["value"], "机构");
+    assert_eq!(sheet.values["C2"]["value"], "批次甲");
+    assert_eq!(sheet.values["D2"]["value"], "东区");
+    assert_eq!(sheet.values["F2"]["value"], 0.0);
+    assert!(!sheet.values.contains_key("C3"));
+    assert_eq!(sheet.values["D3"]["value"], "西区");
+    assert!(events.iter().any(|event| event.phase == "metadata" && event.status == "warning"
+        && event.file_name.as_deref() == Some("missing-meta.xlsx")
+        && event.user_message.contains("Meta!A1")));
+    assert_eq!(fs::read(&template)?, template_before);
+    assert_eq!(fs::read(&first)?, first_before);
+    assert_eq!(fs::read(&second)?, second_before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_fallback_groups_by_source_sheet_and_skips_empty_fixed_rows() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("fallback.xlsx");
+    let source = root.path().join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let fallback = book.add_worksheet();
+    fallback.set_name("兜底模板")?;
+    fallback.write_string(0, 1, "编号")?;
+    fallback.write_string(0, 2, "金额")?;
+    book.add_worksheet().set_name("Meta")?;
+    book.define_name("表头区域", "'兜底模板'!$B$1:$C$1")?;
+    book.define_name("任意行汇总区域", "'兜底模板'!$B$2:$C$3")?;
+    book.define_name("固定行汇总区域", "'兜底模板'!$B$2:$C$3")?;
+    book.define_name("全局单元格区域.批次", "'Meta'!$A$1")?;
+    book.define_name("单元格区域.区域", "'兜底模板'!$F$1")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("北区")?;
+    sheet.write_string(0, 5, "北部")?;
+    sheet.write_string(1, 1, "甲")?;
+    sheet.write_number(1, 2, 10.0)?;
+    sheet.write_string(3, 1, "乙")?;
+    sheet.write_number(3, 2, 0.0)?;
+    let meta = book.add_worksheet();
+    meta.set_name("Meta")?;
+    meta.write_string(0, 0, "批次甲")?;
+    book.save(&source)?;
+    let template_before = fs::read(&template)?;
+    let source_before = fs::read(&source)?;
+    let result = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[source.clone()], &root.path().join("output"),
+    )?;
+    assert_eq!(result.rows, 3);
+    let output = read_workbook(result.path.context("summary output missing")?)?;
+    assert_eq!(output.sheets.iter().map(|sheet| sheet.name.as_str()).collect::<Vec<_>>(), ["北区_2", "北区"]);
+    let any = output.sheets.iter().find(|sheet| sheet.name == "北区").context("any-row output missing")?;
+    assert_eq!(any.values["C2"]["value"], "批次甲");
+    assert_eq!(any.values["D2"]["value"], "北部");
+    assert_eq!(any.values["E2"]["value"], "甲");
+    assert_eq!(any.values["E3"]["value"], "乙");
+    assert_eq!(any.values["F3"]["value"], 0.0);
+    let fixed = output.sheets.iter().find(|sheet| sheet.name == "北区_2").context("fixed-row output missing")?;
+    assert_eq!(fixed.values["E2"]["value"], "甲");
+    assert!(!fixed.values.contains_key("E3"));
+    assert_eq!(fs::read(&template)?, template_before);
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_rejects_duplicate_and_multicell_metadata_fields() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let source = root.path().join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "编号")?;
+    book.add_worksheet().set_name("Meta")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.define_name("全局单元格区域.机构", "'Meta'!$A$1")?;
+    book.define_name("单元格区域.机构", "'数据'!$F$1")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "编号")?;
+    sheet.write_string(1, 0, "A")?;
+    book.save(&source)?;
+    let before = fs::read(&source)?;
+    let error = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[source.clone()], &root.path().join("output"),
+    ).unwrap_err();
+    assert!(format!("{error:#}").contains("存在重复的单元格区域字段名"));
+    assert_eq!(fs::read(&source)?, before);
+
+    let invalid_template = root.path().join("invalid-region.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "编号")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.define_name("单元格区域.机构", "'数据'!$F$1:$G$1")?;
+    book.save(&invalid_template)?;
+    let error = pytools_core::summary_ops::summarize_by_named_ranges(
+        &invalid_template, &[source.clone()], &root.path().join("output"),
+    ).unwrap_err();
+    assert!(format!("{error:#}").contains("必须只定位一个单元格"));
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_reports_and_skips_a_source_with_mismatched_headers() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let source = root.path().join("bad-header.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "编号")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "错误表头")?;
+    sheet.write_string(1, 0, "A")?;
+    book.save(&source)?;
+    let before = fs::read(&source)?;
+    let mut events = Vec::new();
+    let result = pytools_core::summary_ops::summarize_by_named_ranges_with_progress(
+        &template, &[source.clone()], &root.path().join("output"), |event| events.push(event),
+    );
+    assert!(result.is_err());
+    assert!(events.iter().any(|event| event.phase == "source_structure" && event.status == "skipped"
+        && event.user_message.contains("数据!A1")));
+    assert!(!root.path().join("output").exists());
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_uses_saved_formula_results_without_changing_source() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let source = root.path().join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "金额")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "金额")?;
+    sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=1+1").set_result("2"))?;
+    book.save(&source)?;
+    let before = fs::read(&source)?;
+    let result = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[source.clone()], &root.path().join("output"),
+    )?;
+    let output = read_workbook(result.path.context("summary output missing")?)?;
+    let sheet = output.sheets.iter().find(|sheet| sheet.name == "数据").context("summary sheet missing")?;
+    assert_eq!(sheet.values["C2"]["value"], 2.0);
+    assert!(!sheet.formulas.contains_key("C2"));
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_rejects_formula_without_a_saved_result() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let source = root.path().join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "金额")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.set_formula_result_default("");
+    sheet.write_string(0, 0, "金额")?;
+    sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=1+1"))?;
+    book.save(&source)?;
+    let mut archive = zip::ZipArchive::new(fs::File::open(&source)?)?;
+    let without_cache = root.path().join("without-cache.xlsx");
+    let mut rewritten = zip::ZipWriter::new(fs::File::create(&without_cache)?);
+    for index in 0..archive.len() {
+        let mut member = archive.by_index(index)?;
+        let name = member.name().to_owned();
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut member, &mut data)?;
+        if name == "xl/worksheets/sheet1.xml" {
+            let xml = String::from_utf8(data)?;
+            let cached = "<c r=\"A2\" t=\"str\"><f>1+1</f><v></v></c>";
+            assert!(xml.contains(cached));
+            data = xml.replace(cached, "<c r=\"A2\"><f>1+1</f></c>").into_bytes();
+        }
+        rewritten.start_file(name, zip::write::SimpleFileOptions::default())?;
+        std::io::Write::write_all(&mut rewritten, &data)?;
+    }
+    rewritten.finish()?;
+    drop(archive);
+    fs::copy(&without_cache, &source)?;
+    let before = fs::read(&source)?;
+    let error = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[source.clone()], &root.path().join("output"),
+    ).unwrap_err();
+    assert!(format!("{error:#}").contains("没有可用的已保存结果"), "{error:#}");
+    assert!(!root.path().join("output").exists());
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_accepts_a_saved_empty_formula_result() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let source = root.path().join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "金额")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.save(&template)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.set_formula_result_default("");
+    sheet.write_string(0, 0, "金额")?;
+    sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=IF(1=1,\"\",1)").set_result(""))?;
+    book.save(&source)?;
+    let before = fs::read(&source)?;
+    let result = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[source.clone()], &root.path().join("output"),
+    )?;
+    assert_eq!(result.rows, 0);
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_orders_multiple_regions_before_source_files() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let first = root.path().join("first.xlsx");
+    let second = root.path().join("second.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "第一组")?;
+    sheet.write_string(0, 1, "第二组")?;
+    book.define_name("表头区域", "'数据'!$A$1:$B$1")?;
+    book.define_name("固定行汇总区域_1", "'数据'!$A$2")?;
+    book.define_name("固定行汇总区域_2", "'数据'!$B$2")?;
+    book.save(&template)?;
+    for (path, prefix) in [(&first, "甲"), (&second, "乙")] {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("数据")?;
+        sheet.write_string(0, 0, "第一组")?;
+        sheet.write_string(0, 1, "第二组")?;
+        sheet.write_string(1, 0, format!("{prefix}一"))?;
+        sheet.write_string(1, 1, format!("{prefix}二"))?;
+        book.save(path)?;
+    }
+    let first_before = fs::read(&first)?;
+    let second_before = fs::read(&second)?;
+    let result = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template, &[first.clone(), second.clone()], &root.path().join("output"),
+    )?;
+    let output = read_workbook(result.path.context("summary output missing")?)?;
+    let sheet = output.sheets.iter().find(|sheet| sheet.name == "数据").context("summary sheet missing")?;
+    assert_eq!(sheet.values["C2"]["value"], "甲一");
+    assert_eq!(sheet.values["C3"]["value"], "乙一");
+    assert_eq!(sheet.values["C4"]["value"], "甲二");
+    assert_eq!(sheet.values["C5"]["value"], "乙二");
+    assert_eq!(fs::read(&first)?, first_before);
+    assert_eq!(fs::read(&second)?, second_before);
+    Ok(())
+}
+
+#[test]
+fn named_summary_recursive_folder_prefers_nested_sources_and_ignores_results() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_app_config(root.path())?;
+    let template = root.path().join("template.xlsx");
+    let input_dir = root.path().join("input");
+    let nested_dir = input_dir.join("机构");
+    let results_dir = input_dir.join("执行结果");
+    fs::create_dir_all(&nested_dir)?;
+    fs::create_dir_all(&results_dir)?;
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("数据")?;
+    sheet.write_string(0, 0, "编号")?;
+    book.define_name("表头区域", "'数据'!$A$1")?;
+    book.define_name("任意行汇总区域", "'数据'!$A$2:$A$3")?;
+    book.save(&template)?;
+    for (path, value) in [
+        (input_dir.join("root.xlsx"), "根目录"),
+        (nested_dir.join("nested.xlsx"), "子目录"),
+        (results_dir.join("old.xlsx"), "旧结果"),
+    ] {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("数据")?;
+        sheet.write_string(0, 0, "编号")?;
+        sheet.write_string(1, 0, value)?;
+        book.save(path)?;
+    }
+    let input = format!("1\n3\n{}\n3\n{}\n0\n0\n", template.display(), input_dir.display());
+    let output = run_menu(&config, &input)?;
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let logs = root.path().join("app").join("logs");
+    let (_, history, _) = read_single_history(&logs, "PT-6-2_")?;
+    assert_eq!(history["input_stats"]["selected"], 1);
+    assert_eq!(history["summary"]["rows"], 1);
+    let summary = read_workbook(history["summary"]["path"].as_str().context("summary path missing")?)?;
+    assert_eq!(summary.sheets[0].values["C2"]["value"], "子目录");
+    Ok(())
+}
+
+#[test]
 fn summary_named_ranges_cli_is_a_real_standalone_entry() -> Result<()> {
     let root = TestDirectory::new()?;
     let template = root.path().join("named template.xlsx");
@@ -511,7 +877,7 @@ fn summary_named_ranges_cli_is_a_real_standalone_entry() -> Result<()> {
     );
     let result: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(result["saved"], true);
-    assert_eq!(result["rows"], 5);
+    assert_eq!(result["rows"], 4);
     assert_eq!(result["execution"]["reader_engine"], "calamine");
     assert_eq!(result["execution"]["writer_engine"], "rust_xlsxwriter");
     assert_eq!(fs::read(&template)?, template_before);
@@ -655,7 +1021,7 @@ fn create_named_range_template_missing_group_header(path: &Path) -> Result<()> {
     worksheet.write_string(0, 0, "有效表头")?;
     workbook.define_name("表头区域_1", "'1人民币'!$A$1")?;
     workbook.define_name("固定行汇总区域_1", "'1人民币'!$A$2")?;
-    workbook.define_name("固定行汇总区域_2", "'1人民币'!$A$2:$B$2")?;
+    workbook.define_name("固定行汇总区域_2", "'1人民币'!$B$2")?;
     workbook
         .save(path)
         .context("save incomplete named-range template")
@@ -681,7 +1047,6 @@ fn create_multi_sheet_named_range_template(path: &Path) -> Result<()> {
     workbook.define_name("固定行汇总区域_1", "'存款'!$A$2:$B$2")?;
     workbook.define_name("表头区域_2", "'贷款'!$A$1:$B$1")?;
     workbook.define_name("任意行汇总区域_2", "'贷款'!$A$2:$B$4")?;
-    workbook.define_name("固定行汇总区域_3", "'说明'!$A$2:$A$2")?;
     workbook
         .save(path)
         .context("save multi-sheet named-range template")
@@ -714,11 +1079,15 @@ fn create_multi_sheet_named_range_source(path: &Path) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let deposit = workbook.add_worksheet();
     deposit.set_name("存款")?;
+    deposit.write_string(0, 0, "机构")?;
+    deposit.write_string(0, 1, "余额")?;
     deposit.write_string(1, 0, "甲行")?;
     deposit.write_number(1, 1, 100.0)?;
 
     let loan = workbook.add_worksheet();
     loan.set_name("贷款")?;
+    loan.write_string(0, 0, "机构名称")?;
+    loan.write_string(0, 1, "发放金额")?;
     loan.write_string(1, 0, "乙行")?;
     loan.write_number(1, 1, 200.0)?;
     loan.write_string(2, 0, "丙行")?;
@@ -750,6 +1119,14 @@ fn create_named_range_source(
             "结构版本B"
         },
     )?;
+    worksheet.write_string(1, 1, "资产")?;
+    worksheet.write_string(2, 1, "贷款余额")?;
+    worksheet.write_string(1, 2, "资产")?;
+    worksheet.write_string(2, 2, "存款余额")?;
+    worksheet.write_string(1, 3, "机构")?;
+    worksheet.write_string(2, 3, "名称")?;
+    worksheet.write_string(8, 5, "指标")?;
+    worksheet.write_string(8, 6, "金额")?;
     worksheet.write_string(3, 1, "甲")?;
     worksheet.write_number(3, 2, 0.0)?;
     worksheet.write_string(3, 3, "记录甲")?;
@@ -792,6 +1169,12 @@ fn create_arbitrary_row_source(path: &Path) -> Result<usize> {
     let worksheet = workbook.add_worksheet();
     worksheet.set_name("数据")?;
     worksheet.write_string(0, 0, "结构A")?;
+    worksheet.write_string(1, 2, "单位")?;
+    worksheet.write_string(2, 2, "名称")?;
+    worksheet.write_string(1, 3, "金额")?;
+    worksheet.write_string(2, 3, "本期")?;
+    worksheet.write_string(1, 4, "备注")?;
+    worksheet.write_string(2, 4, "类别")?;
     let mut expected_rows = 0;
     for row in 4..=199 {
         if row % 7 == 0 {

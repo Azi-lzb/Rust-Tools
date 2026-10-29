@@ -487,6 +487,7 @@ where
                     output,
                     allow_native_dialog,
                     true,
+                    false,
                 )?
                 else {
                     writeln!(output, "[已取消]")?;
@@ -541,17 +542,32 @@ where
                     writeln!(output, "[已取消]")?;
                     return Ok(());
                 };
-                let Some(sources) = choose_workbooks(
-                    "选择按模板命名区域汇总的源工作簿（可多选）",
-                    true,
+                let Some(mut sources) = choose_source_files_or_folders_impl(
+                    "选择按模板命名区域汇总的源文件或文件夹",
+                    NativeFileFilter::ExcelWorkbooks,
                     input,
                     output,
                     allow_native_dialog,
+                    true,
+                    true,
                 )?
                 else {
                     writeln!(output, "[已取消]")?;
                     return Ok(());
                 };
+                let selected_count = sources.len();
+                sources.retain(|path| {
+                    !path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("~$"))
+                        && !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+                        && !path.components().any(|part| part.as_os_str() == "执行结果")
+                });
+                if sources.len() != selected_count {
+                    writeln!(output, "→ 按汇总规则排除 {} 个临时文件、审核副本或执行结果", selected_count - sources.len())?;
+                }
+                if sources.is_empty() {
+                    writeln!(output, "没有可汇总的源工作簿。")?;
+                    return Ok(());
+                }
                 let mut arguments = vec![
                     "--template".to_owned(),
                     template.to_string_lossy().into_owned(),
@@ -5469,7 +5485,7 @@ where
     R: BufRead,
     W: Write,
 {
-    choose_source_files_or_folders_impl(title, filter, input, output, allow_native_dialog, false)
+    choose_source_files_or_folders_impl(title, filter, input, output, allow_native_dialog, false, false)
 }
 
 fn choose_source_files_or_folders_impl<R, W>(
@@ -5479,6 +5495,7 @@ fn choose_source_files_or_folders_impl<R, W>(
     output: &mut W,
     allow_native_dialog: bool,
     count_only: bool,
+    summary_folder_rules: bool,
 ) -> Result<Option<Vec<PathBuf>>>
 where
     R: BufRead,
@@ -5525,7 +5542,28 @@ where
             }
         }
     }
-    let paths = collect_menu_source_files(&folders, mode == "3", filter)?;
+    let paths = if summary_folder_rules {
+        let mut unique = std::collections::BTreeMap::new();
+        for folder in &folders {
+            let root = fs::canonicalize(folder)
+                .with_context(|| format!("读取汇总源文件夹失败：{}", folder.display()))?;
+            let mut candidates = collect_menu_source_files_impl(std::slice::from_ref(folder), mode == "3", filter, true)?;
+            candidates.retain(|path| {
+                !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+                    && !path.strip_prefix(&root).unwrap_or(path).components()
+                        .any(|part| part.as_os_str() == "执行结果")
+            });
+            if mode == "3" && candidates.iter().any(|path| path.parent() != Some(root.as_path())) {
+                candidates.retain(|path| path.parent() != Some(root.as_path()));
+            }
+            for path in candidates {
+                unique.entry(path.to_string_lossy().to_lowercase()).or_insert(path);
+            }
+        }
+        unique.into_values().collect::<Vec<_>>()
+    } else {
+        collect_menu_source_files(&folders, mode == "3", filter)?
+    };
     writeln!(
         output,
         "→ 已选 {} 个文件夹，{}共识别文件 {} 个",
@@ -5542,6 +5580,15 @@ fn collect_menu_source_files(
     recursive: bool,
     filter: NativeFileFilter,
 ) -> Result<Vec<PathBuf>> {
+    collect_menu_source_files_impl(folders, recursive, filter, false)
+}
+
+fn collect_menu_source_files_impl(
+    folders: &[PathBuf],
+    recursive: bool,
+    filter: NativeFileFilter,
+    skip_summary_results: bool,
+) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for folder in folders {
         anyhow::ensure!(
@@ -5549,7 +5596,7 @@ fn collect_menu_source_files(
             "selected folder does not exist or is not a directory: {}",
             folder.display()
         );
-        collect_menu_source_files_from_folder(folder, folder, recursive, filter, &mut files)?;
+        collect_menu_source_files_from_folder(folder, folder, recursive, filter, skip_summary_results, &mut files)?;
     }
     let mut unique = std::collections::BTreeMap::new();
     for path in files {
@@ -5565,6 +5612,7 @@ fn collect_menu_source_files_from_folder(
     folder: &Path,
     recursive: bool,
     filter: NativeFileFilter,
+    skip_summary_results: bool,
     files: &mut Vec<PathBuf>,
 ) -> Result<()> {
     let mut entries = fs::read_dir(folder)
@@ -5591,8 +5639,10 @@ fn collect_menu_source_files_from_folder(
             {
                 files.push(path);
             }
-        } else if recursive && metadata.is_dir() {
-            collect_menu_source_files_from_folder(root, &path, true, filter, files)?;
+        } else if recursive && metadata.is_dir()
+            && !(skip_summary_results && path.file_name().is_some_and(|name| name == "执行结果"))
+        {
+            collect_menu_source_files_from_folder(root, &path, true, filter, skip_summary_results, files)?;
         }
     }
     Ok(())
@@ -13359,7 +13409,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
                         _ => {}
                     }
                 }
-                let level = match event.status.as_str() { "failed" => Level::Error, "skipped" => Level::Warn, "started" => Level::Info, _ => Level::Debug };
+                let level = match event.status.as_str() { "failed" => Level::Error, "skipped" | "warning" => Level::Warn, "started" => Level::Info, _ => Level::Debug };
                 let safe_message = &event.user_message;
                 let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, safe_message);
                 record.timestamp = event.timestamp.clone();
@@ -13381,7 +13431,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
                             "{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}"
                         ),
                     }
-                } else if log_view == "user" && (event.status == "failed" || event.status == "skipped" || matches!(event.phase.as_str(), "run" | "row_extract" | "output_save")) {
+                } else if log_view == "user" && (matches!(event.status.as_str(), "failed" | "skipped" | "warning") || matches!(event.phase.as_str(), "run" | "row_extract" | "output_save")) {
                     eprintln!("{}", pytools_core::run_logging::terminal_line(level, safe_message));
                 }
                 events.push(event);
