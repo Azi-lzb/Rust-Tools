@@ -19,7 +19,7 @@ pub use plan::{
     ExcelModifierError, ExcelModifierErrorKind, OutputValidator, PageOrientation, PageSettings,
     PreservationRequirement, RangeStyleMode, WorkbookFeature, WorkbookFormat, WorkbookProfile,
 };
-pub use umya_backend::{UmyaXlsxBackend, UmyaXlsxValidator};
+pub use umya_backend::{apply_umya_append_operations, UmyaXlsxBackend, UmyaXlsxValidator};
 pub use umya_spreadsheet::{BorderStyleValues, Cell, Workbook};
 pub use workbook_profile::inspect_xlsx_profile;
 

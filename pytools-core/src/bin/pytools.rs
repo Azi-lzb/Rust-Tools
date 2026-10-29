@@ -23,8 +23,8 @@ use pytools_core::conversion::{
 use pytools_core::dedup_ops::{
     build_append_by_config_plans, build_comment_duplicate_plan, build_config_duplicate_plan,
     precheck_dedup_tasks, write_config_duplicate_check_candidate,
-    write_config_duplicate_delete_candidate, write_new_append_candidate, AppendTargetPlan,
-    DuplicateAction,
+    write_config_duplicate_delete_candidate, write_existing_append_candidate,
+    write_new_append_candidate, AppendTargetPlan, DuplicateAction,
 };
 use pytools_core::edit_plan::{apply_plan_file, apply_plan_with_capability_file};
 use pytools_core::file_commit::{
@@ -2236,7 +2236,7 @@ where
 }
 
 fn run_interactive_dedup_append_menu<R, W>(
-    input: &mut R,
+    _input: &mut R,
     output: &mut W,
     config_path: &Path,
     global: &GlobalConfig,
@@ -2256,7 +2256,14 @@ where
     let started_at = Local::now();
     let started = Instant::now();
     match log_view {
-        "user" => writeln!(output, "开始处理：读取启用配置并去重追加到配置目标工作簿")?,
+        "user" => writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                "开始处理：读取启用配置并去重追加到配置目标工作簿"
+            )
+        )?,
         "developer" => writeln!(output, "PT-2 开始：PT-2-5 config_append")?,
         _ => {}
     }
@@ -2295,7 +2302,14 @@ where
                     Err(log_error) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms} ms；运行记录写入失败：{log_error:#}；错误：{error:#}")?,
                 }
             } else {
-                writeln!(output, "处理失败：按启用配置追加到目标；错误：{error:#}")?;
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Error,
+                        &format!("处理失败：按启用配置追加到目标；错误：{error:#}")
+                    )
+                )?;
             }
             return Ok(());
         }
@@ -2303,138 +2317,204 @@ where
     let planning_elapsed_ms = planning_started.elapsed().as_millis();
 
     let mut executable_indices = Vec::new();
+    let mut diagnostic_events = Vec::new();
     for (index, plan) in plans.iter().enumerate() {
         if plan.appended_rows == 0 {
             report[index]["execution"] = serde_json::Value::String("no_changes".to_owned());
             report[index]["status"] = serde_json::Value::String("no_changes".to_owned());
-        } else if plan.target_existed && capabilities.is_none() {
-            report[index]["execution"] = serde_json::Value::String(
-                "requires ExcelModifier capability and platform".to_owned(),
-            );
-            report[index]["status"] = serde_json::Value::String("planned_only".to_owned());
-            writeln!(
-                output,
-                "既有目标需要已验收的 ExcelModifier capability 和 platform；计划已保留：{}",
-                plan.target.display()
-            )?;
         } else {
+            report[index]["status"] = serde_json::Value::String("pending".to_owned());
             executable_indices.push(index);
         }
-    }
-
-    let confirmation_requested = !executable_indices.is_empty();
-    let mut confirmed = false;
-    if confirmation_requested {
-        writeln!(
-            output,
-            "计划已准备 {} 个可提交目标：",
-            executable_indices.len()
-        )?;
-        for index in &executable_indices {
-            let plan = &plans[*index];
-            let operation = if plan.target_existed {
-                "更新既有目标"
-            } else {
-                "新建目标"
-            };
-            writeln!(
-                output,
-                "  {operation}：{}（追加 {} 行，过滤重复 {} 行）",
-                plan.target.display(),
-                plan.appended_rows,
-                plan.duplicate_rows_filtered
-            )?;
-            if let Some(plan_file) = report[*index]["plan_file"].as_str() {
-                writeln!(output, "  计划文件：{plan_file}")?;
+        if log_view == "user" {
+            for issue in &plan.issues {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Warn,
+                        &format!("配置跳过：{}；{issue}", plan.target.display())
+                    )
+                )?;
             }
         }
-        confirmed = read_menu_choice(
-            input,
-            output,
-            "确认提交上述追加？输入 y/yes/是 确认，其他输入取消> ",
-        )?
-        .is_some_and(|choice| {
-            matches!(
-                choice.trim().to_ascii_lowercase().as_str(),
-                "y" | "yes" | "是"
-            )
-        });
     }
 
     let mut modifier_invoked = false;
     let mut writer_invoked = false;
-    if confirmed {
-        for index in executable_indices {
-            let plan = &plans[index];
-            let mut executor_invoked = false;
-            let execution = (|| -> Result<serde_json::Value> {
-                let plan_file = write_temporary_dedup_append_plan(plan)?;
-                let mut arguments = vec![
-                    "--plan".to_owned(),
-                    plan_file.path().to_string_lossy().into_owned(),
-                    "--commit-target".to_owned(),
-                ];
-                if plan.target_existed {
-                    arguments.push("--capabilities".to_owned());
-                    arguments.push(
-                        capabilities
-                            .context("capabilities missing for existing target")?
-                            .to_string_lossy()
-                            .into_owned(),
-                    );
-                    arguments.push("--platform".to_owned());
-                    arguments.push(
-                        platform
-                            .context("platform missing for existing target")?
-                            .to_owned(),
-                    );
-                }
+    for index in executable_indices.iter().copied() {
+        let plan = &plans[index];
+        if log_view == "user" {
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Info,
+                    &format!(
+                        "正在写入目标：{}（追加 {} 行，过滤重复 {} 行）",
+                        plan.target.display(),
+                        plan.appended_rows,
+                        plan.duplicate_rows_filtered
+                    )
+                )
+            )?;
+        }
+        let mut executor_invoked = false;
+        let direct_existing = plan.target_existed && capabilities.is_none();
+        let execution = (|| -> Result<serde_json::Value> {
+            if direct_existing {
                 executor_invoked = true;
-                run_dedup_append_execute_report(arguments)
-            })();
-            if executor_invoked {
-                if plan.target_existed {
-                    modifier_invoked = true;
-                } else {
-                    writer_invoked = true;
-                }
+                return run_dedup_append_direct_existing(plan);
             }
+            let plan_file = write_temporary_dedup_append_plan(plan)?;
+            let mut arguments = vec![
+                "--plan".to_owned(),
+                plan_file.path().to_string_lossy().into_owned(),
+                "--commit-target".to_owned(),
+            ];
+            if plan.target_existed {
+                arguments.push("--capabilities".to_owned());
+                arguments.push(
+                    capabilities
+                        .context("capabilities missing for existing target")?
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+                arguments.push("--platform".to_owned());
+                arguments.push(
+                    platform
+                        .context("platform missing for existing target")?
+                        .to_owned(),
+                );
+            }
+            executor_invoked = true;
+            run_dedup_append_execute_report(arguments)
+        })();
+        if executor_invoked {
+            if plan.target_existed && !direct_existing {
+                modifier_invoked = true;
+            } else if !plan.target_existed {
+                writer_invoked = true;
+            }
+        }
 
-            match execution {
-                Ok(execution) => {
-                    report[index]["execution"] = serde_json::Value::String("committed".to_owned());
-                    report[index]["status"] = serde_json::Value::String("succeeded".to_owned());
-                    report[index]["execution_result"] = execution;
-                }
-                Err(error) => {
-                    report[index]["execution"] = serde_json::Value::String("failed".to_owned());
-                    report[index]["status"] = serde_json::Value::String("failed".to_owned());
-                    report[index]["error"] = serde_json::Value::String(format!("{error:#}"));
-                    break;
+        match execution {
+            Ok(execution) => {
+                let engine = execution["engine"]
+                    .as_str()
+                    .or_else(|| execution["candidate_engine"].as_str())
+                    .unwrap_or("unknown")
+                    .to_owned();
+                diagnostic_events.push(
+                    pytools_core::engine_diag::DiagEvent::new(
+                        &engine,
+                        pytools_core::engine_diag::DiagStage::SaveOutput,
+                        pytools_core::engine_diag::DiagOutcome::Ok,
+                    )
+                    .with_file(plan.target.to_string_lossy().into_owned())
+                    .with_message("目标工作簿追加完成"),
+                );
+                report[index]["execution"] = serde_json::Value::String("committed".to_owned());
+                report[index]["status"] = serde_json::Value::String("succeeded".to_owned());
+                report[index]["execution_result"] = execution;
+                if log_view == "user" {
+                    writeln!(
+                        output,
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Info,
+                            &format!("已写入：{}", plan.target.display())
+                        )
+                    )?;
                 }
             }
+            Err(error) => {
+                let error_message = format!("{error:#}");
+                let stage = if error_message.contains("backend capability")
+                    || error_message.contains("capabilities missing")
+                    || error_message.contains("platform missing")
+                {
+                    pytools_core::engine_diag::DiagStage::ReadConfig
+                } else if error_message.contains("stage=excel_modifier")
+                    || error_message.contains("stage=direct_append_candidate")
+                {
+                    pytools_core::engine_diag::DiagStage::ModifyWorkbook
+                } else {
+                    pytools_core::engine_diag::DiagStage::SaveOutput
+                };
+                diagnostic_events.push(
+                    pytools_core::engine_diag::DiagEvent::new(
+                        if plan.target_existed {
+                            if direct_existing { "umya-spreadsheet" } else { "ExcelModifier" }
+                        } else {
+                            "rust_xlsxwriter"
+                        },
+                        stage,
+                        pytools_core::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(plan.target.to_string_lossy().into_owned())
+                    .with_message(error_message.clone()),
+                );
+                report[index]["execution"] = serde_json::Value::String("failed".to_owned());
+                report[index]["status"] = serde_json::Value::String("failed".to_owned());
+                report[index]["error"] = serde_json::Value::String(error_message);
+                break;
+            }
         }
-    } else {
-        for index in executable_indices {
-            report[index]["execution"] = serde_json::Value::String("plan_only".to_owned());
-            report[index]["status"] = serde_json::Value::String("cancelled".to_owned());
-        }
-        if plans.iter().any(|plan| plan.appended_rows > 0) {
-            writeln!(output, "提交已取消，计划保留，目标未修改。")?;
+    }
+    for index in executable_indices {
+        if report[index]["status"] == "pending" {
+            report[index]["execution"] = serde_json::Value::String("not_processed".to_owned());
+            report[index]["status"] = serde_json::Value::String("not_processed".to_owned());
         }
     }
 
     let elapsed_ms = started.elapsed().as_millis();
-    let metrics = dedup_menu_metrics(&report);
-    let failed = report
+    let mut metrics = dedup_menu_metrics(&report);
+    let failed_targets = report
         .as_array()
-        .is_some_and(|items| items.iter().any(|item| item["status"] == "failed"));
+        .into_iter()
+        .flatten()
+        .filter(|item| item["status"] == "failed")
+        .count();
+    let blocked_targets = report
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["status"] == "planned_only")
+        .count();
+    let unprocessed_targets = report
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["status"] == "not_processed")
+        .count();
+    let failed = failed_targets > 0;
     let committed_targets = report
         .as_array()
         .into_iter()
         .flatten()
         .filter(|item| item["status"] == "succeeded")
         .count();
+    let committed_rows: usize = plans
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| report[*index]["status"] == "succeeded")
+        .map(|(_, plan)| plan.appended_rows)
+        .sum();
+    let filtered_rows: usize = plans
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| {
+            report[*index]["status"] == "succeeded"
+                || report[*index]["status"] == "no_changes"
+        })
+        .map(|(_, plan)| plan.duplicate_rows_filtered)
+        .sum();
+    let skipped_tasks: usize = plans.iter().map(|plan| plan.task_skipped).sum();
+    metrics["committed_appended_rows"] = serde_json::json!(committed_rows);
+    metrics["processed_duplicate_rows_filtered"] = serde_json::json!(filtered_rows);
+    metrics["unprocessed_targets"] = serde_json::json!(unprocessed_targets);
     let mut actual_engines = vec![
         "Rust append planning".to_owned(),
         "Calamine via excel-reader".to_owned(),
@@ -2468,30 +2548,20 @@ where
             }
         }
     }
-    let run_status = if failed {
-        "failed"
-    } else if committed_targets > 0
-        && report.as_array().is_some_and(|items| {
-            items
-                .iter()
-                .any(|item| item["status"] == "planned_only" || item["status"] == "cancelled")
-        })
+    let run_status = if committed_targets > 0
+        && (failed || blocked_targets > 0 || unprocessed_targets > 0 || skipped_tasks > 0)
     {
         "partial"
-    } else if report
-        .as_array()
-        .is_some_and(|items| items.iter().any(|item| item["status"] == "planned_only"))
-    {
+    } else if failed {
+        "failed"
+    } else if blocked_targets > 0 {
         "blocked"
-    } else if !confirmed && confirmation_requested {
-        "cancelled"
     } else {
         "succeeded"
     };
     let unified_status = match run_status {
         "failed" | "blocked" => pytools_core::run_logging::TaskStatus::Failed,
         "partial" => pytools_core::run_logging::TaskStatus::PartialSuccess,
-        "cancelled" => pytools_core::run_logging::TaskStatus::Cancelled,
         _ if committed_targets == 0 => pytools_core::run_logging::TaskStatus::NoOp,
         _ => pytools_core::run_logging::TaskStatus::Success,
     };
@@ -2499,24 +2569,60 @@ where
         .filter(|(_, item)| item["status"] == "succeeded")
         .filter_map(|(index, _)| plans.get(index).map(|plan| plan.target.clone()))
         .collect::<Vec<_>>();
-    diagnostic.finish_as(failed, None, &[], &committed, Some(unified_status));
+    diagnostic.finish_as(
+        failed || blocked_targets > 0,
+        None,
+        &diagnostic_events,
+        &committed,
+        Some(unified_status),
+    );
 
     match log_view {
-        "user" if failed => {
-            writeln!(output, "处理失败：按配置追加到目标。")?;
+        "user" => {
+            let outcome = match run_status {
+                "failed" => "处理失败",
+                "partial" => "部分完成",
+                "blocked" => "处理受阻",
+                _ => "处理完成",
+            };
+            if plans.is_empty() {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Warn,
+                        "未找到可处理的启用配置，目标未修改。"
+                    )
+                )?;
+            }
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    match run_status {
+                        "failed" | "blocked" => pytools_core::run_logging::Level::Error,
+                        "partial" => pytools_core::run_logging::Level::Warn,
+                        _ => pytools_core::run_logging::Level::Info,
+                    },
+                    &format!("{outcome}：已写入 {committed_targets} 个目标，追加 {committed_rows} 行，过滤重复 {filtered_rows} 行；跳过 {skipped_tasks} 项配置，受阻 {blocked_targets} 个目标，失败 {failed_targets} 个目标，未处理 {unprocessed_targets} 个目标；耗时 {elapsed_ms} ms。")
+                )
+            )?;
             for item in report.as_array().into_iter().flatten() {
                 if let Some(error) = item["error"].as_str() {
-                    writeln!(output, "  错误：{error}")?;
+                    writeln!(
+                        output,
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Error,
+                            &format!(
+                                "写入失败：{}；错误：{error}",
+                                item["target"].as_str().unwrap_or("未知目标")
+                            )
+                        )
+                    )?;
                 }
             }
         }
-        "user" if committed_targets > 0 => writeln!(
-            output,
-            "处理完成：提交 {committed_targets} 个目标，追加 {} 行，过滤重复 {} 行，耗时 {elapsed_ms} ms。",
-            metrics["appended_rows"].as_u64().unwrap_or_default(),
-            metrics["duplicate_rows_filtered"].as_u64().unwrap_or_default()
-        )?,
-        "user" => writeln!(output, "计划已生成，目标未修改，耗时 {elapsed_ms} ms。")?,
         "developer" => {
             let outcome = match run_status {
                 "failed" => "失败",
@@ -2534,11 +2640,11 @@ where
                 &actual_engines,
                 modifier_invoked,
                 writer_invoked,
-                committed_targets == 0,
+                blocked_targets > 0 && committed_targets == 0,
                 failed
                     .then_some("dedup_append_execution_failed")
                     .or_else(|| {
-                        (run_status == "blocked")
+                        (blocked_targets > 0)
                             .then_some("excel_modifier_capability_required")
                     }),
             ) {
@@ -6013,6 +6119,46 @@ fn run_dedup_append_execute(arguments: Vec<String>) -> Result<()> {
     let report = run_dedup_append_execute_report(arguments)?;
     println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())
+}
+
+fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_json::Value> {
+    let started = Instant::now();
+    let expected_hash = plan.target_sha256.as_deref()
+        .context("目标快照缺失，请重新读取配置后再追加")?;
+    let candidate_started = Instant::now();
+    let candidate = write_existing_append_candidate(plan)
+        .context("stage=direct_append_candidate")?;
+    let candidate_elapsed_ms = candidate_started.elapsed().as_millis();
+    let commit = replace_target_from_candidate(&candidate, &plan.target, expected_hash)
+        .context("stage=target_commit")?;
+    Ok(serde_json::json!({
+        "engine": "umya_spreadsheet",
+        "route": "direct_append",
+        "candidate": candidate,
+        "target_commit": &commit,
+        "execution_summary": {
+            "function": "append_target_execute",
+            "status": "succeeded",
+            "task_success_count": plan.task_ok,
+            "task_skipped_count": plan.task_skipped,
+            "appended_rows": plan.appended_rows,
+            "duplicate_rows_filtered": plan.duplicate_rows_filtered,
+            "elapsed_ms": started.elapsed().as_millis(),
+            "stages": [
+                {
+                    "name": "existing_workbook_candidate_and_validation",
+                    "status": "succeeded",
+                    "engine": "umya_spreadsheet",
+                    "elapsed_ms": candidate_elapsed_ms
+                },
+                {
+                    "name": "target_commit",
+                    "status": "succeeded",
+                    "elapsed_ms": commit.elapsed_ms
+                }
+            ]
+        }
+    }))
 }
 
 fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json::Value> {
@@ -12374,7 +12520,7 @@ fn execute_wide_summary_target_writes(
         if append_to_existing && kept_rows.is_empty() {
             // 目标去重后没有新增行：不生成候选、不改写目标文件。
             let message = format!(
-                "目标工作簿 {}：表头一致，输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，目标已有 {existing_filtered_rows} 行；没有新增数据，未修改目标",
+                "目标工作簿 {}：表头一致，输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行；实际追加到目标 0 行，没有新增数据，未修改目标",
                 target.display()
             );
             let mut event = new_wide_summary_cli_event(
@@ -12394,7 +12540,9 @@ fn execute_wide_summary_target_writes(
                 "input_rows": input_rows,
                 "batch_dedup_rows": batch_dedup_rows,
                 "existing_filtered_rows": existing_filtered_rows,
+                "target_duplicate_rows": existing_filtered_rows,
                 "written_rows": 0,
+                "written_data_rows": 0,
                 "cells": 0,
                 "error": message,
             }));
@@ -12489,8 +12637,14 @@ fn execute_wide_summary_target_writes(
         } else {
             kept_rows.len() + 1
         };
+        let written_data_rows = kept_rows.len();
+        let data_write_label = if append_to_existing {
+            "实际追加到目标"
+        } else {
+            "实际写入目标数据"
+        };
         let message = format!(
-            "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，目标已有 {existing_filtered_rows} 行，新增 {written_rows} 行 / 写入 {copied} 个单元格）",
+            "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行，{data_write_label} {written_data_rows} 行 / 写入 {copied} 个单元格）",
             target.display()
         );
         let mut event = new_wide_summary_cli_event(
@@ -12519,7 +12673,9 @@ fn execute_wide_summary_target_writes(
             "input_rows": input_rows,
             "batch_dedup_rows": batch_dedup_rows,
             "existing_filtered_rows": existing_filtered_rows,
+            "target_duplicate_rows": existing_filtered_rows,
             "written_rows": written_rows,
+            "written_data_rows": written_data_rows,
         }));
     }
     let status = if any_failed && any_ok {

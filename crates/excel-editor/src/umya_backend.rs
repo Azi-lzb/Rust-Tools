@@ -1699,6 +1699,33 @@ fn assert_filter_database_matches_plan(
     Ok(())
 }
 
+/// Apply the cell and new-sheet operations used by a de-duplicated append to
+/// an in-memory workbook. The caller must preflight the input, prevent
+/// overwrites, validate the saved candidate and publish it safely.
+pub fn apply_umya_append_operations(
+    workbook: &mut crate::Workbook,
+    operations: &[EditOperation],
+) -> Result<()> {
+    anyhow::ensure!(!operations.is_empty(), "append operations must not be empty");
+    for operation in operations {
+        anyhow::ensure!(
+            matches!(
+                operation,
+                EditOperation::CreateSheet { .. }
+                    | EditOperation::SetCellValue { .. }
+                    | EditOperation::SetFormulaText { .. }
+            ),
+            "unsupported operation in direct append: {:?}",
+            operation.kind()
+        );
+    }
+    for operation in operations {
+        apply_operation(workbook, operation)
+            .with_context(|| format!("apply append operation {:?}", operation.kind()))?;
+    }
+    Ok(())
+}
+
 fn apply_operation(workbook: &mut crate::Workbook, operation: &EditOperation) -> Result<()> {
     match operation {
         EditOperation::SetCellValue { sheet, cell, value } => {

@@ -9,7 +9,7 @@ if errorlevel 1 (
     pause
     exit /b 9009
 )
-for /f "delims=" %%R in ('git -C "%PROJECT_ROOT%" rev-parse --show-toplevel 2^>nul') do set "GIT_ROOT=%%R"
+for /f "delims=" %%R in ('git -C "%SCRIPT_ROOT%" rev-parse --show-toplevel 2^>nul') do set "GIT_ROOT=%%R"
 for %%R in ("%GIT_ROOT%") do set "GIT_ROOT=%%~fR"
 if /I not "%GIT_ROOT%"=="%SCRIPT_ROOT%" (
     echo This script is not at the root of the expected Rust-Tools Git worktree.
@@ -18,7 +18,7 @@ if /I not "%GIT_ROOT%"=="%SCRIPT_ROOT%" (
     pause
     exit /b 3
 )
-for /f "delims=" %%B in ('git -C "%PROJECT_ROOT%" branch --show-current 2^>nul') do set "CURRENT_BRANCH=%%B"
+for /f "delims=" %%B in ('git -C "%SCRIPT_ROOT%" branch --show-current 2^>nul') do set "CURRENT_BRANCH=%%B"
 
 if "%CURRENT_BRANCH%"=="main" (
     set "CARGO_TARGET_DIR=F:\RustBuild\pytools"

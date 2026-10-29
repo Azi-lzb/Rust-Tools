@@ -3,12 +3,14 @@
 use crate::config::DedupTask;
 use anyhow::{bail, Context, Result};
 use excel_editor::{
-    inspect_xlsx_profile, CellValue, EditOperation, ExcelEditPlan, PreservationRequirement,
-    WorkbookFeature, WorkbookFormat,
+    inspect_xlsx_profile, CellValue, EditOperation, ExcelEditPlan, OutputValidator,
+    PreservationRequirement, WorkbookFeature, WorkbookFormat,
 };
 use excel_reader::{
-    read_value_columns_with_iso_dates, read_workbook, read_xlsx_effective_cell_number_formats,
-    uses_1904_date_system, CellNumberFormatRequest, CellValue as ReaderCellValue, SheetDump,
+    read_defined_names, read_ooxml_comments, read_value_columns_with_iso_dates, read_workbook,
+    read_xlsx_effective_cell_number_formats, uses_1904_date_system, CellNumberFormatRequest,
+    CellValue as ReaderCellValue, DefinedNameParseStatus, DefinedNameRecord, SheetDump,
+    WorkbookDump,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -949,6 +951,25 @@ pub fn build_append_by_config_plans(
         grouped.entry(target.clone()).or_default().push(task);
     }
 
+    // A configured target must not also be a source for any enabled task:
+    // committing it would otherwise modify an input workbook.
+    for target in grouped.keys().filter(|target| target.is_file()) {
+        let target_identity = fs::canonicalize(target)
+            .with_context(|| format!("resolve append target {}", target.display()))?;
+        for task in tasks.iter().filter(|task| task.enabled) {
+            let Some(source) = task.source_wb.as_ref().filter(|source| source.is_file()) else {
+                continue;
+            };
+            if fs::canonicalize(source).ok().as_ref() == Some(&target_identity) {
+                bail!(
+                    "配置第 {} 行的源工作簿同时是目标工作簿；为保护源文件，未执行追加：{}",
+                    task.row_no,
+                    source.display()
+                );
+            }
+        }
+    }
+
     let mut reports = Vec::new();
     for (target, target_tasks) in grouped {
         anyhow::ensure!(
@@ -1288,13 +1309,301 @@ pub fn build_append_by_config_plans(
     Ok(reports)
 }
 
+/// Build and verify an existing-target candidate for the explicitly requested
+/// direct 2-3 append route. The configured target is never modified here.
+pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
+    anyhow::ensure!(plan.target_existed, "direct append requires an existing target");
+    anyhow::ensure!(
+        plan.replacement_workbook.is_none(),
+        "direct append cannot replace a target worksheet"
+    );
+    let expected_hash = plan
+        .target_sha256
+        .as_deref()
+        .context("目标快照缺失，请重新读取配置后再追加")?;
+    crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
+        .context("目标工作簿在去重期间发生变化，未执行追加")?;
+    let edit_plan = plan
+        .edit_plan
+        .as_ref()
+        .context("已有目标缺少追加操作")?;
+    anyhow::ensure!(
+        edit_plan.input == plan.target && edit_plan.output == plan.candidate,
+        "追加计划的目标或候选路径不一致"
+    );
+    edit_plan.validate().context("校验目标追加操作失败")?;
+    anyhow::ensure!(
+        edit_plan.format == WorkbookFormat::Xlsx,
+        "直接追加仅支持 .xlsx 目标工作簿"
+    );
+    ooxml_patch::reject_unverified_parts(&plan.target)
+        .context("目标工作簿含不支持安全追加的结构")?;
+    anyhow::ensure!(
+        edit_plan.workbook.inventory_complete,
+        "目标工作簿包含无法确认的结构，未执行追加"
+    );
+
+    let before = read_workbook(&plan.target).context("读取目标工作簿失败")?;
+    let before_names = read_defined_names(&plan.target).context("读取目标工作簿名称定义失败")?;
+    let before_comments = read_ooxml_comments(&plan.target).context("读取目标工作簿批注失败")?;
+    validate_append_scope(edit_plan, &before)?;
+    let mut workbook = excel_editor::open_xlsx(&plan.target).context("umya 打开目标工作簿失败")?;
+    excel_editor::apply_umya_append_operations(&mut workbook, &edit_plan.operations)
+        .context("umya 追加目标工作簿失败")?;
+
+    if let Some(parent) = plan.candidate.parent().filter(|path| !path.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("创建候选目录失败：{}", parent.display()))?;
+    }
+    let reserved = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&plan.candidate)
+        .with_context(|| format!("创建目标候选文件失败：{}", plan.candidate.display()))?;
+    drop(reserved);
+
+    let result = (|| -> Result<()> {
+        excel_editor::save_xlsx(&workbook, &plan.candidate)
+            .context("umya 保存目标候选文件失败")?;
+        excel_editor::UmyaXlsxValidator
+            .validate(edit_plan, &plan.candidate)
+            .context("校验目标候选文件结构失败")?;
+        let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
+        validate_append_candidate(edit_plan, &before, &after)?;
+        let actual_names = read_defined_names(&plan.candidate)?;
+        anyhow::ensure!(
+            comparable_defined_names(&before_names)? == comparable_defined_names(&actual_names)?,
+            "目标工作簿名称定义发生变化"
+        );
+        let after_comments = read_ooxml_comments(&plan.candidate)?;
+        for sheet in &before.sheets {
+            anyhow::ensure!(
+                before_comments.get(&sheet.name) == after_comments.get(&sheet.name),
+                "目标工作表 {:?} 的批注或作者发生变化",
+                sheet.name
+            );
+        }
+        let candidate_profile = inspect_xlsx_profile(&plan.candidate)?;
+        anyhow::ensure!(
+            edit_plan.workbook.features_present.is_subset(&candidate_profile.features_present),
+            "目标候选文件丢失了原工作簿结构"
+        );
+        crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
+            .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        if let Err(cleanup_error) = fs::remove_file(&plan.candidate) {
+            return Err(error.context(format!(
+                "清理未通过校验的候选文件失败：{}；{cleanup_error}",
+                plan.candidate.display()
+            )));
+        }
+        return Err(error);
+    }
+    Ok(plan.candidate.clone())
+}
+
+fn validate_append_scope(plan: &ExcelEditPlan, before: &WorkbookDump) -> Result<()> {
+    let mut touched = HashSet::new();
+    for operation in &plan.operations {
+        let (sheet_name, cell) = match operation {
+            EditOperation::CreateSheet { .. } => continue,
+            EditOperation::SetCellValue { sheet, cell, .. }
+            | EditOperation::SetFormulaText { sheet, cell, .. } => (sheet, cell),
+            _ => bail!("直接追加不支持操作 {:?}", operation.kind()),
+        };
+        anyhow::ensure!(
+            touched.insert((sheet_name.clone(), cell.to_ascii_uppercase())),
+            "目标工作表 {sheet_name:?} 的单元格 {cell} 被重复写入"
+        );
+        let Some(sheet) = before.sheets.iter().find(|sheet| sheet.name == *sheet_name) else {
+            continue;
+        };
+        anyhow::ensure!(
+            !sheet.formulas.contains_key(cell)
+                && sheet.values.get(cell).is_none_or(probe_value_is_blank),
+            "追加位置 {sheet_name:?}!{cell} 已有数据或公式，未覆盖"
+        );
+        for merged in &sheet.merges {
+            anyhow::ensure!(
+                !address_in_merge(cell, merged)?,
+                "追加位置 {sheet_name:?}!{cell} 位于既有合并区域 {merged} 内"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn address_in_merge(cell: &str, merged: &str) -> Result<bool> {
+    let (row, column) = parse_a1(cell).context("解析追加单元格地址失败")?;
+    let (start, end) = merged.split_once(':').unwrap_or((merged, merged));
+    let (start_row, start_col) = parse_a1(start).context("解析合并区域起点失败")?;
+    let (end_row, end_col) = parse_a1(end).context("解析合并区域终点失败")?;
+    Ok(row >= start_row && row <= end_row && column >= start_col && column <= end_col)
+}
+
+fn probe_value_is_blank(value: &serde_json::Value) -> bool {
+    value.get("value").is_none_or(|value| {
+        value.is_null() || value.as_str().is_some_and(str::is_empty)
+    })
+}
+
+fn same_probe_value(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    if expected == actual {
+        return true;
+    }
+    let numeric = |value: &serde_json::Value| {
+        matches!(value["type"].as_str(), Some("number" | "integer"))
+            .then(|| value["value"].as_f64())
+            .flatten()
+    };
+    numeric(expected).zip(numeric(actual)).is_some_and(|(left, right)| left == right)
+}
+
+fn sorted_json_values(values: &[serde_json::Value]) -> Result<Vec<String>> {
+    let mut result = values
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    result.sort();
+    Ok(result)
+}
+
+fn comparable_defined_names(names: &[DefinedNameRecord]) -> Result<Vec<String>> {
+    let mut result = Vec::with_capacity(names.len());
+    for name in names {
+        let mut name = name.clone();
+        // For fully parsed areas, scope and resolved references carry the meaning;
+        // umya may add or remove harmless quotes around a sheet name.
+        if name.parse_status == DefinedNameParseStatus::Areas {
+            name.raw_reference.clear();
+        }
+        result.push(serde_json::to_string(&name)?);
+    }
+    result.sort();
+    Ok(result)
+}
+
+fn validate_append_candidate(
+    plan: &ExcelEditPlan,
+    before: &WorkbookDump,
+    after: &WorkbookDump,
+) -> Result<()> {
+    let mut expected_sheets = before.sheets.iter().map(|sheet| sheet.name.clone()).collect::<Vec<_>>();
+    for operation in &plan.operations {
+        if let EditOperation::CreateSheet { name } = operation {
+            expected_sheets.push(name.clone());
+        }
+    }
+    let actual_sheets = after.sheets.iter().map(|sheet| sheet.name.clone()).collect::<Vec<_>>();
+    anyhow::ensure!(expected_sheets == actual_sheets, "目标工作表名称或顺序发生变化");
+
+    let touched = plan.operations.iter().filter_map(|operation| match operation {
+        EditOperation::SetCellValue { sheet, cell, .. }
+        | EditOperation::SetFormulaText { sheet, cell, .. } => {
+            Some((sheet.as_str(), cell.as_str()))
+        }
+        _ => None,
+    }).collect::<HashSet<_>>();
+    for original in &before.sheets {
+        let saved = after.sheets.iter().find(|sheet| sheet.name == original.name)
+            .with_context(|| format!("目标工作表 {:?} 未保留", original.name))?;
+        anyhow::ensure!(
+            original.formula_status == "read_by_calamine" && saved.formula_status == "read_by_calamine",
+            "无法校验工作表 {:?} 的公式",
+            original.name
+        );
+        for (cell, expected) in &original.values {
+            if touched.contains(&(original.name.as_str(), cell.as_str()))
+                && probe_value_is_blank(expected)
+            {
+                continue;
+            }
+            let actual = saved.values.get(cell)
+                .with_context(|| format!("原有单元格 {:?}!{cell} 未保留", original.name))?;
+            anyhow::ensure!(
+                same_probe_value(expected, actual),
+                "原有单元格 {:?}!{cell} 的值或类型发生变化",
+                original.name
+            );
+        }
+        for (cell, formula) in &original.formulas {
+            anyhow::ensure!(
+                saved.formulas.get(cell) == Some(formula),
+                "原有公式 {:?}!{cell} 发生变化",
+                original.name
+            );
+        }
+        let mut original_merges = original.merges.clone();
+        let mut saved_merges = saved.merges.clone();
+        original_merges.sort();
+        saved_merges.sort();
+        anyhow::ensure!(
+            original_merges == saved_merges && original.comments == saved.comments,
+            "工作表 {:?} 的合并区域或批注发生变化",
+            original.name
+        );
+        anyhow::ensure!(
+            sorted_json_values(&original.conditional_formatting)?
+                == sorted_json_values(&saved.conditional_formatting)?
+                && sorted_json_values(&original.data_validations)?
+                    == sorted_json_values(&saved.data_validations)?,
+            "工作表 {:?} 的条件格式或数据验证发生变化",
+            original.name
+        );
+    }
+    for operation in &plan.operations {
+        match operation {
+            EditOperation::SetCellValue { sheet, cell, value } => {
+                let saved = after.sheets.iter().find(|item| item.name == *sheet)
+                    .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
+                anyhow::ensure!(
+                    appended_value_matches(value, saved.values.get(cell)),
+                    "追加单元格 {sheet:?}!{cell} 回读不一致"
+                );
+            }
+            EditOperation::SetFormulaText { sheet, cell, formula } => {
+                let saved = after.sheets.iter().find(|item| item.name == *sheet)
+                    .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
+                anyhow::ensure!(
+                    saved.formulas.get(cell).is_some_and(|actual|
+                        actual.trim().trim_start_matches('=')
+                            == formula.trim().trim_start_matches('=')),
+                    "追加公式 {sheet:?}!{cell} 回读不一致"
+                );
+            }
+            EditOperation::CreateSheet { .. } => {}
+            _ => bail!("直接追加不支持操作 {:?}", operation.kind()),
+        }
+    }
+    Ok(())
+}
+
+fn appended_value_matches(expected: &CellValue, actual: Option<&serde_json::Value>) -> bool {
+    match expected {
+        CellValue::Blank => actual.is_none_or(probe_value_is_blank),
+        CellValue::Text(text) if text.is_empty() => actual.is_none_or(probe_value_is_blank),
+        CellValue::Text(text) => actual.is_some_and(|value|
+            value["type"] == "string" && value["value"].as_str() == Some(text.as_str())),
+        CellValue::Decimal(number) | CellValue::DateTime { serial: number, .. } => {
+            number.parse::<f64>().ok().is_some_and(|expected| actual.is_some_and(|value|
+                matches!(value["type"].as_str(), Some("number" | "integer" | "datetime_serial"))
+                    && value["value"].as_f64() == Some(expected)))
+        }
+        CellValue::Boolean(expected) => actual.is_some_and(|value|
+            value["type"] == "boolean" && value["value"].as_bool() == Some(*expected)),
+        CellValue::Error(expected) => actual.is_some_and(|value|
+            value["type"] == "error" && value["value"].as_str() == Some(expected.as_str())),
+    }
+}
+
 /// Execute a serialized append payload only when it describes a new workbook.
-/// Existing workbook edits are delegated to `apply-edit-plan` and capability
-/// evidence through ExcelModifier.
+/// Existing workbooks use a separate candidate-editing route.
 pub fn write_new_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
     anyhow::ensure!(
         !plan.target_existed,
-        "existing workbook append plans must use ExcelModifier"
+        "new-workbook candidate writer cannot edit an existing target"
     );
     let workbook_plan = plan
         .new_workbook

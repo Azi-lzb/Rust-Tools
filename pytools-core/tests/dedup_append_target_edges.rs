@@ -200,6 +200,71 @@ fn number_at(sheet: &SheetDump, address: &str) -> Option<f64> {
         .and_then(Value::as_f64)
 }
 
+#[test]
+fn target_also_used_as_source_is_rejected_without_modifying_workbook() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let config = dir.path("config.xlsx");
+    make_source(&source, &[("A", 10.0), ("B", 20.0)])?;
+    make_config(&config, &source, &source, "1")?;
+    let source_before = fs::read(&source)?;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        .args(["dedup-append-plan", "--config"])
+        .arg(&config)
+        .args(["--output-dir"])
+        .arg(dir.path("output"))
+        .output()?;
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("源工作簿同时是目标工作簿"));
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn direct_existing_append_refuses_stale_target_and_preserves_changes() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let target = dir.path("target.xlsx");
+    let config = dir.path("config.xlsx");
+    make_source(&source, &[("A", 10.0), ("B", 20.0)])?;
+    make_target(&target, &[("A", 10.0)])?;
+    make_config(&config, &source, &target, "1")?;
+    let source_before = fs::read(&source)?;
+    let (_, plan_path) = plan_report(&config, &dir.path("output"))?;
+    let plan: AppendTargetPlan = serde_json::from_slice(&fs::read(plan_path)?)?;
+    fs::write(&target, b"changed after planning")?;
+    let changed = fs::read(&target)?;
+
+    let error = pytools_core::dedup_ops::write_existing_append_candidate(&plan).unwrap_err();
+    assert!(format!("{error:#}").contains("目标工作簿在去重期间发生变化"));
+    assert_eq!(fs::read(&target)?, changed);
+    assert_eq!(fs::read(&source)?, source_before);
+    assert!(!plan.candidate.exists());
+    Ok(())
+}
+
+#[test]
+fn direct_existing_append_does_not_overwrite_existing_candidate() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let target = dir.path("target.xlsx");
+    let config = dir.path("config.xlsx");
+    make_source(&source, &[("A", 10.0), ("B", 20.0)])?;
+    make_target(&target, &[("A", 10.0)])?;
+    make_config(&config, &source, &target, "1")?;
+    let target_before = fs::read(&target)?;
+    let (_, plan_path) = plan_report(&config, &dir.path("output"))?;
+    let plan: AppendTargetPlan = serde_json::from_slice(&fs::read(plan_path)?)?;
+    fs::write(&plan.candidate, b"existing candidate")?;
+
+    let error = pytools_core::dedup_ops::write_existing_append_candidate(&plan).unwrap_err();
+    assert!(format!("{error:#}").contains("创建目标候选文件失败"));
+    assert_eq!(fs::read(&plan.candidate)?, b"existing candidate");
+    assert_eq!(fs::read(&target)?, target_before);
+    Ok(())
+}
+
 /// A historical workbook that exists but only carries the header row must
 /// accept every unique source row. Hand-derived expectation: two source rows
 /// with distinct IDs are appended in source order after the header.

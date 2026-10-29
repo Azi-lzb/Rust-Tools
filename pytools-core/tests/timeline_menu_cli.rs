@@ -1430,6 +1430,14 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
         String::from_utf8_lossy(&first.stdout),
         String::from_utf8_lossy(&first.stderr)
     );
+    let first_report = latest_menu_json_report(&first)?;
+    let first_write = &first_report["target_writes"][0];
+    assert_eq!(first_write["target_duplicate_rows"], 0);
+    assert_eq!(
+        first_write["written_rows"].as_u64(),
+        first_write["written_data_rows"].as_u64().map(|rows| rows + 1),
+        "new target's legacy written_rows includes the header"
+    );
     let first_rows = read_workbook(&target)?
         .sheets
         .iter()
@@ -1453,6 +1461,23 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
     assert!(second.status.success());
     let report = latest_menu_json_report(&second)?;
     assert_eq!(report["target_writes"][0]["mode"], "表头一致追加");
+    assert_eq!(
+        report["target_writes"][0]["written_data_rows"],
+        report["target_writes"][0]["written_rows"]
+    );
+    let appended_rows = report["target_writes"][0]["written_data_rows"]
+        .as_u64()
+        .context("written data row count missing")?;
+    assert!(appended_rows > 0);
+    let second_stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(
+        second_stderr.contains(&format!("实际追加到目标 {appended_rows} 行")),
+        "{second_stderr}"
+    );
+    assert_eq!(
+        report["target_writes"][0]["target_duplicate_rows"],
+        report["target_writes"][0]["existing_filtered_rows"]
+    );
     let after = read_workbook(&target)?;
     let second_rows = after
         .sheets
@@ -1496,6 +1521,26 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
         "duplicate rerun must not write rows: {}",
         rerun_report["target_writes"][0]
     );
+    let rerun_write = &rerun_report["target_writes"][0];
+    let input_rows = rerun_write["input_rows"].as_u64().context("input row count missing")?;
+    let batch_duplicates = rerun_write["batch_dedup_rows"]
+        .as_u64()
+        .context("batch duplicate count missing")?;
+    let target_duplicates = rerun_write["target_duplicate_rows"]
+        .as_u64()
+        .context("target duplicate count missing")?;
+    assert!(target_duplicates > 0);
+    assert_eq!(target_duplicates + batch_duplicates, input_rows);
+    assert_eq!(rerun_write["target_duplicate_rows"], rerun_write["existing_filtered_rows"]);
+    assert_eq!(rerun_write["written_data_rows"], 0);
+    let stderr = String::from_utf8_lossy(&rerun.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "批内去重后与目标去重键相同 {target_duplicates} 行"
+        )),
+        "{stderr}"
+    );
+    assert!(stderr.contains("实际追加到目标 0 行"), "{stderr}");
     assert_eq!(
         fs::read(&target)?,
         target_before,

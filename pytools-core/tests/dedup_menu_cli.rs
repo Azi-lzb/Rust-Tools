@@ -298,7 +298,7 @@ fn cell_number_format(path: &Path, address: &str) -> Result<Option<String>> {
 }
 
 #[test]
-fn interactive_dedup_append_requires_confirmation_then_creates_a_new_target() -> Result<()> {
+fn interactive_dedup_append_directly_creates_a_new_target() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -306,15 +306,16 @@ fn interactive_dedup_append_requires_confirmation_then_creates_a_new_target() ->
     create_reviewed_intermediate(&source)?;
     let source_before = fs::read(&source)?;
 
-    let menu_input = "2\n3\nyes\n0\n";
+    let menu_input = "2\n3\n0\n";
     let output = run_menu_with_view(&config, &menu_input, "developer")?;
     assert!(
         output.status.success(),
-        "confirmed append failed: {}",
+        "direct append failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("选择已人工检查的时序宽表中间工作簿"));
+    assert!(!stdout.contains("确认提交上述追加"));
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "succeeded");
     assert_eq!(report[0]["execution"], "committed");
@@ -372,6 +373,7 @@ fn interactive_dedup_append_requires_confirmation_then_creates_a_new_target() ->
     assert_eq!(history["excel_writer_invoked"], true);
     assert_eq!(history["excel_modifier_invoked"], false);
     assert_eq!(history["plan_only"], false);
+    assert_eq!(history["metrics"]["committed_appended_rows"], 2);
     assert!(history["actual_engines"]
         .as_array()
         .is_some_and(|engines| engines.iter().any(|engine| engine == "rust_xlsxwriter")));
@@ -384,7 +386,40 @@ fn interactive_dedup_append_requires_confirmation_then_creates_a_new_target() ->
 }
 
 #[test]
-fn interactive_dedup_append_keeps_existing_target_plan_only_without_capability() -> Result<()> {
+fn interactive_dedup_append_repeated_run_filters_existing_target_rows() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_reviewed_intermediate(&source)?;
+    let source_before = fs::read(&source)?;
+
+    let first = run_menu(&config, "2\n3\n0\n")?;
+    assert!(first.status.success());
+    let first_stdout = String::from_utf8_lossy(&first.stdout);
+    assert!(!first_stdout.contains("确认提交上述追加"));
+    assert!(!first_stdout.contains("计划已生成，目标未修改"));
+    assert!(
+        first_stdout.contains("已写入 1 个目标，追加 2 行，过滤重复 1 行"),
+        "{first_stdout}"
+    );
+    let target_after_first = fs::read(&target)?;
+
+    let second = run_menu(&config, "2\n3\n0\n")?;
+    assert!(second.status.success());
+    let second_stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(!second_stdout.contains("确认提交上述追加"));
+    assert!(
+        second_stdout.contains("已写入 0 个目标，追加 0 行，过滤重复 3 行"),
+        "{second_stdout}"
+    );
+    assert_eq!(fs::read(&target)?, target_after_first);
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_directly_updates_existing_target_without_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -398,31 +433,30 @@ fn interactive_dedup_append_keeps_existing_target_plan_only_without_capability()
     let output = run_menu_with_view(&config, menu_input, "developer")?;
     assert!(
         output.status.success(),
-        "plan-only append failed: {}",
+        "direct append failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stdout).contains("PT-2 受阻"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("PT-2 完成"));
+    assert!(!stdout.contains("确认提交上述追加"));
     let report = output_json(&output)?;
     assert_eq!(report[0]["target_existed"], true);
-    assert_eq!(report[0]["status"], "planned_only");
-    assert_eq!(
-        report[0]["execution"],
-        "requires ExcelModifier capability and platform"
-    );
-    assert!(PathBuf::from(
-        report[0]["plan_file"]
-            .as_str()
-            .context("existing-target append plan path missing")?
-    )
-    .is_file());
-    assert!(!PathBuf::from(
-        report[0]["candidate"]
-            .as_str()
-            .context("append candidate path missing")?
-    )
-    .exists());
-    assert_eq!(fs::read(&target)?, target_before);
+    assert_eq!(report[0]["status"], "succeeded");
+    assert_eq!(report[0]["execution"], "committed");
+    assert_eq!(report[0]["appended_rows"], 1);
+    assert_eq!(report[0]["duplicate_rows_filtered"], 2);
+    assert_eq!(report[0]["execution_result"]["route"], "direct_append");
+    assert_eq!(report[0]["execution_result"]["engine"], "umya_spreadsheet");
+    assert_eq!(report[0]["execution_result"]["target_commit"]["operation"], "replaced");
+    assert_ne!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&source)?, source_before);
+    let appended = read_workbook(&target)?;
+    let sheet = appended.sheets.iter().find(|sheet| sheet.name == "Append")
+        .context("append target worksheet missing")?;
+    assert_eq!(sheet.values["B2"]["value"], "A");
+    assert_eq!(sheet.values["C2"]["value"], 99.0);
+    assert_eq!(sheet.values["B3"]["value"], "B");
+    assert_eq!(sheet.values["C3"]["value"], 30.0);
     let history_path = fs::read_dir(root.path().join("logs"))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .find(|path| {
@@ -430,11 +464,144 @@ fn interactive_dedup_append_keeps_existing_target_plan_only_without_capability()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.starts_with("pytools-dedup-config_append-"))
         })
-        .context("blocked append history missing")?;
+        .context("append history missing")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
-    assert_eq!(history["status"], "blocked");
-    assert_eq!(history["error_type"], "excel_modifier_capability_required");
-    assert_eq!(history["plan_only"], true);
+    assert_eq!(history["status"], "succeeded");
+    assert_eq!(history["plan_only"], false);
+    assert_eq!(history["excel_modifier_invoked"], false);
+    assert_eq!(history["metrics"]["committed_appended_rows"], 1);
+    assert!(read_2_3_events(root.path())?.iter().any(|event| {
+        event["event_name"] == "engine_operation"
+            && event["file_name"] == "target.xlsx"
+            && event["engine"] == "umya_spreadsheet"
+            && event["status"] == "成功"
+    }));
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_direct_preserves_existing_formula_comments_and_merges() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_duplicate_source(&source)?;
+    create_rich_append_target(&target)?;
+    let source_before = fs::read(&source)?;
+    let before = read_workbook(&target)?;
+    let before_names = excel_reader::read_defined_names(&target)?;
+    let before_comments = excel_reader::read_ooxml_comments(&target)?;
+
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
+    assert!(output.status.success());
+    let report = output_json(&output)?;
+    assert_eq!(report[0]["status"], "succeeded", "{report}");
+    assert_eq!(report[0]["execution_result"]["route"], "direct_append");
+    let after = read_workbook(&target)?;
+    let before_sheet = before.sheets.iter().find(|sheet| sheet.name == "Untouched")
+        .context("original untouched worksheet missing")?;
+    let after_sheet = after.sheets.iter().find(|sheet| sheet.name == "Untouched")
+        .context("saved untouched worksheet missing")?;
+    assert_eq!(before_sheet.values, after_sheet.values);
+    assert_eq!(before_sheet.formulas, after_sheet.formulas);
+    assert_eq!(before_sheet.merges, after_sheet.merges);
+    assert_eq!(before_sheet.comments, after_sheet.comments);
+    let after_names = excel_reader::read_defined_names(&target)?;
+    assert_eq!(before_names.len(), after_names.len());
+    for (before, after) in before_names.iter().zip(&after_names) {
+        assert_eq!(before.name, after.name);
+        assert_eq!(before.scope, after.scope);
+        assert_eq!(before.parse_status, after.parse_status);
+        assert_eq!(before.areas, after.areas);
+    }
+    assert_eq!(before_comments, excel_reader::read_ooxml_comments(&target)?);
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_direct_copies_source_formula_and_summarizes() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_duplicate_source_with_formula(&source)?;
+    create_initial_target(&target)?;
+    let source_before = fs::read(&source)?;
+
+    let output = run_menu(&config, "2\n3\n0\n")?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("确认提交上述追加"));
+    assert!(
+        stdout.contains("已写入 1 个目标，追加 1 行，过滤重复 2 行"),
+        "{stdout}"
+    );
+    let saved = read_workbook(&target)?;
+    let sheet = saved.sheets.iter().find(|sheet| sheet.name == "Append")
+        .context("append target worksheet missing")?;
+    assert_eq!(sheet.values["B2"]["value"], "A");
+    assert_eq!(sheet.values["C2"]["value"], 99.0);
+    assert_eq!(sheet.values["B3"]["value"], "B");
+    assert_eq!(sheet.formulas["C3"].trim_start_matches('='), "15+15");
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_creates_missing_sheet_in_existing_target() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_duplicate_source(&source)?;
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("Existing")?;
+    sheet.write_string(0, 0, "保留原表")?;
+    workbook.save(&target)?;
+    let source_before = fs::read(&source)?;
+
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
+    assert!(output.status.success());
+    let report = output_json(&output)?;
+    assert_eq!(report[0]["status"], "succeeded", "{report}");
+    assert_eq!(report[0]["appended_rows"], 2);
+    assert_eq!(report[0]["duplicate_rows_filtered"], 1);
+    let saved = read_workbook(&target)?;
+    assert_eq!(saved.sheets.iter().map(|sheet| sheet.name.as_str()).collect::<Vec<_>>(), ["Existing", "Append"]);
+    assert_eq!(saved.sheets[0].values["A1"]["value"], "保留原表");
+    assert_eq!(saved.sheets[1].values["B2"]["value"], "A");
+    assert_eq!(saved.sheets[1].values["B3"]["value"], "B");
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_rejects_unverified_target_parts() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_duplicate_source(&source)?;
+    create_initial_target(&target)?;
+    let file = fs::OpenOptions::new().read(true).write(true).open(&target)?;
+    let mut archive = zip::ZipWriter::new_append(file)?;
+    archive.start_file("xl/charts/chart1.xml", zip::write::SimpleFileOptions::default())?;
+    archive.write_all(b"<chart/>")?;
+    archive.finish()?;
+    let source_before = fs::read(&source)?;
+    let target_before = fs::read(&target)?;
+
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
+    assert!(output.status.success());
+    let report = output_json(&output)?;
+    assert_eq!(report[0]["status"], "failed", "{report}");
+    assert!(report[0]["error"].as_str().is_some_and(|error| error.contains("不支持安全追加的结构")));
+    let candidate = PathBuf::from(report[0]["candidate"].as_str().context("candidate path missing")?);
+    assert!(!candidate.exists());
+    assert_eq!(fs::read(&target)?, target_before);
+    assert_eq!(fs::read(&source)?, source_before);
     Ok(())
 }
 
@@ -514,7 +681,7 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
         serde_json::to_vec_pretty(&capability_for(edit_plan))?,
     )?;
 
-    let menu_input = "2\n3\nyes\n0\n";
+    let menu_input = "2\n3\n0\n";
     let output = run_menu_with_capability(
         &config,
         menu_input,
@@ -523,13 +690,16 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
     )?;
     assert!(
         output.status.success(),
-        "confirmed existing-target append failed: {}",
+        "direct existing-target append failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("确认提交上述追加"));
     let report = output_json(&output)?;
     assert_eq!(report[0]["target_existed"], true);
     assert_eq!(report[0]["status"], "succeeded");
     assert_eq!(report[0]["execution"], "committed");
+    assert_eq!(report[0]["appended_rows"], 1);
+    assert_eq!(report[0]["duplicate_rows_filtered"], 2);
     assert_eq!(report[0]["execution_result"]["engine"], "umya_spreadsheet");
     assert_eq!(
         report[0]["execution_result"]["target_commit"]["operation"],
@@ -543,6 +713,51 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
     assert!(candidate.is_file());
     assert_eq!(fs::read(&target)?, fs::read(candidate)?);
     assert_ne!(fs::read(&target)?, target_before);
+    assert_eq!(fs::read(&source)?, source_before);
+    let appended = read_workbook(&target)?;
+    let sheet = appended
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Append")
+        .context("append target worksheet missing")?;
+    assert_eq!(sheet.values["B2"]["value"], "A");
+    assert_eq!(sheet.values["C2"]["value"], 99.0);
+    assert_eq!(sheet.values["B3"]["value"], "B");
+    assert_eq!(sheet.values["C3"]["value"], 30.0);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_keeps_target_when_capability_is_invalid() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    let capability_path = root.path().join("invalid-capability.json");
+    create_duplicate_source(&source)?;
+    create_initial_target(&target)?;
+    fs::write(&capability_path, b"{}")?;
+    let source_before = fs::read(&source)?;
+    let target_before = fs::read(&target)?;
+
+    let output = run_menu_with_capability(
+        &config,
+        "2\n3\n0\n",
+        &capability_path,
+        "synthetic-pt-2-5-menu-test",
+    )?;
+    assert!(output.status.success());
+    let report = output_json(&output)?;
+    assert_eq!(report[0]["status"], "failed");
+    assert!(report[0]["error"]
+        .as_str()
+        .is_some_and(|error| error.contains("decode backend capability")));
+    assert!(read_2_3_events(root.path())?.iter().any(|event| {
+        event["event_name"] == "engine_operation"
+            && event["file_name"] == "target.xlsx"
+            && event["error_code"] == "CONFIG_READ_FAILED"
+    }));
+    assert_eq!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&source)?, source_before);
     Ok(())
 }
@@ -658,8 +873,34 @@ fn create_initial_target(path: &Path) -> Result<()> {
     sheet.write_string(0, 0, "源数据")?;
     sheet.write_string(0, 1, "ID")?;
     sheet.write_string(0, 2, "Value")?;
-    sheet.write_string(1, 0, "existing")?;
-    sheet.write_string(1, 1, "existing")?;
+    sheet.write_string(1, 0, "A")?;
+    sheet.write_string(1, 1, "A")?;
+    sheet.write_number(1, 2, 99.0)?;
+    workbook.save(path)?;
+    Ok(())
+}
+
+fn create_rich_append_target(path: &Path) -> Result<()> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    {
+        let sheet = workbook.add_worksheet();
+        sheet.set_name("Append")?;
+        sheet.write_string(0, 0, "源数据")?;
+        sheet.write_string(0, 1, "ID")?;
+        sheet.write_string(0, 2, "Value")?;
+        sheet.write_string(1, 0, "A")?;
+        sheet.write_string(1, 1, "A")?;
+        sheet.write_number(1, 2, 99.0)?;
+    }
+    {
+        let sheet = workbook.add_worksheet();
+        sheet.set_name("Untouched")?;
+        sheet.write_string(0, 0, "保留")?;
+        sheet.insert_note(0, 0, &rust_xlsxwriter::Note::new("保留批注"))?;
+        sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=1+1").set_result("2"))?;
+        sheet.merge_range(2, 0, 2, 1, "保留合并", &rust_xlsxwriter::Format::new())?;
+    }
+    workbook.define_name("ImportantCell", "'Untouched'!$A$1")?;
     workbook.save(path)?;
     Ok(())
 }
@@ -743,6 +984,21 @@ fn create_dedup_config(root: &Path) -> Result<PathBuf> {
 
 fn run_menu(config: &Path, input: &str) -> Result<Output> {
     run_menu_with_view(config, input, "user")
+}
+
+fn read_2_3_events(root: &Path) -> Result<Vec<Value>> {
+    let event_path = fs::read_dir(root.join("logs").join("run-events"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("2-3_") && name.ends_with(".jsonl"))
+        })
+        .context("2-3 event log missing")?;
+    fs::read_to_string(event_path)?
+        .lines()
+        .map(|line| serde_json::from_str(line).context("decode 2-3 event"))
+        .collect()
 }
 
 fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
