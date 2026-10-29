@@ -15,18 +15,26 @@ use rust_xlsxwriter::Workbook;
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+/// 并发测试的临时目录唯一性：进程 ID + 原子序列号 + 纳秒时间戳。
+static DIR_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 struct TestDir(PathBuf);
 
 impl TestDir {
     fn new() -> Self {
-        let nonce = SystemTime::now()
+        let sequence = DIR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time is after epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("excel-editor-sheet-index-{nonce}"));
+        let path = std::env::temp_dir().join(format!(
+            "excel-editor-sheet-index-{}-{sequence}-{nanos}",
+            std::process::id()
+        ));
         fs::create_dir_all(&path).expect("create test directory");
         Self(path)
     }

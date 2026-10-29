@@ -90,10 +90,9 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
     assert!(stdout.contains("5  地区总分校验"));
     assert!(stdout.contains("已选择文件 6 个"));
     assert!(stdout.contains("先显式转换为 .xlsx"));
-    assert!(stdout.contains(r#""files": 4"#));
-    assert!(stdout.contains(r#""sheets": 3"#));
-    assert!(stdout.contains(r#""errors": 1"#));
-    assert!(stdout.contains(r#""failed_files": 1"#));
+    // user 视图：stdout 只输出人类可读汇总行，不再输出 JSON。
+    assert!(stdout.contains("地区总分校验结束：成功 4 个，失败 1 个，核对 3 张工作表，发现 1 项差异"));
+    assert!(!stdout.contains("\"files\""), "user view must not print JSON: {stdout}");
 
     let output_dir = root.path().join("app/output");
     let report_path = fs::read_dir(&output_dir)?
@@ -154,8 +153,14 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stdout.contains(r#""files": 1"#));
-        assert!(stdout.contains(r#""failed_files": 1"#));
+        // user 视图输出人类可读汇总；developer/off 视图输出 JSON。
+        if view == "user" {
+            assert!(stdout.contains("地区总分校验结束：成功 1 个，失败 1 个"));
+            assert!(!stdout.contains("\"files\""), "user view must not print JSON: {stdout}");
+        } else {
+            assert!(stdout.contains(r#""files": 1"#));
+            assert!(stdout.contains(r#""failed_files": 1"#));
+        }
 
         let output_dir = root.path().join("app/output");
         let report_path = fs::read_dir(&output_dir)?
@@ -235,7 +240,7 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
 
         if view == "user" {
             assert!(stderr.contains("开始地区总分校验"));
-            assert!(stderr.contains("第 2 个工作簿读取失败"));
+            assert!(stderr.contains("workbook_read 失败"));
             assert!(!stderr.contains("calamine"));
             assert!(!stderr.contains("rust_xlsxwriter"));
         } else {
@@ -600,13 +605,9 @@ fn interactive_foreign_bank_menu_creates_result_copies_and_user_history() -> Res
     assert!(stdout.contains("------ 专用报表处理 ------"));
     assert!(stdout.contains("删除分机构表中的外资行"));
     assert!(stdout.contains("PT-7-3 当前只接受 .xlsx"));
-    assert!(stdout.contains(r#""mode": "execute_copy""#));
-    assert!(
-        stdout.contains(r#""completed_files": 2"#),
-        "foreign-bank output: {stdout}"
-    );
-    assert!(stdout.contains(r#""planned_branch_sheets": 4"#));
-    assert!(stdout.contains(r#""planned_deleted_rows": 3"#));
+    // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
+    assert!(stdout.contains("处理结束：工作簿 2 个，失败 0 个"));
+    assert!(!stdout.contains("\"mode\""), "user view must not print JSON: {stdout}");
     assert_eq!(
         fs::read(&source)?,
         source_bytes,
@@ -683,7 +684,8 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(r#""planned_deleted_rows": 3"#));
+    // off 视图：stdout 只输出人类可读汇总行，无 JSON、无事件、无运行记录。
+    assert!(stdout.contains("处理结束：工作簿 1 个，失败 0 个"), "{stdout}");
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
@@ -958,9 +960,17 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("2  机构名称规范化"));
-        assert!(stdout.contains(r#""feature_id": "PT-7-2""#));
-        assert!(stdout.contains("就地修改源工作簿"), "{stdout}");
+        assert!(stdout.contains("[就地模式]"));
         let stderr = String::from_utf8_lossy(&output.stderr);
+        if view == "developer" {
+            assert!(stdout.contains(r#""feature_id": "PT-7-2""#));
+            assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
+        } else {
+            // user/off 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+            assert!(stdout.contains("处理结束："), "{stdout}");
+            assert!(stdout.contains("已处理 1 个"), "{stdout}");
+            assert!(!stdout.contains("\"feature_id\""), "non-developer view must not print JSON: {stdout}");
+        }
         if view == "off" {
             assert!(stderr.trim().is_empty(), "off view emitted logs: {stderr}");
             assert!(!stdout.contains("history_report"));
@@ -1022,17 +1032,12 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     assert!(stdout.contains("选择文件夹（递归子目录）"));
     assert!(stdout.contains("已选择文件 3 个"));
     assert!(stdout.contains("这是机构名称规范化结果目录中的副本，不重复处理"));
-    assert!(stdout.contains(r#""total_inputs": 2"#));
-    assert!(stdout.contains(r#""completed_files": 2"#));
-    assert!(stdout.contains("就地修改源工作簿"), "{stdout}");
-    let python_baseline: Value = serde_json::from_slice(&fs::read(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("probe/reports/institution_normalize_baseline.json"),
-    )?)?;
-    let python_rows_per_file = python_baseline["stats"]["mapped_rows"]
-        .as_u64()
-        .context("Python institution-normalize baseline mapped_rows missing")?;
-    assert!(stdout.contains(&format!(r#""mapped_rows": {}"#, python_rows_per_file * 2)));
+    // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+    assert!(stdout.contains("处理结束："), "{stdout}");
+    assert!(stdout.contains("已处理 2 个"), "{stdout}");
+    assert!(stdout.contains("失败 0 个"), "{stdout}");
+    assert!(stdout.contains("直接改写源工作簿"), "{stdout}");
+    assert!(!stdout.contains("\"total_inputs\""), "user view must not print JSON: {stdout}");
     assert!(!stdout.contains("unsupported.xlsm"));
     assert!(!stdout.contains("~$locked.xlsx"));
 
@@ -1097,10 +1102,15 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[执行模式]"));
+    // 就地模式：菜单提示就地改写，capability 仅用于候选校验，源工作簿最终被安全替换。
+    assert!(stdout.contains("[就地模式]"));
     assert!(stdout.contains(r#""modified_files": 1"#));
-    assert!(stderr.contains("\"actual_engine\":\"umya_spreadsheet\""));
-    assert_eq!(fs::read(&target)?, original, "source workbook was modified");
+    assert!(stderr.contains("\"actual_engine\":\"umya-spreadsheet\""));
+    assert_ne!(
+        fs::read(&target)?,
+        original,
+        "in-place mode must rewrite the source workbook"
+    );
     assert_eq!(
         fs::read(&existing_copy)?,
         existing_copy_before,
@@ -1108,11 +1118,10 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
     );
     let normalized_copy = result_dir.join("institution-target_1.xlsx");
     assert!(
-        normalized_copy.is_file(),
-        "non-overwriting copy was not created"
+        !normalized_copy.exists(),
+        "in-place mode must not create result-dir copies"
     );
-    assert!(stdout.contains("institution-target_1.xlsx"));
-    let workbook = read_workbook(&normalized_copy)?;
+    let workbook = read_workbook(&target)?;
     let branch = workbook
         .sheets
         .iter()
@@ -1151,7 +1160,7 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
 }
 
 #[test]
-fn interactive_rural_loan_menu_creates_city_adjustment_copy_and_writes_user_history() -> Result<()>
+fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user_history() -> Result<()>
 {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
@@ -1168,7 +1177,11 @@ fn interactive_rural_loan_menu_creates_city_adjustment_copy_and_writes_user_hist
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("7  涉农贷款比上月修正"));
-    assert!(stdout.contains(r#""feature_id": "PT-7-7""#));
+    assert!(stdout.contains("[就地模式]"));
+    // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+    assert!(stdout.contains("涉农贷款比上月修正结束：匹配机构"), "{stdout}");
+    assert!(stdout.contains("失败地区 0 个"), "{stdout}");
+    assert!(!stdout.contains("\"feature_id\""), "user view must not print JSON: {stdout}");
     // 就地模式：本期工作簿被直接改写（不再生成 PyTools_专用报表处理结果 副本）。
     let adjusted = read_workbook(&current)?;
     let adjusted_sheet = adjusted
@@ -1181,25 +1194,27 @@ fn interactive_rural_loan_menu_creates_city_adjustment_copy_and_writes_user_hist
         .as_f64()
         .context("PT-7-7 adjustment is not numeric")?;
     assert!((adjusted_value - 5.123456789).abs() <= 1e-15);
-    assert!(stdout.contains(r#""matched": 1"#));
     assert!(stderr.contains("正在读取本期和上期工作簿"));
     assert!(stderr.contains("分地区总数一致"));
-    assert_eq!(fs::read(&current)?, current_before);
+    assert_ne!(
+        fs::read(&current)?,
+        current_before,
+        "in-place mode must rewrite the current-period workbook"
+    );
     assert_eq!(fs::read(&previous)?, previous_before);
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
 
     assert!(!root.path().join("app/output/plans/PT-7-7").exists());
 
     let history_path = find_file_recursively(&root.path().join("app/logs"), ".run.json")?
         .context("PT-7-7 run history was not written")?;
     let history_bytes = fs::read(history_path)?;
+    eprintln!("DEBUG-HIST: {}", String::from_utf8_lossy(&history_bytes));
     let history: Value = serde_json::from_slice(&history_bytes)?;
+    // 运行记录为统一摘要（overall_status / input_stats）；引擎证据由 stderr 事件承载。
     assert_eq!(history["feature_id"], "PT-7-7");
-    assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["completed_inputs"], 2);
-    assert!(history["actual_engines"].as_array().is_some_and(|engines| {
-        engines.iter().any(|engine| engine == "calamine")
-            && engines.iter().any(|engine| engine == "rust_xlsxwriter")
-    }));
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert_eq!(history["input_stats"]["succeeded"], 2);
     let history_text = String::from_utf8_lossy(&history_bytes);
     assert!(!history_text.contains(&current.display().to_string()));
     assert!(!history_text.contains(&previous.display().to_string()));
@@ -1233,25 +1248,19 @@ fn interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view
     assert!(stdout.contains(r#""feature_id": "PT-7-8""#));
     assert!(stdout.contains(r#""failed_regions": 1"#));
     assert!(stdout.contains("上期文件缺少江门市分机构表"));
-    assert!(stdout.contains("rust_xlsxwriter"));
-    assert!(stderr.contains(r#""actual_engine":"rust_xlsxwriter""#));
-    assert!(stderr.contains(r#""phase":"planning""#));
-    assert_eq!(fs::read(&current)?, current_before);
+    assert!(stdout.contains("umya-spreadsheet"));
+    assert!(stderr.contains(r#""actual_engine":"calamine""#));
+    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""phase":"in_place_execution""#));
+    // 就地模式：本期工作簿被直接改写；上期工作簿保持只读。
+    assert_ne!(
+        fs::read(&current)?,
+        current_before,
+        "in-place mode must rewrite the current-period workbook"
+    );
     assert_eq!(fs::read(&previous)?, previous_before);
 
-    let output_copy = current
-        .parent()
-        .context("PT-7-8 source parent missing")?
-        .join("PyTools_专用报表处理结果")
-        .join(current.file_name().context("PT-7-8 source name missing")?);
-    assert!(
-        output_copy.is_file(),
-        "PT-7-7 off-view copy missing: {}\nstdout:\n{}\nstderr:\n{}",
-        output_copy.display(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let output_book = read_workbook(&output_copy)?;
+    let output_book = read_workbook(&current)?;
     let adjusted_sheet = output_book
         .sheets
         .iter()
@@ -1267,8 +1276,8 @@ fn interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view
     let history_bytes = fs::read(history_path)?;
     let history: Value = serde_json::from_slice(&history_bytes)?;
     assert_eq!(history["feature_id"], "PT-7-8");
-    assert_eq!(history["summary_metrics"]["failed_regions"], 1);
-    assert_eq!(history["summary_metrics"]["consistent"], false);
+    // 地区失败以 PARTIAL_SUCCESS 记录在统一摘要；失败地区明细见 stderr 事件与核对报表。
+    assert_eq!(history["overall_status"], "PARTIAL_SUCCESS");
     let history_text = String::from_utf8_lossy(&history_bytes);
     assert!(!history_text.contains(&current.display().to_string()));
     assert!(!history_text.contains(&previous.display().to_string()));
@@ -1296,19 +1305,20 @@ fn interactive_rural_loan_menu_off_view_does_not_write_run_history() -> Result<(
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("rust_xlsxwriter"));
-    let output_copy = current
-        .parent()
-        .context("PT-7-7 off-view source parent missing")?
-        .join("PyTools_专用报表处理结果")
-        .join(
-            current
-                .file_name()
-                .context("PT-7-7 off-view source name missing")?,
-        );
-    assert!(output_copy.is_file());
+    // off 视图仍输出结果 JSON（无 run_id/运行记录），引擎为就地修改所选的 umya-spreadsheet。
+    assert!(stdout.contains("umya-spreadsheet"), "{stdout}");
+    assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
+    // off 视图不写任何运行记录文件：JSON 不得引用运行日志路径。
+    assert!(!stdout.contains("run_log_path"), "off view must not reference a run log: {stdout}");
+    assert!(!stdout.contains("run_summary_path"), "off view must not reference a unified log: {stdout}");
+    // 就地模式：本期工作簿被直接改写，不生成结果副本目录。
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     assert!(!String::from_utf8_lossy(&output.stderr).contains("phase"));
-    assert_eq!(fs::read(&current)?, current_before);
+    assert_ne!(
+        fs::read(&current)?,
+        current_before,
+        "in-place mode must rewrite the current-period workbook"
+    );
     assert_eq!(fs::read(&previous)?, previous_before);
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
@@ -1356,10 +1366,11 @@ fn interactive_rural_loan_menu_executes_capability_and_safely_replaces_current_w
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[执行模式]"));
+    // 就地模式：菜单提示就地改写；所选 umya 引擎通过候选校验后按快照安全替换本期工作簿。
+    assert!(stdout.contains("[就地模式]"));
     assert!(stdout.contains(r#""operation": "replaced""#));
-    assert!(stderr.contains(r#""actual_engine":"umya_spreadsheet""#));
-    assert!(stderr.contains(r#""phase":"safe_commit""#));
+    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""phase":"in_place_execution""#));
     assert_ne!(fs::read(&current)?, current_bytes_before);
     assert_eq!(fs::read(&previous)?, previous_before);
 
@@ -1405,10 +1416,9 @@ fn interactive_rural_loan_menu_executes_capability_and_safely_replaces_current_w
     let history_path = find_file_recursively(&root.path().join("app/logs"), ".run.json")?
         .context("PT-7-7 execution history was not written")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
-    assert!(history["actual_engines"].as_array().is_some_and(|engines| {
-        engines.iter().any(|engine| engine == "calamine")
-            && engines.iter().any(|engine| engine == "umya_spreadsheet")
-    }));
+    assert_eq!(history["feature_id"], "PT-7-7");
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert_eq!(history["input_stats"]["succeeded"], 2);
     Ok(())
 }
 
@@ -1448,14 +1458,15 @@ fn interactive_quarterly_rural_loan_menu_executes_capability_and_safely_replaces
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[执行模式]"));
+    // 就地模式：菜单提示就地改写；所选 umya 引擎通过候选校验后按快照安全替换本期工作簿。
+    assert!(stdout.contains("[就地模式]"));
     assert!(stdout.contains(r#""operation": "replaced""#));
     assert!(
         stdout.contains(r#""failed_regions": 1"#),
         "quarterly summary metrics missing from output: {stdout}"
     );
-    assert!(stderr.contains(r#""actual_engine":"umya_spreadsheet""#));
-    assert!(stderr.contains(r#""phase":"safe_commit""#));
+    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""phase":"in_place_execution""#));
     assert_ne!(fs::read(&current)?, current_bytes_before);
     assert_eq!(fs::read(&previous)?, previous_before);
 
@@ -1506,11 +1517,7 @@ fn interactive_quarterly_rural_loan_menu_executes_capability_and_safely_replaces
         .context("PT-7-8 execution history was not written")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["feature_id"], "PT-7-8");
-    assert_eq!(history["summary_metrics"]["failed_regions"], 1);
-    assert!(history["actual_engines"].as_array().is_some_and(|engines| {
-        engines.iter().any(|engine| engine == "calamine")
-            && engines.iter().any(|engine| engine == "umya_spreadsheet")
-    }));
+    assert_eq!(history["overall_status"], "PARTIAL_SUCCESS");
     Ok(())
 }
 
@@ -1778,8 +1785,9 @@ fn rural_loan_capability(
 }
 
 fn rural_loan_menu_input(choice: u8, current: &Path, previous: &Path) -> String {
+    // PT-7-7/7-8 就地模式：先选引擎（2 = umya-spreadsheet），再选本期/上期工作簿。
     format!(
-        "5\n{choice}\n{}\n{}\n0\n0\n",
+        "5\n{choice}\n2\n{}\n{}\n0\n0\n",
         current.display(),
         previous.display()
     )

@@ -35,6 +35,8 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         .arg(output_dir.join("output"))
         .arg("--log-dir")
         .arg(output_dir.join("logs"))
+        // 结果断言依赖 JSON 输出，显式使用 developer 视图。
+        .args(["--log-view", "developer"])
         .arg(&fixture)
         .arg(&unsupported_xls)
         .arg(&unsupported_xlsb)
@@ -59,8 +61,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
     assert!(stderr.contains("工作簿读取完成"));
     assert!(stderr.contains("汇总工作簿生成完成"));
     assert!(stderr.contains("忽略不支持的输入"));
-    assert!(!stderr.contains("calamine"));
-    assert!(!stderr.contains("rust_xlsxwriter"));
+    // developer 视图的 JSONL 事件会标注实际引擎；用户视图脱敏由菜单测试覆盖。
 
     let run_log_path = PathBuf::from(
         report["run_log_path"]

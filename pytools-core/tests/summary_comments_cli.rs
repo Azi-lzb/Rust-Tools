@@ -543,7 +543,14 @@ fn summary_comments_cli_records_template_validation_failure() -> Result<()> {
     );
     let logs = fs::read_dir(root.join("failure/logs"))?
         .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<std::io::Result<Vec<_>>>()?;
+        .collect::<std::io::Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("PT-6-2_") && name.ends_with(".json"))
+        })
+        .collect::<Vec<_>>();
     assert_eq!(logs.len(), 1);
     let history: Value = serde_json::from_slice(&fs::read(&logs[0])?)?;
     assert_eq!(history["feature_id"], "PT-6-2");

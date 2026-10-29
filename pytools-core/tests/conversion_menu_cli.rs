@@ -70,8 +70,13 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     let legacy_excel_source = sources.join("needs-engine.xls");
     fs::write(&legacy_excel_source, b"synthetic xls payload")?;
     let excel_before = fs::read(&legacy_excel_source)?;
-    let excel_engine_failure =
-        run_action_with_engines_disabled(&config, 2, 1, &legacy_excel_source)?;
+    let excel_engine_failure = run_action_with_engines_disabled_and_log_view(
+        &config,
+        2,
+        1,
+        &legacy_excel_source,
+        "developer",
+    )?;
     assert!(
         excel_engine_failure.status.success(),
         "a handled conversion failure should return to the menu: {}",
@@ -84,7 +89,7 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
         String::from_utf8_lossy(&excel_engine_failure.stdout).contains("------ 文件处理 ------")
     );
     assert!(stderr(&excel_engine_failure).contains("needs-engine.xls"));
-    assert!(stderr(&excel_engine_failure).contains("该功能需要外部引擎"));
+    assert!(stderr(&excel_engine_failure).contains("需要可用的转换引擎"));
     let excel_failure_report = output_json(&excel_engine_failure)?;
     assert_eq!(excel_failure_report["failed"], 1);
     assert_eq!(excel_failure_report["items"][0]["status"], "failed");
@@ -98,8 +103,13 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     let legacy_word_source = sources.join("needs-engine.doc");
     fs::write(&legacy_word_source, b"synthetic doc payload")?;
     let word_before = fs::read(&legacy_word_source)?;
-    let word_engine_failure =
-        run_action_with_engines_disabled(&config, 3, 1, &legacy_word_source)?;
+    let word_engine_failure = run_action_with_engines_disabled_and_log_view(
+        &config,
+        3,
+        1,
+        &legacy_word_source,
+        "developer",
+    )?;
     assert!(
         word_engine_failure.status.success(),
         "a handled conversion failure should return to the menu: {}",
@@ -109,7 +119,7 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
         String::from_utf8_lossy(&word_engine_failure.stdout).contains("文件处理菜单仍可继续操作")
     );
     assert!(stderr(&word_engine_failure).contains("needs-engine.doc"));
-    assert!(stderr(&word_engine_failure).contains("该功能需要外部引擎"));
+    assert!(stderr(&word_engine_failure).contains("需要可用的转换引擎"));
     let word_failure_report = output_json(&word_engine_failure)?;
     assert_eq!(word_failure_report["failed"], 1);
     assert!(word_failure_report["items"][0]["detail"]
@@ -156,7 +166,7 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     let xls_content_source = sources.join("legacy-content.xls");
     fs::copy(&legacy_xls_fixture, &xls_content_source)?;
     let xls_content_before = fs::read(&xls_content_source)?;
-    let xls_content = run_action(&config, 5, 1, &xls_content_source)?;
+    let xls_content = run_action_with_log_view(&config, 5, 1, &xls_content_source, "developer")?;
     assert!(
         xls_content.status.success(),
         "content-name menu route rejected XLS: {}",
@@ -176,7 +186,7 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
     ] {
         fs::write(submission_dir.join(name), bytes)?;
     }
-    let submission = run_action(&config, 8, 2, &submission_dir)?;
+    let submission = run_action_with_log_view(&config, 8, 2, &submission_dir, "developer")?;
     assert!(
         submission.status.success(),
         "submission check failed: {}",
@@ -719,13 +729,15 @@ fn file_sort_menu_supports_user_developer_and_off_progress_views() -> Result<()>
     assert!(user.status.success(), "user view failed: {}", stderr(&user));
     assert!(sources.join("1_sort-user-payload.txt").is_file());
     let user_stderr = stderr(&user);
+    let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取文件排序配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("sort-user-payload"));
     assert!(String::from_utf8_lossy(&user.stdout).contains("重命名 1 个"));
-    assert_eq!(fs::read_dir(&log_dir)?.count(), 0);
+    // user 视图同样保存统一运行记录（1 个 .run.json + 1 个 .jsonl 事件日志）。
+    assert_eq!(fs::read_dir(&log_dir)?.count(), 2);
 
     let developer_source = sources.join("1_sort-developer-payload.txt");
     fs::write(&developer_source, b"developer view")?;
@@ -803,16 +815,19 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     assert!(user.status.success(), "user view failed: {}", stderr(&user));
     let user_target = sources.join("Bank_content-user.xlsx");
     assert_eq!(fs::read(&user_target)?, user_source_bytes);
-    let user_report = output_json(&user)?;
-    assert_eq!(user_report["ok"], 1);
-    assert!(user_report.get("run_history_path").is_none());
+    let user_stdout = String::from_utf8_lossy(&user.stdout);
+    // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+    assert!(user_stdout.contains("处理结束：成功 1 个，跳过 0 个，失败 0 个"), "{user_stdout}");
+    assert!(!user_stdout.contains("\"ok\""), "user view must not print JSON: {user_stdout}");
+    assert!(!user_stdout.contains("run_history_path"), "user view must not reference a run history path: {user_stdout}");
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取内容前缀配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("content-user.xlsx"));
-    assert_eq!(fs::read_dir(&log_dir)?.count(), 0);
+    // user 视图同样保存统一运行记录（1 个 .run.json）。
+    assert_eq!(find_files_with_extension(&log_dir, "json")?.len(), 1);
 
     let developer_source = sources.join("content-developer.xlsx");
     create_source_workbook(&developer_source, "Plain")?;
@@ -919,8 +934,15 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("Bank-user-report"));
-    let user_history_path = user_stderr.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("unified rename summary missing")?;
-    let user_report: Value = serde_json::from_slice(&fs::read(user_history_path)?)?;
+    let user_history_name = user_stderr.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("unified rename summary missing")?;
+    // user 视图仅显示可移植文件名；读取时需按配置的日志目录解析。
+    let user_history_path = PathBuf::from(user_history_name);
+    let user_history_path = if user_history_path.is_absolute() {
+        user_history_path
+    } else {
+        log_dir.join(user_history_path)
+    };
+    let user_report: Value = serde_json::from_slice(&fs::read(&user_history_path)?)?;
     assert_eq!(user_report["input_stats"]["succeeded"], 1);
     assert_eq!(user_report["overall_status"], "SUCCESS");
     assert!(find_files_with_extension(&log_dir, "log")?.len() == 1);

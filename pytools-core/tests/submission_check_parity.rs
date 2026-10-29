@@ -342,7 +342,8 @@ fn submission_check_menu_uses_and_between_columns_and_or_for_institution_aliases
         .collect::<std::io::Result<Vec<_>>>()?;
 
     let input = format!("4\n6\n2\n{}\n0\n", sources.display());
-    let output = run_menu(&config, &input)?;
+    // 基线断言依赖 JSON 输出，显式使用 developer 视图。
+    let output = run_menu_with_log_view(&config, &input, "developer")?;
     assert!(
         output.status.success(),
         "submission-check menu failed: {}",
@@ -441,7 +442,8 @@ fn submission_check_menu_matches_python_date_keyword_semantics() -> Result<()> {
         .collect::<std::io::Result<Vec<_>>>()?;
 
     let input = format!("4\n6\n2\n{}\n0\n", sources.display());
-    let output = run_menu(&config, &input)?;
+    // 基线断言依赖 JSON 输出，显式使用 developer 视图。
+    let output = run_menu_with_log_view(&config, &input, "developer")?;
     assert!(
         output.status.success(),
         "submission-check menu failed: {}",
@@ -519,15 +521,25 @@ fn submission_check_menu_logs_user_developer_and_off_views() -> Result<()> {
             "{log_view} menu failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let report_start = output
-            .stdout
-            .iter()
-            .position(|byte| *byte == b'{')
-            .context("submission-check menu JSON output missing")?;
-        let report: Value = serde_json::Deserializer::from_slice(&output.stdout[report_start..])
-            .into_iter::<Value>()
-            .next()
-            .context("submission-check menu report missing")??;
+        let report = if log_view == "user" {
+            // user 视图：stdout 只输出人类可读汇总行。
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                stdout.contains("提交检查完成：发现 3 个文件，提交 2 项"),
+                "{stdout}"
+            );
+            continue;
+        } else {
+            let report_start = output
+                .stdout
+                .iter()
+                .position(|byte| *byte == b'{')
+                .context("submission-check menu JSON output missing")?;
+            serde_json::Deserializer::from_slice(&output.stdout[report_start..])
+                .into_iter::<Value>()
+                .next()
+                .context("submission-check menu report missing")??
+        };
         assert_eq!(report["files"], 3);
         assert_eq!(report["submitted"], 2);
 
@@ -599,16 +611,20 @@ fn submission_check_menu_logs_user_developer_and_off_views() -> Result<()> {
         }
     }
 
-    let history_count = fs::read_dir(root.join("logs"))?
+    // developer 视图写 PT-4-8 专用历史；user 视图写统一运行记录；off 不写任何文件。
+    let developer_history_count = fs::read_dir(root.join("logs"))?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             entry
-                .path()
-                .extension()
-                .is_some_and(|extension| extension == "json")
+                .file_name()
+                .to_string_lossy()
+                .starts_with("PT-4-8_submission-check")
         })
         .count();
-    assert_eq!(history_count, 1, "only developer view writes history");
+    assert_eq!(
+        developer_history_count, 1,
+        "developer view writes the feature history"
+    );
     Ok(())
 }
 
@@ -655,7 +671,14 @@ fn submission_check_developer_history_records_report_write_failure() -> Result<(
 
     let histories = fs::read_dir(&logs)?
         .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<std::io::Result<Vec<_>>>()?;
+        .collect::<std::io::Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("PT-4-8_submission-check"))
+        })
+        .collect::<Vec<_>>();
     assert_eq!(histories.len(), 1);
     assert!(stderr.contains(&histories[0].to_string_lossy().to_string()));
     let history_text = fs::read_to_string(&histories[0])?;

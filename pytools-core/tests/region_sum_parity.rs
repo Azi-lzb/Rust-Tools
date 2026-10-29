@@ -151,6 +151,8 @@ fn region_sum_cli_runs_python_baseline_workflow() -> Result<()> {
         .arg(&output_dir)
         .arg("--log-dir")
         .arg(&log_dir)
+        // 基线对拍依赖 JSON 输出，显式使用 developer 视图。
+        .args(["--log-view", "developer"])
         .args(&input_paths)
         .output()
         .context("run pytools region-sum-check")?;
@@ -159,11 +161,8 @@ fn region_sum_cli_runs_python_baseline_workflow() -> Result<()> {
         "CLI failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        output.stderr.is_empty(),
-        "legacy CLI output changed without --log-view: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    // developer 视图：stderr 输出 JSONL 进度事件，stdout 仍为结果 JSON。
+    assert!(String::from_utf8_lossy(&output.stderr).contains("\"feature_id\":\"PT-7-5\""));
     let result: Value = serde_json::from_slice(&output.stdout).context("parse CLI JSON")?;
     for field in ["files", "sheets", "errors", "failed_files"] {
         assert_eq!(
@@ -237,6 +236,8 @@ fn region_sum_cli_projects_cached_formula_totals_like_python() -> Result<()> {
         .arg(&output_dir)
         .arg("--log-dir")
         .arg(&log_dir)
+        // 基线对拍依赖 JSON 输出，显式使用 developer 视图。
+        .args(["--log-view", "developer"])
         .args(&input_paths)
         .output()
         .context("run PT-7-5 CLI with cached formula totals")?;
@@ -245,11 +246,8 @@ fn region_sum_cli_projects_cached_formula_totals_like_python() -> Result<()> {
         "CLI failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        output.stderr.is_empty(),
-        "legacy CLI output changed without --log-view: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    // developer 视图：stderr 输出 JSONL 进度事件，stdout 仍为结果 JSON。
+    assert!(String::from_utf8_lossy(&output.stderr).contains("\"feature_id\":\"PT-7-5\""));
     let result: Value = serde_json::from_slice(&output.stdout).context("parse CLI JSON")?;
     for field in ["files", "sheets", "errors", "failed_files"] {
         assert_eq!(
@@ -347,6 +345,8 @@ fn interactive_region_sum_menu_matches_python_baseline_workbook() -> Result<()> 
         .arg("menu")
         .arg("--config")
         .arg(&config_path)
+        // 基线对拍依赖 JSON 输出，显式使用 developer 视图。
+        .args(["--log-view", "developer"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

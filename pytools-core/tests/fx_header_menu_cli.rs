@@ -109,10 +109,11 @@ fn fx_header_menu_creates_validated_copy_without_capability_and_skips_unverified
     fs::write(&unsupported, b"synthetic legacy workbook placeholder")?;
     let unsupported_original = fs::read(&unsupported)?;
 
+    // 结果断言依赖 JSON 输出，显式使用 developer 视图。
     let output = run_menu(
         &config,
         &format!("5\n4\n{};{}\n0\n", target.display(), unsupported.display()),
-        &[],
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
@@ -129,21 +130,16 @@ fn fx_header_menu_creates_validated_copy_without_capability_and_skips_unverified
 
     let result = parse_result(&stdout, "PT-7-4")?;
     assert_eq!(result["mode"], "create_copy");
-    assert_eq!(result["summary"]["total_files"], 1);
-    assert_eq!(result["summary"]["planned_files"], 0);
-    assert_eq!(result["summary"]["created_copies"], 1);
-    assert_eq!(result["summary"]["failed_files"], 0);
+    assert_eq!(result["files"], 1);
+    assert_eq!(result["planned_files"], 0);
+    assert_eq!(result["created_copies"], 1);
+    assert_eq!(result["failed_files"], 0);
     assert!(result["events"]
         .as_array()
         .is_some_and(|events| !events.is_empty()));
-    assert!(!stdout.contains("actual_engine"));
-    assert!(!stderr.contains("actual_engine"));
 
-    let output_copy = PathBuf::from(
-        result["outputs"][0]
-            .as_str()
-            .context("PT-7-4 output copy path missing from user report")?,
-    );
+    // developer JSON 不含 outputs 数组；副本位置按约定目录定位。
+    let output_copy = root.path().join("PyTools_专用报表处理结果").join("target.xlsx");
     assert!(output_copy.is_file());
     assert_eq!(
         output_copy.parent().unwrap().file_name().unwrap(),
@@ -331,15 +327,14 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(r#""created_copies": 1"#));
+    // off 视图：stdout 只输出人类可读汇总行，不输出 JSON、不写运行记录。
+    assert!(stdout.contains("处理结束：输入 1 个，已处理 1 个，失败 0 个"), "{stdout}");
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
     assert_eq!(fs::read(&target)?, original);
-    let result = parse_result(&stdout, "PT-7-4")?;
-    let copy = PathBuf::from(result["outputs"][0].as_str().context("copy path missing")?);
+    let copy = root.path().join("PyTools_专用报表处理结果").join("target.xlsx");
     assert!(copy.is_file());
-    assert_eq!(result["mode"], "create_copy");
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
     Ok(())

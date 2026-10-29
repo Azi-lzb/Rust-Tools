@@ -284,6 +284,8 @@ fn operation_49_cli_executes_rust_workflow_against_python_baseline() {
         .arg(&output_dir)
         .arg("--log-dir")
         .arg(&log_dir)
+        // 完整操作日志（log_path 及其逐行内容）现在仅在 developer 视图输出。
+        .args(["--log-view", "developer"])
         .args(&files)
         .output()
         .unwrap();

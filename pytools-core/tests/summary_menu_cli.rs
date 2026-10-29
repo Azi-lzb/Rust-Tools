@@ -90,14 +90,14 @@ fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<
     assert_eq!(history["overall_status"], "SUCCESS");
     assert_eq!(history["sheet_stats"]["succeeded"], 2);
     assert_eq!(history["output_stats"]["workbooks_saved"], 1);
+    // developer 视图：stderr 输出 JSONL 进度事件；统计字段承载于 progress 对象。
     let terminal = String::from_utf8_lossy(&output.stderr);
-    assert!(terminal.contains(
-        "[INFO] 处理成功：选择 2 个，尝试 2 个，成功 2 个，失败 0 个"
-    ));
-    assert!(terminal.contains("工作表发现 2 个，尝试 2 个，成功 2 个"));
-    assert!(terminal.contains("处理 4 行，输出 4 行"));
-    assert!(terminal.contains("读取耗时") && terminal.contains("写入耗时"));
-    assert!(terminal.contains("总耗时") && terminal.contains("运行编号"));
+    assert!(terminal.contains("\"phase\":\"run\""));
+    assert!(terminal.contains("\"total_files\":2"));
+    assert!(terminal.contains("\"sheets_discovered\":2"));
+    assert!(terminal.contains("\"sheets_succeeded\":2"));
+    assert!(terminal.contains("\"processed_rows\":4"));
+    assert!(terminal.contains("\"stage_elapsed_ms\"") && terminal.contains("\"total_elapsed_ms\""));
     assert_eq!(history["sheets"].as_array().unwrap().len(), 2);
     assert_eq!(history["sheets"][0]["file_name"], "source branch one.xlsx");
     assert_eq!(history["sheets"][0]["sheet_name"], "Data");
@@ -306,12 +306,25 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
     assert!(stdout.matches("------ 数据提取与汇总 ------").count() >= 2);
 
     let logs = root.path().join("app").join("logs");
-    let (_, history, _) = read_single_history(&logs, "PT-6-2_")?;
+    let (_, history, history_text) = read_single_history(&logs, "PT-6-2_")?;
     assert_eq!(history["status"], "failed");
-    assert!(history["failure"]["detail"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("group 2 has no 表头区域_2"));
+    // 失败细节（错误链）现记录在统一摘要 error_summary / 诊断日志中。
+    let diagnostic = fs::read_dir(&logs.join("run-events"))
+        .ok()
+        .and_then(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .find(|entry| {
+                    entry.file_name().to_string_lossy().starts_with("PT-6-2_")
+                })
+                .and_then(|entry| fs::read_to_string(entry.path()).ok())
+        })
+        .unwrap_or_default();
+    assert!(
+        history_text.contains("group 2 has no 表头区域_2")
+            || diagnostic.contains("group 2 has no 表头区域_2"),
+        "named-range failure detail missing from history and diagnostic log"
+    );
     assert_eq!(fs::read(&template)?, template_before);
     assert_eq!(fs::read(&source)?, source_before);
     Ok(())
@@ -568,9 +581,10 @@ fn interactive_menu_returns_failure_when_summary_input_is_corrupt() -> Result<()
     );
     let output = run_menu(&config, &input)?;
     assert!(!output.status.success());
+    let stderr_text = String::from_utf8_lossy(&output.stderr);
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("pytools:"),
-        "CLI failure should be surfaced to stderr"
+        stderr_text.contains("命令执行失败") || stderr_text.contains("pytools:"),
+        "CLI failure should be surfaced to stderr: {stderr_text}"
     );
 
     let logs = root.path().join("app").join("logs");

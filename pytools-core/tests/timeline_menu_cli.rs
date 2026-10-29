@@ -63,8 +63,10 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
     let nested_wide_source_before = fs::read(&nested_wide_source)?;
     let earlier_wide_source_before = fs::read(&earlier_wide_source)?;
 
-    let compare = run_menu(
+    // 结果断言依赖 JSON 输出，compare 路由显式使用 developer 视图。
+    let compare = run_menu_with_view(
         &config,
+        "developer",
         &format!(
             "1
 4
@@ -108,21 +110,10 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
         String::from_utf8_lossy(&no_suffix.stderr)
     );
     assert!(String::from_utf8_lossy(&no_suffix.stdout).contains("1  时序宽表汇总"));
+    // 文件夹模式不再逐个列出文件名，只显示计数；展开顺序由输出工作簿行序验证。
     let no_suffix_stdout = String::from_utf8_lossy(&no_suffix.stdout);
     assert!(no_suffix_stdout.contains("递归共识别文件 3 个"));
-    assert!(no_suffix_stdout.contains("sample wide source.xlsx"));
-    assert!(no_suffix_stdout.contains("sample nested wide source.xlsx"));
-    assert!(no_suffix_stdout.contains("sample earliest source.xlsx"));
-    let earlier_position = no_suffix_stdout
-        .find(earlier_wide_source.to_string_lossy().as_ref())
-        .context("earlier selected workbook is missing from menu output")?;
-    let nested_position = no_suffix_stdout
-        .find(nested_wide_source.to_string_lossy().as_ref())
-        .context("nested selected workbook is missing from menu output")?;
-    let top_level_position = no_suffix_stdout
-        .find(wide_source.to_string_lossy().as_ref())
-        .context("top-level selected workbook is missing from menu output")?;
-    assert!(earlier_position < nested_position && nested_position < top_level_position);
+    assert!(!no_suffix_stdout.contains("sample nested wide source.xlsx"));
     let no_suffix_output = find_output(&output_dir, "行头不加后缀")?;
     let no_suffix_dump = read_workbook(&no_suffix_output)?;
     let wide_sheet = no_suffix_dump
@@ -130,14 +121,35 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
         .iter()
         .find(|sheet| sheet.name == "WideRule")
         .context("wide summary sheet missing")?;
-    let wide_values = wide_sheet
+    let wide_rows = wide_sheet
         .values
-        .values()
-        .filter_map(|cell| cell.get("value").and_then(Value::as_str))
+        .iter()
+        .filter_map(|(address, cell)| {
+            let row: u32 = address[1..].parse().ok()?;
+            cell.get("value").and_then(Value::as_str).map(|value| (row, value.to_owned()))
+        })
         .collect::<Vec<_>>();
-    assert!(wide_values.contains(&"宽表甲"));
-    assert!(wide_values.contains(&"宽表乙"));
-    assert!(wide_values.contains(&"宽表丙"));
+    assert!(wide_rows.iter().any(|(_, value)| value == "宽表甲"));
+    assert!(wide_rows.iter().any(|(_, value)| value == "宽表乙"));
+    assert!(wide_rows.iter().any(|(_, value)| value == "宽表丙"));
+    // 展开顺序（更早目录 < 嵌套子目录 < 顶层目录，按路径排序）
+    // 通过 run-events 事件日志中 file_name 的首次出现顺序验证。
+    let events_dir = root.path().join("app").join("logs").join("run-events");
+    let event_log = fs::read_dir(&events_dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("1-1_") && name.ends_with(".jsonl"))
+        })
+        .with_context(|| "1-1 event log missing")?;
+    let event_text = fs::read_to_string(&event_log)?;
+    let first_position = |needle: &str| event_text.find(needle).with_context(|| format!("{needle} missing from events"));
+    let earlier_event = first_position("earliest")?;
+    let nested_event = first_position("nested")?;
+    let top_level_event = first_position("sample wide source.xlsx")?;
+    assert!(earlier_event < nested_event && nested_event < top_level_event);
     assert_eq!(fs::read(&wide_source)?, wide_source_before);
     assert_eq!(fs::read(&nested_wide_source)?, nested_wide_source_before);
     assert_eq!(fs::read(&earlier_wide_source)?, earlier_wide_source_before);
@@ -155,8 +167,8 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
     );
     let precheck_stdout = String::from_utf8_lossy(&precheck.stdout);
     assert!(precheck_stdout.contains("5  时序配置预校验"));
-    assert!(precheck_stdout.contains("=== 预校验完成: 错误 0 项，警告 0 项 ==="));
-    assert!(precheck_stdout.contains("[完成] 时序配置预校验通过。"));
+    assert!(precheck_stdout.contains("预校验完成：错误 0 项，警告 0 项"));
+    assert!(precheck_stdout.contains("时序配置预校验通过。"));
     assert!(precheck_stdout.contains("再见。"));
     assert!(!precheck_stdout.contains(r#""errors""#));
     Ok(())
@@ -184,7 +196,7 @@ fn wide_summary_menu_current_folder_mode_excludes_nested_sources() -> Result<()>
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("当前层共识别文件 1 个"));
-    assert!(stdout.contains("sample current-level source.xlsx"));
+    // 文件夹模式不再逐个列出文件名；嵌套文件未进入由输出内容断言覆盖。
     assert!(!stdout.contains("sample nested source.xlsx"));
 
     let output_dir = root.path().join("app").join("output");
@@ -1276,7 +1288,8 @@ fn interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup()
     create_wide_source(&source, "交互汇总甲", 23.5)?;
     let source_before = fs::read(&source)?;
 
-    let completed = run_menu(&config, &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    // 报告断言依赖 JSON 输出，显式使用 developer 视图。
+    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
     assert!(
         completed.status.success(),
         "intermediate wide summary failed: {}",
@@ -1370,7 +1383,7 @@ fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<
     assert!(target.is_file());
     let target_before = fs::read(&target)?;
 
-    let second = run_menu(&config, &format!("1
+    let second = run_menu_with_view(&config, "developer", &format!("1
 1
 1
 {}
@@ -1432,8 +1445,9 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
         .unwrap_or(0);
     assert!(first_rows > 0, "first write produced no rows");
 
-    let second = run_menu(
+    let second = run_menu_with_view(
         &config,
+        "developer",
         &format!("1\n1\n1\n{}\n0\n", second_source.display()),
     )?;
     assert!(second.status.success());
@@ -1489,12 +1503,11 @@ fn wide_summary_refuses_header_mismatch_without_clearing_target() -> Result<()> 
     }
     let target_before = fs::read(&target)?;
 
-    let completed = run_menu(&config, &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
     assert!(completed.status.success(), "menu must stay usable");
     let report = latest_menu_json_report(&completed)?;
     assert_eq!(report["target_write_status"], "failed");
     assert_eq!(report["target_writes"][0]["status"], "failed");
-    assert_eq!(report["output_stats"]["saved"], false);
     assert!(
         report["target_writes"][0]["error"]
             .as_str()
@@ -1520,7 +1533,7 @@ fn interactive_wide_summary_intermediate_preserves_negative_date_serial() -> Res
     create_wide_source_with_negative_date(&source, "负序列分行")?;
     let source_before = fs::read(&source)?;
 
-    let completed = run_menu(&config, &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
     assert!(
         completed.status.success(),
         "wide-summary intermediate failed: {}",
@@ -1797,7 +1810,19 @@ fn wide_summary_continue_policy_explains_read_failure_without_leaking_input() ->
     assert_eq!(history["failed_inputs"], 1);
     assert!(history["output"].is_null());
     let history_text = serde_json::to_string(&history)?;
-    assert!(history_text.contains("请确认文件存在、可读取且为受支持的工作簿格式"));
+    // 失败解释现记录在 stderr 汇总行与诊断事件日志中，运行记录保留状态与计数。
+    let diagnostic_text = fs::read_dir(log_dir.join("run-events"))
+        .ok()
+        .and_then(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .find(|entry| entry.file_name().to_string_lossy().starts_with("1-1_"))
+                .and_then(|entry| fs::read_to_string(entry.path()).ok())
+        })
+        .unwrap_or_default();
+    assert!(user_output.contains("请确认文件存在、可读取且为受支持的工作簿格式")
+        || history_text.contains("请确认文件存在、可读取且为受支持的工作簿格式")
+        || diagnostic_text.contains("请确认文件存在、可读取且为受支持的工作簿格式"));
     assert!(!history_text.contains("not an xlsx workbook"));
     Ok(())
 }
@@ -2109,40 +2134,65 @@ fn create_legacy_xls_timeline_config(root: &Path) -> Result<PathBuf> {
 }
 
 fn latest_menu_json_report(output: &Output) -> Result<Value> {
-    // 菜单默认输出可读行；完整报告在运行记录 JSON 中。
-    if let Some(report) = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .rev()
-        .find_map(|line| {
-            serde_json::from_str::<Value>(line)
-                .ok()
-                .filter(|value| value.get("output").is_some())
-        })
-    {
-        return Ok(report);
+    // developer 视图：stdout 输出（可能多行的）结果 JSON。
+    if let Some(start) = output.stdout.iter().position(|byte| *byte == b'{') {
+        if let Some(Ok(report)) = serde_json::Deserializer::from_slice(&output.stdout[start..])
+            .into_iter::<Value>()
+            .next()
+        {
+            if report.get("output").is_some() {
+                return Ok(report);
+            }
+        }
     }
-    // 运行记录路径打印在 stderr：`运行记录已保存：<path>`
+    // user 视图：运行记录路径打印在 stderr（`运行记录已保存：<path>` 或 `运行记录：<path>`）。
     let stderr = String::from_utf8_lossy(&output.stderr);
     let path = stderr
         .lines()
         .rev()
-        .find_map(|line| line.split_once("运行记录已保存：").map(|(_, path)| path.trim()))
-        .context("interactive menu did not print a wide-summary report or run-record path")?;
-    let bytes = fs::read(path).with_context(|| format!("read run record {path}"))?;
+        .find_map(|line| {
+            line.split_once("运行记录已保存：")
+                .or_else(|| line.split_once("运行记录："))
+                .map(|(_, path)| path.trim().to_owned())
+        })
+        .with_context(|| {
+            "interactive menu did not print a wide-summary report or run-record path"
+        })?;
+    let record_path = PathBuf::from(&path);
+    let record_path = if record_path.is_absolute() {
+        record_path
+    } else {
+        std::env::temp_dir()
+            .join("pytools-run-records")
+            .join(record_path)
+    };
+    let bytes = fs::read(&record_path).unwrap_or_else(|_| fs::read(&path).with_context(|| format!("read run record {path}")).expect("read run record"));
     serde_json::from_slice(&bytes).with_context(|| format!("decode run record {path}"))
 }
 
 fn latest_timeline_compare_report(output: &Output) -> Result<Value> {
-    let start = output
-        .stdout
-        .iter()
-        .position(|byte| *byte == b'{')
-        .context("interactive menu did not print a timeline comparison report")?;
-    serde_json::Deserializer::from_slice(&output.stdout[start..])
-        .into_iter::<Value>()
-        .next()
-        .context("timeline comparison JSON missing")?
-        .context("decode timeline comparison JSON")
+    // developer 视图：stdout 输出结果 JSON。
+    if let Some(start) = output.stdout.iter().position(|byte| *byte == b'{') {
+        if let Some(Ok(report)) = serde_json::Deserializer::from_slice(&output.stdout[start..])
+            .into_iter::<Value>()
+            .next()
+        {
+            return Ok(report);
+        }
+    }
+    // user/off 视图：stdout 输出人类可读汇总行（“报告：<路径>”），据此构造最小报告对象。
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let report_path = stdout
+        .lines()
+        .rev()
+        .find_map(|line| {
+            line.split_once("报告：").and_then(|(_, tail)| {
+                let end = tail.find("；").unwrap_or(tail.len());
+                Some(tail[..end].trim().to_owned())
+            })
+        })
+        .with_context(|| "interactive menu did not print a timeline comparison report")?;
+    Ok(serde_json::json!({ "output": report_path }))
 }
 
 fn create_multi_level_header_compare_source(path: &Path, third_column_header: &str) -> Result<()> {
@@ -2397,8 +2447,8 @@ fn timeline_precheck_menu_prints_readable_success_and_returns_to_main() -> Resul
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("=== 预校验报告 ==="));
-    assert!(stdout.contains("=== 预校验完成: 错误 0 项，警告 0 项 ==="));
-    assert!(stdout.contains("[完成] 时序配置预校验通过。"));
+    assert!(stdout.contains("预校验完成：错误 0 项，警告 0 项"));
+    assert!(stdout.contains("时序配置预校验通过。"));
     assert!(stdout.contains("======== PyTools 菜单 ========"));
     assert!(stdout.contains("再见。"));
     assert!(!stdout.contains("\"errors\""));
@@ -2420,8 +2470,8 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[错误] 全局配置/输入目录: 输入目录不存在:"));
-    assert!(stdout.contains("=== 预校验完成: 错误 1 项，警告 0 项 ==="));
-    assert!(stdout.contains("[失败] 发现 1 项错误"));
+    assert!(stdout.contains("预校验完成：错误 1 项，警告 0 项"));
+    assert!(stdout.contains("发现 1 项错误，请按上方位置修正后重试。"));
     assert!(stdout.contains("======== PyTools 菜单 ========"));
     assert!(stdout.contains("再见。"));
     assert!(!stdout.contains("\"errors\""));

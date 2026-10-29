@@ -70,6 +70,12 @@ fn v2_configuration_menu_routes_all_three_quick_actions_without_starting_a_deskt
         String::from_utf8_lossy(&result.stderr)
     );
 
+    // 失败/提示信息统一走终端日志行（stderr），不再以 [失败]/[提示] 前缀打印到 stdout。
+    let terminal = format!(
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(
         stdout.contains("  7  配置与快捷操作"),
@@ -80,16 +86,16 @@ fn v2_configuration_menu_routes_all_three_quick_actions_without_starting_a_deskt
         "configuration and quick-actions menu missing: {stdout}"
     );
     assert!(
-        stdout.contains("[失败] 打开配置文件失败:"),
-        "config route missing: {stdout}"
+        terminal.contains("打开配置文件失败；请检查文件是否存在以及系统是否允许打开"),
+        "config route missing: {terminal}"
     );
     assert!(
-        stdout.contains("[提示] 未找到输出文件:"),
-        "latest-output route missing: {stdout}"
+        terminal.contains("输出目录中没有可打开的文件"),
+        "latest-output route missing: {terminal}"
     );
     assert!(
-        stdout.contains("[失败] 打开输出目录失败:"),
-        "output-folder route missing: {stdout}"
+        terminal.contains("打开输出目录失败；请检查文件是否存在以及系统是否允许打开"),
+        "output-folder route missing: {terminal}"
     );
     assert!(
         stdout.contains("再见。"),

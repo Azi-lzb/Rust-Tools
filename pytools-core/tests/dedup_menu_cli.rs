@@ -187,7 +187,26 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
         "in-place dedup must modify the source workbook"
     );
     let log_dir = root.path().join("logs");
-    assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
+    // user 视图同样保存统一运行记录：2-1 与 2-2 各一条（另有 run-events 事件日志目录）。
+    let entries = fs::read_dir(&log_dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|name| name.starts_with("2-1_") && name.ends_with(".run.json"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|name| name.starts_with("2-2_") && name.ends_with(".run.json"))
+            .count(),
+        1
+    );
+    assert!(entries.iter().any(|name| name == "run-events"));
     Ok(())
 }
 
@@ -325,11 +344,24 @@ fn interactive_dedup_append_requires_confirmation_then_creates_a_new_target() ->
     assert_eq!(fs::read(&source)?, source_before);
 
     let log_dir = root.path().join("logs");
+    let entries = fs::read_dir(&log_dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    // 统一运行记录（2-3_*.run.json）与专用去重历史（pytools-dedup-config_append-*.json）并存。
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|name| name.starts_with("2-3_") && name.ends_with(".run.json"))
+            .count(),
+        1
+    );
     let histories = fs::read_dir(&log_dir)?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "json")
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("pytools-dedup-") && name.ends_with(".json"))
         })
         .collect::<Vec<_>>();
     assert_eq!(histories.len(), 1);

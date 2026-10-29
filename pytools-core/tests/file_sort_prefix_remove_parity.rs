@@ -324,6 +324,8 @@ fn operation_410_cli_executes_rust_workflow_against_python_baseline() {
         .arg(&output_dir)
         .arg("--log-dir")
         .arg(&log_dir)
+        // 完整操作日志（log_path）现在仅在 developer 视图输出。
+        .args(["--log-view", "developer"])
         .args(&files)
         .output()
         .unwrap();
@@ -434,6 +436,8 @@ fn operation_410_cli_accepts_empty_input_and_writes_blank_report() {
         .arg(&output_dir)
         .arg("--log-dir")
         .arg(&log_dir)
+        // 完整操作日志（log_path）现在仅在 developer 视图输出。
+        .args(["--log-view", "developer"])
         .output()
         .unwrap();
     assert!(
