@@ -82,7 +82,8 @@ fn main() {
             "{}",
             pytools_core::run_logging::terminal_line(
                 pytools_core::run_logging::Level::Error,
-                &format!("命令执行失败：{error}")
+                // 输出完整错误链：阶段上下文之外还必须暴露根因（如"目标在计划后已出现"）。
+                &format!("命令执行失败：{error:#}")
             )
         );
         std::process::exit(2);
@@ -1893,8 +1894,18 @@ fn run_interactive_wide_summary_menu<W: Write>(
 where
     W: Write,
 {
-    // 菜单输出为人类可读行（带时间戳）；机器可读 JSON 仅保留在运行记录文件中。
+    // 菜单输出为人类可读行（带时间戳）；developer 视图保留机器可读 JSON，与 CLI 行为一致。
+    let developer_view = arguments
+        .iter()
+        .position(|argument| argument == "--log-view")
+        .and_then(|index| arguments.get(index + 1))
+        .map(|value| value == "developer")
+        .unwrap_or(false);
     let report = run_wide_summary_cli_report(arguments, row_suffix)?;
+    if developer_view {
+        writeln!(output, "{}", serde_json::to_string(&report)?)?;
+        return Ok(());
+    }
     let (status, level) = match report["overall_status"].as_str().unwrap_or_default().to_ascii_uppercase().as_str() {
         "SUCCESS" => ("完成", pytools_core::run_logging::Level::Info),
         "PARTIAL_SUCCESS" => ("部分完成", pytools_core::run_logging::Level::Warn),
@@ -5099,7 +5110,7 @@ where
                     capabilities,
                     platform,
                     quarterly,
-                    None,
+                    engine,
                 )?;
                 return Ok(());
             }
@@ -15333,6 +15344,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     }
 
     let config_path = config_path.context("--config is required")?;
+    let log_view_explicit = log_view.is_some();
     if log_view.is_none() {
         log_view = Some("user".to_owned());
     }
@@ -15355,7 +15367,9 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             config_path.display()
         )
     })?;
-    let global = if output_dir.is_none() || (log_view.is_some() && log_dir.is_none()) {
+    // 仅在显式给出 --log-view/--log-dir 或缺少 --output-dir 时才从配置工作簿读取全局设置；
+    // 夹具/极简配置可能没有"全局配置"表。
+    let global = if output_dir.is_none() || (log_view_explicit && log_dir.is_none()) {
         Some(load_global(&config_path).with_context(|| {
             format!(
                 "load output and log directories from {}",

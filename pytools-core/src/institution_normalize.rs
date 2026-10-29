@@ -1050,7 +1050,10 @@ fn build_and_optionally_apply_institution_plan(
     );
 
     let modifier_route = options.capabilities.is_some();
-    let selected_components = if modifier_route {
+    let selected_components = if options.in_place {
+        // 就地模式：引擎在执行阶段确定（openpyxl / umya-spreadsheet），不预挂 rust_xlsxwriter。
+        vec!["Rust".to_owned(), "in-place".to_owned()]
+    } else if modifier_route {
         vec!["Rust".to_owned(), "ExcelModifier".to_owned()]
     } else {
         vec![
@@ -1066,7 +1069,9 @@ fn build_and_optionally_apply_institution_plan(
         on_event,
         "engine_execution",
         "started",
-        if modifier_route {
+        if options.in_place {
+            format!("正在就地改写源工作簿：{file_name}。")
+        } else if modifier_route {
             format!("正在按已登记能力生成规范化副本：{file_name}。")
         } else {
             format!("正在用 Rust 新建并验证规范化工作簿：{file_name}。")
@@ -1080,7 +1085,12 @@ fn build_and_optionally_apply_institution_plan(
         None,
         None,
     );
-    let execution_result = if options.in_place {
+    let execution_result: Result<(
+        Option<serde_json::Value>,
+        String,
+        Vec<String>,
+        Option<crate::file_commit::TargetCommitReport>,
+    )> = if options.in_place {
         let engine = match options.engine.as_deref() {
             Some("openpyxl") => crate::inplace_edit::InPlaceEngine::Openpyxl,
             _ => crate::inplace_edit::InPlaceEngine::Umya,
@@ -1089,6 +1099,7 @@ fn build_and_optionally_apply_institution_plan(
             let engine_name = engine.label().to_owned();
             let mut components = vec!["Rust".to_owned(), "in-place".to_owned()];
             components.push(engine_name.clone());
+            let commit = outcome.commit.clone();
             (
                 Some(serde_json::json!({
                     "engine": engine_name,
@@ -1098,6 +1109,7 @@ fn build_and_optionally_apply_institution_plan(
                 })),
                 engine_name,
                 components,
+                Some(commit),
             )
         })
     } else if let (Some(capability_file), Some(platform)) =
@@ -1109,7 +1121,7 @@ fn build_and_optionally_apply_institution_plan(
                 let mut components = vec!["Rust".to_owned(), "ExcelModifier".to_owned()];
                 components.push(engine.clone());
                 components.push(engine_language(&engine).to_owned());
-                (serde_json::to_value(execution).ok(), engine, components)
+                (serde_json::to_value(execution).ok(), engine, components, None)
             },
         )
     } else {
@@ -1122,6 +1134,7 @@ fn build_and_optionally_apply_institution_plan(
                 })),
                 "rust_xlsxwriter".to_owned(),
                 selected_components.clone(),
+                None,
             )
         })
     };
@@ -1165,7 +1178,7 @@ fn build_and_optionally_apply_institution_plan(
         );
         failure
     })?;
-    let (execution_value, execution_engine, execution_components) = execution;
+    let (execution_value, execution_engine, execution_components, in_place_commit) = execution;
     actual_engine = Some(execution_engine.clone());
     stage_components.insert("engine_execution".to_owned(), execution_components);
     emit_institution_stage(
@@ -1208,54 +1221,64 @@ fn build_and_optionally_apply_institution_plan(
         None,
         None,
     );
-    let commit_result = (|| -> Result<crate::file_commit::TargetCommitReport> {
-        crate::file_commit::verify_planning_snapshot(input, Some(&expected_source_hash))
-            .context("source changed during normalization; refusing to publish a copy")?;
-        let output_parent = output_path
-            .parent()
-            .context("normalized copy path has no parent directory")?;
-        ensure_institution_normalize_output_directory(output_parent, true)?;
-        crate::file_commit::create_target_from_candidate(candidate, &output_path)
-            .with_context(|| format!("publish normalized copy to {}", output_path.display()))
-    })();
-    timings.safe_commit_ms = commit_started.elapsed().as_millis();
-    let commit = commit_result.map_err(|error| {
-        let mut failure = normalize_file_failure(
-            "safe_commit",
-            "commit_failed",
-            format!("safe copy publication failed: {error:#}"),
-            None,
-        )
-        .attach_state(&timings, &stage_components, actual_engine.as_deref())
-        .attach_execution(execution_value.clone());
-        if let Err(cleanup_error) = cleanup_institution_normalize_candidate(candidate) {
-            failure.diagnostic.push_str(&format!(
-                "; validated candidate cleanup failed: {cleanup_error:#}"
-            ));
-        }
-        emit_institution_stage(
-            report,
-            on_event,
-            "safe_commit",
-            "failed",
-            format!("另存修改副本失败：{file_name}；原文件未被替换。"),
-            &progress,
-            &file_name,
-            Some(timings.safe_commit_ms),
-            vec!["Rust".to_owned(), "file_commit".to_owned()],
-            actual_engine.clone(),
-            Some(failure.error_type.to_owned()),
-            Some(failure.diagnostic.clone()),
-            None,
-        );
-        failure
-    })?;
+    let commit = if let Some(commit) = in_place_commit {
+        // 就地模式：execute_in_place 已完成候选校验、快照核对与安全替换，无需再次发布。
+        timings.safe_commit_ms = commit_started.elapsed().as_millis();
+        commit
+    } else {
+        let commit_result = (|| -> Result<crate::file_commit::TargetCommitReport> {
+            crate::file_commit::verify_planning_snapshot(input, Some(&expected_source_hash))
+                .context("source changed during normalization; refusing to publish a copy")?;
+            let output_parent = output_path
+                .parent()
+                .context("normalized copy path has no parent directory")?;
+            ensure_institution_normalize_output_directory(output_parent, true)?;
+            crate::file_commit::create_target_from_candidate(candidate, &output_path)
+                .with_context(|| format!("publish normalized copy to {}", output_path.display()))
+        })();
+        timings.safe_commit_ms = commit_started.elapsed().as_millis();
+        commit_result.map_err(|error| {
+            let mut failure = normalize_file_failure(
+                "safe_commit",
+                "commit_failed",
+                format!("safe copy publication failed: {error:#}"),
+                None,
+            )
+            .attach_state(&timings, &stage_components, actual_engine.as_deref())
+            .attach_execution(execution_value.clone());
+            if let Err(cleanup_error) = cleanup_institution_normalize_candidate(candidate) {
+                failure.diagnostic.push_str(&format!(
+                    "; validated candidate cleanup failed: {cleanup_error:#}"
+                ));
+            }
+            emit_institution_stage(
+                report,
+                on_event,
+                "safe_commit",
+                "failed",
+                format!("另存修改副本失败：{file_name}；原文件未被替换。"),
+                &progress,
+                &file_name,
+                Some(timings.safe_commit_ms),
+                vec!["Rust".to_owned(), "file_commit".to_owned()],
+                actual_engine.clone(),
+                Some(failure.error_type.to_owned()),
+                Some(failure.diagnostic.clone()),
+                None,
+            );
+            failure
+        })?
+    };
     emit_institution_stage(
         report,
         on_event,
         "safe_commit",
         "completed",
-        format!("规范化副本已验证并保存：{}。", output_path.display()),
+        if options.in_place {
+            format!("源工作簿已通过快照校验安全替换：{}。", output_path.display())
+        } else {
+            format!("规范化副本已验证并保存：{}。", output_path.display())
+        },
         &progress,
         &file_name,
         Some(timings.safe_commit_ms),
@@ -1283,11 +1306,18 @@ fn build_and_optionally_apply_institution_plan(
         timings,
         error_stage: None,
         error_type: None,
-        user_message: format!(
-            "完成 {index}/{total_files}：{file_name}，修改 {} 行；副本已保存到 {}。",
-            plan_result.mapped_rows,
-            commit.target.display()
-        ),
+        user_message: if options.in_place {
+            format!(
+                "完成 {index}/{total_files}：{file_name}，修改 {} 行；源工作簿已就地更新。",
+                plan_result.mapped_rows
+            )
+        } else {
+            format!(
+                "完成 {index}/{total_files}：{file_name}，修改 {} 行；副本已保存到 {}。",
+                plan_result.mapped_rows,
+                commit.target.display()
+            )
+        },
         diagnostic: None,
         route_diagnostic: None,
         cleanup_warning: cleanup_warning.take(),
