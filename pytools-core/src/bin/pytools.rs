@@ -12218,37 +12218,44 @@ fn execute_wide_summary_target_writes(
             .expect("summary sheet resolved above")
             .get_highest_column_and_row();
 
-        // 既有工作表：先比对表头（列数 + 每列文本）。
-        // 一致→在末尾追加数据行；不一致→拒绝写入并说明差异，绝不清空既有数据。
+        // 既有工作表：完全空白→视为待填充，直接写入表头+数据；
+        // 否则先比对表头（列数 + 每列文本）：一致→在末尾追加数据行；
+        // 不一致→拒绝写入并说明差异，绝不清空既有数据。
         let mut existing_target_rows: u32 = 0;
+        let mut blank_existing_sheet = false;
         let (write_start_row, _first_source_row, mode) = if existed_sheet {
             let (target_max_col, target_max_row, mismatch) = {
                 let target_ws = book
                     .get_sheet_by_name(&target_sheet_name)
                     .expect("target sheet resolved above");
                 let (target_max_col, target_max_row) = target_ws.get_highest_column_and_row();
-                let mut mismatch = None;
-                if target_max_col != summary_max_col {
-                    mismatch = Some(format!(
-                        "表头列数不同：目标 {target_max_col} 列，汇总 {summary_max_col} 列"
-                    ));
+                if target_max_col == 0 || target_max_row == 0 {
+                    // umya 对无任何单元格的表返回 (0, 0)：完全空白，视为待填充。
+                    (0u32, 0u32, None)
                 } else {
-                    for column in 1..=summary_max_col {
-                        let expected = umya_cell_display(target_ws, column, 1);
-                        let actual = summary_book
-                            .get_sheet_by_name(&summary_sheet_name)
-                            .ok()
-                            .map(|sheet| umya_cell_display(sheet, column, 1))
-                            .unwrap_or_default();
-                        if expected != actual {
-                            mismatch = Some(format!(
-                                "第 {column} 列表头不同：目标 {expected:?}，汇总 {actual:?}"
-                            ));
-                            break;
+                    let mut mismatch = None;
+                    if target_max_col != summary_max_col {
+                        mismatch = Some(format!(
+                            "表头列数不同：目标 {target_max_col} 列，汇总 {summary_max_col} 列"
+                        ));
+                    } else {
+                        for column in 1..=summary_max_col {
+                            let expected = umya_cell_display(target_ws, column, 1);
+                            let actual = summary_book
+                                .get_sheet_by_name(&summary_sheet_name)
+                                .ok()
+                                .map(|sheet| umya_cell_display(sheet, column, 1))
+                                .unwrap_or_default();
+                            if expected != actual {
+                                mismatch = Some(format!(
+                                    "第 {column} 列表头不同：目标 {expected:?}，汇总 {actual:?}"
+                                ));
+                                break;
+                            }
                         }
                     }
+                    (target_max_col, target_max_row, mismatch)
                 }
-                (target_max_col, target_max_row, mismatch)
             };
             let _ = target_max_col;
             if let Some(reason) = mismatch {
@@ -12273,13 +12280,21 @@ fn execute_wide_summary_target_writes(
                 }));
                 continue;
             }
-            // 表头一致：跳过汇总表头行，追加到目标末行之后。
-            existing_target_rows = target_max_row;
-            (target_max_row + 1, 2u32, "表头一致追加")
+            if target_max_row == 0 {
+                // 空白工作表：在既有空 sheet 上写入表头+数据，其他 sheet 不受影响。
+                blank_existing_sheet = true;
+                (1u32, 1u32, "空白工作表写入")
+            } else {
+                // 表头一致：跳过汇总表头行，追加到目标末行之后。
+                existing_target_rows = target_max_row;
+                (target_max_row + 1, 2u32, "表头一致追加")
+            }
         } else {
             let _ = book.new_sheet(target_sheet_name.clone());
             (1u32, 1u32, "新建工作表写入")
         };
+        // 追加语义仅在“既有非空白工作表”上成立；新表/空白表都由本次写入表头。
+        let append_to_existing = existed_sheet && !blank_existing_sheet;
 
         // 对齐旧 Python：写入前先做两级去重——键列默认“数据日期+集合表头+行头路径/首个动态列”，
         // 可由规则“目标去重列”显式指定；批内重复行与目标既有行都不再写入。
@@ -12356,7 +12371,7 @@ fn execute_wide_summary_target_writes(
             kept_rows.push(row);
         }
         let input_rows = summary_max_row.saturating_sub(1) as usize;
-        if existed_sheet && kept_rows.is_empty() {
+        if append_to_existing && kept_rows.is_empty() {
             // 目标去重后没有新增行：不生成候选、不改写目标文件。
             let message = format!(
                 "目标工作簿 {}：表头一致，输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，目标已有 {existing_filtered_rows} 行；没有新增数据，未修改目标",
@@ -12416,7 +12431,7 @@ fn execute_wide_summary_target_writes(
                     *destination_row += 1;
                     copied
                 };
-                if !existed_sheet {
+                if !append_to_existing {
                     copied += copy_one(&mut destination_row, 1);
                 }
                 for &source_row in &kept_rows {
@@ -12469,7 +12484,7 @@ fn execute_wide_summary_target_writes(
         } else {
             mode
         };
-        let written_rows = if existed_sheet {
+        let written_rows = if append_to_existing {
             kept_rows.len()
         } else {
             kept_rows.len() + 1

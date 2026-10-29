@@ -1505,6 +1505,80 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
 }
 
 #[test]
+fn wide_summary_fills_preexisting_blank_target_sheet() -> Result<()> {
+    // 目标工作表存在但完全空白：视为待填充，写入表头+数据，不拒绝、不影响其他 sheet。
+    let root = TestDirectory::new()?;
+    let target = root.path().join("configured target.xlsx");
+    {
+        let mut workbook = umya_spreadsheet::new_file();
+        let _ = workbook.new_sheet("Append");
+        let other = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        other.cell_mut((1, 1)).set_value("keep me");
+        umya_spreadsheet::writer::xlsx::write(&workbook, &target)?;
+    }
+    let config = create_timeline_config_with_target(root.path(), Some(&target))?;
+    let source = root.path().join("sample blank target source.xlsx");
+    create_wide_source(&source, "空白表记录", 5.5)?;
+
+    let output = run_menu_with_view(
+        &config,
+        "developer",
+        &format!("1
+1
+1
+{}
+0
+", source.display()),
+    )?;
+    assert!(
+        output.status.success(),
+        "blank-target write failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = latest_menu_json_report(&output)?;
+    assert_eq!(report["target_writes"][0]["status"], "succeeded");
+    assert_eq!(report["target_writes"][0]["mode"], "空白工作表写入");
+    assert!(report["target_writes"][0]["cells"].as_u64().unwrap_or(0) > 0);
+    let after = read_workbook(&target)?;
+    let sheet = after
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Append")
+        .context("target sheet missing")?;
+    // 表头行 + 数据行都已写入。
+    assert!(
+        sheet
+            .values
+            .values()
+            .any(|cell| cell.get("value").and_then(Value::as_str) == Some("工作簿名")),
+        "blank target sheet must receive the summary header"
+    );
+    assert!(
+        sheet
+            .values
+            .values()
+            .any(|cell| cell.get("value").and_then(Value::as_str) == Some("空白表记录")),
+        "blank target sheet must receive the data row"
+    );
+    // 其他 sheet 不受影响。
+    let other = after
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Sheet1")
+        .context("unrelated sheet missing")?;
+    assert_eq!(
+        other
+            .values
+            .get("A1")
+            .and_then(|cell| cell.get("value"))
+            .and_then(Value::as_str),
+        Some("keep me"),
+        "unrelated sheet must stay untouched"
+    );
+    Ok(())
+}
+
+#[test]
 fn wide_summary_refuses_header_mismatch_without_clearing_target() -> Result<()> {
     // 既有工作表表头与汇总不一致时必须拒绝写入，且不改动目标文件。
     let root = TestDirectory::new()?;
