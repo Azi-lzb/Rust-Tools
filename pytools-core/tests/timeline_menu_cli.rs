@@ -1479,6 +1479,28 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
             .any(|cell| cell.get("value").and_then(Value::as_str) == Some("首轮记录"))
     });
     assert!(kept, "append must keep previously written rows");
+
+    // 目标去重：同一份源重跑不得重复追加；目标文件保持不变。
+    let target_before = fs::read(&target)?;
+    let rerun = run_menu(&config, &format!("1
+1
+1
+{}
+0
+", first_source.display()))?;
+    assert!(rerun.status.success());
+    let rerun_report = latest_menu_json_report(&rerun)?;
+    assert_eq!(rerun_report["target_writes"][0]["status"], "skipped");
+    assert_eq!(
+        rerun_report["target_writes"][0]["written_rows"], 0,
+        "duplicate rerun must not write rows: {}",
+        rerun_report["target_writes"][0]
+    );
+    assert_eq!(
+        fs::read(&target)?,
+        target_before,
+        "duplicate rerun must not modify the target file"
+    );
     Ok(())
 }
 

@@ -12220,7 +12220,8 @@ fn execute_wide_summary_target_writes(
 
         // 既有工作表：先比对表头（列数 + 每列文本）。
         // 一致→在末尾追加数据行；不一致→拒绝写入并说明差异，绝不清空既有数据。
-        let (write_start_row, first_source_row, mode) = if existed_sheet {
+        let mut existing_target_rows: u32 = 0;
+        let (write_start_row, _first_source_row, mode) = if existed_sheet {
             let (target_max_col, target_max_row, mismatch) = {
                 let target_ws = book
                     .get_sheet_by_name(&target_sheet_name)
@@ -12273,13 +12274,119 @@ fn execute_wide_summary_target_writes(
                 continue;
             }
             // 表头一致：跳过汇总表头行，追加到目标末行之后。
+            existing_target_rows = target_max_row;
             (target_max_row + 1, 2u32, "表头一致追加")
         } else {
             let _ = book.new_sheet(target_sheet_name.clone());
             (1u32, 1u32, "新建工作表写入")
         };
 
-        // 写入汇总内容：逐格复制值与样式。
+        // 对齐旧 Python：写入前先做两级去重——键列默认“数据日期+集合表头+行头路径/首个动态列”，
+        // 可由规则“目标去重列”显式指定；批内重复行与目标既有行都不再写入。
+        let summary_ws_for_dedup = summary_book
+            .get_sheet_by_name(&summary_sheet_name)
+            .expect("summary sheet resolved above");
+        let summary_headers: Vec<String> = (1..=summary_max_col)
+            .map(|column| umya_cell_display(summary_ws_for_dedup, column, 1))
+            .collect();
+        let key_names = match pytools_core::timeline_ops::wide_target_key_names(rule, &summary_headers) {
+            Ok(names) => names,
+            Err(error) => {
+                // 与 Python 一致：去重列不存在时跳过目标写入，不做猜测。
+                let message = format!("解析目标去重列失败，已跳过目标写入：{error:#}");
+                let mut event = new_wide_summary_cli_event(
+                    events, run_started, feature_id, total_inputs, "target_write", "skipped",
+                    format!("目标工作簿 {}：{message}", target.display()),
+                    Some(stage_started.elapsed().as_millis()), 0,
+                    &["pytools-core"], None, Some("target_dedup_columns_missing"),
+                );
+                event.workbook_name = Some(target.to_string_lossy().into_owned());
+                event.worksheet_name = Some(target_sheet_name.clone());
+                emit_wide_summary_event(_log_view, events, event);
+                results.push(serde_json::json!({
+                    "target": target.display().to_string(),
+                    "sheet": target_sheet_name,
+                    "status": "skipped",
+                    "error": message,
+                }));
+                continue;
+            }
+        };
+        let key_columns: Vec<usize> = key_names
+            .iter()
+            .map(|name| {
+                summary_headers
+                    .iter()
+                    .position(|header| header == name)
+                    .expect("key names resolved against summary headers")
+                    + 1
+            })
+            .collect();
+        let row_key = |sheet: &umya::Worksheet, row: u32| -> Vec<String> {
+            key_columns
+                .iter()
+                .map(|&column| umya_cell_display(sheet, column as u32, row))
+                .collect()
+        };
+        let mut seen_keys: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+        if existed_sheet {
+            let target_ws = book
+                .get_sheet_by_name(&target_sheet_name)
+                .expect("target sheet resolved above");
+            for row in 2..=existing_target_rows {
+                seen_keys.insert(row_key(target_ws, row));
+            }
+        }
+        let mut batch_keys: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+        let mut batch_dedup_rows = 0usize;
+        let mut existing_filtered_rows = 0usize;
+        let mut kept_rows = Vec::<u32>::new();
+        // 去重始终只针对数据行（第 2 行起）；表头行由下方写入逻辑单独处理。
+        for row in 2..=summary_max_row {
+            let key = row_key(summary_ws_for_dedup, row);
+            if !batch_keys.insert(key.clone()) {
+                batch_dedup_rows += 1;
+                continue;
+            }
+            if seen_keys.contains(&key) {
+                existing_filtered_rows += 1;
+                continue;
+            }
+            seen_keys.insert(key);
+            kept_rows.push(row);
+        }
+        let input_rows = summary_max_row.saturating_sub(1) as usize;
+        if existed_sheet && kept_rows.is_empty() {
+            // 目标去重后没有新增行：不生成候选、不改写目标文件。
+            let message = format!(
+                "目标工作簿 {}：表头一致，输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，目标已有 {existing_filtered_rows} 行；没有新增数据，未修改目标",
+                target.display()
+            );
+            let mut event = new_wide_summary_cli_event(
+                events, run_started, feature_id, total_inputs, "target_write", "skipped",
+                message.clone(),
+                Some(stage_started.elapsed().as_millis()), 0,
+                &["pytools-core", "umya-spreadsheet"], None, Some("no_new_rows_after_dedup"),
+            );
+            event.workbook_name = Some(target.to_string_lossy().into_owned());
+            event.worksheet_name = Some(target_sheet_name.clone());
+            emit_wide_summary_event(_log_view, events, event);
+            results.push(serde_json::json!({
+                "target": target.display().to_string(),
+                "sheet": target_sheet_name,
+                "status": "skipped",
+                "mode": mode,
+                "input_rows": input_rows,
+                "batch_dedup_rows": batch_dedup_rows,
+                "existing_filtered_rows": existing_filtered_rows,
+                "written_rows": 0,
+                "cells": 0,
+                "error": message,
+            }));
+            continue;
+        }
+
+        // 写入汇总内容：逐格复制值与样式（仅写入去重后保留的行；新表先复制表头行）。
         let mut copied = 0usize;
         {
             if let Ok(summary_ws) = summary_book.get_sheet_by_name(&summary_sheet_name) {
@@ -12287,7 +12394,8 @@ fn execute_wide_summary_target_writes(
                     .get_sheet_by_name_mut(&target_sheet_name)
                     .expect("target sheet resolved above");
                 let mut destination_row = write_start_row;
-                for row in first_source_row..=summary_max_row {
+                let mut copy_one = |destination_row: &mut u32, source_row: u32| -> usize {
+                    let mut copied = 0usize;
                     for column in 1..=summary_max_col {
                         let mut letters = String::new();
                         let mut rest = column;
@@ -12295,17 +12403,24 @@ fn execute_wide_summary_target_writes(
                             letters.insert(0, (b'A' + ((rest - 1) % 26) as u8) as char);
                             rest = (rest - 1) / 26;
                         }
-                        let address = format!("{letters}{row}");
+                        let address = format!("{letters}{source_row}");
                         if let Some(source_cell) = summary_ws.get_cell(address.as_str()) {
                             let style = source_cell.get_style().clone();
                             let raw = source_cell.get_raw_value().clone();
-                            let target_cell = target_ws.cell_mut((column, destination_row));
+                            let target_cell = target_ws.cell_mut((column, *destination_row));
                             target_cell.set_style(style);
                             set_umya_raw_value(target_cell, &raw);
                             copied += 1;
                         }
                     }
-                    destination_row += 1;
+                    *destination_row += 1;
+                    copied
+                };
+                if !existed_sheet {
+                    copied += copy_one(&mut destination_row, 1);
+                }
+                for &source_row in &kept_rows {
+                    copied += copy_one(&mut destination_row, source_row);
                 }
             }
         }
@@ -12354,8 +12469,13 @@ fn execute_wide_summary_target_writes(
         } else {
             mode
         };
+        let written_rows = if existed_sheet {
+            kept_rows.len()
+        } else {
+            kept_rows.len() + 1
+        };
         let message = format!(
-            "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（写入 {copied} 个单元格）",
+            "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，目标已有 {existing_filtered_rows} 行，新增 {written_rows} 行 / 写入 {copied} 个单元格）",
             target.display()
         );
         let mut event = new_wide_summary_cli_event(
@@ -12381,6 +12501,10 @@ fn execute_wide_summary_target_writes(
             "status": "succeeded",
             "mode": mode,
             "cells": copied,
+            "input_rows": input_rows,
+            "batch_dedup_rows": batch_dedup_rows,
+            "existing_filtered_rows": existing_filtered_rows,
+            "written_rows": written_rows,
         }));
     }
     let status = if any_failed && any_ok {

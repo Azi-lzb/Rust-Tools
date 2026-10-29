@@ -3441,7 +3441,9 @@ fn wide_import_operation(
     }
 }
 
-fn wide_target_key_names(rule: &TimelineRule, headers: &[String]) -> Result<Vec<String>> {
+/// 宽表目标写入去重键：显式“目标去重列”优先，否则按业务默认键推导
+/// （数据日期 + 集合表头 + 行头路径/首个动态列），与旧 Python 版一致。
+pub fn wide_target_key_names(rule: &TimelineRule, headers: &[String]) -> Result<Vec<String>> {
     let mut names = Vec::new();
     if !rule.target_dedup_cols.is_empty() {
         for spec in &rule.target_dedup_cols {
