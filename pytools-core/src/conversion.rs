@@ -424,6 +424,34 @@ where
         format!("已发现 {} 个待处理文件。", inputs.len()),
     );
     let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+    // One LibreOffice session serves the whole batch: stage and convert all
+    // LO-routed files up front (single shared profile, one soffice process
+    // per stage) so the per-file loop never starts a process. Windows auto
+    // routes to COM and never creates a session.
+    if engine != "native"
+        && std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none()
+    {
+        let requests = inputs
+            .iter()
+            .filter(|input| {
+                let Some(ext) = input.extension().and_then(|ext| ext.to_str()) else {
+                    return false;
+                };
+                let ext = ext.to_ascii_lowercase();
+                ext != target
+                    && crate::conversion_engine::libreoffice_batch_request(&ext, &target, engine)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !requests.is_empty() {
+            runtime.prepare_libreoffice_batch(
+                &requests
+                    .into_iter()
+                    .map(|input| (input, target.clone()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
     for (index, input) in inputs.iter().enumerate() {
         let input_index = index + 1;
         let item_started = Instant::now();
