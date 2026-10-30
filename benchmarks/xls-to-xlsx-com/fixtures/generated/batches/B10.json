@@ -1,0 +1,46 @@
+{
+  "batch": "B10",
+  "count": 10,
+  "files": [
+    {
+      "name": "LARGE-001.xls",
+      "sha256": "f1e6cf930b3ab795dcc6aa803139d4f696e5e330e4b24b99764c311d5cf9084f"
+    },
+    {
+      "name": "MEDIUM-001.xls",
+      "sha256": "ab955ed8e5bb024520eb22d1aa8704cddccf055c2c30c618f0f0ded1ba03a143"
+    },
+    {
+      "name": "MEDIUM-002.xls",
+      "sha256": "13168293ea15b64fb453e3bedaaa42842c253e9a46d8fc0b141d0dd1a04785c5"
+    },
+    {
+      "name": "MEDIUM-003.xls",
+      "sha256": "1e2639d9ba1382e729bf8308b93521c216c2aed7a19edaf562e841fc92b5aa6a"
+    },
+    {
+      "name": "MEDIUM-004.xls",
+      "sha256": "dc32631c88ba306e273e12f3d48f4160bb9a05a3f9d337c2d545f43c1ab87a16"
+    },
+    {
+      "name": "SMALL-001.xls",
+      "sha256": "186a2ff8b51a8214e7598a4134164c161be87390ade0c49739c50b996c8ea717"
+    },
+    {
+      "name": "SMALL-002.xls",
+      "sha256": "c424265d8ce493eca705c795d88319e0fa8e53dafd80dce2e59cf991aa98b820"
+    },
+    {
+      "name": "SMALL-003.xls",
+      "sha256": "423383be0d3e20f7bac034750bdfef4800142eb57facdb3969afe2efe0ffc443"
+    },
+    {
+      "name": "SMALL-004.xls",
+      "sha256": "5415d90569dd24e221985f0a9d6fbabe673d2eb6c7c7a7c73e7aa6263a5de40b"
+    },
+    {
+      "name": "SMALL-005.xls",
+      "sha256": "af163c998db206e5c59b9742158b3a8c3007579970ffc68a0e3fa806d3443893"
+    }
+  ]
+}

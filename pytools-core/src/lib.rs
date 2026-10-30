@@ -8,6 +8,8 @@ pub mod batch_ops;
 pub mod batch_rename;
 pub mod config;
 pub mod config_admin;
+#[cfg(windows)]
+mod conversion_com;
 pub mod conversion;
 pub mod conversion_engine;
 pub mod date_parse;

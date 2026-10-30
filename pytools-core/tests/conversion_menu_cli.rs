@@ -392,6 +392,69 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
 }
 
 #[test]
+#[ignore = "requires Windows Excel COM; converts temporary copies through the V2 menu"]
+fn conversion_menu_batch_uses_rust_com_and_preserves_sources() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let sources = root.path().join("sources");
+    fs::create_dir_all(&sources)?;
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/timeline/wide_summary_elapsed_duration.xls");
+    let first = sources.join("first.xls");
+    let second = sources.join("second.xls");
+    fs::copy(&fixture, &first)?;
+    fs::copy(&fixture, &second)?;
+    let source_bytes = [fs::read(&first)?, fs::read(&second)?];
+
+    let input = format!(
+        "4\n4\n1\n1\n{};{}\n0\n0\n",
+        first.display(),
+        second.display()
+    );
+    let mut child = menu_command(&config);
+    child.arg("--log-view").arg("developer");
+    let output = finish_menu(child, &input)?;
+    assert!(
+        output.status.success(),
+        "conversion menu failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        stderr(&output)
+    );
+
+    let report = output_json(&output)?;
+    assert_eq!(report["converted"], 2, "{report}");
+    assert_eq!(report["failed"], 0, "{report}");
+    let items = report["items"].as_array().context("conversion items missing")?;
+    assert_eq!(items.len(), 2);
+    for (index, item) in items.iter().enumerate() {
+        assert_eq!(item["status"], "converted");
+        let detail: Value = serde_json::from_str(
+            item["detail"].as_str().context("conversion detail missing")?,
+        )?;
+        assert_eq!(detail["com_bridge"], "rust");
+        assert_eq!(detail["com_application"], "Excel.Application");
+        let output_path = PathBuf::from(
+            item["output"]
+                .as_str()
+                .context("converted output path missing")?,
+        );
+        assert!(output_path.is_file(), "{}", output_path.display());
+        assert_eq!(fs::read([&first, &second][index])?, source_bytes[index]);
+    }
+
+    let history_path = PathBuf::from(
+        report["run_history_path"]
+            .as_str()
+            .context("conversion run history path missing")?,
+    );
+    let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
+    assert!(history["actual_engines"]
+        .as_array()
+        .is_some_and(|engines| engines.iter().any(|engine| engine == "Microsoft Excel COM (Rust)")));
+    Ok(())
+}
+
+#[test]
 #[ignore = "requires Windows Office/WPS COM and a verified native ET fixture; set PYTOOLS_NATIVE_ET_FIXTURE"]
 fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<()> {
     let fixture = env::var_os("PYTOOLS_NATIVE_ET_FIXTURE")

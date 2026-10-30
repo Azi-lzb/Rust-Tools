@@ -1,7 +1,7 @@
-//! In-process fidelity conversion engine (former `lo-convert` sidecar).
-//! Windows uses Office/WPS COM automation directly; other platforms use a
-//! local `soffice` CLI when installed. The engine never links or launches a
-//! separate executable.
+//! Fidelity conversion engine (former `lo-convert` sidecar).
+//! Windows spreadsheet conversion uses Rust COM on an isolated STA thread;
+//! Word retains its PowerShell COM bridge. LibreOffice uses the local
+//! `soffice` CLI. No separate `lo-convert` executable is required.
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use encoding_rs::GBK;
@@ -15,13 +15,52 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-/// Run one same-category fidelity conversion and return the JSON detail
-/// report (identical shape to the former sidecar's stdout contract).
-pub(crate) fn run_fidelity_conversion(
+/// State scoped to one user conversion request or batch.
+#[derive(Default)]
+pub(crate) struct ConversionRuntime {
+    #[cfg(windows)]
+    spreadsheet_com: Option<crate::conversion_com::ComWorker>,
+}
+
+impl ConversionRuntime {
+    #[cfg(windows)]
+    fn spreadsheet_com(
+        &mut self,
+        input: &Path,
+        output: &Path,
+        source_ext: &str,
+    ) -> Result<ComExecution> {
+        if self.spreadsheet_com.is_none() {
+            self.spreadsheet_com = Some(crate::conversion_com::ComWorker::start()?);
+        }
+        let converted = self.spreadsheet_com
+            .as_mut()
+            .expect("spreadsheet COM worker initialized")
+            .convert(input, output, source_ext)?;
+        Ok(ComExecution {
+            source_format: converted.source_format,
+            bridge: "rust",
+            application: Some(converted.application),
+            process_id: Some(converted.process_id),
+        })
+    }
+}
+
+struct ComExecution {
+    source_format: Option<i32>,
+    bridge: &'static str,
+    application: Option<&'static str>,
+    process_id: Option<u32>,
+}
+
+/// Run one same-category fidelity conversion and retain the existing JSON
+/// detail contract. The caller may reuse the runtime across a batch.
+pub(crate) fn run_fidelity_conversion_with_runtime(
     input: &Path,
     output: &Path,
     target: &str,
     engine: &str,
+    runtime: &mut ConversionRuntime,
 ) -> Result<String> {
     if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
         // Test override: simulate an environment with no external engine.
@@ -66,17 +105,18 @@ pub(crate) fn run_fidelity_conversion(
     } else {
         engine
     };
-    let source_file_format = match selected {
+    let com_execution = match selected {
         "lo" => {
             run_libreoffice(input, temp_dir, target)?;
             None
         }
-        "com" if cfg!(windows) => run_com(input, &converted, target, &source_ext)?,
+        "com" if cfg!(windows) => Some(run_com(input, &converted, target, &source_ext, runtime)?),
         "com" => bail!(
             "该功能需要外部引擎: COM conversion is only available on Windows; install LibreOffice or use --engine lo"
         ),
         _ => unreachable!(),
     };
+    let source_file_format = com_execution.as_ref().and_then(|execution| execution.source_format);
     let candidate = if converted.exists() {
         converted
     } else {
@@ -94,15 +134,29 @@ pub(crate) fn run_fidelity_conversion(
         selected,
         temp_dir,
         source_file_format,
+        runtime,
     )?;
+    let validation = serde_json::from_str::<serde_json::Value>(&validation)
+        .context("decode conversion validation details")?;
+    let mut report = serde_json::json!({
+        "status": "converted",
+        "engine": selected,
+        "input": input.display().to_string(),
+        "output": output.display().to_string(),
+        "validation": validation,
+    });
+    if let Some(execution) = com_execution {
+        report["com_bridge"] = serde_json::json!(execution.bridge);
+        if let Some(application) = execution.application {
+            report["com_application"] = serde_json::json!(application);
+        }
+        if let Some(process_id) = execution.process_id {
+            report["com_process_id"] = serde_json::json!(process_id);
+        }
+    }
     fs::rename(&candidate, output)
         .with_context(|| format!("commit validated output {}", output.display()))?;
-    Ok(format!(
-        "{{\"status\":\"converted\",\"engine\":\"{selected}\",\"input\":{},\"output\":{},\"validation\":{}}}",
-        json_string(&input.display().to_string()),
-        json_string(&output.display().to_string()),
-        validation
-    ))
+    Ok(report.to_string())
 }
 
 fn run_libreoffice(input: &Path, temp_dir: &Path, target: &str) -> Result<()> {
@@ -138,7 +192,13 @@ fn run_libreoffice(input: &Path, temp_dir: &Path, target: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_com(input: &Path, output: &Path, target: &str, source_ext: &str) -> Result<Option<i32>> {
+fn run_com(
+    input: &Path,
+    output: &Path,
+    target: &str,
+    source_ext: &str,
+    runtime: &mut ConversionRuntime,
+) -> Result<ComExecution> {
     let output_parent = output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -158,6 +218,17 @@ fn run_com(input: &Path, output: &Path, target: &str, source_ext: &str) -> Resul
             input.display()
         )
     })?;
+    if target == "xlsx" {
+        #[cfg(windows)]
+        let result = runtime.spreadsheet_com(&com_input, output, source_ext);
+        #[cfg(not(windows))]
+        let result = {
+            let _ = runtime;
+            Err(anyhow!("COM conversion is only available on Windows"))
+        };
+        let _ = fs::remove_file(&com_input);
+        return result;
+    }
     let app_names: &[&str] = if target == "docx" {
         &[
             "Word.Application",
@@ -244,9 +315,19 @@ fn run_com(input: &Path, output: &Path, target: &str, source_ext: &str) -> Resul
             file_format == 65521,
             "KET opened .et input as FileFormat {file_format}; expected native ET FileFormat 65521"
         );
-        Ok(Some(file_format))
+        Ok(ComExecution {
+            source_format: Some(file_format),
+            bridge: "powershell",
+            application: None,
+            process_id: None,
+        })
     } else {
-        Ok(None)
+        Ok(ComExecution {
+            source_format: None,
+            bridge: "powershell",
+            application: None,
+            process_id: None,
+        })
     }
 }
 
@@ -274,6 +355,7 @@ fn validate_conversion(
     engine: &str,
     temp_dir: &Path,
     source_file_format: Option<i32>,
+    runtime: &mut ConversionRuntime,
 ) -> Result<String> {
     if target == "docx" {
         let bytes = fs::read(output)?;
@@ -325,8 +407,9 @@ fn validate_conversion(
             }
             "com" if cfg!(windows) => {
                 let probe = probe_dir.join(format!("source.{target}"));
-                let probe_file_format = run_com(input, &probe, target, source_ext)
-                    .context("convert ET source for preservation validation with COM")?;
+                let probe_file_format = run_com(input, &probe, target, source_ext, runtime)
+                    .context("convert ET source for preservation validation with COM")?
+                    .source_format;
                 ensure!(
                     source_file_format == probe_file_format,
                     "ET source format verification differed between candidate and preservation probe"
@@ -789,10 +872,6 @@ fn csv_column_name(mut column: usize) -> String {
 
 fn ps_quote(value: &str) -> String {
     value.replace('\'', "''")
-}
-
-fn json_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into())
 }
 
 struct TempDirGuard(PathBuf);

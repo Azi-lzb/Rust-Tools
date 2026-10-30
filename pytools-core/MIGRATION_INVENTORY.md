@@ -47,6 +47,10 @@
 - 4-2 文件排序前缀添加与清理：**已实现，待人工验收**。
 - 4-3 根据工作簿单元格内容命名：**已实现，待人工验收**。输入格式和内容语义按实际能力处理。
 - 4-4 Office 格式转换（XLS/ET→XLSX、DOC→DOCX）：**部分实现或存在已知限制**。历史 XLS、DOC 有合成正向冒烟；原生 ET 正向转换、真实业务文件和目标平台仍未充分验证，相关外部引擎与格式证据必须显式满足。
+
+  2026-10-30：按用户要求比较 Windows Excel/WPS 下 Rust COM、PowerShell COM、pywin32 COM。合成数据为 4 个 XLS、每个 3 张表且每表 250 行，每种引擎/模式计时两轮；全批次输出与相同应用的基准结果一致。计时来自产品接入前的独立 Rust COM bridge 原型，不是 UI 端到端数据。Excel 批量中位耗时：Rust 6.433 秒、PowerShell 6.199 秒、pywin32 18.361 秒（两轮为 29.389/7.334 秒，波动较大）；WPS 批量：Rust 2.923 秒、PowerShell 4.457 秒、pywin32 4.675 秒。样本和轮数有限，仅作当前机器参考。原始样本哈希未变；WPS 会修改交给它打开的临时副本，因此正式转换仍先复制源文件。
+
+  同日：Windows XLS→XLSX 表格转换改为 Rust `windows` COM，在专用 STA 线程中按批次复用自行创建的 Excel/WPS 实例；每次转换使用源文件临时副本，先检查进程与空工作簿，只有确认由本次任务新建的实例才会在任务结束时退出。转换结果继续校验工作表、值和公式。PowerShell COM 仍用于 DOC→DOCX；LibreOffice 路径未变。Windows 合成测试覆盖 V2 菜单批量 Excel、Excel 批次实例复用及异常后恢复、WPS 正向转换与实例复用、伪装 ET 的拒绝和源文件保护。当前机器的 WPS 生成样本未能证明 `FileFormat=65521` 的原生 ET 正向路径，故严格 ET 校验保留且该路径仍待真实原生 ET 样本；未更新 Release EXE，真实业务样本人工验收及 Linux/deb 验证未进行。计时明细见 `probe/reports/com_conversion_benchmark_20261030.json`。
 - 4-5 按配置修改 Sheet 名：**部分实现或存在已知限制**。历史记录表明缺少匹配的生产 `RenameSheet` capability 时不能执行，源文件保持不变。
 - 4-6 机构提交完整性检查：**已实现，待人工验收**。
 - 4-7/4-8 [临时] umya / openpyxl 区域回写格式探针：**临时诊断入口**（2026-10-28 经用户要求添加，`pytools-core/src/format_probe.rs` + 文件处理菜单 7/8）。用于人工对比两引擎“整簿读入→保留区域→删除区域外行列→另存副本”的格式保留效果；openpyxl 按钮依赖本机 python+openpyxl（可用 `PYTOOLS_OPENPYXL_PYTHON` 指定解释器）。**用户对比得出结论后应移除**，不进入迁移清单正式子功能。

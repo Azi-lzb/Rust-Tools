@@ -155,6 +155,17 @@ pub fn convert_word_files_in_source_folders(
     convert_word_files_with_progress(inputs, None, target, engine, |_| {})
 }
 pub fn convert_one(input: &Path, output: &Path, target: &str, engine: &str) -> Result<String> {
+    let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+    convert_one_with_runtime(input, output, target, engine, &mut runtime)
+}
+
+fn convert_one_with_runtime(
+    input: &Path,
+    output: &Path,
+    target: &str,
+    engine: &str,
+    runtime: &mut crate::conversion_engine::ConversionRuntime,
+) -> Result<String> {
     anyhow::ensure!(
         input.is_file(),
         "input file does not exist: {}",
@@ -209,7 +220,7 @@ pub fn convert_one(input: &Path, output: &Path, target: &str, engine: &str) -> R
     } else {
         output.to_path_buf()
     };
-    let detail = invoke_engine(&staged_input, &staged_output, &target, engine)?;
+    let detail = invoke_engine_with_runtime(&staged_input, &staged_output, &target, engine, runtime)?;
     if source_ext == "et" {
         ensure_et_source_format_verified(&detail)?;
         crate::file_commit::create_target_from_candidate(&staged_output, output)
@@ -314,8 +325,20 @@ fn stage_sidecar_input(
     Ok((staged_input, Some(guard)))
 }
 
+#[cfg(test)]
 fn invoke_engine(input: &Path, output: &Path, target: &str, engine: &str) -> Result<String> {
-    crate::conversion_engine::run_fidelity_conversion(input, output, target, engine).map_err(
+    let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+    invoke_engine_with_runtime(input, output, target, engine, &mut runtime)
+}
+
+fn invoke_engine_with_runtime(
+    input: &Path,
+    output: &Path,
+    target: &str,
+    engine: &str,
+    runtime: &mut crate::conversion_engine::ConversionRuntime,
+) -> Result<String> {
+    crate::conversion_engine::run_fidelity_conversion_with_runtime(input, output, target, engine, runtime).map_err(
         |error| {
             let message = format!("{error:#}");
             if message.starts_with("该功能需要外部引擎") {
@@ -400,6 +423,7 @@ where
         None,
         format!("已发现 {} 个待处理文件。", inputs.len()),
     );
+    let mut runtime = crate::conversion_engine::ConversionRuntime::default();
     for (index, input) in inputs.iter().enumerate() {
         let input_index = index + 1;
         let item_started = Instant::now();
@@ -524,7 +548,7 @@ where
                 .map(|_| "same-format copy; source bytes retained".to_owned())
                 .map_err(anyhow::Error::from)
         } else {
-            convert_one(input, &output, &target, engine)
+            convert_one_with_runtime(input, &output, &target, engine, &mut runtime)
         };
         let (actual_engine, error_type, user_message, event_status) = match result {
             Ok(detail) => {
@@ -699,15 +723,20 @@ fn conversion_components(ext: &str, target: &str, engine: &str) -> Vec<String> {
 }
 
 fn fidelity_engine(detail: &str) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(detail)
-        .ok()?
-        .get("engine")?
-        .as_str()
-        .map(|engine| match engine {
-            "lo" => "LibreOffice".to_owned(),
-            "com" => "Windows Office/WPS COM".to_owned(),
-            other => other.to_owned(),
-        })
+    let report = serde_json::from_str::<serde_json::Value>(detail).ok()?;
+    let engine = report.get("engine")?.as_str()?;
+    Some(match engine {
+        "lo" => "LibreOffice".to_owned(),
+        "com" if report.get("com_bridge").and_then(serde_json::Value::as_str) == Some("rust") => {
+            match report.get("com_application").and_then(serde_json::Value::as_str) {
+                Some("Excel.Application") => "Microsoft Excel COM (Rust)".to_owned(),
+                Some(name) if name.eq_ignore_ascii_case("KET.Application") => "WPS 表格 COM (Rust)".to_owned(),
+                _ => "Windows Office/WPS COM (Rust)".to_owned(),
+            }
+        }
+        "com" => "Windows Office/WPS COM".to_owned(),
+        other => other.to_owned(),
+    })
 }
 
 fn native_engine_for_attempt(ext: &str, target: &str, engine: &str) -> Option<String> {

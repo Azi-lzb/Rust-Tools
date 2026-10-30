@@ -1,0 +1,406 @@
+{
+  "batch": "B100",
+  "count": 100,
+  "files": [
+    {
+      "name": "LARGE-001.xls",
+      "sha256": "f1e6cf930b3ab795dcc6aa803139d4f696e5e330e4b24b99764c311d5cf9084f"
+    },
+    {
+      "name": "LARGE-002.xls",
+      "sha256": "056c20d3d8cdf7656e47070cb8d031da4def4d71e51a46ef21a01e0a3b4ee05c"
+    },
+    {
+      "name": "LARGE-003.xls",
+      "sha256": "90b2830bf06d9032369d5c3a74ba92d0ae59c2074b01911bb5e26bfeba97d388"
+    },
+    {
+      "name": "LARGE-004.xls",
+      "sha256": "f4f0e653be277228d3c83abeb8e2420507a7f858cffb248b7a5b5ed05851af6f"
+    },
+    {
+      "name": "LARGE-005.xls",
+      "sha256": "d606292bafd680da008f8df769f35576ca969334bc6eddfad895a9caf869bf4d"
+    },
+    {
+      "name": "LARGE-006.xls",
+      "sha256": "b2df2d0f7ee1ea45d380b02a3c29f5c56afdf3eb67c3af7664ee09c6eb309243"
+    },
+    {
+      "name": "LARGE-007.xls",
+      "sha256": "c9814001508708b4d231d08c537571cea9541c5189271b07fbbe73ef94445cad"
+    },
+    {
+      "name": "LARGE-008.xls",
+      "sha256": "c6470e5a550f7fbd404b46701d4a184eb60096c443e7603296710656e838a549"
+    },
+    {
+      "name": "LARGE-009.xls",
+      "sha256": "99a3da3c3a876319396e0f53fe9d0ceced661020671ad7354f84c1053807aabf"
+    },
+    {
+      "name": "LARGE-010.xls",
+      "sha256": "64976cd151c8797c4ba6c7473ad28025fd476227ec50db6059d1761a79395d82"
+    },
+    {
+      "name": "LARGE-011.xls",
+      "sha256": "baafd670f9a36a0002904c14eaae74acedb22a4ce5e7e8a59d65786bfb5b2e5a"
+    },
+    {
+      "name": "LARGE-012.xls",
+      "sha256": "2353288393c3b79f10ee8feafb573ee040a1417b17bbcbf587387a086fac5a90"
+    },
+    {
+      "name": "LARGE-013.xls",
+      "sha256": "a6f10fefb27ea37cdd369183aee1099a788a65eceda346a583606409edbad3b3"
+    },
+    {
+      "name": "LARGE-014.xls",
+      "sha256": "e1d9a320b278c16349ab500a6fedd7067c50d7605991b45c4b51134d1e2b06be"
+    },
+    {
+      "name": "LARGE-015.xls",
+      "sha256": "0abe56e0a0e3cfc578cc2fb5c20aba0b710283db41227237f92544680cfe82c6"
+    },
+    {
+      "name": "MEDIUM-001.xls",
+      "sha256": "ab955ed8e5bb024520eb22d1aa8704cddccf055c2c30c618f0f0ded1ba03a143"
+    },
+    {
+      "name": "MEDIUM-002.xls",
+      "sha256": "13168293ea15b64fb453e3bedaaa42842c253e9a46d8fc0b141d0dd1a04785c5"
+    },
+    {
+      "name": "MEDIUM-003.xls",
+      "sha256": "1e2639d9ba1382e729bf8308b93521c216c2aed7a19edaf562e841fc92b5aa6a"
+    },
+    {
+      "name": "MEDIUM-004.xls",
+      "sha256": "dc32631c88ba306e273e12f3d48f4160bb9a05a3f9d337c2d545f43c1ab87a16"
+    },
+    {
+      "name": "MEDIUM-005.xls",
+      "sha256": "71700ddc23ace7b95d33be37b61d46c188ae85294f2127bacf921a6b006c1948"
+    },
+    {
+      "name": "MEDIUM-006.xls",
+      "sha256": "c66c07ae3d92cd681351547aa2a0ca41e725baa5d80bb785846f6646ad6df8d5"
+    },
+    {
+      "name": "MEDIUM-007.xls",
+      "sha256": "4ee5cf121e90f642ff377a9e1e88e19d587c0acf8eb7763903c94522d1b95e09"
+    },
+    {
+      "name": "MEDIUM-008.xls",
+      "sha256": "76f399b208c8bcd2a48993f988a0c3db45c204b0342371c702a400415d5a109c"
+    },
+    {
+      "name": "MEDIUM-009.xls",
+      "sha256": "46fbddc27032d3d266f057a3012bc00bb6ae2778e98183d7c59285ddb5e464d5"
+    },
+    {
+      "name": "MEDIUM-010.xls",
+      "sha256": "b06aa87403c1bde06cead6a22ed0f77aa3b4b0c0722a98d7d51e14c703b79a07"
+    },
+    {
+      "name": "MEDIUM-011.xls",
+      "sha256": "ca3354977b77ba925708bf3b44b2c8a946213f183f03f8a92301931606099fd4"
+    },
+    {
+      "name": "MEDIUM-012.xls",
+      "sha256": "d3eab6bd82261486955eb0538743e742194e10c1ac04b732be21d9f7522e7daa"
+    },
+    {
+      "name": "MEDIUM-013.xls",
+      "sha256": "b6b58cbadc5f93bb784fdc4d269fde347bd6f1abc2bbca00664d56c394a1bbd9"
+    },
+    {
+      "name": "MEDIUM-014.xls",
+      "sha256": "70e14b4a39f911fd60ca423a61db0616d4a18b5a6dbf026c7dd7d8096322df3b"
+    },
+    {
+      "name": "MEDIUM-015.xls",
+      "sha256": "e760eab036de566a30dbd65489788867ecdeebfca8203558b07360d88212fcea"
+    },
+    {
+      "name": "MEDIUM-016.xls",
+      "sha256": "6330e3300156dba2e95f8838ea64abe66bd2d9339b7ab023bc396de72787ad48"
+    },
+    {
+      "name": "MEDIUM-017.xls",
+      "sha256": "cbf90c7da8a8d32008d288eceaf24d4341f5acfdd7bae493d4f88cda2bbf53ec"
+    },
+    {
+      "name": "MEDIUM-018.xls",
+      "sha256": "d848d6c02d426b2b557a4b05106ea08209f7432d11ba8f6f7bf389e19bb0bad1"
+    },
+    {
+      "name": "MEDIUM-019.xls",
+      "sha256": "23fc36f3ecacf65555340b4db55231eb881430ab1e50f90bc4d17b456b5192d9"
+    },
+    {
+      "name": "MEDIUM-020.xls",
+      "sha256": "a375769bfc56a1d0b3980c0600c7dcf7751b30271a81912f26dd9cdd3aa77ca7"
+    },
+    {
+      "name": "MEDIUM-021.xls",
+      "sha256": "3bcfa4b65d4f1a0cab5fc2d72b81785d37dfb2d51f0e49cb85bb084bdcadfe64"
+    },
+    {
+      "name": "MEDIUM-022.xls",
+      "sha256": "724972f933964f9e115d4c2d3e63a53ff03c027e9a20a47a7bd87088b07efc61"
+    },
+    {
+      "name": "MEDIUM-023.xls",
+      "sha256": "7f7c5acf84c45c7c22dfbef050b5573717a411a8beafb969431961b2563ba545"
+    },
+    {
+      "name": "MEDIUM-024.xls",
+      "sha256": "e861b5d4bf07f719b3b9eda2d9a8f2bda18b4ec1d8d3036d36b2f9fcf1fc9753"
+    },
+    {
+      "name": "MEDIUM-025.xls",
+      "sha256": "4243b3db04ac926029153b400c47ae6778cef914946250e1c57d0fd8677b83c1"
+    },
+    {
+      "name": "MEDIUM-026.xls",
+      "sha256": "1e8f37f39035c12e3c3e63eb9b8ab9460143898202371fa6b2d44035ea4ffbde"
+    },
+    {
+      "name": "MEDIUM-027.xls",
+      "sha256": "5eb383fa81e6ac37851b2c1c4ebefa0df433e1eb4e2974137ad17ae2d86afe61"
+    },
+    {
+      "name": "MEDIUM-028.xls",
+      "sha256": "43900fdcf231e355a7bd821e303310bbc2adcbe496ad11261ccb7fd7adf53ec8"
+    },
+    {
+      "name": "MEDIUM-029.xls",
+      "sha256": "c7656cab29c498c24c62dfa44157b92cbf1d764a8bc65c23cd7003865b698332"
+    },
+    {
+      "name": "MEDIUM-030.xls",
+      "sha256": "e17b26165a781a78849cf6d81085dcd0b931cc85bb28aae13d791677bce252f9"
+    },
+    {
+      "name": "MEDIUM-031.xls",
+      "sha256": "aeb8b6108ccfac105458db172ec30ebeb277dd194bf888680213c4adc7f13dee"
+    },
+    {
+      "name": "MEDIUM-032.xls",
+      "sha256": "2bd311305b6c368bf571b89e4e807f463cc92922d89994ea1f6ec443369cab95"
+    },
+    {
+      "name": "MEDIUM-033.xls",
+      "sha256": "f577cc304f15026fa811b07c2cb82a5ea82da2ef04a55b2c19545f223600efda"
+    },
+    {
+      "name": "MEDIUM-034.xls",
+      "sha256": "4b0972e86ef115d1c5e07785c4aca400a6d6181ea71df32f469788de694c2fa4"
+    },
+    {
+      "name": "MEDIUM-035.xls",
+      "sha256": "bd47849e35b48c475fc84ff74c7f16dc22151158f2db9733e33378e5931f64fc"
+    },
+    {
+      "name": "SMALL-001.xls",
+      "sha256": "186a2ff8b51a8214e7598a4134164c161be87390ade0c49739c50b996c8ea717"
+    },
+    {
+      "name": "SMALL-002.xls",
+      "sha256": "c424265d8ce493eca705c795d88319e0fa8e53dafd80dce2e59cf991aa98b820"
+    },
+    {
+      "name": "SMALL-003.xls",
+      "sha256": "423383be0d3e20f7bac034750bdfef4800142eb57facdb3969afe2efe0ffc443"
+    },
+    {
+      "name": "SMALL-004.xls",
+      "sha256": "5415d90569dd24e221985f0a9d6fbabe673d2eb6c7c7a7c73e7aa6263a5de40b"
+    },
+    {
+      "name": "SMALL-005.xls",
+      "sha256": "af163c998db206e5c59b9742158b3a8c3007579970ffc68a0e3fa806d3443893"
+    },
+    {
+      "name": "SMALL-006.xls",
+      "sha256": "5acc85e6d6d3e47f47abe2c41436a830ee0b465dc3c1439dfa3d3aae2e06efd0"
+    },
+    {
+      "name": "SMALL-007.xls",
+      "sha256": "f97c3edb7865c623989328f51f2669483093fdf9fe5a3b1708077319d70fe574"
+    },
+    {
+      "name": "SMALL-008.xls",
+      "sha256": "e1e10bcb250365f52768f76795e1180ba63b244e8df4d428a23600612c0b872d"
+    },
+    {
+      "name": "SMALL-009.xls",
+      "sha256": "14d79812ba2649715bcfd982aa95715b5c2bc24f5a2ab1b2a89c1b69263d39ae"
+    },
+    {
+      "name": "SMALL-010.xls",
+      "sha256": "34515fb4d05fce8464109019d90e762de0268ebdb31d8e42b85f0f3923aeb9ac"
+    },
+    {
+      "name": "SMALL-011.xls",
+      "sha256": "070ddf7a97945104603b6d4d6d5ade26d166833089f7d0ec17e19d3bed063c70"
+    },
+    {
+      "name": "SMALL-012.xls",
+      "sha256": "c68547bab04067e4352ae2fcb828615ae4cfa2f4770bb0bb7159cf9882f05509"
+    },
+    {
+      "name": "SMALL-013.xls",
+      "sha256": "8e0de11e370094e48471a6b3b86c36a0f05d75c0e390c3341371e5cd3ef25c21"
+    },
+    {
+      "name": "SMALL-014.xls",
+      "sha256": "fe80ccfcbc5f9e4a3f8427cb1a0bd0d6edfd54425bed52c86992cb4a1f1f0a2b"
+    },
+    {
+      "name": "SMALL-015.xls",
+      "sha256": "bee55ede86f8ee4b0db1d412748aa12f439c74a3fc9ff08766d1acc077b11a96"
+    },
+    {
+      "name": "SMALL-016.xls",
+      "sha256": "f21f555e52b73decae376844186ca3671b2250e75b741a279742a3200f2f0136"
+    },
+    {
+      "name": "SMALL-017.xls",
+      "sha256": "1d1f115f488e001bf9c1386b1ff567de8e2b91a6de27f22276b4a6c2b9939682"
+    },
+    {
+      "name": "SMALL-018.xls",
+      "sha256": "cb7f4a5c45f935f24e04b16f45d045d83456d6e56a0f2c5fe845154e4383a128"
+    },
+    {
+      "name": "SMALL-019.xls",
+      "sha256": "b18925450d27e3405fefdd4d4ff7e90862bc683021834b7f1470f6785d85ad51"
+    },
+    {
+      "name": "SMALL-020.xls",
+      "sha256": "cdb7a44ce1af54d4327486f66d73d7f09608c07c145e5b729f569703db9fa33b"
+    },
+    {
+      "name": "SMALL-021.xls",
+      "sha256": "07c2c1c3e9c8f9cde4894414936ab2946d1c2326bb7b4ad4eb6b3c2796edbf1f"
+    },
+    {
+      "name": "SMALL-022.xls",
+      "sha256": "9d2c0b7f7e108a80e2c1c12146a51bcb8ceb6b36ced1e6471470cbfc9ba9ce92"
+    },
+    {
+      "name": "SMALL-023.xls",
+      "sha256": "b8fc8e5e2eefd824fe163d7925902285457d7322e56b5e681c6865f428298fcf"
+    },
+    {
+      "name": "SMALL-024.xls",
+      "sha256": "4941f52f0b8ac0a0b50651b6d9e22f087282e8934da42a542530de44c98a146a"
+    },
+    {
+      "name": "SMALL-025.xls",
+      "sha256": "cbec06b651182cf6e2d0445eec4f004e0bf01229ea0705dc97b640382b1724e9"
+    },
+    {
+      "name": "SMALL-026.xls",
+      "sha256": "d1c5e9a94f8d543e4dc8bd925193b26484b28d20db4e5ebee3d79d57ae0f9e57"
+    },
+    {
+      "name": "SMALL-027.xls",
+      "sha256": "021726016721bca014f54fb4f5083fb0af325e59bc886aa15fdcb507807176a5"
+    },
+    {
+      "name": "SMALL-028.xls",
+      "sha256": "efd941a2290d2c29b3183ff45f5d958f0411edc3939805e38fe7da0bb069fdf4"
+    },
+    {
+      "name": "SMALL-029.xls",
+      "sha256": "df2925f7e3269d1526d3e35b47c8c32c3aa9fba54ae08741ac8de9e337228a16"
+    },
+    {
+      "name": "SMALL-030.xls",
+      "sha256": "44c2ae913d053a30160dea68fb3f4f0a17f234793d9a1d3db37c8789b336080f"
+    },
+    {
+      "name": "SMALL-031.xls",
+      "sha256": "e10b2f119f60926750baa805392a2bbcdd61d5fb36f9c9f0a2625c21c3e6e23f"
+    },
+    {
+      "name": "SMALL-032.xls",
+      "sha256": "41552175697e924f37b4e6621fafb23e31226f5f885bcf4140f167e6c8764d14"
+    },
+    {
+      "name": "SMALL-033.xls",
+      "sha256": "c9ce7ccf91a2a06b38027f000ca63daeb69efbe8f6bb42326fbdd3ffea11062f"
+    },
+    {
+      "name": "SMALL-034.xls",
+      "sha256": "0296de2ed6d99baaf6bdf31edd70229c6f43a444575127c0984219df3f88cc93"
+    },
+    {
+      "name": "SMALL-035.xls",
+      "sha256": "0df3ffad3d3a7bc3a1c6e117760022cd84fd846830061a6ede94465e042591b8"
+    },
+    {
+      "name": "SMALL-036.xls",
+      "sha256": "fd313bb917f5be5ef7231e1bd64147de10cccbfe7add62862001b6a01b7cee94"
+    },
+    {
+      "name": "SMALL-037.xls",
+      "sha256": "bda20da1cb53b9b37c0eb6b1ab02c98fcac2e93634088aa4e0c169df050cf988"
+    },
+    {
+      "name": "SMALL-038.xls",
+      "sha256": "5988269ea1082d251fba8cbb32c17e5b1ac7b2e435d7311050a82e0ca9de9bd1"
+    },
+    {
+      "name": "SMALL-039.xls",
+      "sha256": "d851b46b79d752815668fe484035e5bda3764fe0d96903d3782fa4235acc2b65"
+    },
+    {
+      "name": "SMALL-040.xls",
+      "sha256": "c96bcbd3e6022fc828391585476d105f4fd6226ceff80db8db624a0257651231"
+    },
+    {
+      "name": "SMALL-041.xls",
+      "sha256": "d63de54138775a68d64f311ab373c0abf65b711d96a7a6c4f79806767b613924"
+    },
+    {
+      "name": "SMALL-042.xls",
+      "sha256": "eac8314f9a7d1e6b7ba2d1f02b77e7a97444e243ef59cb94d62437657291b151"
+    },
+    {
+      "name": "SMALL-043.xls",
+      "sha256": "b1ddb7fc8c173fccb4a1bd2df4c8e78453e7f523f1a93c0d6878f709e5476487"
+    },
+    {
+      "name": "SMALL-044.xls",
+      "sha256": "e0e1d0393c3dd3e5a87753740b684cef4038e960cd8ea8ee1407b4d51d0b7227"
+    },
+    {
+      "name": "SMALL-045.xls",
+      "sha256": "c41194286fb59d9f120344b91ec5d67ab997a9a18bec27324e42e2ddb8aa5f2a"
+    },
+    {
+      "name": "SMALL-046.xls",
+      "sha256": "40e85da4b4d349b1cbd9f6d1d0ea335b5b22527e6afe5309886b43d3a96a971b"
+    },
+    {
+      "name": "SMALL-047.xls",
+      "sha256": "e2da5b661f03619398a720954218602795ca1897c9d4d8e5ea15569577141151"
+    },
+    {
+      "name": "SMALL-048.xls",
+      "sha256": "fc0de59f67cea84d768c951554dfd9ec74f3b1a3c8eeebbeea76eeb40a14fa6a"
+    },
+    {
+      "name": "SMALL-049.xls",
+      "sha256": "878b89cf4545f3675110de78a89ebe21f38df605aa6303bfa39552497bda2410"
+    },
+    {
+      "name": "SMALL-050.xls",
+      "sha256": "39f1e2adefb926ea161f6cd3abaa1b3d25d8cce215f5b9e2d970650db1f540dc"
+    }
+  ]
+}

@@ -92,3 +92,8 @@ secrets.json
 
 # 人工测试包的运行产物不入库（样本输入保留）
 testdata/manual-menu/output/
+
+# Approved synthetic XLS → XLSX COM performance benchmark fixtures
+!/benchmarks/xls-to-xlsx-com/fixtures/**/
+!/benchmarks/xls-to-xlsx-com/fixtures/**/*.xls
+!/benchmarks/xls-to-xlsx-com/fixtures/**/*.xlsx

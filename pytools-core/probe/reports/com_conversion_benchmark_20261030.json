@@ -1,0 +1,491 @@
+{
+  "method": "synthetic XLS to XLSX; 4 workbooks, 3 sheets, 250 data rows per sheet; 2 timed rounds per mode",
+  "benchmark_scope": "Direct bridge prototype benchmark before product integration; results describe this machine and workload, not an end-to-end UI or real-workbook performance guarantee.",
+  "comparison": "wall time includes staging copies, process/COM startup, open, SaveAs, close and quit; excludes application-level output validation",
+  "ps_guard": "each PowerShell process loads a precompiled safety guard to avoid touching an existing user's application",
+  "source_hashes_unchanged": true,
+  "summary": [
+    {
+      "app": "excel",
+      "mode": "rust_batch",
+      "median_seconds": 6.433,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "excel",
+      "mode": "ps_batch",
+      "median_seconds": 6.199,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "excel",
+      "mode": "pywin32_batch",
+      "median_seconds": 18.361,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "excel",
+      "mode": "rust_per_file",
+      "median_seconds": 24.477,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "excel",
+      "mode": "ps_per_file",
+      "median_seconds": 22.795,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "excel",
+      "mode": "pywin32_per_file",
+      "median_seconds": 16.137,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "rust_batch",
+      "median_seconds": 2.923,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "ps_batch",
+      "median_seconds": 4.457,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_batch",
+      "median_seconds": 4.675,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "rust_per_file",
+      "median_seconds": 10.415,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "ps_per_file",
+      "median_seconds": 17.09,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_per_file",
+      "median_seconds": 12.382,
+      "runs": 2,
+      "successes": 2,
+      "all_same_app_outputs_equal": true
+    }
+  ],
+  "records": [
+    {
+      "app": "excel",
+      "mode": "pywin32_per_file",
+      "run": 2,
+      "seconds": 15.981,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "rust_batch",
+      "run": 1,
+      "seconds": 2.855,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "ps_batch",
+      "run": 2,
+      "seconds": 6.394,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "rust_per_file",
+      "run": 2,
+      "seconds": 9.557,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_per_file",
+      "run": 1,
+      "seconds": 12.821,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "ps_batch",
+      "run": 2,
+      "seconds": 4.806,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "rust_batch",
+      "run": 1,
+      "seconds": 7.599,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "ps_batch",
+      "run": 1,
+      "seconds": 4.107,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "ps_per_file",
+      "run": 2,
+      "seconds": 22.126,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "ps_per_file",
+      "run": 1,
+      "seconds": 14.968,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "ps_batch",
+      "run": 1,
+      "seconds": 6.004,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "rust_per_file",
+      "run": 1,
+      "seconds": 33.776,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "pywin32_batch",
+      "run": 1,
+      "seconds": 29.389,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "pywin32_batch",
+      "run": 2,
+      "seconds": 7.334,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "rust_per_file",
+      "run": 1,
+      "seconds": 11.273,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "ps_per_file",
+      "run": 2,
+      "seconds": 19.213,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "ps_per_file",
+      "run": 1,
+      "seconds": 23.464,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_batch",
+      "run": 1,
+      "seconds": 5.981,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "rust_batch",
+      "run": 2,
+      "seconds": 5.267,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "rust_batch",
+      "run": 2,
+      "seconds": 2.992,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "pywin32_per_file",
+      "run": 1,
+      "seconds": 16.292,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_per_file",
+      "run": 2,
+      "seconds": 11.943,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "excel",
+      "mode": "rust_per_file",
+      "run": 2,
+      "seconds": 15.177,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 0,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    },
+    {
+      "app": "wps",
+      "mode": "pywin32_batch",
+      "run": 2,
+      "seconds": 3.368,
+      "output_files": 4,
+      "success": true,
+      "staged_inputs_modified": 4,
+      "matches_same_app_baseline": true,
+      "digest": {
+        "sample-1.xlsx": "0cc1e3b94144ad09814372437f35bb84a961da3a077f40abfa1f87c618a661c9",
+        "sample-2.xlsx": "96d4e7f117d78db4a4c271df3146859883d6f3a6a1adec575cc35a80403e3032",
+        "sample-3.xlsx": "ba9ca81da80b7d124668aa291929068b1bee08eb53910ee81ef6b62d5fadfe2e",
+        "sample-4.xlsx": "5df0830d53782cbbc11f62d5c62513e51871bc6926cc63ad9b37b84ebfdf5906"
+      }
+    }
+  ]
+}
