@@ -25,7 +25,7 @@ use std::{
 /// State scoped to one user conversion request or batch.
 pub(crate) struct ConversionRuntime {
     #[cfg(windows)]
-    spreadsheet_com: Option<crate::conversion_com::ComWorker>,
+    com: Option<crate::conversion_com::ComWorker>,
     libreoffice: Option<LibreOfficeBatchSession>,
     /// Test hook: replaces the real `soffice` process execution.
     libreoffice_executor: Option<LibreOfficeExecutor>,
@@ -35,7 +35,7 @@ impl Default for ConversionRuntime {
     fn default() -> Self {
         Self {
             #[cfg(windows)]
-            spreadsheet_com: None,
+            com: None,
             libreoffice: None,
             libreoffice_executor: None,
         }
@@ -211,24 +211,37 @@ pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: 
 
 impl ConversionRuntime {
     #[cfg(windows)]
+    fn com(&mut self) -> Result<&mut crate::conversion_com::ComWorker> {
+        if self.com.is_none() {
+            self.com = Some(crate::conversion_com::ComWorker::start()?);
+        }
+        Ok(self.com.as_mut().expect("COM worker initialized"))
+    }
+
+    #[cfg(windows)]
     fn spreadsheet_com(
         &mut self,
         input: &Path,
         output: &Path,
         source_ext: &str,
     ) -> Result<ComExecution> {
-        if self.spreadsheet_com.is_none() {
-            self.spreadsheet_com = Some(crate::conversion_com::ComWorker::start()?);
-        }
-        let converted = self.spreadsheet_com
-            .as_mut()
-            .expect("spreadsheet COM worker initialized")
-            .convert(input, output, source_ext)?;
+        let converted = self.com()?.convert(input, output, source_ext)?;
         Ok(ComExecution {
             source_format: converted.source_format,
             bridge: "rust",
             application: Some(converted.application),
             process_id: Some(converted.process_id),
+        })
+    }
+
+    #[cfg(windows)]
+    fn word_com(&mut self, input: &Path, output: &Path) -> Result<ComExecution> {
+        let converted = self.com()?.convert_word(input, output)?;
+        Ok(ComExecution {
+            source_format: None,
+            bridge: "rust",
+            application: Some(converted.application),
+            process_id: converted.process_id,
         })
     }
 
@@ -715,133 +728,31 @@ fn run_com(
             input.display()
         )
     })?;
-    if target == "xlsx" {
-        #[cfg(windows)]
-        let result = runtime.spreadsheet_com(&com_input, output, source_ext);
-        #[cfg(not(windows))]
-        let result = {
-            let _ = runtime;
-            Err(anyhow!("COM conversion is only available on Windows"))
-        };
-        let _ = fs::remove_file(&com_input);
-        return result;
-    }
-    let app_names: &[&str] = if target == "docx" {
-        &[
-            "Word.Application",
-            "kwps.Application",
-            "KWPS.Application",
-            "wps.Application",
-        ]
-    } else if source_ext == "et" {
-        // ET is a WPS-native workbook format. Do not route it through Excel
-        // COM, which may open a renamed XLS and make the extension look valid.
-        &["KET.Application"]
-    } else {
-        &["Excel.Application", "ket.Application", "KET.Application"]
-    };
-    let format_code = if target == "docx" { 16 } else { 51 };
-    let mut script = String::from("$ErrorActionPreference='Stop';\n");
-    script.push_str("$app=$null; $appName=''; $lastError='';\n");
-    for app_name in app_names {
-        script.push_str(&format!(
-            "if ($null -eq $app) {{ try {{ $app=New-Object -ComObject '{}'; $appName='{}' }} catch {{ $lastError=$_.Exception.Message }} }}\n",
-            app_name, app_name
-        ));
-    }
-    script.push_str("if ($null -eq $app) { throw \"No supported Office/WPS COM engine is available: $lastError\" }\n");
-    script.push_str("$doc=$null; $book=$null;\ntry {\n$app.Visible=$false; ");
-    script.push_str(com_display_alerts_setting(target));
-    script.push('\n');
-    if target == "docx" {
-        script.push_str(&format!("$doc=$app.Documents.Open('{}',$false,$true); try {{ $doc.SaveAs2('{}',{}) }} catch {{ $doc.SaveAs('{}',{}) }};\n", ps_quote(&com_input.to_string_lossy()), ps_quote(&output.to_string_lossy()), format_code, ps_quote(&output.to_string_lossy()), format_code));
-    } else {
-        script.push_str(&format!(
-            "$book=$app.Workbooks.Open('{}',0,$true);\n",
-            ps_quote(&com_input.to_string_lossy())
-        ));
-        if source_ext == "et" {
-            // Inspect the format WPS actually opened before publishing an
-            // XLSX. A CFB/XLS file renamed to .et reports 56; native ET is
-            // identified by KET as 65521.
-            script.push_str(
-                "$sourceFormat=[int]$book.FileFormat; if ($sourceFormat -ne 65521) { throw \"Input has .et extension but KET opened FileFormat $sourceFormat; expected native ET FileFormat 65521\" }; [Console]::Out.WriteLine(\"PYTOOLS_SOURCE_FILE_FORMAT=$sourceFormat\");\n",
-            );
+    match target {
+        "xlsx" => {
+            #[cfg(windows)]
+            let result = runtime.spreadsheet_com(&com_input, output, source_ext);
+            #[cfg(not(windows))]
+            let result = {
+                let _ = runtime;
+                Err(anyhow!("COM conversion is only available on Windows"))
+            };
+            let _ = fs::remove_file(&com_input);
+            return result;
         }
-        script.push_str(&format!(
-            "$book.SaveAs('{}',{});\n",
-            ps_quote(&output.to_string_lossy()),
-            format_code
-        ));
+        "docx" => {
+            #[cfg(windows)]
+            let result = runtime.word_com(&com_input, output);
+            #[cfg(not(windows))]
+            let result = {
+                let _ = runtime;
+                Err(anyhow!("COM conversion is only available on Windows"))
+            };
+            let _ = fs::remove_file(&com_input);
+            return result;
+        }
+        other => bail!("unsupported COM conversion target {other}"),
     }
-    script.push_str("} finally { if ($null -ne $doc) { $doc.Close($false) }; if ($null -ne $book) { $book.Close($false) }; if ($null -ne $app) { $app.Quit() } }\n");
-    let script_path = output.with_extension("pytools-convert.ps1");
-    let result = (|| {
-        write_powershell_script(&script_path, &script)?;
-        Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ])
-            .arg(&script_path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .with_context(|| "start Office/WPS COM automation")
-    })();
-    let _ = fs::remove_file(script_path);
-    let _ = fs::remove_file(com_input);
-    let result = result?;
-    if !result.status.success() {
-        bail!(
-            "Office/WPS COM conversion failed: {}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-    }
-    if source_ext == "et" {
-        let file_format = String::from_utf8_lossy(&result.stdout)
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("PYTOOLS_SOURCE_FILE_FORMAT="))
-            .context("KET did not return source FileFormat evidence for .et input")?
-            .parse::<i32>()
-            .context("KET returned invalid source FileFormat evidence")?;
-        ensure!(
-            file_format == 65521,
-            "KET opened .et input as FileFormat {file_format}; expected native ET FileFormat 65521"
-        );
-        Ok(ComExecution {
-            source_format: Some(file_format),
-            bridge: "powershell",
-            application: None,
-            process_id: None,
-        })
-    } else {
-        Ok(ComExecution {
-            source_format: None,
-            bridge: "powershell",
-            application: None,
-            process_id: None,
-        })
-    }
-}
-
-fn com_display_alerts_setting(target: &str) -> &'static str {
-    if target == "docx" {
-        // Word expects the WdAlertLevel enum (wdAlertsNone = 0), not a Boolean.
-        "$app.DisplayAlerts=0;"
-    } else {
-        "$app.DisplayAlerts=$false;"
-    }
-}
-
-fn write_powershell_script(path: &Path, script: &str) -> Result<()> {
-    let mut encoded = Vec::with_capacity(script.len() + 3);
-    encoded.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
-    encoded.extend_from_slice(script.as_bytes());
-    fs::write(path, encoded).with_context(|| format!("write PowerShell script {}", path.display()))
 }
 
 fn validate_conversion(
@@ -877,10 +788,13 @@ fn validate_conversion(
                     },
                 )
             },
-            "com" if cfg!(windows) => (
-                extract_word_text_com(input, &temp_dir.join("source.txt"))?,
-                extract_word_text_com(output, &temp_dir.join("output.txt"))?,
-            ),
+            "com" if cfg!(windows) => {
+                // Same batch-owned Word/WPS instance that produced the
+                // candidate also extracts both texts - no extra process.
+                let source_text = runtime.com()?.extract_word_text(input)?;
+                let output_text = runtime.com()?.extract_word_text(output)?;
+                (source_text, output_text)
+            }
             _ => bail!("unsupported text-validation engine {engine:?}"),
         };
         ensure!(
@@ -983,40 +897,6 @@ fn extract_word_text_lo(input: &Path, output_dir: &Path) -> Result<String> {
     let text_path = output_dir.join(format!("{}.txt", file_stem(input)));
     fs::read_to_string(&text_path)
         .with_context(|| format!("read extracted Word text {}", text_path.display()))
-}
-
-fn extract_word_text_com(input: &Path, text_output: &Path) -> Result<String> {
-    if let Some(parent) = text_output.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let script_path = text_output.with_extension("extract-word-text.ps1");
-    let script = format!(
-        "$ErrorActionPreference='Stop';\n$app=$null; $appName=''; $lastError='';\nforeach ($name in @('Word.Application','kwps.Application','KWPS.Application','wps.Application')) {{ if ($null -eq $app) {{ try {{ $app=New-Object -ComObject $name; $appName=$name }} catch {{ $lastError=$_.Exception.Message }} }} }}\nif ($null -eq $app) {{ throw \"No supported Office/WPS COM engine is available: $lastError\" }}\n$doc=$null;\ntry {{ $app.Visible=$false; $app.DisplayAlerts=0; $doc=$app.Documents.Open('{}',$false,$true); $text=$doc.Content.Text; [System.IO.File]::WriteAllText('{}',$text,[System.Text.UTF8Encoding]::new($false)) }} finally {{ if ($null -ne $doc) {{ $doc.Close($false) }}; if ($null -ne $app) {{ $app.Quit() }} }}\n",
-        ps_quote(&input.to_string_lossy()),
-        ps_quote(&text_output.to_string_lossy())
-    );
-    write_powershell_script(&script_path, &script)?;
-    let result = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(&script_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .with_context(|| "start Word COM text validation")?;
-    let _ = fs::remove_file(script_path);
-    ensure!(
-        result.status.success(),
-        "Word COM text extraction failed: {}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    fs::read_to_string(text_output)
-        .with_context(|| format!("read extracted Word text {}", text_output.display()))
 }
 
 fn normalize_document_text(text: &str) -> String {
@@ -1379,10 +1259,6 @@ fn csv_column_name(mut column: usize) -> String {
     name
 }
 
-fn ps_quote(value: &str) -> String {
-    value.replace('\'', "''")
-}
-
 struct TempDirGuard(PathBuf);
 
 impl Drop for TempDirGuard {
@@ -1394,9 +1270,9 @@ impl Drop for TempDirGuard {
 #[cfg(test)]
 mod tests {
     use super::{
-        com_display_alerts_setting, file_uri, libreoffice_batch_request,
-        libreoffice_user_installation_arg, select_fidelity_engine, ConversionRuntime,
-        LibreOfficeExecutor, LibreOfficeRunOutcome,
+        file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
+        select_fidelity_engine, ConversionRuntime, LibreOfficeExecutor,
+        LibreOfficeRunOutcome,
     };
     use anyhow::Result;
     use std::fs;
@@ -1697,15 +1573,6 @@ mod tests {
         assert!(!libreoffice_batch_request("xlsx", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "com"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "auto") || !cfg!(windows));
-    }
-
-    #[test]
-    fn com_display_alerts_setting_uses_host_application_type() {
-        assert_eq!(com_display_alerts_setting("docx"), "$app.DisplayAlerts=0;");
-        assert_eq!(
-            com_display_alerts_setting("xlsx"),
-            "$app.DisplayAlerts=$false;"
-        );
     }
 
     #[test]
