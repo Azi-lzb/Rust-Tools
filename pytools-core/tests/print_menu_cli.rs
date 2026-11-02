@@ -102,7 +102,7 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     let events = events.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
     assert!(events.iter().all(|event| event["run_id"] == history["run_id"]));
     assert!(events.iter().any(|event| event["event_name"] == "run_finished"));
-    let printed = root.path().join("3-4-umya").join("printed.xlsx");
+    let printed = target.clone();
     assert!(printed.is_file(), "umya print output missing");
     assert_eq!(fs::read(&source)?, source_before, "source must stay unchanged");
 
@@ -110,8 +110,8 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     let precheck = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
     assert!(precheck.status.success());
     let precheck_response = output_json(&precheck)?;
-    assert_eq!(precheck_response["failed"], 0);
-    assert_eq!(precheck_response["ok"], 1);
+    assert_eq!(precheck_response["failed"], 1, "existing print target must fail precheck");
+    assert_eq!(precheck_response["ok"], 0);
     Ok(())
 }
 
@@ -178,7 +178,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
     let output_line_count = stdout.lines().filter(|line| line.contains("输出：")).count();
     assert_eq!(output_line_count, 1, "{stdout}");
 
-    let printed_path = root.path().join("3-4-umya").join("printed.xlsx");
+    let printed_path = target.clone();
     assert!(printed_path.is_file(), "print target was not created");
     let printed = read_workbook(&printed_path)?;
     assert_eq!(printed.sheets.len(), 1);
@@ -220,7 +220,7 @@ fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Resul
     let output = run_menu(&config, "3\n2\n0\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let printed = root.path().join("3-5-openpyxl").join("printed.xlsx");
+    let printed = target.clone();
     if printed.is_file() {
         assert!(stdout.contains("处理完成"), "{stdout}");
         let dump = read_workbook(&printed)?;

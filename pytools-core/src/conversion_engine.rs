@@ -1,7 +1,7 @@
 //! Fidelity conversion engine (former `lo-convert` sidecar).
-//! Windows spreadsheet conversion uses Rust COM on an isolated STA thread;
-//! Word retains its PowerShell COM bridge. LibreOffice uses the local
-//! `soffice` CLI. No separate `lo-convert` executable is required.
+//! Windows `.xls/.xlsb/.xlsm` conversion uses the bundled pywin32 COM worker;
+//! native ET and Word keep their existing Windows routes. LibreOffice uses the
+//! local `soffice` CLI. No separate `lo-convert` executable is required.
 //!
 //! LibreOffice runs as a batch-scoped session: one shared isolated profile
 //! and one `soffice` process per conversion stage handle the whole batch
@@ -21,11 +21,18 @@ use std::{
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
+#[cfg(windows)]
+use std::{
+    io::{BufRead, BufReader, BufWriter, Write},
+    process::{Child, ChildStdin, ChildStdout},
+};
 
 /// State scoped to one user conversion request or batch.
 pub(crate) struct ConversionRuntime {
     #[cfg(windows)]
     com: Option<crate::conversion_com::ComWorker>,
+    #[cfg(windows)]
+    pywin32: Option<PythonExcelWorker>,
     libreoffice: Option<LibreOfficeBatchSession>,
     /// Test hook: replaces the real `soffice` process execution.
     libreoffice_executor: Option<LibreOfficeExecutor>,
@@ -36,6 +43,8 @@ impl Default for ConversionRuntime {
         Self {
             #[cfg(windows)]
             com: None,
+            #[cfg(windows)]
+            pywin32: None,
             libreoffice: None,
             libreoffice_executor: None,
         }
@@ -196,6 +205,30 @@ pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
     }
 }
 
+fn select_conversion_engine(
+    engine: &str,
+    source_ext: &str,
+    target: &str,
+    is_windows: bool,
+) -> &'static str {
+    if engine != "auto" {
+        return match engine {
+            "lo" => "lo",
+            "com" => "com",
+            "pywin32" => "pywin32",
+            _ => "lo",
+        };
+    }
+    if !is_windows {
+        return "lo";
+    }
+    if target == "xlsx" && matches!(source_ext, "xls" | "xlsb" | "xlsm") {
+        "pywin32"
+    } else {
+        "com"
+    }
+}
+
 /// Whether this source would run through LibreOffice under the requested
 /// engine, using the same source/target matrix the per-file path accepts.
 pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: &str) -> bool {
@@ -229,8 +262,30 @@ impl ConversionRuntime {
         Ok(ComExecution {
             source_format: converted.source_format,
             bridge: "rust",
-            application: Some(converted.application),
+            application: Some(converted.application.to_owned()),
             process_id: Some(converted.process_id),
+            worker_process_id: None,
+            validation: None,
+        })
+    }
+
+    #[cfg(windows)]
+    fn spreadsheet_pywin32(&mut self, input: &Path, output: &Path) -> Result<ComExecution> {
+        if self.pywin32.is_none() {
+            self.pywin32 = Some(PythonExcelWorker::start()?);
+        }
+        let converted = self
+            .pywin32
+            .as_mut()
+            .expect("pywin32 worker initialized")
+            .convert(input, output)?;
+        Ok(ComExecution {
+            source_format: None,
+            bridge: "pywin32",
+            application: Some(converted.application),
+            process_id: converted.process_id,
+            worker_process_id: Some(converted.worker_process_id),
+            validation: Some(converted.validation),
         })
     }
 
@@ -240,8 +295,10 @@ impl ConversionRuntime {
         Ok(ComExecution {
             source_format: None,
             bridge: "rust",
-            application: Some(converted.application),
+            application: Some(converted.application.to_owned()),
             process_id: converted.process_id,
+            worker_process_id: None,
+            validation: None,
         })
     }
 
@@ -285,12 +342,11 @@ impl ConversionRuntime {
             }
         };
         for (input, target) in &unique_requests {
-            session
-                .covered
-                .insert((input.clone(), target.clone()));
+            session.covered.insert((input.clone(), target.clone()));
         }
         let mut executor = self.libreoffice_executor.take();
-        let outcome = Self::convert_batch_with_session(&mut session, &unique_requests, &mut executor);
+        let outcome =
+            Self::convert_batch_with_session(&mut session, &unique_requests, &mut executor);
         if let Err(error) = outcome {
             session.error = Some(format!("{error:#}"));
         }
@@ -341,24 +397,25 @@ impl ConversionRuntime {
             source_exts.len() == 1,
             "a LibreOffice batch session handles one source format"
         );
-        let source_ext = source_exts.into_iter().next().expect("source format checked");
+        let source_ext = source_exts
+            .into_iter()
+            .next()
+            .expect("source format checked");
 
         // Stage disposable, uniquely named copies so same-stem inputs cannot
         // collide inside the shared outdir and the engine never sees the
         // caller's original file.
         let mut main_jobs = Vec::new();
         for (index, (input, request_target)) in requests.iter().enumerate() {
-            let staged_input =
-                inputs_dir.join(format!("lo-{index:06}.{source_ext}"));
+            let staged_input = inputs_dir.join(format!("lo-{index:06}.{source_ext}"));
             fs::copy(input, &staged_input).with_context(|| {
                 format!(
                     "stage disposable copy for LibreOffice batch conversion from {}",
                     input.display()
                 )
             })?;
-            let staged_output = outputs_dir_for(session).join(format!(
-                "lo-{index:06}.{request_target}"
-            ));
+            let staged_output =
+                outputs_dir_for(session).join(format!("lo-{index:06}.{request_target}"));
             main_jobs.push(LibreOfficeJob {
                 staged_input,
                 staged_output,
@@ -366,16 +423,11 @@ impl ConversionRuntime {
         }
         session.run_libreoffice_processes(
             executor,
-            vec![(
-                filter.to_owned(),
-                outputs_dir_for(session),
-                main_jobs,
-            )],
+            vec![(filter.to_owned(), outputs_dir_for(session), main_jobs)],
         )?;
         for (index, (input, request_target)) in requests.iter().enumerate() {
-            let staged_output = outputs_dir_for(session).join(format!(
-                "lo-{index:06}.{request_target}"
-            ));
+            let staged_output =
+                outputs_dir_for(session).join(format!("lo-{index:06}.{request_target}"));
             if staged_output.is_file() && fs::metadata(&staged_output)?.len() > 0 {
                 session
                     .converted
@@ -411,7 +463,10 @@ impl ConversionRuntime {
             let mut candidate_index = requests.len();
             let mut candidate_texts = Vec::new();
             for (input, request_target) in requests.iter() {
-                let Some(candidate) = session.converted.get(&(input.clone(), request_target.clone())) else {
+                let Some(candidate) = session
+                    .converted
+                    .get(&(input.clone(), request_target.clone()))
+                else {
                     continue;
                 };
                 let staged_candidate = texts_in.join(format!("t-{candidate_index:06}.docx"));
@@ -462,8 +517,11 @@ impl ConversionRuntime {
     /// input (successfully or not). Covered inputs must never fall back to
     /// a second `soffice` process.
     pub(crate) fn libreoffice_covers(&self, input: &Path, target: &str) -> bool {
-        self.libreoffice_session()
-            .is_some_and(|session| session.covered.contains(&(input.to_path_buf(), target.to_owned())))
+        self.libreoffice_session().is_some_and(|session| {
+            session
+                .covered
+                .contains(&(input.to_path_buf(), target.to_owned()))
+        })
     }
 
     pub(crate) fn libreoffice_source_text(&self, input: &Path) -> Option<String> {
@@ -513,6 +571,226 @@ impl ConversionRuntime {
     }
 }
 
+#[cfg(windows)]
+struct PyWin32Conversion {
+    application: String,
+    process_id: Option<u32>,
+    worker_process_id: u32,
+    validation: serde_json::Value,
+}
+
+#[cfg(windows)]
+struct PythonExcelWorker {
+    child: Child,
+    input: BufWriter<ChildStdin>,
+    output: BufReader<ChildStdout>,
+}
+
+#[cfg(windows)]
+impl PythonExcelWorker {
+    fn start() -> Result<Self> {
+        let (python, worker) = pywin32_worker_paths()?;
+        let mut child = Command::new(&python)
+            .arg("-I")
+            .arg(&worker)
+            .arg("--serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .with_context(|| {
+                format!(
+                    "启动随包 pywin32 Excel 转换 Worker 失败（Python={}，Worker={}）",
+                    python.display(),
+                    worker.display()
+                )
+            })?;
+
+        let startup = (|| -> Result<(BufWriter<ChildStdin>, BufReader<ChildStdout>)> {
+            let input = BufWriter::new(
+                child
+                    .stdin
+                    .take()
+                    .context("pywin32 worker 未提供标准输入")?,
+            );
+            let mut output = BufReader::new(
+                child
+                    .stdout
+                    .take()
+                    .context("pywin32 worker 未提供标准输出")?,
+            );
+            let mut line = String::new();
+            let bytes = output
+                .read_line(&mut line)
+                .context("读取 pywin32 worker 启动握手失败")?;
+            ensure!(bytes > 0, "pywin32 worker 在启动握手前退出");
+            let ready: serde_json::Value =
+                serde_json::from_str(&line).context("pywin32 worker 启动握手不是有效 JSON")?;
+            ensure!(
+                ready.get("ready").and_then(serde_json::Value::as_bool) == Some(true)
+                    && ready.get("protocol").and_then(serde_json::Value::as_u64) == Some(1),
+                "pywin32 worker 启动失败：{}",
+                ready
+                    .get("error")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("协议版本不匹配")
+            );
+            Ok((input, output))
+        })();
+
+        match startup {
+            Ok((input, output)) => Ok(Self {
+                child,
+                input,
+                output,
+            }),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(error)
+            }
+        }
+    }
+
+    fn convert(&mut self, input: &Path, output: &Path) -> Result<PyWin32Conversion> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .context("检查 pywin32 worker 进程状态失败")?
+        {
+            bail!("pywin32 worker 已退出（状态：{status}）");
+        }
+        let request = serde_json::json!({
+            "op": "convert",
+            "input": input.to_string_lossy(),
+            "output": output.to_string_lossy(),
+        });
+        serde_json::to_writer(&mut self.input, &request)
+            .context("写入 pywin32 Excel 转换请求失败")?;
+        self.input
+            .write_all(b"\n")
+            .and_then(|()| self.input.flush())
+            .context("发送 pywin32 Excel 转换请求失败")?;
+
+        let mut line = String::new();
+        let bytes = self
+            .output
+            .read_line(&mut line)
+            .context("读取 pywin32 Excel 转换结果失败")?;
+        ensure!(bytes > 0, "pywin32 worker 未返回转换结果");
+        let response: serde_json::Value =
+            serde_json::from_str(&line).context("pywin32 worker 返回的转换结果不是有效 JSON")?;
+        ensure!(
+            response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
+            "pywin32 Excel 转换失败（阶段：{}）：{}",
+            response
+                .get("stage")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("未知阶段"),
+            response
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("worker 未提供错误详情")
+        );
+        let validation = response
+            .get("validation")
+            .cloned()
+            .context("pywin32 worker 缺少工作簿校验结果")?;
+        ensure!(
+            validation
+                .get("verified")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true),
+            "pywin32 worker 未报告工作簿校验通过"
+        );
+        let application = response
+            .get("application")
+            .and_then(serde_json::Value::as_str)
+            .context("pywin32 worker 未报告 Excel/WPS COM 应用")?
+            .to_owned();
+        let process_id = response
+            .get("process_id")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok());
+        Ok(PyWin32Conversion {
+            application,
+            process_id,
+            worker_process_id: self.child.id(),
+            validation,
+        })
+    }
+}
+
+#[cfg(windows)]
+impl Drop for PythonExcelWorker {
+    fn drop(&mut self) {
+        let _ = writeln!(self.input, "{{\"op\":\"shutdown\"}}");
+        let _ = self.input.flush();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                _ => {
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn pywin32_worker_paths() -> Result<(PathBuf, PathBuf)> {
+    let current_exe = std::env::current_exe().context("定位当前 pytools.exe 失败")?;
+    let exe_dir = current_exe
+        .parent()
+        .context("当前 pytools.exe 没有父目录")?;
+    let packaged_dir = exe_dir.join("python");
+    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .context("定位 pytools-core 仓库根目录失败")?
+        .to_path_buf();
+    let development_dir = manifest_root.join("dist").join("python");
+
+    let python = std::env::var_os("PYTOOLS_COM_PYTHON")
+        .map(PathBuf::from)
+        .or_else(|| {
+            [
+                packaged_dir.join("python.exe"),
+                development_dir.join("python.exe"),
+            ]
+            .into_iter()
+            .find(|candidate| candidate.is_file())
+        })
+        .context("未找到随包 Python；请将 pywin32 运行时暂存到 dist\\python")?;
+    let worker = std::env::var_os("PYTOOLS_COM_WORKER")
+        .map(PathBuf::from)
+        .or_else(|| {
+            [
+                packaged_dir.join("pywin32_excel_conversion_worker.py"),
+                development_dir.join("pywin32_excel_conversion_worker.py"),
+            ]
+            .into_iter()
+            .find(|candidate| candidate.is_file())
+        })
+        .context("未找到 pywin32 Excel 转换 Worker；请重新暂存 dist\\python")?;
+    ensure!(
+        python.is_file(),
+        "pywin32 Python 解释器不存在：{}",
+        python.display()
+    );
+    ensure!(
+        worker.is_file(),
+        "pywin32 Worker 不存在：{}",
+        worker.display()
+    );
+    Ok((python, worker))
+}
+
 fn outputs_dir_for(session: &LibreOfficeBatchSession) -> PathBuf {
     session.session_dir.join("outputs")
 }
@@ -536,8 +814,10 @@ fn unique_lo_session_dir() -> Result<PathBuf> {
 struct ComExecution {
     source_format: Option<i32>,
     bridge: &'static str,
-    application: Option<&'static str>,
+    application: Option<String>,
     process_id: Option<u32>,
+    worker_process_id: Option<u32>,
+    validation: Option<serde_json::Value>,
 }
 
 /// Run one same-category fidelity conversion and retain the existing JSON
@@ -554,8 +834,8 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         bail!("该功能需要外部引擎: no conversion engine is available (PYTOOLS_CONVERT_ENGINES_DISABLED)");
     }
     ensure!(
-        engine == "auto" || engine == "lo" || engine == "com",
-        "engine must be auto, lo or com"
+        engine == "auto" || engine == "lo" || engine == "com" || engine == "pywin32",
+        "engine must be auto, lo, com or pywin32"
     );
     ensure!(
         input.is_file(),
@@ -564,10 +844,14 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
     );
     let source_ext = extension(input)?;
     ensure!(
-        (matches!(target, "xlsx")
-            && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "et"))
+        (matches!(target, "xlsx") && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "et"))
             || (target == "docx" && source_ext == "doc"),
         "unsupported conversion: .{source_ext} -> .{target}"
+    );
+    ensure!(
+        engine != "pywin32"
+            || (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm")),
+        "pywin32 conversion supports .xls, .xlsb or .xlsm to .xlsx"
     );
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
@@ -583,15 +867,7 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
     )?);
     let temp_dir = &temp_guard.0;
     let converted = temp_dir.join(format!("{}.{}", file_stem(input), target));
-    let selected = if engine == "auto" {
-        if cfg!(windows) {
-            "com"
-        } else {
-            "lo"
-        }
-    } else {
-        engine
-    };
+    let selected = select_conversion_engine(engine, &source_ext, target, cfg!(windows));
     let com_execution = match selected {
         "lo" => {
             match runtime.libreoffice_batch_outcome(input, target) {
@@ -611,13 +887,21 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
             }
             None
         }
-        "com" if cfg!(windows) => Some(run_com(input, &converted, target, &source_ext, runtime)?),
+        "com" if cfg!(windows) => {
+            Some(run_com(input, &converted, target, &source_ext, runtime, false)?)
+        }
         "com" => bail!(
             "该功能需要外部引擎: COM conversion is only available on Windows; install LibreOffice or use --engine lo"
         ),
+        "pywin32" if cfg!(windows) => {
+            Some(run_com(input, &converted, target, &source_ext, runtime, true)?)
+        }
+        "pywin32" => bail!("pywin32 Excel COM conversion is only available on Windows"),
         _ => unreachable!(),
     };
-    let source_file_format = com_execution.as_ref().and_then(|execution| execution.source_format);
+    let source_file_format = com_execution
+        .as_ref()
+        .and_then(|execution| execution.source_format);
     let candidate = if converted.exists() {
         converted
     } else {
@@ -635,6 +919,9 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         selected,
         temp_dir,
         source_file_format,
+        com_execution
+            .as_ref()
+            .and_then(|execution| execution.validation.as_ref()),
         runtime,
     )?;
     let validation = serde_json::from_str::<serde_json::Value>(&validation)
@@ -653,6 +940,9 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         }
         if let Some(process_id) = execution.process_id {
             report["com_process_id"] = serde_json::json!(process_id);
+        }
+        if let Some(process_id) = execution.worker_process_id {
+            report["com_worker_process_id"] = serde_json::json!(process_id);
         }
     }
     // Session evidence: the PIDs of the LibreOffice processes this batch
@@ -708,6 +998,7 @@ fn run_com(
     target: &str,
     source_ext: &str,
     runtime: &mut ConversionRuntime,
+    use_pywin32: bool,
 ) -> Result<ComExecution> {
     let output_parent = output
         .parent()
@@ -731,10 +1022,14 @@ fn run_com(
     match target {
         "xlsx" => {
             #[cfg(windows)]
-            let result = runtime.spreadsheet_com(&com_input, output, source_ext);
+            let result = if use_pywin32 {
+                runtime.spreadsheet_pywin32(&com_input, output)
+            } else {
+                runtime.spreadsheet_com(&com_input, output, source_ext)
+            };
             #[cfg(not(windows))]
             let result = {
-                let _ = runtime;
+                let _ = (runtime, use_pywin32);
                 Err(anyhow!("COM conversion is only available on Windows"))
             };
             let _ = fs::remove_file(&com_input);
@@ -763,6 +1058,7 @@ fn validate_conversion(
     engine: &str,
     temp_dir: &Path,
     source_file_format: Option<i32>,
+    external_validation: Option<&serde_json::Value>,
     runtime: &mut ConversionRuntime,
 ) -> Result<String> {
     if target == "docx" {
@@ -787,7 +1083,7 @@ fn validate_conversion(
                         None => extract_word_text_lo(output, &temp_dir.join("output-text"))?,
                     },
                 )
-            },
+            }
             "com" if cfg!(windows) => {
                 // Same batch-owned Word/WPS instance that produced the
                 // candidate also extracts both texts - no extra process.
@@ -811,7 +1107,22 @@ fn validate_conversion(
     );
     if source_ext == "csv" {
         validate_csv_conversion(input, &converted)?;
-        return Ok("{\"level\":\"one_worksheet_and_csv_values\",\"numeric_tolerance\":1e-15}".into());
+        return Ok(
+            "{\"level\":\"one_worksheet_and_csv_values\",\"numeric_tolerance\":1e-15}".into(),
+        );
+    }
+    if let Some(validation) = external_validation {
+        ensure!(
+            engine == "pywin32"
+                && matches!(source_ext, "xls" | "xlsb" | "xlsm")
+                && validation
+                    .get("verified")
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true),
+            "pywin32 external validation evidence is invalid for this conversion"
+        );
+        return serde_json::to_string(validation)
+            .context("encode pywin32 Excel preservation validation");
     }
     let source_path = if source_ext == "et" {
         // ET is a CFB container, not necessarily an OOXML ZIP. Convert the
@@ -830,7 +1141,7 @@ fn validate_conversion(
             }
             "com" if cfg!(windows) => {
                 let probe = probe_dir.join(format!("source.{target}"));
-                let probe_file_format = run_com(input, &probe, target, source_ext, runtime)
+                let probe_file_format = run_com(input, &probe, target, source_ext, runtime, false)
                     .context("convert ET source for preservation validation with COM")?
                     .source_format;
                 ensure!(
@@ -888,7 +1199,9 @@ fn extract_word_text_lo(input: &Path, output_dir: &Path) -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .with_context(|| "该功能需要外部引擎: LibreOffice is required to validate converted Word text")?;
+        .with_context(|| {
+            "该功能需要外部引擎: LibreOffice is required to validate converted Word text"
+        })?;
     ensure!(
         command.status.success(),
         "LibreOffice text extraction failed: {}",
@@ -1123,8 +1436,7 @@ fn file_uri(path: &Path) -> Result<String> {
     };
     let mut encoded = String::with_capacity(path.len());
     for byte in path.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b':' | b'-' | b'.' | b'_' | b'~')
-        {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b':' | b'-' | b'.' | b'_' | b'~') {
             encoded.push(byte as char);
         } else {
             encoded.push_str(&format!("%{byte:02X}"));
@@ -1271,7 +1583,7 @@ impl Drop for TempDirGuard {
 mod tests {
     use super::{
         file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
-        select_fidelity_engine, ConversionRuntime, LibreOfficeExecutor,
+        select_conversion_engine, select_fidelity_engine, ConversionRuntime, LibreOfficeExecutor,
         LibreOfficeRunOutcome,
     };
     use anyhow::Result;
@@ -1573,6 +1885,30 @@ mod tests {
         assert!(!libreoffice_batch_request("xlsx", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "com"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "auto") || !cfg!(windows));
+    }
+
+    #[test]
+    fn automatic_windows_excel_conversion_uses_the_packaged_pywin32_worker() {
+        assert_eq!(
+            select_conversion_engine("auto", "xls", "xlsx", true),
+            "pywin32"
+        );
+        assert_eq!(
+            select_conversion_engine("auto", "xlsb", "xlsx", true),
+            "pywin32"
+        );
+        assert_eq!(
+            select_conversion_engine("auto", "xlsm", "xlsx", true),
+            "pywin32"
+        );
+        assert_eq!(select_conversion_engine("auto", "et", "xlsx", true), "com");
+        assert_eq!(select_conversion_engine("auto", "doc", "docx", true), "com");
+        assert_eq!(select_conversion_engine("auto", "xls", "xlsx", false), "lo");
+        assert_eq!(select_conversion_engine("com", "xls", "xlsx", true), "com");
+        assert_eq!(
+            select_conversion_engine("pywin32", "xls", "xlsx", true),
+            "pywin32"
+        );
     }
 
     #[test]

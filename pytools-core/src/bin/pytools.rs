@@ -312,13 +312,13 @@ where
                 writeln!(
                     output,
                     "[配置不可用] {}；请先使用 7-1 初始化/修复配置表（{error}）",
-                    config_path.display()
+                    display_path_for_user(&config_path)
                 )?;
             } else {
                 writeln!(
                     output,
                     "[配置不可用] {}；请先使用 7-1 初始化/修复配置表。",
-                    config_path.display()
+                    display_path_for_user(&config_path)
                 )?;
             }
         }
@@ -450,11 +450,11 @@ where
 {
     loop {
         writeln!(output, "------ 数据提取与汇总 ------")?;
-        writeln!(output, "  1  时序宽表汇总")?;
+        writeln!(output, "  1  时序宽表汇总  【时序提取规则；路径标准化映射】")?;
         writeln!(output, "  2  按使用区域快速汇总")?;
-        writeln!(output, "  3  按模板命名区域汇总")?;
-        writeln!(output, "  4  表头路径比对与映射")?;
-        writeln!(output, "  5  时序配置预校验")?;
+        writeln!(output, "  3  按模板命名区域汇总  【所选模板：表头区域/汇总区域/可选表结构区域】")?;
+        writeln!(output, "  4  表头路径比对与映射  【时序提取规则；路径标准化映射】")?;
+        writeln!(output, "  5  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "--------------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -665,17 +665,17 @@ where
         };
         match choice.as_str() {
             "1" => match open_config(config_path) {
-                Ok(()) => writeln!(output, "[完成] 已打开配置文件: {}", config_path.display())?,
+                Ok(()) => writeln!(output, "[完成] 已打开配置文件: {}", display_path_for_user(&config_path))?,
                 Err(error) => writeln!(output, "[失败] 打开配置文件失败: {error:#}")?,
             },
             "2" => match open_latest_output(&global.output_dir) {
                 Ok(Some(path)) => {
-                    writeln!(output, "[完成] 已打开最新输出文件: {}", path.display())?
+                    writeln!(output, "[完成] 已打开最新输出文件: {}", display_path_for_user(&path))?
                 }
                 Ok(None) => writeln!(
                     output,
                     "[提示] 未找到输出文件: {}",
-                    global.output_dir.display()
+                    display_path_for_user(&global.output_dir)
                 )?,
                 Err(error) => writeln!(output, "[失败] 打开输出文件失败: {error:#}")?,
             },
@@ -683,7 +683,7 @@ where
                 Ok(()) => writeln!(
                     output,
                     "[完成] 已打开输出文件夹: {}",
-                    global.output_dir.display()
+                    display_path_for_user(&global.output_dir)
                 )?,
                 Err(error) => writeln!(output, "[失败] 打开输出文件夹失败: {error:#}")?,
             },
@@ -766,19 +766,17 @@ fn finish_config_menu_action<W: Write>(
 ) -> Result<()> {
     if log_view == "user" {
         if facts.status == "failed" {
-            writeln!(output, "处理失败：{label}，耗时 {elapsed_ms} ms。")?;
+            writeln!(output, "处理失败：{label}，耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         } else if facts.status == "partial" {
             writeln!(
-                output,
-                "处理完成，但部分配置未能解析：{}，耗时 {elapsed_ms} ms。",
+                output, "处理完成，但部分配置未能解析：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
                 config_menu_summary(feature_id, &facts.metrics)
-            )?;
+            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         } else {
             writeln!(
-                output,
-                "处理完成：{}，耗时 {elapsed_ms} ms。",
+                output, "处理完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
                 config_menu_summary(feature_id, &facts.metrics)
-            )?;
+            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         }
     } else if log_view == "developer" {
         let history_result = write_config_menu_run_history(
@@ -786,16 +784,15 @@ fn finish_config_menu_action<W: Write>(
         );
         match history_result {
             Ok(path) => writeln!(
-                output,
-                "PT-5 完成：{feature_id}，状态 {}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms} ms；运行记录：{}",
+                output, "PT-5 完成：{feature_id}，状态 {}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}",
                 facts.status,
                 config_menu_summary(feature_id, &facts.metrics),
                 if facts.actual_engines.is_empty() { "未调用".to_owned() } else { facts.actual_engines.join(", ") },
                 if facts.actual_components.is_empty() { "未确认".to_owned() } else { facts.actual_components.join(", ") },
                 if facts.excel_modifier_invoked { "已调用" } else { "未调用" },
                 if facts.excel_writer_invoked { "已调用" } else { "未调用" },
-                path.display()
-            )?,
+                display_path_for_user(&path)
+            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             Err(error) => writeln!(
                 output,
                 "PT-5 完成：{feature_id}，状态 {}，{}，运行记录写入失败：{error:#}",
@@ -844,7 +841,7 @@ fn write_config_menu_run_history(
     facts: &ConfigMenuRunFacts,
 ) -> Result<PathBuf> {
     fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create config log directory {}", global.log_dir.display()))?;
+        .with_context(|| format!("create config log directory {}", display_path_for_user(&global.log_dir)))?;
     let mut stages = facts.stages.clone();
     if stages.is_empty() {
         stages.push(serde_json::json!({
@@ -932,7 +929,7 @@ where
                     output,
                     "[二次确认] 7-1 将新建配置表或生成配置修复候选；如后续确认替换，当前配置文件会被更新。"
                 )?;
-                writeln!(output, "配置路径：{}", config_path.display())?;
+                writeln!(output, "配置路径：{}", display_path_for_user(&config_path))?;
                 writeln!(output, "  1  确认继续")?;
                 writeln!(output, "  0  取消，不修改配置")?;
                 let Some(confirmation) = read_menu_choice(input, output, "确认执行 7-1> ")?
@@ -1032,7 +1029,7 @@ where
                             "non_empty_rows": non_empty_rows,
                             "global_config_loaded": false,
                         });
-                        writeln!(output, "配置文件: {}", config_path.display())?;
+                        writeln!(output, "配置文件: {}", display_path_for_user(&config_path))?;
                         if let Ok(modified) =
                             fs::metadata(config_path).and_then(|metadata| metadata.modified())
                         {
@@ -1068,13 +1065,13 @@ where
                                 Ok(config) => {
                                     facts.metrics["global_config_loaded"] = serde_json::json!(true);
                                     writeln!(output, "全局配置解析:")?;
-                                    writeln!(output, "  输入目录: {}", config.input_dir.display())?;
+                                    writeln!(output, "  输入目录: {}", display_path_for_user(&config.input_dir))?;
                                     writeln!(
                                         output,
                                         "  输出目录: {}",
-                                        config.output_dir.display()
+                                        display_path_for_user(&config.output_dir)
                                     )?;
-                                    writeln!(output, "  日志目录: {}", config.log_dir.display())?;
+                                    writeln!(output, "  日志目录: {}", display_path_for_user(&config.log_dir))?;
                                     writeln!(output, "  源文件扩展名: {:?}", config.source_exts)?;
                                 }
                                 Err(error) => {
@@ -1131,7 +1128,7 @@ where
                             }
                         }
                         if log_view != "off" {
-                            writeln!(output, "用时={}ms", view_started.elapsed().as_millis())?;
+                            writeln!(output, "用时={:.3} 秒", (view_started.elapsed().as_millis()) as f64 / 1000.0)?;
                         }
                         facts.add_component("pytools_core::config::load_global");
                         match refreshed_global {
@@ -1195,13 +1192,13 @@ where
                             writeln!(
                                 output,
                                 "[缺失] 配置文件 {} 不存在；继续使用上次成功加载的配置。",
-                                config_path.display()
+                                display_path_for_user(&config_path)
                             )?;
                         } else {
                             writeln!(
                                 output,
                                 "[缺失] 配置文件 {} 不存在，请先选择 7-1 初始化/修复配置表。",
-                                config_path.display()
+                                display_path_for_user(&config_path)
                             )?;
                         }
                     }
@@ -1276,7 +1273,7 @@ where
                 "QUICK-OPEN-LATEST",
                 "打开最近输出文件",
                 open_latest_output(&global.output_dir),
-                format!("输出目录中没有可打开的文件：{}", global.output_dir.display()),
+                format!("输出目录中没有可打开的文件：{}", display_path_for_user(&global.output_dir)),
             )?,
             "quick.open_output_folder" => log_quick_menu_action(
                 output,
@@ -1334,17 +1331,14 @@ where
             writeln!(
                 output,
                 "[完成] 已新建配置表：{}（{} 张工作表）",
-                result.path.display(),
+                display_path_for_user(&result.path),
                 result.sheets
             )?;
         } else {
             writeln!(
-                output,
-                "[完成] 已新建配置表：{}（{} 张工作表，用时={}ms）",
-                result.path.display(),
-                result.sheets,
-                initialize_started.elapsed().as_millis()
-            )?;
+                output, "[完成] 已新建配置表：{}（{} 张工作表，用时={:.3} 秒）",
+                display_path_for_user(&result.path),
+                result.sheets, (initialize_started.elapsed().as_millis()) as f64 / 1000.0)?;
         }
         if log_view == "developer" {
             writeln!(output, "实际写入引擎: rust_xlsxwriter")?;
@@ -1384,7 +1378,7 @@ where
         writeln!(
             output,
             "[无需修复] 当前配置已经完整：{}",
-            config_path.display()
+            display_path_for_user(&config_path)
         )?;
         refresh_interactive_global(config_path, global, config_error);
         return Ok(());
@@ -1406,15 +1400,13 @@ where
                 output,
                 "[计划已生成] 共 {} 项操作：{}",
                 plan.operations.len(),
-                plan_path.display()
+                display_path_for_user(&plan_path)
             )?;
         } else {
             writeln!(
-                output,
-                "[计划已生成] 共 {} 项操作，用时={}ms：{}",
-                plan.operations.len(),
-                plan_started.elapsed().as_millis(),
-                plan_path.display()
+                output, "[计划已生成] 共 {} 项操作，用时={:.3} 秒：{}",
+                plan.operations.len(), (plan_started.elapsed().as_millis()) as f64 / 1000.0,
+                display_path_for_user(&plan_path)
             )?;
         }
     } else {
@@ -1426,11 +1418,8 @@ where
             )?;
         } else {
             writeln!(
-                output,
-                "[计划已生成] 共 {} 项操作，用时={}ms（全局配置 输出附带计划文件=否，计划未落盘）",
-                plan.operations.len(),
-                plan_started.elapsed().as_millis()
-            )?;
+                output, "[计划已生成] 共 {} 项操作，用时={:.3} 秒（全局配置 输出附带计划文件=否，计划未落盘）",
+                plan.operations.len(), (plan_started.elapsed().as_millis()) as f64 / 1000.0)?;
         }
     }
 
@@ -1467,15 +1456,12 @@ where
         writeln!(
             output,
             "[候选已验证] {}；源配置仍未替换。",
-            candidate_path.display()
+            display_path_for_user(&candidate_path)
         )?;
     } else {
         writeln!(
-            output,
-            "[候选已验证] {}；源配置仍未替换；执行用时={}ms。",
-            candidate_path.display(),
-            execution_started.elapsed().as_millis()
-        )?;
+            output, "[候选已验证] {}；源配置仍未替换；执行用时={:.3} 秒。",
+            display_path_for_user(&candidate_path), (execution_started.elapsed().as_millis()) as f64 / 1000.0)?;
     }
     if log_view == "developer" {
         writeln!(
@@ -1505,25 +1491,22 @@ where
             writeln!(
                 output,
                 "[完成] 配置已安全更新：{}；原文件备份：{}",
-                committed.target.display(),
+                display_path_for_user(&committed.target),
                 committed
                     .backup_path
                     .as_deref()
-                    .map(|path| path.display().to_string())
+                    .map(|path| display_path_for_user(&path).to_string())
                     .unwrap_or_else(|| "无".to_owned())
             )?;
         } else {
             writeln!(
-                output,
-                "[完成] 配置已安全更新：{}；原文件备份：{}；提交用时={}ms",
-                committed.target.display(),
+                output, "[完成] 配置已安全更新：{}；原文件备份：{}；提交用时={:.3} 秒",
+                display_path_for_user(&committed.target),
                 committed
                     .backup_path
                     .as_deref()
-                    .map(|path| path.display().to_string())
-                    .unwrap_or_else(|| "无".to_owned()),
-                commit_started.elapsed().as_millis()
-            )?;
+                    .map(|path| display_path_for_user(&path).to_string())
+                    .unwrap_or_else(|| "无".to_owned()), (commit_started.elapsed().as_millis()) as f64 / 1000.0)?;
         }
         refresh_interactive_global(config_path, global, config_error);
         if let Some(error) = config_error.as_deref() {
@@ -1572,10 +1555,10 @@ where
     loop {
         writeln!(output, "------ 归档整理 ------")?;
         writeln!(output, "  1  按日期归档（预览）")?;
-        writeln!(output, "  2  按类型归档（预览，使用归档类型配置）")?;
+        writeln!(output, "  2  按类型归档（预览，使用归档类型配置）  【归档类型配置】")?;
         writeln!(output, "  3  执行归档计划")?;
         writeln!(output, "  4  按日期归档（直接复制）")?;
-        writeln!(output, "  5  按类型归档（直接复制，使用归档类型配置）")?;
+        writeln!(output, "  5  按类型归档（直接复制，使用归档类型配置）  【归档类型配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -1781,7 +1764,7 @@ where
     anyhow::ensure!(
         path.is_dir(),
         "archive target root does not exist or is not a directory: {}",
-        path.display()
+        display_path_for_user(&path)
     );
     print_selected_paths(output, std::slice::from_ref(&path))?;
     Ok(Some(path))
@@ -1983,7 +1966,7 @@ where
         writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, &format!("失败阶段：{stage}，错误代码：{code}")))?;
     }
     if let Some(elapsed) = report["total_elapsed_ms"].as_u64() {
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("总耗时 {elapsed} ms")))?;
+        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!( "总耗时 {elapsed_display_seconds:.3} 秒", elapsed_display_seconds = elapsed as f64 / 1000.0)))?;
     }
     Ok(())
 }
@@ -2003,10 +1986,10 @@ where
 {
     loop {
         writeln!(output, "------ 数据去重与追加 ------")?;
-        writeln!(output, "  1  按配置检查重复")?;
-        writeln!(output, "  2  按配置删除重复")?;
-        writeln!(output, "  3  按配置去重追加到目标工作簿")?;
-        writeln!(output, "  4  去重/追加配置预校验")?;
+        writeln!(output, "  1  按配置检查重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】")?;
+        writeln!(output, "  2  按配置删除重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】")?;
+        writeln!(output, "  3  按配置去重追加到目标工作簿  【去重追加数据配置：源数据/标识列/目标工作簿/目标工作表】")?;
+        writeln!(output, "  4  去重/追加配置预校验  【去重追加数据配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -2104,13 +2087,45 @@ where
                     )?;
                     let started = Instant::now();
                     let log = ConfiguredRunLog::new(global, "2-1", label, log_view);
-                    let result = load_dedup_tasks(config_path).and_then(|tasks| pytools_core::dedup_ops::mark_duplicates_in_place(&tasks));
+                    let mut report_tasks = Vec::new();
+                    let mut progress_write_error = None;
+                    let result = match load_dedup_tasks(config_path) {
+                        Ok(tasks) => {
+                            let enabled_count = tasks.iter().filter(|task| task.enabled).count();
+                            writeln!(
+                                output,
+                                "{} [INFO] 已启用配置：{enabled_count} 项",
+                                pytools_core::engine_diag::now_prefix()
+                            )?;
+                            let result = pytools_core::dedup_ops::mark_duplicates_in_place_with_progress(
+                                &tasks,
+                                |task| {
+                                    if progress_write_error.is_none() {
+                                        progress_write_error = write_dedup_task_start(output, task, false).err();
+                                    }
+                                },
+                            );
+                            report_tasks = tasks;
+                            result
+                        }
+                        Err(error) => Err(error),
+                    };
                     match &result {
                         Ok(run) => log.finish(false, Some((run.task_ok, run.task_skipped, run.task_failed)), &run.events, &run.saved_books),
                         Err(_) => log.finish(true, None, &[], &[]),
                     }
+                    if let Some(error) = progress_write_error {
+                        return Err(error.into());
+                    }
                     match result {
                         Ok(run) => {
+                            write_dedup_task_results(
+                                output,
+                                &report_tasks,
+                                &run.events,
+                                &run.saved_books,
+                                "标记重复行",
+                            )?;
                             writeln!(
                                 output,
                                 "{} [{}] 处理完成：任务成功 {} 项，跳过 {} 项，失败 {} 项；标记重复行 {} 行；保存工作簿 {} 个；用时 {:.1} 秒",
@@ -2128,7 +2143,7 @@ where
                                     output,
                                     "{} 已就地标记：{}",
                                     pytools_core::engine_diag::now_prefix(),
-                                    path.display()
+                                    display_path_for_user(&path)
                                 )?;
                             }
                             for event in run
@@ -2167,13 +2182,45 @@ where
                     )?;
                     let started = Instant::now();
                     let log = ConfiguredRunLog::new(global, "2-2", label, log_view);
-                    let result = load_dedup_tasks(config_path).and_then(|tasks| pytools_core::dedup_ops::delete_duplicates_in_place(&tasks));
+                    let mut report_tasks = Vec::new();
+                    let mut progress_write_error = None;
+                    let result = match load_dedup_tasks(config_path) {
+                        Ok(tasks) => {
+                            let enabled_count = tasks.iter().filter(|task| task.enabled).count();
+                            writeln!(
+                                output,
+                                "{} [INFO] 已启用配置：{enabled_count} 项",
+                                pytools_core::engine_diag::now_prefix()
+                            )?;
+                            let result = pytools_core::dedup_ops::delete_duplicates_in_place_with_progress(
+                                &tasks,
+                                |task| {
+                                    if progress_write_error.is_none() {
+                                        progress_write_error = write_dedup_task_start(output, task, false).err();
+                                    }
+                                },
+                            );
+                            report_tasks = tasks;
+                            result
+                        }
+                        Err(error) => Err(error),
+                    };
                     match &result {
                         Ok(run) => log.finish(false, Some((run.task_ok, run.task_skipped, run.task_failed)), &run.events, &run.saved_books),
                         Err(_) => log.finish(true, None, &[], &[]),
                     }
+                    if let Some(error) = progress_write_error {
+                        return Err(error.into());
+                    }
                     match result {
                         Ok(run) => {
+                            write_dedup_task_results(
+                                output,
+                                &report_tasks,
+                                &run.events,
+                                &run.saved_books,
+                                "删除重复行",
+                            )?;
                             writeln!(
                                 output,
                                 "{} [{}] 处理完成：任务成功 {} 项，跳过 {} 项，失败 {} 项；删除重复行 {} 行；保存工作簿 {} 个；用时 {:.1} 秒",
@@ -2191,7 +2238,7 @@ where
                                     output,
                                     "{} 已就地删除：{}",
                                     pytools_core::engine_diag::now_prefix(),
-                                    path.display()
+                                    display_path_for_user(&path)
                                 )?;
                             }
                             for event in run
@@ -2286,11 +2333,34 @@ where
 
     let planning_started = Instant::now();
     let action_output_dir = unique_menu_output_dir(&global.output_dir, "config-append");
-    let (mut report, plans) = match dedup_append_plan_bundle(
-        config_path,
-        &action_output_dir,
-        global.emit_plan_files,
-    ) {
+    let mut append_tasks = Vec::new();
+    let planning_result = match load_dedup_tasks(config_path) {
+        Ok(tasks) => {
+            let enabled_count = tasks.iter().filter(|task| task.enabled).count();
+            if log_view == "user" {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Info,
+                        &format!("已启用配置：{enabled_count} 项")
+                    )
+                )?;
+                for task in tasks.iter().filter(|task| task.enabled) {
+                    write_dedup_task_start(output, task, true)?;
+                }
+                output.flush()?;
+            }
+            append_tasks = tasks;
+            dedup_append_plan_bundle_with_tasks(
+                &append_tasks,
+                &action_output_dir,
+                global.emit_plan_files,
+            )
+        }
+        Err(error) => Err(error),
+    };
+    let (mut report, plans) = match planning_result {
         Ok(result) => result,
         Err(error) => {
             diagnostic.finish(true, None, &[], &[]);
@@ -2314,8 +2384,8 @@ where
                     false,
                     Some("dedup_operation_failed"),
                 ) {
-                    Ok(path) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms} ms；运行记录：{}；错误：{error:#}", path.display())?,
-                    Err(log_error) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms} ms；运行记录写入失败：{log_error:#}；错误：{error:#}")?,
+                    Ok(path) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}；错误：{error:#}", display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                    Err(log_error) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
             } else {
                 writeln!(
@@ -2349,7 +2419,7 @@ where
                     "{}",
                     pytools_core::run_logging::terminal_line(
                         pytools_core::run_logging::Level::Warn,
-                        &format!("配置跳过：{}；{issue}", plan.target.display())
+                        &format!("配置跳过：{}；{issue}", display_path_for_user(&plan.target))
                     )
                 )?;
             }
@@ -2368,7 +2438,7 @@ where
                     pytools_core::run_logging::Level::Info,
                     &format!(
                         "正在写入目标：{}（追加 {} 行，过滤重复 {} 行）",
-                        plan.target.display(),
+                        display_path_for_user(&plan.target),
                         plan.appended_rows,
                         plan.duplicate_rows_filtered
                     )
@@ -2439,7 +2509,7 @@ where
                         "{}",
                         pytools_core::run_logging::terminal_line(
                             pytools_core::run_logging::Level::Info,
-                            &format!("已写入：{}", plan.target.display())
+                            &format!("已写入：{}", display_path_for_user(&plan.target))
                         )
                     )?;
                 }
@@ -2482,6 +2552,61 @@ where
         if report[index]["status"] == "pending" {
             report[index]["execution"] = serde_json::Value::String("not_processed".to_owned());
             report[index]["status"] = serde_json::Value::String("not_processed".to_owned());
+        }
+    }
+
+    if log_view == "user" {
+        for (index, plan) in plans.iter().enumerate() {
+            let config_rows = append_tasks
+                .iter()
+                .filter(|task| task.enabled && task.target_wb.as_ref() == Some(&plan.target))
+                .map(|task| format!("{} 行「{}」", task.row_no, if task.task_name.trim().is_empty() { "未命名" } else { task.task_name.trim() }))
+                .collect::<Vec<_>>()
+                .join("、");
+            let status = report[index]["status"].as_str().unwrap_or("unknown");
+            let committed = status == "succeeded" && plan.appended_rows > 0;
+            let config_rows_label = if config_rows.is_empty() {
+                "未匹配到配置行"
+            } else {
+                config_rows.as_str()
+            };
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    if status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info },
+                    &format!(
+                        "目标汇总结果：关联配置 {}；目标：{}；过滤重复 {} 行；追加 {} 行；修改：{}；保存：{}",
+                        config_rows_label,
+                        display_path_for_user(&plan.target),
+                        plan.duplicate_rows_filtered,
+                        plan.appended_rows,
+                        if committed { "是" } else { "否" },
+                        if committed { "是" } else { "否" }
+                    )
+                )
+            )?;
+        }
+        for task in append_tasks.iter().filter(|task| {
+            task.enabled
+                && task
+                    .target_wb
+                    .as_ref()
+                    .is_none_or(|target| !plans.iter().any(|plan| &plan.target == target))
+        }) {
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Warn,
+                    &format!(
+                        "配置结果：工作表「{}」第 {} 行「{}」；未生成目标计划，未执行去重；修改：否；保存：否",
+                        task.config_sheet_name,
+                        task.row_no,
+                        if task.task_name.trim().is_empty() { "未命名" } else { task.task_name.trim() }
+                    )
+                )
+            )?;
         }
     }
 
@@ -2607,7 +2732,11 @@ where
                     "{}",
                     pytools_core::run_logging::terminal_line(
                         pytools_core::run_logging::Level::Warn,
-                        "未找到可处理的启用配置，目标未修改。"
+                        if append_tasks.iter().any(|task| task.enabled) {
+                            "启用配置未生成可处理的目标；请检查源工作簿和目标工作簿路径，目标未修改。"
+                        } else {
+                            "未找到启用配置，目标未修改。"
+                        }
                     )
                 )?;
             }
@@ -2620,7 +2749,7 @@ where
                         "partial" => pytools_core::run_logging::Level::Warn,
                         _ => pytools_core::run_logging::Level::Info,
                     },
-                    &format!("{outcome}：已写入 {committed_targets} 个目标，追加 {committed_rows} 行，过滤重复 {filtered_rows} 行；跳过 {skipped_tasks} 项配置，受阻 {blocked_targets} 个目标，失败 {failed_targets} 个目标，未处理 {unprocessed_targets} 个目标；耗时 {elapsed_ms} ms。")
+                    &format!( "{outcome}：已写入 {committed_targets} 个目标，追加 {committed_rows} 行，过滤重复 {filtered_rows} 行；跳过 {skipped_tasks} 项配置，受阻 {blocked_targets} 个目标，失败 {failed_targets} 个目标，未处理 {unprocessed_targets} 个目标；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)
                 )
             )?;
             for item in report.as_array().into_iter().flatten() {
@@ -2664,8 +2793,8 @@ where
                             .then_some("excel_modifier_capability_required")
                     }),
             ) {
-                Ok(path) => writeln!(output, "PT-2 {outcome}：PT-2-5，提交 {committed_targets} 个目标，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms} ms；运行记录：{}", actual_engines.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, path.display())?,
-                Err(error) => writeln!(output, "PT-2 {outcome}：PT-2-5，提交 {committed_targets} 个目标，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms} ms；运行记录写入失败：{error:#}", actual_engines.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" })?,
+                Ok(path) => writeln!(output, "PT-2 {outcome}：PT-2-5，提交 {committed_targets} 个目标，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}", actual_engines.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                Err(error) => writeln!(output, "PT-2 {outcome}：PT-2-5，提交 {committed_targets} 个目标，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{error:#}", actual_engines.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             }
         }
         "off" if failed => {
@@ -2700,7 +2829,7 @@ fn write_dedup_append_menu_run_history(
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
     fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create dedup log directory {}", global.log_dir.display()))?;
+        .with_context(|| format!("create dedup log directory {}", display_path_for_user(&global.log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let history = serde_json::json!({
         "schema_version": 1,
@@ -2735,7 +2864,7 @@ fn write_dedup_append_menu_run_history(
                 return Ok(path);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error).with_context(|| format!("create {}", path.display())),
+            Err(error) => return Err(error).with_context(|| format!("create {}", display_path_for_user(&path))),
         }
     }
     bail!("unable to allocate a unique dedup append run history path")
@@ -2762,11 +2891,142 @@ fn write_temporary_dedup_append_plan(plan: &AppendTargetPlan) -> Result<Temporar
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
                 return Err(error)
-                    .with_context(|| format!("create temporary plan {}", path.display()))
+                    .with_context(|| format!("create temporary plan {}", display_path_for_user(&path)))
             }
         }
     }
     bail!("unable to allocate a temporary dedup append plan")
+}
+
+fn write_dedup_task_start<W: Write>(
+    output: &mut W,
+    task: &pytools_core::config::DedupTask,
+    include_target: bool,
+) -> std::io::Result<()> {
+    let task_name = if task.task_name.trim().is_empty() {
+        "（未命名）"
+    } else {
+        task.task_name.trim()
+    };
+    let source = task
+        .source_wb
+        .as_deref()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "（未配置）".to_owned());
+    let source_sheet = if task.source_ws.trim().is_empty() {
+        "（未指定）"
+    } else {
+        task.source_ws.trim()
+    };
+    let key_columns = if task.key_cols.is_empty() {
+        "全部已用列（默认）".to_owned()
+    } else {
+        task.key_cols
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut line = format!(
+        "{} [INFO] 正在检查：配置工作表「{}」第 {} 行；任务「{}」；源文件：{}；源工作表：{}；标识列：{}",
+        pytools_core::engine_diag::now_prefix(), task.config_sheet_name, task.row_no,
+        task_name, source, source_sheet, key_columns
+    );
+    if include_target {
+        let target = task.target_wb.as_deref()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "（未配置）".to_owned());
+        let target_sheet = if task.target_ws.trim().is_empty() { "（未指定）" } else { task.target_ws.trim() };
+        line.push_str(&format!("；目标文件：{target}；目标工作表：{target_sheet}"));
+    }
+    writeln!(output, "{line}")?;
+    output.flush()
+}
+
+fn write_dedup_task_results<W: Write>(
+    output: &mut W,
+    tasks: &[pytools_core::config::DedupTask],
+    events: &[pytools_core::engine_diag::DiagEvent],
+    saved_books: &[PathBuf],
+    duplicate_label: &str,
+) -> std::io::Result<()> {
+    use pytools_core::engine_diag::DiagOutcome;
+
+    for task in tasks.iter().filter(|task| task.enabled) {
+        let task_event = events
+            .iter()
+            .find(|event| {
+                event.row_no == Some(task.row_no)
+                    && event.sheet.as_deref() == Some(task.source_ws.as_str())
+            })
+            .or_else(|| {
+                events.iter().find(|event| {
+                    event.row_no == Some(task.row_no) && event.outcome != DiagOutcome::Ok
+                })
+            });
+        let workbook_event = task.source_wb.as_ref().and_then(|source| {
+            let source = source.to_string_lossy();
+            events.iter().find(|event| {
+                event.row_no.is_none()
+                    && event.file.as_deref() == Some(source.as_ref())
+                    && matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
+            })
+        });
+        let event = task_event.or(workbook_event);
+        let prefix = pytools_core::engine_diag::now_prefix();
+        if let Some(event) = event.filter(|event| {
+            matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
+        }) {
+            let level = if event.outcome == DiagOutcome::Failed {
+                "ERROR"
+            } else {
+                "WARN"
+            };
+            writeln!(
+                output,
+                "{prefix} [{level}] 配置结果：工作表「{}」第 {} 行「{}」；状态：{}；原因：{}；修改：否；保存：否",
+                task.config_sheet_name,
+                task.row_no,
+                if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() },
+                event.outcome,
+                event.message
+            )?;
+            continue;
+        }
+
+        let duplicate_count = task_event.and_then(|event| {
+            event
+                .message
+                .strip_prefix(&format!("{duplicate_label} "))
+                .and_then(|message| message.strip_suffix(" 行"))
+                .and_then(|count| count.parse::<usize>().ok())
+        });
+        let Some(duplicate_count) = duplicate_count else {
+            writeln!(
+                output,
+                "{prefix} [WARN] 配置结果：工作表「{}」第 {} 行「{}」；未找到对应的重复检查结果",
+                task.config_sheet_name,
+                task.row_no,
+                if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() }
+            )?;
+            continue;
+        };
+        let saved = task.source_wb.as_ref().is_some_and(|source| {
+            saved_books.iter().any(|saved_path| saved_path == source)
+        });
+        let modified = duplicate_count > 0;
+        writeln!(
+            output,
+            "{prefix} [INFO] 配置结果：工作表「{}」第 {} 行「{}」；重复行：{} 行；修改：{}；源工作簿保存：{}",
+            task.config_sheet_name,
+            task.row_no,
+            if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() },
+            duplicate_count,
+            if modified { "是" } else { "否" },
+            if saved { "是" } else { "否" }
+        )?;
+    }
+    Ok(())
 }
 
 /// Structured diagnostics for configuration-driven operations.  Their task
@@ -2873,7 +3133,7 @@ impl ConfiguredRunLog {
             if let Some((ok, skipped, failures)) = task_counts { value["task_stats"] = serde_json::json!({"succeeded": ok, "skipped": skipped, "failed": failures}); }
             let path = self.log_dir.join(format!("{}_{}.run.json", self.tracker.feature_id, self.tracker.run_id));
             match write_json_report_create_new(&path, &value) {
-                Ok(()) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", self.tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, self.log_view == "developer")))),
+                Ok(()) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", self.tracker.run_id, display_path_for_user(&path)))),
                 Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留"))),
             }
         }
@@ -3219,7 +3479,7 @@ fn log_quick_menu_action<W: Write>(
     match result {
         Ok(Some(path)) => {
             diagnostic.finish_as(false, Some((1, 0, 0)), &[], std::slice::from_ref(&path), Some(TaskStatus::Success));
-            writeln!(output, "{}", terminal_line(Level::Info, &format!("已执行：{label}；位置：{}", path.display())))?;
+            writeln!(output, "{}", terminal_line(Level::Info, &format!("已执行：{label}；位置：{}", display_path_for_user(&path))))?;
         }
         Ok(None) => {
             diagnostic.finish_as(false, Some((0, 1, 0)), &[], &[], Some(TaskStatus::NoOp));
@@ -3275,8 +3535,8 @@ fn run_dedup_menu_action<W: Write>(
                     &[],
                     Some("dedup_operation_failed"),
                 ) {
-                    Ok(path) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms} ms；运行记录：{}；错误：{error:#}", path.display())?,
-                    Err(log_error) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms} ms；运行记录写入失败：{log_error:#}；错误：{error:#}")?,
+                    Ok(path) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}；错误：{error:#}", display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                    Err(log_error) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
             } else {
                 writeln!(output, "处理失败：{label}；错误：{error:#}")?;
@@ -3318,10 +3578,9 @@ fn run_dedup_menu_action<W: Write>(
     match log_view {
         "user" if failed_precheck || failed_outputs => {
             writeln!(
-                output,
-                "处理失败：{label}；{}，耗时 {elapsed_ms} ms。",
+                output, "处理失败：{label}；{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
                 dedup_menu_summary(action, &metrics)
-            )?;
+            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
             if let Some(issues) = report["issues"].as_array() {
                 for issue in issues.iter().filter_map(serde_json::Value::as_str) {
                     writeln!(output, "  {issue}")?;
@@ -3336,10 +3595,9 @@ fn run_dedup_menu_action<W: Write>(
             }
         }
         "user" => writeln!(
-            output,
-            "处理完成：{}，耗时 {elapsed_ms} ms。",
+            output, "处理完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
             dedup_menu_summary(action, &metrics)
-        )?,
+        , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
         "developer" => {
             let outcome = match status {
                 "failed" => "失败",
@@ -3357,12 +3615,12 @@ fn run_dedup_menu_action<W: Write>(
                     &components,
                     error_type,
             ) {
-                Ok(path) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms} ms；运行记录：{}", dedup_menu_summary(action, &metrics), components.join(", "), path.display())?,
-                Err(error) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms} ms；运行记录写入失败：{error:#}", dedup_menu_summary(action, &metrics), components.join(", "))?,
+                Ok(path) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}", dedup_menu_summary(action, &metrics), components.join(", "), display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                Err(error) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{error:#}", dedup_menu_summary(action, &metrics), components.join(", "), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             }
         }
         _ if failed_precheck || failed_outputs => {
-            writeln!(output, "处理失败：{label}；耗时 {elapsed_ms} ms。")?;
+            writeln!(output, "处理失败：{label}；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         }
         _ => {}
     }
@@ -3484,7 +3742,7 @@ fn write_dedup_menu_run_history(
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
     fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create dedup log directory {}", global.log_dir.display()))?;
+        .with_context(|| format!("create dedup log directory {}", display_path_for_user(&global.log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let writer_invoked = actual_components.contains(&"rust_xlsxwriter");
     let stage = if action == "config_precheck" {
@@ -3526,7 +3784,7 @@ fn write_dedup_menu_run_history(
                 return Ok(path);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error).with_context(|| format!("create {}", path.display())),
+            Err(error) => return Err(error).with_context(|| format!("create {}", display_path_for_user(&path))),
         }
     }
     bail!("unable to allocate a unique dedup run history path")
@@ -3595,6 +3853,35 @@ where
         pytools_core::engine_diag::now_prefix(),
         engine.label()
     )?;
+    let print_tasks_for_display = pytools_core::config::load_print_tasks(config_path).ok();
+    if let Some(tasks) = print_tasks_for_display.as_ref() {
+        let enabled_count = tasks.iter().filter(|task| task.enabled).count();
+        writeln!(
+            output,
+            "{} [INFO] 已启用配置：{enabled_count} 项",
+            pytools_core::engine_diag::now_prefix()
+        )?;
+        for task in tasks.iter().filter(|task| task.enabled) {
+            let source = task.source_wb.as_deref()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "（未配置）".to_owned());
+            let target = task.target_wb.as_deref()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "（未配置）".to_owned());
+            writeln!(
+                output,
+                "{} [INFO] 正在处理：配置工作表「打印配置」第 {} 行；任务「打印配置第 {} 行」；源文件：{}；源工作表：{}；目标文件：{}；目标工作表：{}；打印区域：{}",
+                pytools_core::engine_diag::now_prefix(),
+                task.row_no,
+                task.row_no,
+                source,
+                if task.source_ws.trim().is_empty() { "（未指定）" } else { task.source_ws.trim() },
+                target,
+                if task.target_ws.trim().is_empty() { "（未指定）" } else { task.target_ws.trim() },
+                if task.source_ranges.trim().is_empty() { "（按配置默认范围）" } else { task.source_ranges.trim() }
+            )?;
+        }
+    }
     output.flush()?;
     let started = Instant::now();
     let run_print = || {
@@ -3635,6 +3922,41 @@ where
         output.flush()?;
         run_print()
     };
+    if let (Some(tasks), Ok(run)) = (print_tasks_for_display.as_ref(), result.as_ref()) {
+        for task in tasks.iter().filter(|task| task.enabled) {
+            let task_event = run.events.iter().find(|event| {
+                event.row_no == Some(task.row_no)
+                    && matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
+            }).or_else(|| run.events.iter().find(|event| {
+                event.row_no == Some(task.row_no) && event.outcome == DiagOutcome::Ok
+            }));
+            let target_saved = task.target_wb.as_ref().is_some_and(|target| {
+                run.outputs.iter().any(|output_path| output_path == target)
+            });
+            if let Some(event) = task_event.filter(|event| {
+                matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
+            }) {
+                writeln!(
+                    output,
+                    "{} [{}] 配置结果：打印配置第 {} 行；状态：{}；原因：{}；保存：否",
+                    pytools_core::engine_diag::now_prefix(),
+                    if event.outcome == DiagOutcome::Failed { "ERROR" } else { "WARN" },
+                    task.row_no,
+                    event.outcome,
+                    event.message
+                )?;
+            } else {
+                writeln!(
+                    output,
+                    "{} [INFO] 配置结果：打印配置第 {} 行；重复行：不适用；修改：{}；保存：{}",
+                    pytools_core::engine_diag::now_prefix(),
+                    task.row_no,
+                    if target_saved { "是" } else { "否" },
+                    if target_saved { "是" } else { "否" }
+                )?;
+            }
+        }
+    }
     let outputs = result.as_ref().ok().map(|run| run.outputs.iter().map(|path| path_for_log_view(path, log_view)).collect()).unwrap_or_default();
     let diagnostic_path = diagnostic_path_for_log_view(diagnostic.as_ref(), log_view);
     let mut summary = tracker.finish(result.is_err(), false, false, outputs, diagnostic_path.clone());
@@ -3709,7 +4031,7 @@ where
         }
         let path = global.log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &report) {
-            Ok(()) => writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, path.display())))?,
+            Ok(()) => writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, display_path_for_user(&path))))?,
             Err(error) => writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留")))?,
         }
     }
@@ -3745,7 +4067,7 @@ where
                         output,
                         "{} 输出：{}",
                         pytools_core::engine_diag::now_prefix(),
-                        path.display()
+                        display_path_for_user(&path)
                     )?;
                 }
             }
@@ -3803,9 +4125,9 @@ where
     let _ = (allow_native_dialog, capabilities, platform);
     loop {
         writeln!(output, "------ 报表打印 ------")?;
-        writeln!(output, "  1  按打印配置生成：umya-spreadsheet")?;
-        writeln!(output, "  2  按打印配置生成：openpyxl")?;
-        writeln!(output, "  3  打印配置预校验")?;
+        writeln!(output, "  1  按打印配置生成：umya-spreadsheet  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
+        writeln!(output, "  2  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
+        writeln!(output, "  3  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -3895,8 +4217,8 @@ where
                     false,
                     Some("print_menu_action_failed"),
                 ) {
-                    Ok(path) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms} ms；运行记录：{}；错误：{error:#}", path.display())?,
-                    Err(log_error) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms} ms；运行记录写入失败：{log_error:#}；错误：{error:#}")?,
+                    Ok(path) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}；错误：{error:#}", display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                    Err(log_error) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
             } else {
                 writeln!(output, "处理失败：{label}；错误：{error:#}")?;
@@ -3933,10 +4255,9 @@ where
     match log_view {
         "user" if failed_precheck => {
             writeln!(
-                output,
-                "预校验发现问题：{}，耗时 {elapsed_ms} ms。",
+                output, "预校验发现问题：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
                 print_menu_summary(action, &metrics)
-            )?;
+            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
             if let Some(issues) = report["issues"].as_array() {
                 for issue in issues.iter().filter_map(serde_json::Value::as_str) {
                     writeln!(output, "  {issue}")?;
@@ -3944,10 +4265,9 @@ where
             }
         }
         "user" => writeln!(
-            output,
-            "处理完成：{}，耗时 {elapsed_ms} ms。",
+            output, "处理完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
             print_menu_summary(action, &metrics)
-        )?,
+        , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
         "developer" => {
             let outcome = if failed_precheck {
                 "发现问题"
@@ -3968,12 +4288,12 @@ where
                 writer_invoked,
                 failed_precheck.then_some("print_precheck_failures"),
             ) {
-                Ok(path) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms} ms；运行记录：{}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, path.display())?,
-                Err(error) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms} ms；运行记录写入失败：{error:#}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" })?,
+                Ok(path) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
+                Err(error) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{error:#}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             }
         }
         _ if failed_precheck => {
-            writeln!(output, "预校验发现问题：{label}；耗时 {elapsed_ms} ms。")?;
+            writeln!(output, "预校验发现问题：{label}；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         }
         _ => {}
     }
@@ -4134,7 +4454,7 @@ fn write_print_menu_run_history(
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
     fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create print log directory {}", global.log_dir.display()))?;
+        .with_context(|| format!("create print log directory {}", display_path_for_user(&global.log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let history = serde_json::json!({
         "schema_version": 1,
@@ -4173,7 +4493,7 @@ fn write_print_menu_run_history(
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
                 return Err(error)
-                    .with_context(|| format!("create print run history {}", path.display()))
+                    .with_context(|| format!("create print run history {}", display_path_for_user(&path)))
             }
         }
     }
@@ -4196,15 +4516,15 @@ where
 {
     loop {
         writeln!(output, "------ 文件处理 ------")?;
-        writeln!(output, "  1  文件名机构标准化")?;
-        writeln!(output, "  2  文件排序前缀管理（添加 / 清理）")?;
-        writeln!(output, "  3  根据工作簿单元格内容命名")?;
+        writeln!(output, "  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】")?;
+        writeln!(output, "  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】")?;
+        writeln!(output, "  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】")?;
         writeln!(
             output,
-            "  4  Office 格式转换（XLS / ET → XLSX，DOC → DOCX）"
+            "  4  Office 格式转换（XLS / ET → XLSX，DOC → DOCX）  【全局配置：excel目的格式/word目的格式】"
         )?;
-        writeln!(output, "  5  按配置修改 Sheet 名")?;
-        writeln!(output, "  6  机构提交完整性检查")?;
+        writeln!(output, "  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】")?;
+        writeln!(output, "  6  机构提交完整性检查  【提交检查配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -4229,7 +4549,24 @@ where
                     }
                 }
             }
-            "3" => "files.name_from_workbook_cells",
+            "3" => {
+                writeln!(output, "工作簿内容命名前缀操作：")?;
+                writeln!(output, "  1  添加内容前缀")?;
+                writeln!(output, "  2  清理内容前缀")?;
+                writeln!(output, "  0  返回")?;
+                let Some(action) = read_menu_choice(input, output, "选择操作> ")? else {
+                    return Ok(());
+                };
+                match action.as_str() {
+                    "1" => "files.name_from_workbook_cells",
+                    "2" => "files.name_from_workbook_cells.remove",
+                    "0" => continue,
+                    _ => {
+                        writeln!(output, "仅接受 1、2 或 0")?;
+                        continue;
+                    }
+                }
+            }
             "4" => {
                 writeln!(output, "选择格式转换：")?;
                 writeln!(output, "  1  Excel 格式转换（XLS / ET → XLSX）")?;
@@ -4263,6 +4600,9 @@ where
             "files.sort_prefix.remove" => ("取消文件排序前缀", NativeFileFilter::AllFiles),
             "files.name_from_workbook_cells" => {
                 ("按工作簿内容重命名文件", NativeFileFilter::ExcelWorkbooks)
+            }
+            "files.name_from_workbook_cells.remove" => {
+                ("清理工作簿内容命名前缀", NativeFileFilter::ExcelWorkbooks)
             }
             "files.office_conversion.excel" => {
                 ("批量转换 Excel 文件", NativeFileFilter::ExcelConversion)
@@ -4381,7 +4721,7 @@ where
                     writeln!(output, "[已取消] 未执行改名，也未生成计划或输出文件。")?;
                 }
             }
-            "files.name_from_workbook_cells" => {
+            "files.name_from_workbook_cells" | "files.name_from_workbook_cells.remove" => {
                 arguments.push("--log-dir".to_owned());
                 arguments.push(global.log_dir.to_string_lossy().into_owned());
                 arguments.push("--log-view".to_owned());
@@ -4391,7 +4731,11 @@ where
                         .into_iter()
                         .map(|path| path.to_string_lossy().into_owned()),
                 );
-                run_content_prefix_rename_cli(arguments, true)?;
+                if operation_id == "files.name_from_workbook_cells.remove" {
+                    run_content_prefix_unrename_cli(arguments, true)?;
+                } else {
+                    run_content_prefix_rename_cli(arguments, true)?;
+                }
             }
             "files.submission_check" => {
                 arguments.push("--output-dir".to_owned());
@@ -4581,11 +4925,11 @@ where
     loop {
         writeln!(output, "------ 专用报表处理 ------")?;
         writeln!(output, "  1  拆分村镇银行数据（生成独立副本）")?;
-        writeln!(output, "  2  机构名称规范化（Rust 新建规范化副本）")?;
-        writeln!(output, "  3  删除分机构表中的外资行（生成独立副本）")?;
-        writeln!(output, "  4  修改外汇工作表页眉单位（生成独立副本）")?;
+        writeln!(output, "  2  机构名称规范化（Rust 新建规范化副本）  【机构映射表：原始机构名称/映射后机构名称】")?;
+        writeln!(output, "  3  删除分机构表中的外资行（直接修改原工作簿）  【机构映射表：是否为外资行】")?;
+        writeln!(output, "  4  修改外汇工作表页眉单位（直接修改原工作簿）")?;
         writeln!(output, "  5  地区总分校验（读取并生成核对结果）")?;
-        writeln!(output, "  6  工作表数据提取（普通无批注版）")?;
+        writeln!(output, "  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】")?;
         writeln!(output, "  7  涉农贷款比上月修正（生成独立副本）")?;
         writeln!(output, "  8  季度涉农贷款修正及分地区核对（生成独立副本）")?;
         writeln!(output, "  0  返回")?;
@@ -4609,10 +4953,9 @@ where
             }
         };
         // 5-1/5-2/5-7/5-8 就地修改工作簿：先让用户选择执行引擎（openpyxl / umya）。
-        let engine: Option<SpecialReportEngine> = if matches!(
-            feature_id,
-            "PT-7-1" | "PT-7-2" | "PT-7-7" | "PT-7-8"
-        ) {
+        let engine: Option<SpecialReportEngine> = if matches!(feature_id, "PT-7-1" | "PT-7-2") {
+            Some(SpecialReportEngine::Umya)
+        } else if matches!(feature_id, "PT-7-7" | "PT-7-8") {
             match choose_special_report_engine(input, output)? {
                 Some(engine) => Some(engine),
                 None => continue,
@@ -4661,7 +5004,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：这是专用报表结果副本目录，不重复处理。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                         continue;
                     }
@@ -4681,7 +5024,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：PT-7-4 当前仅验收 .xlsx；.xls 请先显式转换，含 VBA 的 .xlsm 暂不修改。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -4747,7 +5090,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：这是机构名称规范化结果目录中的副本，不重复处理。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                         continue;
                     }
@@ -4772,13 +5115,13 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：旧版 .xls 不支持就地修改；请先用 4-4 格式转换另存为 .xlsx 后再处理。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     } else {
                         writeln!(
                             output,
                             "[跳过] {}：当前引擎不支持该格式（umya 仅 xlsx/xltx；openpyxl 支持 xlsx/xlsm/xltx/xltm）。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -4849,7 +5192,7 @@ where
                     return Ok(());
                 }
                 let Some(selected) = choose_source_files_or_folders(
-                    "选择要生成外发用副本的工作簿（删除分机构表的外资行）",
+                    "选择要删除分机构表外资行的工作簿（直接修改原文件）",
                     NativeFileFilter::XlsxOnly,
                     input,
                     output,
@@ -4867,7 +5210,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：这是专用报表结果副本目录，不重复处理。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                         continue;
                     }
@@ -4880,7 +5223,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：PT-7-3 当前只接受 .xlsx；未验收格式请先显式转换。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -4888,17 +5231,7 @@ where
                     writeln!(output, "[提示] 没有可处理的 .xlsx 工作簿。")?;
                     return Ok(());
                 }
-                if capabilities.is_none() {
-                    writeln!(
-                        output,
-                        "[新建模式] 将使用 Rust 生成外发副本，保存到源文件旁的 PyTools_专用报表处理结果 文件夹；原工作簿保持不变。"
-                    )?;
-                } else {
-                    writeln!(
-                        output,
-                        "[执行模式] 将通过已提供的 ExcelModifier capability 生成外发副本；原工作簿不会修改。"
-                    )?;
-                }
+                writeln!(output, "[就地模式] 使用 umya 删除选中工作簿分机构表中的外资行；候选校验通过后备份并安全替换原文件。")?;
 
                 let mut arguments = vec![
                     "--config".to_owned(),
@@ -4926,16 +5259,7 @@ where
                         report_path.to_string_lossy().into_owned(),
                     ]);
                 }
-                if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
-                    arguments.extend([
-                        "--capabilities".to_owned(),
-                        capabilities.to_string_lossy().into_owned(),
-                        "--platform".to_owned(),
-                        platform.to_owned(),
-                    ]);
-                } else {
-                    arguments.push("--create-copy".to_owned());
-                }
+                arguments.extend(["--in-place".to_owned(), "umya".to_owned()]);
                 arguments.extend(
                     targets
                         .into_iter()
@@ -4970,13 +5294,13 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：PT-7-4 当前仅验收 .xlsx；.xls 请先显式转换，含 VBA 的 .xlsm 暂不修改。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     } else {
                         writeln!(
                             output,
                             "[跳过] {}：PT-7-4 当前仅验收 .xlsx；.xls 请先显式转换，含 VBA 的 .xlsm 暂不修改。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -4984,17 +5308,7 @@ where
                     writeln!(output, "[提示] 没有可处理的 .xlsx 工作簿。")?;
                     return Ok(());
                 }
-                if capabilities.is_some() {
-                    writeln!(
-                        output,
-                        "[执行模式] 将通过匹配的 ExcelModifier 验证候选后安全替换原工作簿；失败时使用临时备份回滚。"
-                    )?;
-                } else {
-                    writeln!(
-                        output,
-                        "[新建副本] 外汇页眉必须经 OOXML 补丁后端修改；将生成经逐部件校验的独立副本，原工作簿保持不变。"
-                    )?;
-                }
+                writeln!(output, "[就地模式] 将校验 OOXML 页眉补丁，备份后安全替换选中的原工作簿。")?;
                 let mut arguments = vec![
                     "--output-dir".to_owned(),
                     global.output_dir.to_string_lossy().into_owned(),
@@ -5003,19 +5317,7 @@ where
                     "--view".to_owned(),
                     log_view.to_owned(),
                 ];
-                // 外汇页眉必须走 namespace-aware OOXML 补丁后端（umya/openpyxl 无法完成）。
-                // 有 capability 时安全替换原簿，否则生成校验副本。
-                if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
-                    arguments.extend([
-                        "--commit-target".to_owned(),
-                        "--capabilities".to_owned(),
-                        capabilities.to_string_lossy().into_owned(),
-                        "--platform".to_owned(),
-                        platform.to_owned(),
-                    ]);
-                } else {
-                    arguments.push("--create-copy".to_owned());
-                }
+                arguments.push("--commit-target".to_owned());
                 arguments.extend(
                     targets
                         .into_iter()
@@ -5047,7 +5349,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：当前 Rust 核对入口只支持 .xlsx/.xlsm；请先显式转换为 .xlsx",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -5076,7 +5378,7 @@ where
                 let tasks = load_extract_tasks(config_path).with_context(|| {
                     format!(
                         "load worksheet-extraction tasks from {}",
-                        config_path.display()
+                        display_path_for_user(&config_path)
                     )
                 })?;
                 if tasks.is_empty() {
@@ -5137,7 +5439,7 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：PT-7-6 区域提取仅接受 .xlsx/.xlsm；整表样式导入仍仅接受 .xlsx。",
-                            path.display()
+                            display_path_for_user(&path)
                         )?;
                     }
                 }
@@ -5320,7 +5622,7 @@ where
         writeln!(
             output,
             "[跳过] {}：PT-7-1 当前只接受 .xlsx；未验收的格式请勿直接修改。",
-            path.display()
+            display_path_for_user(&path)
         )?;
         return Ok(None);
     }
@@ -5364,7 +5666,7 @@ where
         writeln!(
             output,
             "[跳过] {}：{feature_id} 当前只接受 .xlsx；请先显式转换，未验收格式不执行修改。",
-            path.display()
+            display_path_for_user(&path)
         )?;
         return Ok(None);
     }
@@ -5546,7 +5848,7 @@ where
         let mut unique = std::collections::BTreeMap::new();
         for folder in &folders {
             let root = fs::canonicalize(folder)
-                .with_context(|| format!("读取汇总源文件夹失败：{}", folder.display()))?;
+                .with_context(|| format!("读取汇总源文件夹失败：{}", display_path_for_user(&folder)))?;
             let mut candidates = collect_menu_source_files_impl(std::slice::from_ref(folder), mode == "3", filter, true)?;
             candidates.retain(|path| {
                 !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
@@ -5594,7 +5896,7 @@ fn collect_menu_source_files_impl(
         anyhow::ensure!(
             folder.is_dir(),
             "selected folder does not exist or is not a directory: {}",
-            folder.display()
+            display_path_for_user(&folder)
         );
         collect_menu_source_files_from_folder(folder, folder, recursive, filter, skip_summary_results, &mut files)?;
     }
@@ -5616,7 +5918,7 @@ fn collect_menu_source_files_from_folder(
     files: &mut Vec<PathBuf>,
 ) -> Result<()> {
     let mut entries = fs::read_dir(folder)
-        .with_context(|| format!("list selected folder {}", folder.display()))?
+        .with_context(|| format!("list selected folder {}", display_path_for_user(&folder)))?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(|path| {
@@ -5627,7 +5929,7 @@ fn collect_menu_source_files_from_folder(
     });
     for path in entries {
         let metadata = fs::symlink_metadata(&path)
-            .with_context(|| format!("inspect selected path {}", path.display()))?;
+            .with_context(|| format!("inspect selected path {}", display_path_for_user(&path)))?;
         if metadata.file_type().is_symlink() {
             continue;
         }
@@ -5668,7 +5970,7 @@ fn parse_manual_path_list(raw: &str) -> Option<Vec<PathBuf>> {
 fn print_selected_paths<W: Write>(output: &mut W, paths: &[PathBuf]) -> Result<()> {
     writeln!(output, "→ 已选择文件 {} 个：", paths.len())?;
     for (index, path) in paths.iter().enumerate() {
-        writeln!(output, "  {}. {}", index + 1, path.display())?;
+        writeln!(output, "  {}. {}", index + 1, display_path_for_user(&path))?;
     }
     Ok(())
 }
@@ -5746,48 +6048,30 @@ fn native_file_dialog(
 
 #[cfg(windows)]
 fn native_folder_dialog(title: &str) -> Option<PathBuf> {
-    use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::System::Com::CoTaskMemFree;
-    use windows_sys::Win32::System::Ole::{OleInitialize, OleUninitialize};
-    use windows_sys::Win32::UI::Shell::{
-        SHBrowseForFolderW, SHGetPathFromIDListW, BIF_EDITBOX, BIF_NEWDIALOGSTYLE,
-        BIF_RETURNONLYFSDIRS, BROWSEINFOW,
+    use windows::core::HSTRING;
+    use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
+    use windows::Win32::UI::Shell::{
+        FileOpenDialog, IFileOpenDialog, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST,
+        FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
     };
+    use windows_sys::Win32::System::Ole::{OleInitialize, OleUninitialize};
 
-    let mut display_name = vec![0u16; 260];
-    let title = title
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let mut dialog = BROWSEINFOW::default();
-    dialog.pszDisplayName = display_name.as_mut_ptr();
-    dialog.lpszTitle = title.as_ptr();
-    dialog.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_EDITBOX;
-
-    // SHBrowseForFolderW's new-style dialog requires COM on an STA thread.
-    // S_FALSE also means initialization succeeded and must be balanced.
     if unsafe { OleInitialize(std::ptr::null()) } < 0 {
         return None;
     }
-    let item = unsafe { SHBrowseForFolderW(&dialog) };
-    let selected = if item.is_null() {
-        None
-    } else {
-        let mut path = vec![0u16; 32_768];
-        let resolved = unsafe { SHGetPathFromIDListW(item, path.as_mut_ptr()) } != 0;
-        unsafe { CoTaskMemFree(item.cast()) };
-        if !resolved {
-            None
-        } else {
-            let length = path
-                .iter()
-                .position(|unit| *unit == 0)
-                .unwrap_or(path.len());
-            Some(PathBuf::from(std::ffi::OsString::from_wide(
-                &path[..length],
-            )))
+    let selected = (|| -> windows::core::Result<PathBuf> {
+        unsafe {
+            let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+            dialog.SetOptions(dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)?;
+            dialog.SetTitle(&HSTRING::from(title))?;
+            dialog.Show(None)?;
+            let item = dialog.GetResult()?;
+            let path = item.GetDisplayName(SIGDN_FILESYSPATH)?;
+            let text = path.to_string();
+            CoTaskMemFree(Some(path.0.cast()));
+            Ok(PathBuf::from(text?))
         }
-    };
+    })().ok();
     unsafe { OleUninitialize() };
     selected
 }
@@ -6136,7 +6420,15 @@ fn dedup_append_plan_bundle(
     emit_plan_files: bool,
 ) -> Result<(serde_json::Value, Vec<AppendTargetPlan>)> {
     let tasks = load_dedup_tasks(config)?;
-    let reports = build_append_by_config_plans(&tasks, output_dir)?;
+    dedup_append_plan_bundle_with_tasks(&tasks, output_dir, emit_plan_files)
+}
+
+fn dedup_append_plan_bundle_with_tasks(
+    tasks: &[pytools_core::config::DedupTask],
+    output_dir: &Path,
+    emit_plan_files: bool,
+) -> Result<(serde_json::Value, Vec<AppendTargetPlan>)> {
+    let reports = build_append_by_config_plans(tasks, output_dir)?;
     fs::create_dir_all(&output_dir)?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let mut output = Vec::new();
@@ -6217,7 +6509,7 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
     let options = parse_cli_arguments(arguments)?;
     let plan_path = required_path(&options, "plan")?;
     let plan: AppendTargetPlan = serde_json::from_slice(&fs::read(&plan_path)?)
-        .with_context(|| format!("decode append plan {}", plan_path.display()))?;
+        .with_context(|| format!("decode append plan {}", display_path_for_user(&plan_path)))?;
     let report = if plan.target_existed {
         let edit_plan = plan
             .edit_plan
@@ -6237,7 +6529,7 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
             anyhow::ensure!(
                 actual == expected,
                 "configured target changed after planning; refusing to execute the commit: {}",
-                plan.target.display()
+                display_path_for_user(&plan.target)
             );
             Some(expected.to_owned())
         } else {
@@ -6275,7 +6567,7 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
                     fs::remove_file(&plan.candidate).with_context(|| {
                         format!(
                             "remove invalid wide target candidate {}",
-                            plan.candidate.display()
+                            display_path_for_user(&plan.candidate)
                         )
                     })?;
                 }
@@ -6539,7 +6831,7 @@ fn build_print_config_report(
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .unwrap_or_else(|| std::path::Path::new("."));
             fs::create_dir_all(output_parent).with_context(|| {
-                format!("create print target directory {}", output_parent.display())
+                format!("create print target directory {}", display_path_for_user(&output_parent))
             })?;
             serde_json::json!(apply_plan_with_capability_file(
                 plan,
@@ -6678,10 +6970,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
     );
-    anyhow::ensure!(
-        !commit_target || capabilities.is_some(),
-        "--commit-target requires --capabilities and --platform"
-    );
+
     anyhow::ensure!(
         !create_copy || (capabilities.is_none() && !commit_target),
         "--create-copy cannot be combined with an ExcelModifier capability"
@@ -6720,10 +7009,10 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         .unwrap_or(true);
     let plan_dir = unique_menu_action_dir(&output_dir, "village-split");
     fs::create_dir_all(&output_dir)
-        .with_context(|| format!("create output directory {}", output_dir.display()))?;
+        .with_context(|| format!("create output directory {}", display_path_for_user(&output_dir)))?;
     if emit_plan_files && !create_copy {
         fs::create_dir_all(&plan_dir)
-            .with_context(|| format!("create plan directory {}", plan_dir.display()))?;
+            .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
     }
 
     let started = Instant::now();
@@ -6752,7 +7041,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         let display_name = input
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| input.display().to_string());
+            .unwrap_or_else(|| display_path_for_user(&input).to_string());
         progress.current_file = Some(index + 1);
         progress.processed_files = index;
         progress.completed_files = completed_files;
@@ -6828,7 +7117,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 let persistence_started = Instant::now();
                 if emit_plan_files && !create_copy {
                     fs::write(&plan_path, serde_json::to_vec_pretty(plan)?)
-                        .with_context(|| format!("write edit plan {}", plan_path.display()))?;
+                        .with_context(|| format!("write edit plan {}", display_path_for_user(&plan_path)))?;
                     emit_village_split_event(
                         &mut events,
                         log_view,
@@ -6991,13 +7280,18 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 failed_files += 1;
                 progress.processed_files = index + 1;
                 progress.failed_files = failed_files;
+                let failure_message = format!(
+                    "工作簿处理失败：{}；阶段：{}；原因：{error:#}",
+                    display_path_for_user(&input),
+                    current_stage
+                );
                 emit_village_split_event(
                     &mut events,
                     log_view,
                     started,
                     current_stage,
                     "failed",
-                    "当前工作簿处理失败；请查看开发者运行记录中的失败阶段",
+                    &failure_message,
                     &progress,
                     Some(file_started),
                     &["pytools-core"],
@@ -7083,7 +7377,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         match write_json_report_create_new(&path, &history) {
             Ok(()) => {
                 result["run_id"] = serde_json::Value::String(run_id.clone());
-                result["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                result["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                 Some(path)
             }
             Err(error) => {
@@ -7107,7 +7401,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         }
     }
     if interactive && log_view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：输入 {total} 个，已处理 {completed_files} 个，失败 {failed_files} 个；耗时 {} ms", started.elapsed().as_millis())));
+        println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "处理结束：输入 {total} 个，已处理 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
     } else {
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
@@ -7192,7 +7486,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
     );
-    let execute = capabilities.is_some();
+    let execute = capabilities.is_some() || in_place.is_some();
     anyhow::ensure!(
         !create_copy || !execute,
         "--create-copy cannot be combined with an ExcelModifier capability"
@@ -7255,7 +7549,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         anyhow::ensure!(
             !path.exists(),
             "run history file already exists; refusing to overwrite {}",
-            path.display()
+            display_path_for_user(&path)
         );
         Some(path)
     } else {
@@ -7283,7 +7577,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         "planned_branch_sheets": 0,
         "planned_deleted_rows": 0,
         "foreign_empty": foreign.is_empty(),
-        "mode": if create_copy { "create_copy" } else if execute { "execute" } else { "plan_only" },
+        "mode": if in_place.is_some() { "in_place" } else if create_copy { "create_copy" } else if execute { "execute" } else { "plan_only" },
         "items": [],
     });
 
@@ -7327,7 +7621,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         }
     } else {
         result["files"] = serde_json::json!(options.positional.len());
-        for (file_index, input) in options.positional.into_iter().enumerate() {
+        for (file_index, input) in options.positional.iter().cloned().enumerate() {
             progress.current_file = Some(file_index + 1);
             progress.processed_files = file_index + 1;
             if view.is_some() {
@@ -7491,7 +7785,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
 
             let mut item = serde_json::json!({
                 "input": input,
-                "output": output,
+                "output": if in_place.is_some() { &input } else { &output },
                 "status": if execute { "pending" } else if report.plan.is_some() { "plan_only" } else { "plan_only_no_changes" },
                 "planned_branch_sheets": report.matched_sheets,
                 "planned_deleted_rows": planned_deleted_rows,
@@ -7511,7 +7805,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                     "plan_build",
                     "completed",
                     format!(
-                        "修改计划已生成：{} 个目标工作表，{} 行待删除。",
+                        "已完成检查：{} 个目标工作表，{} 行待删除。",
                         report.matched_sheets, planned_deleted_rows
                     ),
                     &progress,
@@ -7580,20 +7874,21 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                 let execution: Result<serde_json::Value> = if let Some(plan) = report.plan.as_ref()
                 {
                     fs::create_dir_all(&output_dir).with_context(|| {
-                        format!("create temporary report directory {}", output_dir.display())
+                        format!("create temporary report directory {}", display_path_for_user(&output_dir))
                     })?;
                     let candidate = unique_workbook_candidate(&input, &output_dir, "foreign_bank");
                     let expected_source_hash = sha256_file(&input)?;
                     let result = (|| -> Result<serde_json::Value> {
-                        pytools_core::institution_normalize::create_rust_new_workbook_from_cell_plan(
-                            &input,
-                            &candidate,
-                            plan,
+                        let mut candidate_plan = plan.clone();
+                        candidate_plan.output = candidate.clone();
+                        pytools_core::inplace_edit::execute_candidate(
+                            &candidate_plan,
+                            pytools_core::inplace_edit::InPlaceEngine::Umya,
                         )?;
                         verify_planning_snapshot(&input, Some(&expected_source_hash))?;
                         create_target_from_candidate(&candidate, &output)?;
                         Ok(serde_json::json!({
-                            "engine": "rust_xlsxwriter",
+                            "engine": "umya-spreadsheet",
                             "execution": "created_and_validated_workbook_copy",
                             "output": output,
                             "operation_count": plan.operations.len()
@@ -7648,7 +7943,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 "外发结果副本已生成，原工作簿保持不变。",
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["pytools-core", "excel-writer", "rust_xlsxwriter"],
+                                &["pytools-core", "excel-editor", "umya-spreadsheet"],
                                 actual_engine.as_deref(),
                                 None,
                             );
@@ -7669,10 +7964,10 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "failed",
-                                "Rust 副本生成失败，未发布结果文件。",
+                                &format!("外发副本生成失败：{}；原因：{error:#}；未发布结果文件。", display_path_for_user(&input)),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["pytools-core", "excel-writer", "rust_xlsxwriter"],
+                                &["pytools-core", "excel-editor", "umya-spreadsheet"],
                                 None,
                                 Some("execution"),
                             );
@@ -7687,14 +7982,18 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                     item.get("plan").filter(|value| !value.is_null()).cloned()
                 {
                     let plan: excel_editor::ExcelEditPlan = serde_json::from_value(plan)?;
-                    apply_plan_with_capability_file(
+                    if in_place.is_some() {
+                        execute_optional_plan(&options, Some(&plan))
+                    } else { apply_plan_with_capability_file(
                         &plan,
                         capabilities.expect("validated capability path"),
                         platform.expect("validated platform"),
                     )
                     .and_then(|report| {
                         serde_json::to_value(report).context("serialize edit result")
-                    })
+                    }) }
+                } else if in_place.is_some() {
+                    Ok(serde_json::json!({"engine": "umya-spreadsheet", "execution": "no_changes"}))
                 } else {
                     copy_workbook_to_new_target(&input, &output).and_then(|report| {
                         serde_json::to_value(report).context("serialize copy result")
@@ -7725,7 +8024,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "completed",
-                                "外发副本已生成，原工作簿保持不变。",
+                                if in_place.is_some() { "已校验并安全更新原工作簿中的外资行。" } else { "外发副本已生成，原工作簿保持不变。" },
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
                                 &["ExcelModifier"],
@@ -7749,7 +8048,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "failed",
-                                "ExcelModifier 执行失败；未发布外发副本。",
+                                &format!("外资行删除失败：{}；原因：{error:#}", display_path_for_user(&input)),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
                                 &["ExcelModifier"],
@@ -7771,7 +8070,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &diagnostic_dir, current_view);
     }
     if let Some(view) = view {
-        let human_summary = format!("处理结束：工作簿 {} 个，失败 {} 个；耗时 {total_elapsed_ms} ms", result["files"], result["failed_files"]);
+        let human_summary = format!( "处理结束：工作簿 {} 个，失败 {} 个；耗时 {total_elapsed_ms_display_seconds:.3} 秒", result["files"], result["failed_files"], total_elapsed_ms_display_seconds = total_elapsed_ms as f64 / 1000.0);
         let user_view = foreign_bank_user_view(&result, total_elapsed_ms, Some(&events));
         if let Some(path) = report_output.as_deref() {
             let history = serde_json::json!({
@@ -8011,10 +8310,10 @@ fn foreign_bank_user_status(status: &str) -> &str {
 fn foreign_bank_copy_path(input: &Path) -> Result<PathBuf> {
     let stem = input
         .file_stem()
-        .with_context(|| format!("source workbook has no file stem: {}", input.display()))?;
+        .with_context(|| format!("source workbook has no file stem: {}", display_path_for_user(&input)))?;
     let extension = input
         .extension()
-        .with_context(|| format!("source workbook has no extension: {}", input.display()))?;
+        .with_context(|| format!("source workbook has no extension: {}", display_path_for_user(&input)))?;
     let mut file_name = stem.to_os_string();
     file_name.push("(金融局).");
     file_name.push(extension);
@@ -8141,10 +8440,10 @@ fn rural_loan_output_metrics(summary: &serde_json::Value, quarterly: bool) -> (u
 
 fn rural_loan_paths_equal(left: &Path, right: &Path) -> Result<bool> {
     let left = fs::canonicalize(left)
-        .with_context(|| format!("resolve current workbook path {}", left.display()))?;
+        .with_context(|| format!("resolve current workbook path {}", display_path_for_user(&left)))?;
     let right_parent = right.parent().unwrap_or_else(|| Path::new("."));
     let right_parent = fs::canonicalize(right_parent)
-        .with_context(|| format!("resolve output directory {}", right_parent.display()))?;
+        .with_context(|| format!("resolve output directory {}", display_path_for_user(&right_parent)))?;
     let right_name = right
         .file_name()
         .context("candidate workbook path has no file name")?;
@@ -8260,7 +8559,7 @@ fn run_rural_loan_menu(
     let mut target_commit = None::<serde_json::Value>;
     let result = (|| -> Result<serde_json::Value> {
         fs::create_dir_all(&global.output_dir)
-            .with_context(|| format!("create output directory {}", global.output_dir.display()))?;
+            .with_context(|| format!("create output directory {}", display_path_for_user(&global.output_dir)))?;
         let candidate = unique_workbook_candidate(current, &global.output_dir, suffix);
         candidate_cleanup_path = Some(candidate.clone());
         anyhow::ensure!(
@@ -8271,7 +8570,7 @@ fn run_rural_loan_menu(
             unique_menu_action_dir(&global.output_dir.join("plans").join(feature_id), "run");
         if capabilities.is_some() {
             fs::create_dir_all(&plan_dir)
-                .with_context(|| format!("create plan directory {}", plan_dir.display()))?;
+                .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
         }
         let plan_path = plan_dir.join("rural-loan-adjustment.plan.json");
         let expected_target_hash = Some(sha256_file(current)?);
@@ -8515,7 +8814,7 @@ fn run_rural_loan_menu(
                     verify_planning_snapshot(current, expected_target_hash.as_deref())
                         .context("stage=source_stability_check")?;
                     create_target_from_candidate(&candidate, &copy_path).with_context(|| {
-                        format!("publish result copy to {}", copy_path.display())
+                        format!("publish result copy to {}", display_path_for_user(&copy_path))
                     })?;
                     output_copy = Some(copy_path.clone());
                     execution = serde_json::json!({
@@ -8572,10 +8871,7 @@ fn run_rural_loan_menu(
                 feature_id,
                 "completed",
                 "succeeded",
-                format!(
-                    "{operation_name}处理完成，总耗时 {} ms",
-                    run_started.elapsed().as_millis()
-                ),
+                format!( "{operation_name}处理完成，总耗时 {:.3} 秒", (run_started.elapsed().as_millis()) as f64 / 1000.0),
                 &progress,
                 Some(run_started.elapsed().as_millis()),
                 &["Rust", "pytools-core"],
@@ -8732,7 +9028,7 @@ fn run_rural_loan_menu(
             if log_view != "off" {
                 result["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    result["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                    result["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
@@ -8750,7 +9046,7 @@ fn run_rural_loan_menu(
             if log_view == "user" {
                 println!("{}", pytools_core::run_logging::terminal_line(
                     if unified_summary.overall_status == pytools_core::run_logging::TaskStatus::PartialSuccess { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info },
-                    &format!("{operation_name}结束：匹配机构 {} 个，失败地区 {} 个；运行状态 {:?}，耗时 {} ms；运行编号 {}{}", progress.matched_entities, progress.failed_regions, unified_summary.overall_status, unified_summary.total_elapsed_ms, unified_summary.run_id, unified_summary_path.as_ref().map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default()),
+                    &format!( "{operation_name}结束：匹配机构 {} 个，失败地区 {} 个；运行状态 {:?}，耗时 {:.3} 秒；运行编号 {}{}", progress.matched_entities, progress.failed_regions, unified_summary.overall_status, (unified_summary.total_elapsed_ms) as f64 / 1000.0, unified_summary.run_id, unified_summary_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default()),
                 ));
             } else {
                 let mut result = result;
@@ -8888,14 +9184,14 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
         anyhow::ensure!(
             !path.exists(),
             "run history file already exists; refusing to overwrite {}",
-            path.display()
+            display_path_for_user(&path)
         );
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
             fs::create_dir_all(parent)
-                .with_context(|| format!("create history directory {}", parent.display()))?;
+                .with_context(|| format!("create history directory {}", display_path_for_user(&parent)))?;
         }
         Some(path)
     };
@@ -8980,11 +9276,11 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
         }
     }
     if let Some(report_output) = report_output {
-        output["history_report"] = serde_json::Value::String(report_output.display().to_string());
+        output["history_report"] = serde_json::Value::String(display_path_for_user(&report_output).to_string());
     }
     if let Some(path) = unified_path { output["run_summary_path"] = serde_json::json!(path.to_string_lossy()); }
     if interactive && view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if report.failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：选择 {} 个，已处理 {} 个，失败 {} 个；耗时 {} ms；运行编号 {}", report.total_inputs, report.completed_files, report.failed_files, report.elapsed_ms, report.run_id)));
+        println!("{}", pytools_core::run_logging::terminal_line(if report.failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "处理结束：选择 {} 个，已处理 {} 个，失败 {} 个；耗时 {:.3} 秒；运行编号 {}", report.total_inputs, report.completed_files, report.failed_files, (report.elapsed_ms) as f64 / 1000.0, report.run_id)));
     } else { println!("{}", serde_json::to_string_pretty(&output)?); }
     Ok(())
 }
@@ -9199,19 +9495,19 @@ fn write_json_report_create_new<T: serde::Serialize>(path: &Path, report: &T) ->
         .filter(|parent| !parent.as_os_str().is_empty())
     {
         fs::create_dir_all(parent)
-            .with_context(|| format!("create report directory {}", parent.display()))?;
+            .with_context(|| format!("create report directory {}", display_path_for_user(&parent)))?;
     }
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
-        .with_context(|| format!("create run report {} without overwriting", path.display()))?;
+        .with_context(|| format!("create run report {} without overwriting", display_path_for_user(&path)))?;
     output
         .write_all(&serde_json::to_vec_pretty(report)?)
-        .with_context(|| format!("write run report {}", path.display()))?;
+        .with_context(|| format!("write run report {}", display_path_for_user(&path)))?;
     output
         .sync_all()
-        .with_context(|| format!("sync run report {}", path.display()))?;
+        .with_context(|| format!("sync run report {}", display_path_for_user(&path)))?;
     Ok(())
 }
 
@@ -9239,10 +9535,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         capabilities.is_none() || commit_target || in_place.is_some(),
         "FX header execution requires --commit-target with matching capability evidence"
     );
-    anyhow::ensure!(
-        !commit_target || capabilities.is_some(),
-        "--commit-target requires --capabilities and --platform"
-    );
+
     let view = options
         .values
         .get("view")
@@ -9267,7 +9560,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         .get("log-dir")
         .map(PathBuf::from)
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let plan_dir = if create_copy {
+    let plan_dir = if create_copy || (commit_target && capabilities.is_none()) {
         None
     } else {
         Some(
@@ -9281,10 +9574,10 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         )
     };
     fs::create_dir_all(&output_dir)
-        .with_context(|| format!("create output directory {}", output_dir.display()))?;
+        .with_context(|| format!("create output directory {}", display_path_for_user(&output_dir)))?;
     if let Some(plan_dir) = plan_dir.as_deref() {
         fs::create_dir_all(plan_dir)
-            .with_context(|| format!("create plan directory {}", plan_dir.display()))?;
+            .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
     }
 
     let run_started = Instant::now();
@@ -9319,7 +9612,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         anyhow::ensure!(
             !path.exists(),
             "run history file already exists; refusing to overwrite {}",
-            path.display()
+            display_path_for_user(&path)
         );
         Some(path)
     };
@@ -9382,11 +9675,11 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                 );
             }
             let metadata = fs::symlink_metadata(input)
-                .with_context(|| format!("inspect input workbook {}", input.display()))?;
+                .with_context(|| format!("inspect input workbook {}", display_path_for_user(&input)))?;
             anyhow::ensure!(
                 metadata.is_file() && !metadata.file_type().is_symlink(),
                 "input workbook must be a regular, non-symlink file: {}",
-                input.display()
+                display_path_for_user(&input)
             );
             // 就地模式同样需要规划期快照，用于提交前校验源未被改动。
             let expected_target_hash = if commit_target || create_copy || in_place.is_some() {
@@ -9444,7 +9737,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                 None,
             );
 
-            let plan_file = if !create_copy {
+            let plan_file = if plan_dir.is_some() {
                 if let Some(plan) = inspection.plan.as_ref() {
                     current_stage = "plan_persistence";
                     let path = plan_dir
@@ -9477,14 +9770,15 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
             let execution = if let Some(plan) = inspection.plan.as_ref() {
                 current_stage = "engine_execution";
                 let execution_started = Instant::now();
-                let execution = if create_copy {
+                let execution = if create_copy || (commit_target && capabilities.is_none()) {
                     create_fx_header_copy(
                         input,
                         &candidate,
                         plan,
                         expected_target_hash
                             .as_deref()
-                            .context("source snapshot missing before copy creation")?,
+                            .context("source snapshot missing before header modification")?,
+                        create_copy,
                     )?
                 } else if in_place.is_some() {
                     // 就地修改：直接改写源工作簿（execute_optional_plan 读取 --in-place）。
@@ -9571,7 +9865,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
             }))
         })();
 
-        let item_result = if create_copy {
+        let item_result = if create_copy || commit_target {
             match (item_result, remove_regular_candidate(&candidate)) {
                 (Ok(item), Ok(())) => Ok(item),
                 (Err(error), Ok(())) => Err(error),
@@ -9779,7 +10073,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         _ => unreachable!("view was validated"),
     };
     if interactive && view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：输入 {total_files} 个，已处理 {completed_files} 个，失败 {failed_files} 个；耗时 {} ms", run_started.elapsed().as_millis())));
+        println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "处理结束：输入 {total_files} 个，已处理 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (run_started.elapsed().as_millis()) as f64 / 1000.0)));
     } else { println!("{}", serde_json::to_string_pretty(&output)?); }
     Ok(())
 }
@@ -9789,6 +10083,7 @@ fn create_fx_header_copy(
     candidate: &Path,
     plan: &excel_editor::ExcelEditPlan,
     expected_source_hash: &str,
+    publish_copy: bool,
 ) -> Result<serde_json::Value> {
     let updates = plan
         .operations
@@ -9825,9 +10120,17 @@ fn create_fx_header_copy(
         .context("validate FX header copy; unexpected workbook changes were detected")?;
     verify_planning_snapshot(input, Some(expected_source_hash))?;
 
+    if !publish_copy {
+        return Ok(serde_json::json!({
+            "engine": "ooxml_patch",
+            "execution": "validated_header_candidate",
+            "modified_sheets": written.modified_sheets,
+            "replacements": written.replacements,
+        }));
+    }
     let output = specialized_report_copy_path(input, "PyTools_专用报表处理结果")?;
     let publication = create_target_from_candidate(candidate, &output)
-        .with_context(|| format!("publish FX header copy to {}", output.display()))?;
+        .with_context(|| format!("publish FX header copy to {}", display_path_for_user(&output)))?;
     Ok(serde_json::json!({
         "engine": "ooxml_patch",
         "execution": "created_and_validated_workbook_copy",
@@ -9874,7 +10177,7 @@ fn emit_fx_header_event(
             eprintln!("{encoded}");
         }
     } else {
-        let message = format!("{}（进度 {}/{}, 已完成 {}，失败 {}，已耗时 {} ms）", event.user_message, event.progress.processed_files, event.progress.total_files, event.progress.completed_files, event.progress.failed_files, event.total_elapsed_ms);
+        let message = format!( "{}（进度 {}/{}, 已完成 {}，失败 {}，已耗时 {:.3} 秒）", event.user_message, event.progress.processed_files, event.progress.total_files, event.progress.completed_files, event.progress.failed_files, (event.total_elapsed_ms) as f64 / 1000.0);
         eprintln!("{}", pytools_core::run_logging::terminal_line(if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, &message));
     }
     events.push(event);
@@ -10085,7 +10388,7 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let output_stats = (!output_paths.is_empty()).then_some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(output_paths.len()), sheets_saved: None, saved: Some(true) });
     let (summary, summary_path) = unified.finish(false, false, report.rename_ok == 0, &output_paths, output_stats, None, None);
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(if report.skip > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("Sheet 改名结束：扫描 {} 个文件，处理 {} 个工作簿，成功改名 {} 个工作表，跳过 {} 项；耗时 {} ms；运行编号 {}{}", report.files_scanned, report.workbooks, report.rename_ok, report.skip, report.elapsed_ms, summary.run_id, summary_path.as_ref().map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default())));
+        println!("{}", pytools_core::run_logging::terminal_line(if report.skip > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "Sheet 改名结束：扫描 {} 个文件，处理 {} 个工作簿，成功改名 {} 个工作表，跳过 {} 项；耗时 {:.3} 秒；运行编号 {}{}", report.files_scanned, report.workbooks, report.rename_ok, report.skip, (report.elapsed_ms) as f64 / 1000.0, summary.run_id, summary_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
     } else {
         let mut value = serde_json::to_value(&report)?;
         value["run_id"] = serde_json::json!(summary.run_id.clone());
@@ -10164,7 +10467,7 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
             unified.operation_failure(stage, error_code, "提交完整性检查失败", &error);
             let _ = unified.finish(true, false, false, &[], None, None, None);
             if let Some(Ok(path)) = &history_result {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("pytools: developer run history: {}", path.display())));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("pytools: developer run history: {}", display_path_for_user(&path))));
             }
             return Err(error);
         }
@@ -10193,7 +10496,7 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
             serde_json::json!(format!("could not write structured run history: {error:#}"));
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("提交检查完成：发现 {} 个文件，提交 {} 项，缺失 {} 项，未匹配 {} 个，多重匹配 {} 个；报告 {}；运行编号 {}{}", report.files, report.submitted, report.missing, report.unmatched, report.multi, report.output.display(), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default())));
+        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("提交检查完成：发现 {} 个文件，提交 {} 项，缺失 {} 项，未匹配 {} 个，多重匹配 {} 个；报告 {}；运行编号 {}{}", report.files, report.submitted, report.missing, report.unmatched, report.multi, display_path_for_user(&report.output), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -10209,11 +10512,11 @@ fn emit_submission_check_event_view(
         "user" => {
             let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if event.status == "skipped" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
             if event.phase == "complete" {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!("{} 总用时 {}ms。", event.user_message, event.total_elapsed_ms)));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 总用时 {:.3} 秒。", event.user_message, (event.total_elapsed_ms) as f64 / 1000.0)));
             } else if matches!(event.status.as_str(), "started" | "progress") {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
             } else if let Some(stage_elapsed_ms) = event.stage_elapsed_ms {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms)));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)));
             } else {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
             }
@@ -10236,7 +10539,7 @@ fn write_submission_check_run_history(
     fs::create_dir_all(log_dir).with_context(|| {
         format!(
             "create submission-check log directory {}",
-            log_dir.display()
+            display_path_for_user(&log_dir)
         )
     })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
@@ -10290,7 +10593,7 @@ fn write_submission_check_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create submission-check run history {}", path.display()))?;
+        .with_context(|| format!("create submission-check run history {}", display_path_for_user(&path)))?;
     serde_json::to_writer_pretty(&mut file, &history)?;
     file.write_all(b"\n")?;
     Ok(path)
@@ -10407,7 +10710,10 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
             let mut event = tracker.event(level, "file_result", "conversion", &item.status, "文件转换结果");
             event.file_index = Some(position);
             event.file_name = Some(pytools_core::run_logging::portable_file_name(&item.input));
-            if state == FileStatus::Failed { event.error_code = Some("FILE_CONVERT_FAILED".to_owned()); }
+            if state == FileStatus::Failed {
+                event.error_code = Some("FILE_CONVERT_FAILED".to_owned());
+                event.message = format!("转换失败：{}", item.detail);
+            }
             if let Err(error) = writer.write(&event) { if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; } }
         }
     }
@@ -10423,6 +10729,12 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
     if log_view != "off" {
         let mut report = serde_json::to_value(&unified)?;
         report["selected_path_count"] = serde_json::json!(options.positional.len());
+        report["conversion_errors"] = serde_json::json!(result.items.iter()
+            .filter(|item| item.status == "failed")
+            .map(|item| serde_json::json!({
+                "file_name": pytools_core::run_logging::portable_file_name(&item.input),
+                "reason": item.detail,
+            })).collect::<Vec<_>>());
         let path = log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &report) {
             Ok(()) => {
@@ -10452,11 +10764,11 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
             else if item.detail.contains("unsupported") { "文件格式不受支持" }
             else if item.detail.contains("does not exist") { "源文件不存在" }
             else { "转换或保存失败，请检查文件及访问权限" };
-        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("转换失败：{name}；{reason}；运行编号 {}", tracker.run_id)));
+        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("转换失败：{name}；{reason}；具体原因：{}；运行编号 {}", item.detail, tracker.run_id)));
     }
     if interactive && log_view != "developer" {
         let stats = &unified.input_stats;
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { Level::Warn } else { Level::Info }, &format!("转换结束：发现 {} 个文件，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {} ms", stats.selected, stats.succeeded, stats.failed, stats.skipped, unified.total_elapsed_ms)));
+        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { Level::Warn } else { Level::Info }, &format!( "转换结束：发现 {} 个文件，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {:.3} 秒", stats.selected, stats.succeeded, stats.failed, stats.skipped, (unified.total_elapsed_ms) as f64 / 1000.0)));
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -10488,7 +10800,7 @@ fn emit_conversion_event_view(
     match log_view {
         "user" => {
             let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if event.status == "skipped" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
-            let message = if let Some(stage_elapsed_ms) = event.stage_elapsed_ms { format!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms) } else { event.user_message.clone() };
+            let message = if let Some(stage_elapsed_ms) = event.stage_elapsed_ms { format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0) } else { event.user_message.clone() };
             eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
         }
         "developer" => {
@@ -10510,7 +10822,7 @@ fn write_conversion_run_history(
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create conversion log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create conversion log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -10547,7 +10859,7 @@ fn write_conversion_run_history(
         "events": events,
     });
     fs::write(&path, serde_json::to_vec_pretty(&history)?)
-        .with_context(|| format!("write conversion run history {}", path.display()))?;
+        .with_context(|| format!("write conversion run history {}", display_path_for_user(&path)))?;
     Ok(path)
 }
 
@@ -10921,7 +11233,7 @@ fn run_timeline_extract_cli_report(
                 writeln!(
                     output,
                     "  {}（{} 行）",
-                    item.plan.target.display(),
+                    display_path_for_user(&item.plan.target),
                     item.plan.appended_rows
                 )?;
             }
@@ -10985,7 +11297,7 @@ fn run_timeline_extract_cli_report(
                     "issues": plan.issues,
                 }));
                 if log_view == "user" {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("目标簿计划已保存，未修改既有文件：{}", plan_path.display())));
+                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("目标簿计划已保存，未修改既有文件：{}", display_path_for_user(&plan_path))));
                 }
                 continue;
             }
@@ -11035,12 +11347,9 @@ fn run_timeline_extract_cli_report(
                         "issues": plan.issues,
                     }));
                     if log_view == "user" {
-                        eprintln!(
-                            "目标簿写入完成：{}，新增 {} 行，耗时 {} ms",
-                            plan.target.display(),
-                            plan.appended_rows,
-                            elapsed_ms
-                        );
+                        eprintln!( "目标簿写入完成：{}，新增 {} 行，耗时 {:.3} 秒",
+                            display_path_for_user(&plan.target),
+                            plan.appended_rows, (elapsed_ms) as f64 / 1000.0);
                     }
                     if log_view != "off" {
                         let event = TimelineExtractRunEvent {
@@ -11162,7 +11471,7 @@ fn run_timeline_extract_cli_report(
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = history_path {
-                    output["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
@@ -11340,7 +11649,7 @@ where
     } else {
         writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, &format!("发现 {} 项错误，请按上方位置修正后重试。", report.errors)))?;
     }
-    writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行编号 {}{}", summary.run_id, summary_path.map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default())))?;
+    writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行编号 {}{}", summary.run_id, summary_path.map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())))?;
     Ok(())
 }
 
@@ -11433,7 +11742,7 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
                     error_type,
                     &events,
                 ) {
-                    Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", path.display()))),
+                    Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", display_path_for_user(&path)))),
                     Err(history_error) => {
                         eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("pytools: warning: could not write PT-1-1 run history: {history_error:#}")))
                     }
@@ -11616,7 +11925,7 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
         Ok(path) => path,
         Err(_error) => {
             if let Some(Ok(history_path)) = history_result.as_ref() {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", history_path.display())));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", display_path_for_user(&history_path))));
             } else if let Some(Err(history_error)) = history_result.as_ref() {
                 eprintln!(
                     "pytools: warning: could not write PT-1-1 run history: {history_error:#}"
@@ -11634,7 +11943,7 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
     }
     if interactive && log_view != "developer" {
         let stats = &unified.input_stats;
-        println!("{}", pytools_core::run_logging::terminal_line(if matches!(unified.overall_status, TaskStatus::Failed | TaskStatus::PartialSuccess) { Level::Warn } else { Level::Info }, &format!("表头比对结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；报告：{}；运行编号 {}", stats.selected, stats.succeeded, stats.failed, stats.skipped, output.display(), tracker.run_id)));
+        println!("{}", pytools_core::run_logging::terminal_line(if matches!(unified.overall_status, TaskStatus::Failed | TaskStatus::PartialSuccess) { Level::Warn } else { Level::Info }, &format!("表头比对结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；报告：{}；运行编号 {}", stats.selected, stats.succeeded, stats.failed, stats.skipped, display_path_for_user(&output), tracker.run_id)));
     } else { println!("{}", serde_json::to_string(&report)?); }
     if log_view == "user" {
         eprintln!(
@@ -11682,7 +11991,7 @@ fn emit_header_path_compare_event_view(
     match log_view {
         "user" => {
             let level = match event.status.as_str() { "failed" => pytools_core::run_logging::Level::Error, "partial" | "skipped" => pytools_core::run_logging::Level::Warn, _ => pytools_core::run_logging::Level::Info };
-            let message = if matches!(event.status.as_str(), "completed" | "partial" | "failed" | "skipped") { format!("{}；阶段用时 {}ms，总用时 {}ms", event.user_message, event.stage_elapsed_ms.unwrap_or_default(), event.total_elapsed_ms) } else { event.user_message.clone() };
+            let message = if matches!(event.status.as_str(), "completed" | "partial" | "failed" | "skipped") { format!( "{}；阶段用时 {:.3} 秒，总用时 {:.3} 秒", event.user_message, (event.stage_elapsed_ms.unwrap_or_default()) as f64 / 1000.0, (event.total_elapsed_ms) as f64 / 1000.0) } else { event.user_message.clone() };
             eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
         },
         "developer" => match serde_json::to_string(&event) {
@@ -11775,7 +12084,7 @@ fn run_wide_summary_cli_report(
     let rules = pytools_core::config::load_timeline_rules(&config)?;
     let maps = pytools_core::config::load_path_maps(&config)?;
     if log_view == "user" {
-        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("已找到 {} 条启用的时序规则", rules.len())));
+        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("已启用时序配置：{} 项", rules.len())));
     }
     let capabilities = options.values.get("capabilities").map(PathBuf::from);
     let platform = options.values.get("platform").map(String::as_str);
@@ -11860,6 +12169,55 @@ fn run_wide_summary_cli_report(
     };
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker, TaskStatus};
     let selected = source_paths.as_ref().ok().cloned().unwrap_or_default();
+    let rule_source_matches = rules
+        .iter()
+        .map(|rule| {
+            let matched = selected
+                .iter()
+                .filter(|path| {
+                    let workbook_name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    pytools_core::rule_engine::pick_rules_for_workbook(
+                        &rules,
+                        &workbook_name,
+                        &global.timeline_rule_match_mode,
+                    )
+                    .iter()
+                    .any(|candidate| candidate.row_no == rule.row_no)
+                })
+                .count();
+            (rule.row_no, matched)
+        })
+        .collect::<Vec<_>>();
+    if log_view == "user" {
+        for rule in &rules {
+            let rule_name = if rule.name.trim().is_empty() { "未命名规则" } else { rule.name.trim() };
+            let sheet_keyword = if rule.sheet_keyword.trim().is_empty() { "（未限制）" } else { rule.sheet_keyword.trim() };
+            let key_columns = if rule.target_dedup_cols.is_empty() { "（未配置）".to_owned() } else { rule.target_dedup_cols.join(", ") };
+            let matched = rule_source_matches
+                .iter()
+                .find(|(row_no, _)| *row_no == rule.row_no)
+                .map(|(_, matched)| *matched)
+                .unwrap_or_default();
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!(
+                        "正在处理配置：工作表「时序提取规则」第 {} 行；规则「{}」；工作簿关键字：{}；工作表关键字：{}；所选源文件匹配 {} 个；目标去重列：{}",
+                        rule.row_no,
+                        rule_name,
+                        if rule.wb_keyword.trim().is_empty() { "（未限制）" } else { rule.wb_keyword.trim() },
+                        sheet_keyword,
+                        matched,
+                        key_columns
+                    )
+                )
+            );
+        }
+    }
     let mut tracker = RunTracker::with_id(feature_id, "时序宽表汇总", &selected, run_id.clone());
     if options.positional.is_empty() { tracker.set_discovered(selected.len()); }
     let mut diagnostic = if log_view == "off" { None } else {
@@ -12017,6 +12375,38 @@ fn run_wide_summary_cli_report(
     }
 
     let progress = events.last().map(|event| event.progress.clone()).unwrap_or_default();
+    if log_view == "user" {
+        for rule in &rules {
+            let completed_sheets = events
+                .iter()
+                .filter(|event| {
+                    event.phase == "worksheet_aggregation"
+                        && event.status == "completed"
+                        && event.config_row == Some(rule.row_no)
+                })
+                .count();
+            let matched_sources = rule_source_matches
+                .iter()
+                .find(|(row_no, _)| *row_no == rule.row_no)
+                .map(|(_, matched)| *matched)
+                .unwrap_or_default();
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    if completed_sheets == 0 { Level::Warn } else { Level::Info },
+                    &format!(
+                        "配置结果：工作表「时序提取规则」第 {} 行「{}」；匹配源文件 {} 个；完成工作表 {} 个；汇总文件生成并保存：{}；配置目标整体写入：{}",
+                        rule.row_no,
+                        if rule.name.trim().is_empty() { "未命名规则" } else { rule.name.trim() },
+                        matched_sources,
+                        completed_sheets,
+                        if output.is_some() { "是" } else { "否" },
+                        target_write_status
+                    )
+                )
+            );
+        }
+    }
     let status = if result.is_err() {
         "failed"
     } else if progress.failed_inputs > 0
@@ -12283,7 +12673,7 @@ fn execute_wide_summary_target_writes(
                 total_inputs,
                 "target_write",
                 "failed",
-                format!("读取汇总文件 {} 失败：{error:#}", summary_path.display()),
+                format!("读取汇总文件 {} 失败：{error:#}", display_path_for_user(&summary_path)),
                 Some(stage_started.elapsed().as_millis()),
                 0,
                 &["pytools-core", "umya-spreadsheet"],
@@ -12296,7 +12686,7 @@ fn execute_wide_summary_target_writes(
             emit_wide_summary_event(_log_view, events, event);
             return (
                 vec![serde_json::json!({
-                    "target": summary_path.display().to_string(),
+                    "target": display_path_for_user(&summary_path).to_string(),
                     "status": "failed",
                     "error": format!("读取汇总文件失败：{error:#}"),
                 })],
@@ -12323,7 +12713,7 @@ fn execute_wide_summary_target_writes(
         if let Some(parent) = &parent {
             if !parent.is_dir() {
                 any_failed = true;
-                let message = format!("目标路径文件夹不存在：{}", parent.display());
+                let message = format!("目标路径文件夹不存在：{}", display_path_for_user(&parent));
                 let mut event = new_wide_summary_cli_event(
                     events, run_started, feature_id, total_inputs, "target_write", "failed",
                     message.clone(), Some(stage_started.elapsed().as_millis()), 0,
@@ -12332,7 +12722,7 @@ fn execute_wide_summary_target_writes(
                 event.workbook_name = Some(target.to_string_lossy().into_owned());
                 emit_wide_summary_event(_log_view, events, event);
                 results.push(serde_json::json!({
-                    "target": target.display().to_string(),
+                    "target": display_path_for_user(&target).to_string(),
                     "sheet": target_sheet_name,
                     "status": "failed",
                     "error": message,
@@ -12354,7 +12744,7 @@ fn execute_wide_summary_target_writes(
                     );
                     event.workbook_name = Some(pytools_core::run_logging::portable_file_name(target));
                     emit_wide_summary_event(_log_view, events, event);
-                    results.push(serde_json::json!({"target": target.display().to_string(), "status": "failed", "error": format!("读取目标文件快照失败：{error:#}")}));
+                    results.push(serde_json::json!({"target": display_path_for_user(&target).to_string(), "status": "failed", "error": format!("读取目标文件快照失败：{error:#}")}));
                     continue;
                 }
             }
@@ -12369,14 +12759,14 @@ fn execute_wide_summary_target_writes(
                     let message = format!("打开既有目标工作簿失败：{error:#}");
                     let mut event = new_wide_summary_cli_event(
                         events, run_started, feature_id, total_inputs, "target_write", "failed",
-                        format!("目标工作簿 {}：{message}", target.display()),
+                        format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                         Some(stage_started.elapsed().as_millis()), 0,
                         &["pytools-core", "umya-spreadsheet"], None, Some("target_write_error"),
                     );
                     event.workbook_name = Some(target.to_string_lossy().into_owned());
                     emit_wide_summary_event(_log_view, events, event);
                     results.push(serde_json::json!({
-                        "target": target.display().to_string(),
+                        "target": display_path_for_user(&target).to_string(),
                         "status": "failed",
                         "error": message,
                     }));
@@ -12402,7 +12792,7 @@ fn execute_wide_summary_target_writes(
             event.worksheet_name = Some(target_sheet_name.clone());
             emit_wide_summary_event(_log_view, events, event);
             results.push(serde_json::json!({
-                "target": target.display().to_string(),
+                "target": display_path_for_user(&target).to_string(),
                 "sheet": target_sheet_name,
                 "status": "failed",
                 "error": format!("规则 {:?} 的汇总工作表不存在或名称不唯一，未写入目标", rule.name),
@@ -12461,7 +12851,7 @@ fn execute_wide_summary_target_writes(
                 );
                 let mut event = new_wide_summary_cli_event(
                     events, run_started, feature_id, total_inputs, "target_write", "failed",
-                    format!("目标工作簿 {}：{message}", target.display()),
+                    format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                     Some(stage_started.elapsed().as_millis()), 0,
                     &["pytools-core", "umya-spreadsheet"], None, Some("target_header_mismatch"),
                 );
@@ -12469,7 +12859,7 @@ fn execute_wide_summary_target_writes(
                 event.worksheet_name = Some(target_sheet_name.clone());
                 emit_wide_summary_event(_log_view, events, event);
                 results.push(serde_json::json!({
-                    "target": target.display().to_string(),
+                    "target": display_path_for_user(&target).to_string(),
                     "sheet": target_sheet_name,
                     "status": "failed",
                     "error": message,
@@ -12507,7 +12897,7 @@ fn execute_wide_summary_target_writes(
                 let message = format!("解析目标去重列失败，已跳过目标写入：{error:#}");
                 let mut event = new_wide_summary_cli_event(
                     events, run_started, feature_id, total_inputs, "target_write", "skipped",
-                    format!("目标工作簿 {}：{message}", target.display()),
+                    format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                     Some(stage_started.elapsed().as_millis()), 0,
                     &["pytools-core"], None, Some("target_dedup_columns_missing"),
                 );
@@ -12515,7 +12905,7 @@ fn execute_wide_summary_target_writes(
                 event.worksheet_name = Some(target_sheet_name.clone());
                 emit_wide_summary_event(_log_view, events, event);
                 results.push(serde_json::json!({
-                    "target": target.display().to_string(),
+                    "target": display_path_for_user(&target).to_string(),
                     "sheet": target_sheet_name,
                     "status": "skipped",
                     "error": message,
@@ -12571,7 +12961,7 @@ fn execute_wide_summary_target_writes(
             // 目标去重后没有新增行：不生成候选、不改写目标文件。
             let message = format!(
                 "目标工作簿 {}：表头一致，输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行；实际追加到目标 0 行，没有新增数据，未修改目标",
-                target.display()
+                display_path_for_user(&target)
             );
             let mut event = new_wide_summary_cli_event(
                 events, run_started, feature_id, total_inputs, "target_write", "skipped",
@@ -12583,7 +12973,7 @@ fn execute_wide_summary_target_writes(
             event.worksheet_name = Some(target_sheet_name.clone());
             emit_wide_summary_event(_log_view, events, event);
             results.push(serde_json::json!({
-                "target": target.display().to_string(),
+                "target": display_path_for_user(&target).to_string(),
                 "sheet": target_sheet_name,
                 "status": "skipped",
                 "mode": mode,
@@ -12662,14 +13052,14 @@ fn execute_wide_summary_target_writes(
             let message = format!("保存目标工作簿失败：{error:#}");
             let mut event = new_wide_summary_cli_event(
                 events, run_started, feature_id, total_inputs, "target_write", "failed",
-                format!("目标工作簿 {}：{message}", target.display()),
+                format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                 Some(stage_started.elapsed().as_millis()), 0,
                 &["pytools-core", "umya-spreadsheet"], None, Some("target_write_error"),
             );
             event.workbook_name = Some(target.to_string_lossy().into_owned());
             emit_wide_summary_event(_log_view, events, event);
             results.push(serde_json::json!({
-                "target": target.display().to_string(),
+                "target": display_path_for_user(&target).to_string(),
                 "sheet": target_sheet_name,
                 "status": "failed",
                 "error": message,
@@ -12695,7 +13085,7 @@ fn execute_wide_summary_target_writes(
         };
         let message = format!(
             "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行，{data_write_label} {written_data_rows} 行 / 写入 {copied} 个单元格）",
-            target.display()
+            display_path_for_user(&target)
         );
         let mut event = new_wide_summary_cli_event(
             events,
@@ -12715,7 +13105,7 @@ fn execute_wide_summary_target_writes(
         event.worksheet_name = Some(target_sheet_name.clone());
         emit_wide_summary_event(_log_view, events, event);
         results.push(serde_json::json!({
-            "target": target.display().to_string(),
+            "target": display_path_for_user(&target).to_string(),
             "sheet": target_sheet_name,
             "status": "succeeded",
             "mode": mode,
@@ -12799,6 +13189,7 @@ fn new_wide_summary_cli_event(
         workbook_name: None,
         worksheet_name: None,
         rule_name: None,
+        config_row: None,
         stage_elapsed_ms,
         workbook_elapsed_ms: None,
         total_elapsed_ms: run_started.elapsed().as_millis(),
@@ -12825,6 +13216,7 @@ fn wide_diagnostic_event(
     record.file_index = event.source_input_index;
     record.file_name = event.workbook_name.as_deref().map(|name| pytools_core::run_logging::portable_file_name(Path::new(name)));
     record.sheet_name = event.worksheet_name.clone();
+    record.config_row = event.config_row;
     record.engine = event.actual_engine.clone();
     record.elapsed_ms = event.stage_elapsed_ms;
     if event.status == "failed" {
@@ -13169,33 +13561,27 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             .performance_stats
             .as_ref()
             .map(|performance| {
-                format!(
-                    "；读取耗时 {} ms，写入耗时 {} ms",
-                    performance
+                format!("；读取耗时 {}，写入耗时 {}", performance
                         .read_elapsed_ms
-                        .map(|value| value.to_string())
-                        .unwrap_or_else(|| "未采集".to_owned()),
-                    performance
+                        .map(|value| format!("{:.3} 秒", value as f64 / 1000.0))
+                        .unwrap_or_else(|| "未采集".to_owned()), performance
                         .write_elapsed_ms
-                        .map(|value| value.to_string())
-                        .unwrap_or_else(|| "未采集".to_owned())
-                )
+                        .map(|value| format!("{:.3} 秒", value as f64 / 1000.0))
+                        .unwrap_or_else(|| "未采集".to_owned()))
             })
             .unwrap_or_default();
         eprintln!(
             "{}",
             pytools_core::run_logging::terminal_line(
                 level,
-                &format!(
-                    "处理{status}：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，取消 {} 个，未完成 {} 个{sheet_summary}{record_summary}{performance_summary}；总耗时 {} ms；运行编号 {}",
+                &format!( "处理{status}：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，取消 {} 个，未完成 {} 个{sheet_summary}{record_summary}{performance_summary}；总耗时 {:.3} 秒；运行编号 {}",
                     stats.selected,
                     stats.attempted,
                     stats.succeeded,
                     stats.failed,
                     stats.skipped,
                     stats.cancelled,
-                    stats.pending,
-                    unified.total_elapsed_ms,
+                    stats.pending, (unified.total_elapsed_ms) as f64 / 1000.0,
                     run_id
                 )
             )
@@ -13305,7 +13691,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                     eprintln!(
                         "{}",
@@ -13479,7 +13865,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
     }
     if interactive {
         let stats = &unified.input_stats;
-        eprintln!("{}", pytools_core::run_logging::terminal_line(if result.is_err() { Level::Error } else { Level::Info }, &format!("处理结束：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，未完成 {} 个；耗时 {} ms；运行编号 {run_id}", stats.selected, stats.attempted, stats.succeeded, stats.failed, stats.skipped, stats.pending, unified.total_elapsed_ms)));
+        eprintln!("{}", pytools_core::run_logging::terminal_line(if result.is_err() { Level::Error } else { Level::Info }, &format!( "处理结束：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，未完成 {} 个；耗时 {:.3} 秒；运行编号 {run_id}", stats.selected, stats.attempted, stats.succeeded, stats.failed, stats.skipped, stats.pending, (unified.total_elapsed_ms) as f64 / 1000.0)));
     }
 
     if result.is_err()
@@ -13573,7 +13959,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
                     }
@@ -13877,10 +14263,10 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id.clone());
                 if let Some(path) = &unified_path {
-                    output["run_summary_path"] = serde_json::Value::String(path.display().to_string());
+                    output["run_summary_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                 }
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(path.display().to_string());
+                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
@@ -14073,7 +14459,7 @@ fn run_archive_menu_operation(
                         "{}",
                         pytools_core::run_logging::terminal_line(
                             Level::Info,
-                            &format!("{feature_id} run history: {}", path.display())
+                            &format!("{feature_id} run history: {}", display_path_for_user(&path))
                         )
                     ),
                     Err(history_error) => {
@@ -14139,10 +14525,8 @@ fn run_archive_menu_operation(
         2,
         "archive_operation",
         status,
-        &format!(
-            "{description}完成：文件 {}，无效 {}，已复制 {}，跳过 {}，失败 {}，用时 {} 毫秒",
-            result.files, result.invalid, result.copied, result.skipped, result.failed, elapsed_ms
-        ),
+        &format!( "{description}完成：文件 {}，无效 {}，已复制 {}，跳过 {}，失败 {}，用时 {:.3} 秒",
+            result.files, result.invalid, result.copied, result.skipped, result.failed, (elapsed_ms) as f64 / 1000.0),
         input_paths,
         Some(&result),
         elapsed_ms,
@@ -14178,7 +14562,7 @@ fn run_archive_menu_operation(
                 "{}",
                 pytools_core::run_logging::terminal_line(
                     Level::Info,
-                    &format!("{feature_id} run history: {}", path.display())
+                    &format!("{feature_id} run history: {}", display_path_for_user(&path))
                 )
             ),
             Err(error) => {
@@ -14190,7 +14574,7 @@ fn run_archive_menu_operation(
     if log_view == "developer" {
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
-        let message = format!("{description}结束：文件={} 无效={} 已复制={} 跳过={} 失败={} 用时={}毫秒 报告={}", result.files, result.invalid, result.copied, result.skipped, result.failed, elapsed_ms, result.output.display());
+        let message = format!( "{description}结束：文件={} 无效={} 已复制={} 跳过={} 失败={} 用时={:.3} 秒 报告={}", result.files, result.invalid, result.copied, result.skipped, result.failed, (elapsed_ms) as f64 / 1000.0, display_path_for_user(&result.output));
         println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { Level::Warn } else { Level::Info }, &message));
     }
     Ok(())
@@ -14270,7 +14654,7 @@ fn write_archive_run_history(
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create archive log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create archive log directory {}", display_path_for_user(&log_dir)))?;
     let report = serde_json::json!({
         "schema_version": 1,
         "product": "pytools",
@@ -14374,7 +14758,7 @@ fn create_rust_report_copy(
     verify_planning_snapshot(input, expected_source_hash)?;
     let output = specialized_report_copy_path(input, "PyTools_专用报表处理结果")?;
     create_target_from_candidate(candidate, &output)
-        .with_context(|| format!("publish Rust report copy to {}", output.display()))?;
+        .with_context(|| format!("publish Rust report copy to {}", display_path_for_user(&output)))?;
     Ok(serde_json::json!({
         "engine": "rust_xlsxwriter",
         "execution": "created_and_validated_workbook_copy",
@@ -14396,13 +14780,13 @@ fn specialized_report_copy_path(input: &Path, directory_name: &str) -> Result<Pa
         .unwrap_or_else(|| Path::new("."));
     let result_dir = parent.join(directory_name);
     fs::create_dir_all(&result_dir)
-        .with_context(|| format!("create report result directory {}", result_dir.display()))?;
+        .with_context(|| format!("create report result directory {}", display_path_for_user(&result_dir)))?;
     let metadata = fs::symlink_metadata(&result_dir)
-        .with_context(|| format!("inspect report result directory {}", result_dir.display()))?;
+        .with_context(|| format!("inspect report result directory {}", display_path_for_user(&result_dir)))?;
     anyhow::ensure!(
         metadata.is_dir() && !metadata.file_type().is_symlink(),
         "report result path must be a real directory: {}",
-        result_dir.display()
+        display_path_for_user(&result_dir)
     );
     let source_name = input
         .file_name()
@@ -14427,7 +14811,7 @@ fn specialized_report_copy_path(input: &Path, directory_name: &str) -> Result<Pa
     }
     anyhow::bail!(
         "could not choose a unique report output name beside {}",
-        input.display()
+        display_path_for_user(&input)
     )
 }
 
@@ -14435,7 +14819,7 @@ fn path_has_directory_entry(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error).with_context(|| format!("inspect path {}", path.display())),
+        Err(error) => Err(error).with_context(|| format!("inspect path {}", display_path_for_user(&path))),
     }
 }
 
@@ -14443,14 +14827,14 @@ fn remove_regular_candidate(path: &Path) -> Result<()> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error).with_context(|| format!("inspect {}", path.display())),
+        Err(error) => return Err(error).with_context(|| format!("inspect {}", display_path_for_user(&path))),
     };
     anyhow::ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink(),
         "refusing to remove non-regular candidate {}",
-        path.display()
+        display_path_for_user(&path)
     );
-    fs::remove_file(path).with_context(|| format!("remove temporary candidate {}", path.display()))
+    fs::remove_file(path).with_context(|| format!("remove temporary candidate {}", display_path_for_user(&path)))
 }
 
 fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
@@ -14581,7 +14965,7 @@ fn emit_local_filename_map_event_view(
                     "{}",
                     pytools_core::run_logging::terminal_line(
                         level,
-                        &format!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms)
+                        &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)
                     )
                 );
             } else {
@@ -14606,7 +14990,7 @@ fn write_local_filename_map_run_history(
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -14648,7 +15032,7 @@ fn write_local_filename_map_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create run history {}", path.display()))?;
+        .with_context(|| format!("create run history {}", display_path_for_user(&path)))?;
     file.write_all(&bytes)?;
     file.write_all(b"\n")?;
     file.flush()?;
@@ -14814,7 +15198,7 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
         }
     }
     if interactive && log_view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if stats.failed > 0 { Level::Warn } else { Level::Info }, &format!("处理结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {} ms", stats.selected, stats.succeeded, stats.failed, stats.skipped, unified.total_elapsed_ms)));
+        println!("{}", pytools_core::run_logging::terminal_line(if stats.failed > 0 { Level::Warn } else { Level::Info }, &format!( "处理结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {:.3} 秒", stats.selected, stats.succeeded, stats.failed, stats.skipped, (unified.total_elapsed_ms) as f64 / 1000.0)));
     } else { println!("{}", serde_json::to_string_pretty(&output)?); }
     Ok(())
 }
@@ -14824,8 +15208,8 @@ fn emit_batch_rename_event_view(log_view: &str, event: &BatchRenameProgressEvent
         "user" => {
             let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
             let message = match event.status.as_str() {
-                "progress" => format!("{}（阶段用时 {}ms）", event.user_message, event.stage_elapsed_ms),
-                "completed" | "failed" => format!("{}；阶段用时 {}ms，总用时 {}ms", event.user_message, event.stage_elapsed_ms, event.total_elapsed_ms),
+                "progress" => format!( "{}（阶段用时 {:.3} 秒）", event.user_message, (event.stage_elapsed_ms) as f64 / 1000.0),
+                "completed" | "failed" => format!( "{}；阶段用时 {:.3} 秒，总用时 {:.3} 秒", event.user_message, (event.stage_elapsed_ms) as f64 / 1000.0, (event.total_elapsed_ms) as f64 / 1000.0),
                 _ => event.user_message.clone(),
             };
             eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
@@ -14845,7 +15229,7 @@ fn write_batch_rename_run_history(
     events: &[BatchRenameProgressEvent],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -14864,7 +15248,7 @@ fn write_batch_rename_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create run history {}", path.display()))?;
+        .with_context(|| format!("create run history {}", display_path_for_user(&path)))?;
     file.write_all(&bytes)?;
     file.write_all(b"\n")?;
     file.flush()?;
@@ -14873,7 +15257,7 @@ fn write_batch_rename_run_history(
 
 fn open_batch_rename_log(log_dir: &Path) -> Result<(PathBuf, File)> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create batch-rename log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create batch-rename log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let base = format!("3_3_batch_rename_{timestamp}");
     for index in 0usize.. {
@@ -14887,7 +15271,7 @@ fn open_batch_rename_log(log_dir: &Path) -> Result<(PathBuf, File)> {
             Ok(file) => return Ok((path, file)),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(error).with_context(|| format!("create log {}", path.display()))
+                return Err(error).with_context(|| format!("create log {}", display_path_for_user(&path)))
             }
         }
     }
@@ -15071,7 +15455,7 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
             serde_json::json!(format!("could not write structured run history: {error:#}"));
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("处理结束：成功 {} 个，跳过 {} 个，失败 {} 个；运行编号 {}{}", summary_output.0, summary_output.1, unified_summary.input_stats.failed, unified_summary.run_id, unified_path.as_ref().map(|path| format!("；日志 {}", path.display())).unwrap_or_default())));
+        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("处理结束：成功 {} 个，跳过 {} 个，失败 {} 个；运行编号 {}{}", summary_output.0, summary_output.1, unified_summary.input_stats.failed, unified_summary.run_id, unified_path.as_ref().map(|path| format!("；日志 {}", display_path_for_user(&path))).unwrap_or_default())));
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -15139,7 +15523,7 @@ fn write_content_prefix_run_history(
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -15181,7 +15565,7 @@ fn write_content_prefix_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create run history {}", path.display()))?;
+        .with_context(|| format!("create run history {}", display_path_for_user(&path)))?;
     file.write_all(&bytes)?;
     file.write_all(b"\n")?;
     file.flush()?;
@@ -15289,7 +15673,7 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
         eprintln!("pytools: warning: could not write complete operation log: {error:#}");
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：重命名 {} 个，未命中 {} 个，跳过 {} 个，失败 {} 个；报告 {}；运行编号 {}{}", result.renamed, result.unmatched, result.skipped, result.failed, result.output.display(), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default())));
+        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：重命名 {} 个，未命中 {} 个，跳过 {} 个，失败 {} 个；报告 {}；运行编号 {}{}", result.renamed, result.unmatched, result.skipped, result.failed, display_path_for_user(&result.output), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
         return Ok(());
     }
     let mut output = serde_json::to_value(result)?;
@@ -15355,7 +15739,7 @@ fn emit_file_sort_event_view(
             if event.status == "started" {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
             } else if let Some(stage_elapsed_ms) = event_value["stage_elapsed_ms"].as_u64() {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!("{} 阶段用时 {}ms。", event.user_message, stage_elapsed_ms)));
+                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)));
             } else {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
             }
@@ -15376,7 +15760,7 @@ fn write_file_sort_run_history(
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -15395,7 +15779,7 @@ fn write_file_sort_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create run history {}", path.display()))?;
+        .with_context(|| format!("create run history {}", display_path_for_user(&path)))?;
     file.write_all(&bytes)?;
     file.write_all(b"\n")?;
     file.flush()?;
@@ -15413,14 +15797,14 @@ fn write_file_sort_legacy_log(
 
 fn open_file_sort_log(log_dir: &Path) -> Result<(PathBuf, File)> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let path = log_dir.join(format!("4_9_file_sort_prefix_{timestamp}.log"));
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
-        .with_context(|| format!("open operation log {}", path.display()))?;
+        .with_context(|| format!("open operation log {}", display_path_for_user(&path)))?;
     Ok((path, file))
 }
 
@@ -15472,14 +15856,14 @@ fn write_file_sort_removal_legacy_log(
 
 fn open_file_sort_removal_log(log_dir: &Path) -> Result<(PathBuf, File)> {
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create log directory {}", log_dir.display()))?;
+        .with_context(|| format!("create log directory {}", display_path_for_user(&log_dir)))?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let path = log_dir.join(format!("4_10_remove_file_sort_prefix_{timestamp}.log"));
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
-        .with_context(|| format!("open operation log {}", path.display()))?;
+        .with_context(|| format!("open operation log {}", display_path_for_user(&path)))?;
     Ok((path, file))
 }
 
@@ -15616,7 +16000,7 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
         eprintln!("pytools: warning: could not write complete operation log: {error:#}");
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：重命名 {} 个，跳过 {} 个，失败 {} 个；报告 {}；运行编号 {}{}", result.renamed, result.skipped, result.failed, result.output.display(), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", path.display())).unwrap_or_default())));
+        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("处理结束：重命名 {} 个，跳过 {} 个，失败 {} 个；报告 {}；运行编号 {}{}", result.renamed, result.skipped, result.failed, display_path_for_user(&result.output), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
         return Ok(());
     }
     let mut output = serde_json::to_value(result)?;
@@ -15709,7 +16093,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let tasks = load_extract_tasks(&config_path).with_context(|| {
         format!(
             "load worksheet-extraction tasks from {}",
-            config_path.display()
+            display_path_for_user(&config_path)
         )
     })?;
     // 仅在显式给出 --log-view/--log-dir 或缺少 --output-dir 时才从配置工作簿读取全局设置；
@@ -15718,7 +16102,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         Some(load_global(&config_path).with_context(|| {
             format!(
                 "load output and log directories from {}",
-                config_path.display()
+                display_path_for_user(&config_path)
             )
         })?)
     } else {
@@ -15743,6 +16127,40 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     );
     use pytools_core::run_logging::{EventWriter, Level, RunTracker};
     let view = log_view.as_deref().unwrap_or("user");
+    if view == "user" {
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                &format!("已启用工作表提取配置：{} 项", tasks.len())
+            )
+        );
+        for task in &tasks {
+            let matching_workbooks = source_workbooks
+                .iter()
+                .filter(|path| {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    pytools_core::sheet_extract::workbook_matches(&name, task)
+                })
+                .count();
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Info,
+                    &format!(
+                        "正在检查配置：工作表「工作表提取」第 {} 行；任务「工作表提取第 {} 行」；工作簿关键字：{}；工作表关键字：{}；匹配源文件 {} 个；提取区域：{}；输出文件名：{}",
+                        task.row_no,
+                        task.row_no,
+                        if task.workbook_keywords.trim().is_empty() { "（未限制）" } else { task.workbook_keywords.as_str() },
+                        if task.sheet_keywords.trim().is_empty() { "（未限制）" } else { task.sheet_keywords.as_str() },
+                        matching_workbooks,
+                        if task.area_spec.trim().is_empty() { "（按整表规则）" } else { task.area_spec.as_str() },
+                        if task.output_name.trim().is_empty() { "（自动生成）" } else { task.output_name.as_str() }
+                    )
+                )
+            );
+        }
+    }
     let mut tracker = RunTracker::with_id("PT-7-6", "工作表数据提取", &source_workbooks, run_id.clone());
     let mut diagnostic = if view == "off" {
         None
@@ -15952,7 +16370,7 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             Ok(path) if view == "user" => {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("工作表提取运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))))
             }
-            Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("PT-7-6 run history: {}", path.display()))),
+            Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("PT-7-6 run history: {}", display_path_for_user(&path)))),
             Err(error) => {
                 eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存工作表提取记录：{error}")))
             }
@@ -16203,7 +16621,7 @@ fn save_extract_sheets_run_history(
     fs::create_dir_all(log_dir).with_context(|| {
         format!(
             "create worksheet extraction log directory {}",
-            log_dir.display()
+            display_path_for_user(&log_dir)
         )
     })?;
     let actual_engines = events
@@ -16253,7 +16671,7 @@ fn save_extract_sheets_run_history(
     });
     let path = log_dir.join(format!("PT-7-6_{run_id}.run.json"));
     fs::write(&path, serde_json::to_vec_pretty(&history)?)
-        .with_context(|| format!("write worksheet extraction run history {}", path.display()))?;
+        .with_context(|| format!("write worksheet extraction run history {}", display_path_for_user(&path)))?;
     Ok(path)
 }
 
@@ -16305,7 +16723,7 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let global = match config_path.as_ref() {
         Some(path) => Some(
             load_global(path)
-                .with_context(|| format!("load global configuration from {}", path.display()))?,
+                .with_context(|| format!("load global configuration from {}", display_path_for_user(&path)))?,
         ),
         None => None,
     };
@@ -16564,10 +16982,10 @@ fn write_region_sum_run_history(
         "events": events,
     });
     fs::create_dir_all(log_dir)
-        .with_context(|| format!("create PT-7-5 history directory {}", log_dir.display()))?;
+        .with_context(|| format!("create PT-7-5 history directory {}", display_path_for_user(&log_dir)))?;
     let path = log_dir.join(format!("PT-7-5_{}.run.json", first.run_id));
     fs::write(&path, serde_json::to_vec_pretty(&history)?)
-        .with_context(|| format!("write PT-7-5 run history {}", path.display()))?;
+        .with_context(|| format!("write PT-7-5 run history {}", display_path_for_user(&path)))?;
     Ok(path)
 }
 
@@ -16618,9 +17036,9 @@ fn print_usage() {
          archive-date-copy --target-root <dir> [--config <config.xlsx>] [--output-dir <dir>] <file-or-directory>...\n\
          archive-type-copy --config <config.xlsx> --target-root <dir> [--output-dir <dir>] <file-or-directory>...\n\
          archive-execute-plan --plan <archive-plan.xlsx> [--output-dir <dir>]\n\
-         convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|native] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
+         convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|pywin32|native] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
-         convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|native]\n\
+         convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|pywin32|native]\n\
          native = 按值重建（C01，丢弃样式/公式缓存）；Excel 公式文本保留但不重算，CSV 按文本写入\n\
                    ISO 日期/时长、错误值、空文本和检测到的 1904 epoch XLS/XLSM/XLSB 会拒绝转换\n\
          pytools extract-sheets --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--append-existing] [--capabilities <json> --platform <id>] <source.xlsx>...\n\

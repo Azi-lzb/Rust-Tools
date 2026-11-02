@@ -42,10 +42,10 @@ cargo-zigbuild），deb 产出见该次构建输出；产物未提交仓库。
 ## Windows
 
 `stage-windows-runtime.py --dist dist`：下载 CPython embeddable（版本见
-`python-version-windows.txt`，默认 3.12.10）+ pip download 固定 wheel
-（openpyxl 3.1.5 / et-xmlfile 2.0.0），组装到 `dist/python/` 并自检
-（`python -I -c "import openpyxl"` + worker 启动）。每次暂存都会清理旧
-`dist/python/`，避免误带过期 worker。`package.bat` 在运行时缺失或
+`python-version-windows.txt`，默认 3.12.10）+ 固定 wheel
+（openpyxl 3.1.5 / et-xmlfile 2.0.0 / pywin32 312），组装到 `dist/python/`
+并自检依赖导入、版本及两个 worker 握手。只有新运行时通过检查后才替换旧
+`dist/python/`，避免暂存失败损坏现有运行包。`package.bat` 在运行时缺失或
 `--version` 握手失败时拒绝打包。
 
 ZIP 生成后运行解压验证：
@@ -55,8 +55,8 @@ python packaging/openpyxl/verify-windows-zip.py <zip>
 # 省略路径时自动选择 dist 下最新的 pytools-windows-x64-*.zip
 ```
 
-验证内容：解压布局完整性、bundled worker `--version` 握手（protocol=1）、
-import openpyxl/et_xmlfile、用解压出的 pytools.exe `apply-edit-plan` 执行
+验证内容：解压布局完整性、openpyxl 与 pywin32 worker `--version` 握手、
+import openpyxl/et_xmlfile/pythoncom/win32com、用解压出的 pytools.exe `apply-edit-plan` 执行
 合成 ExcelEditPlan（openpyxl 引擎路由 + PlanOutputValidator 回读校验）、
 输出回读与输入快照。2026-10-29 实际执行：全部通过。
 

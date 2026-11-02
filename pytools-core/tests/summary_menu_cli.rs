@@ -179,7 +179,7 @@ fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<
 }
 
 #[test]
-fn interactive_v2_named_range_summary_uses_headers_and_ignores_other_structure_regions() -> Result<()> {
+fn interactive_v2_named_range_summary_uses_optional_structure_to_skip_mismatching_sheet() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_app_config(root.path())?;
     let template = root.path().join("named template.xlsx");
@@ -218,19 +218,19 @@ fn interactive_v2_named_range_summary_uses_headers_and_ignores_other_structure_r
     assert_eq!(history["feature_id"], "PT-6-2");
     assert_eq!(history["function"], "summary-named-ranges");
     assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["summary"]["rows"], 10);
-    assert_eq!(history["summary"]["files"], 3);
+    assert_eq!(history["summary"]["rows"], 6);
+    assert_eq!(history["summary"]["files"], 2);
     assert_eq!(history["input_stats"]["selected"], 3);
     assert_eq!(history["input_stats"]["attempted"], 3);
-    assert_eq!(history["input_stats"]["succeeded"], 3);
-    assert_eq!(history["input_stats"]["skipped"], 0);
+    assert_eq!(history["input_stats"]["succeeded"], 2);
+    assert_eq!(history["input_stats"]["skipped"], 1);
     assert_eq!(history["overall_status"], "SUCCESS");
     assert_eq!(
         history["summary"]["skipped_sources"]
             .as_array()
             .unwrap()
             .len(),
-        0
+        1
     );
     assert!(!history_text.contains("记录甲"));
     assert!(history_path.starts_with(&logs));
@@ -252,7 +252,7 @@ fn interactive_v2_named_range_summary_uses_headers_and_ignores_other_structure_r
     assert_eq!(sheet.values["D4"]["value"], 0.0);
     assert_eq!(sheet.values["A5"]["value"], "source branch short");
     assert_eq!(sheet.values["C5"]["value"], "甲");
-    assert_eq!(sheet.values["A6"]["value"], "mismatched branch");
+    assert!(!sheet.values.values().any(|value| value["value"] == "mismatched branch"));
     let fixed = summary.sheets.iter().find(|sheet| sheet.name == "数据_2")
         .context("fixed-row summary sheet missing")?;
     assert_eq!(fixed.values["C1"]["value"], "指标");
@@ -260,7 +260,7 @@ fn interactive_v2_named_range_summary_uses_headers_and_ignores_other_structure_r
     assert_eq!(fixed.values["C2"]["value"], "总计");
     assert_eq!(fixed.values["D2"]["value"], 3.0);
     assert_eq!(fixed.values["C3"]["value"], "总计");
-    assert_eq!(fixed.values["C4"]["value"], "总计");
+    assert!(!fixed.values.contains_key("C4"));
     assert!(!fixed.values.contains_key("C5"));
     assert!(!sheet
         .values

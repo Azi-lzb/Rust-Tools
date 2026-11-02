@@ -243,6 +243,7 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
 
     for (target, target_tasks) in grouped {
         ensure!(is_xlsx(&target), "打印目标必须是 .xlsx/.xlsm：{}", target.display());
+        ensure!(!target.exists(), "目标路径已存在，拒绝写入：{}", target.display());
         let mut book = if target.is_file() {
             umya_spreadsheet::reader::xlsx::read(&target)
                 .with_context(|| format!("umya 打开既有目标 {}", target.display()))?
@@ -602,6 +603,7 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
             }
         }
         let save_started = Instant::now();
+        ensure!(!target.exists(), "目标路径在处理期间已出现，拒绝写入：{}", target.display());
         if let Err(error) = umya_spreadsheet::writer::xlsx::write(&book, &target) {
             run.events.push(
                 DiagEvent::new("umya-spreadsheet", DiagStage::SaveOutput, DiagOutcome::Failed)
@@ -823,6 +825,8 @@ for t in plan['tasks']:
     try:
         src_path = Path(t['source_wb']) if t['source_wb'] else None
         tgt_path = Path(t['target_wb']) if t['target_wb'] else None
+        if tgt_path is not None and tgt_path.exists() and str(tgt_path) not in outputs:
+            raise FileExistsError(f'目标路径已存在，拒绝写入：{tgt_path}')
         if src_path is None or tgt_path is None or not t['target_ws'].strip():
             task_skip += 1
             missing = []
@@ -886,7 +890,11 @@ for t in plan['tasks']:
                     parse_orientation(t.get('orientation')), t.get('center_h'), t.get('center_v'))
         stage = f'openpyxl 写入目标工作簿 {tgt_path}'
         tgt_path.parent.mkdir(parents=True, exist_ok=True)
-        tgt_wb.save(tgt_path)
+        if str(tgt_path) in outputs:
+            tgt_wb.save(tgt_path)
+        else:
+            with tgt_path.open('xb') as target_stream:
+                tgt_wb.save(target_stream)
         outputs.append(str(tgt_path))
         if len(issues) > issues_before_copy:
             task_failed += 1
@@ -1006,25 +1014,6 @@ fn unique_temp_json(value: &serde_json::Value) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// 把目标改写到 `<原目录>/<引擎名>/<原文件名>`，三种引擎可并存对比。
-fn engine_variant_target(target: &Path, engine: StaticPrintEngine) -> PathBuf {
-    let folder = match engine {
-        StaticPrintEngine::RustWriter => "3-3-rust_xlsxwriter",
-        StaticPrintEngine::Umya => "3-4-umya",
-        StaticPrintEngine::Openpyxl => "3-5-openpyxl",
-    };
-    let parent = target
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .map(|parent| parent.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."));
-    let name = target
-        .file_name()
-        .map(|name| name.to_owned())
-        .unwrap_or_else(|| std::ffi::OsString::from("static-print.xlsx"));
-    parent.join(folder).join(name)
-}
-
 pub fn probe_python_exe() -> Option<String> {
     std::env::var("PYTOOLS_OPENPYXL_PYTHON")
         .ok()
@@ -1039,20 +1028,37 @@ pub fn run_configured_static_print(
     let tasks = crate::config::load_print_tasks(config_path)
         .with_context(|| format!("[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）", config_path.display()))?;
     let enabled = tasks.iter().filter(|task| task.enabled).count();
-    let tasks = tasks
-        .into_iter()
-        .map(|mut task| {
-            task.target_wb = task.target_wb.map(|target| engine_variant_target(&target, engine));
-            task
-        })
-        .collect::<Vec<_>>();
-    let mut run = match engine {
+    let mut rejected = StaticPrintRun::default();
+    let tasks = tasks.into_iter().filter(|task| {
+        if task.enabled && task.target_wb.as_ref().is_some_and(|target| target.exists()) {
+            let target = task.target_wb.as_ref().expect("target checked");
+            rejected.task_failed += 1;
+            let message = format!("目标路径已存在，拒绝写入，请修改打印配置中的目标路径或移走已有文件：{}", target.display());
+            rejected.issues.push(format!("打印配置第 {} 行：{message}", task.row_no));
+            rejected.events.push(
+                DiagEvent::new(engine.label(), DiagStage::SaveOutput, DiagOutcome::Failed)
+                    .with_row(task.row_no)
+                    .with_file(target.to_string_lossy().into_owned())
+                    .with_sheet(task.source_ws.clone())
+                    .with_message(message),
+            );
+            false
+        } else {
+            true
+        }
+    }).collect::<Vec<_>>();
+    let mut run = if enabled > 0 && !tasks.iter().any(|task| task.enabled) {
+        StaticPrintRun::default()
+    } else { match engine {
         StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
         StaticPrintEngine::Umya => run_umya_engine(&tasks),
         StaticPrintEngine::Openpyxl => {
             run_openpyxl_engine(&tasks, probe_python_exe().as_deref())
         }
-    }?;
+    }? };
+    run.task_failed += rejected.task_failed;
+    run.issues.extend(rejected.issues);
+    run.events.extend(rejected.events);
     // 配置读取成功事件排在最前（读取引擎：calamine）。
     let mut events = vec![DiagEvent::new("calamine", DiagStage::ReadConfig, DiagOutcome::Ok)
         .with_file(config_path.to_string_lossy().into_owned())

@@ -49,6 +49,12 @@ if not exist "%DIST_DIR%\python\openpyxl_worker.py" (
     echo Refusing to build a package without the openpyxl runtime.
     exit /b 5
 )
+if not exist "%DIST_DIR%\python\pywin32_excel_conversion_worker.py" (
+    echo pywin32 Excel COM worker is missing: %DIST_DIR%\python\pywin32_excel_conversion_worker.py
+    echo Run: python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    echo Refusing to build a package without the Excel conversion worker.
+    exit /b 5
+)
 if not exist "%DIST_DIR%\python\python.exe" (
     echo Bundled Python is missing: %DIST_DIR%\python\python.exe
     echo Run: python packaging\openpyxl\stage-windows-runtime.py --dist dist
@@ -77,13 +83,28 @@ if errorlevel 1 (
     echo   python packaging\openpyxl\stage-windows-runtime.py --dist dist
     exit /b 7
 )
-"%DIST_DIR%\python\python.exe" -I -c "import openpyxl, et_xmlfile" >nul 2>&1
+"%DIST_DIR%\python\python.exe" -I "%DIST_DIR%\python\pywin32_excel_conversion_worker.py" --version > "%TEMP%\pytools-pywin32-version.txt" 2>&1
 if errorlevel 1 (
-    echo Bundled runtime cannot import openpyxl/et_xmlfile. Re-stage the runtime:
+    type "%TEMP%\pytools-pywin32-version.txt"
+    echo Bundled pywin32 Excel COM worker failed its version handshake.
+    echo Re-stage the runtime: python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    exit /b 7
+)
+findstr /B /C:"protocol=1 pywin32=312" "%TEMP%\pytools-pywin32-version.txt" >nul
+if errorlevel 1 (
+    type "%TEMP%\pytools-pywin32-version.txt"
+    echo Bundled pywin32 Excel COM worker has an unexpected version.
+    echo Re-stage the runtime: python packaging\openpyxl\stage-windows-runtime.py --dist dist
+    exit /b 7
+)
+"%DIST_DIR%\python\python.exe" -I -c "import openpyxl, et_xmlfile, pythoncom, win32com.client" >nul 2>&1
+if errorlevel 1 (
+    echo Bundled runtime cannot import openpyxl/et_xmlfile/pywin32. Re-stage the runtime:
     echo   python packaging\openpyxl\stage-windows-runtime.py --dist dist
     exit /b 7
 )
 del "%TEMP%\pytools-worker-version.txt" >nul 2>&1
+del "%TEMP%\pytools-pywin32-version.txt" >nul 2>&1
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $root=$env:PROJECT_ROOT; $dist=Join-Path $root 'dist'; $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'; $archive=Join-Path $dist ('pytools-windows-x64-' + $env:PACKAGE_SUFFIX + '-' + $stamp + '.zip'); if (Test-Path -LiteralPath $archive) { throw 'Package already exists: ' + $archive }; $stage=Join-Path ([IO.Path]::GetTempPath()) ('pytools-package-' + [Guid]::NewGuid().ToString('N')); try { New-Item -ItemType Directory -Path $stage | Out-Null; $stageDist=Join-Path $stage 'dist'; New-Item -ItemType Directory -Path $stageDist | Out-Null; Copy-Item -LiteralPath (Join-Path $dist 'pytools.exe') -Destination $stageDist; Copy-Item -LiteralPath (Join-Path $root 'run.bat') -Destination $stage; Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage; Copy-Item -LiteralPath (Join-Path $root 'config.xlsx') -Destination $stage; Copy-Item -Path (Join-Path $dist 'python') -Destination $stageDist -Recurse; Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive; Write-Host ('Package created: ' + $archive) } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }"
 if errorlevel 1 exit /b %ERRORLEVEL%

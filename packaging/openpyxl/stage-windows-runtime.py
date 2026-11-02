@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -35,7 +36,10 @@ PYTHON_VERSION = (Path(__file__).resolve().parent / "python-version-windows.txt"
 DEFAULT_VERSION = "3.12.10"
 OPENPYXL_VERSION = "3.1.5"
 ET_XMLFILE_VERSION = "2.0.0"
-WORKER_SOURCE = REPO_ROOT / "crates" / "excel-editor" / "python" / "openpyxl_worker.py"
+PYWIN32_VERSION = "312"
+WINDOWS_REQUIREMENTS = Path(__file__).resolve().parent / "requirements-windows.txt"
+OPENPYXL_WORKER_SOURCE = REPO_ROOT / "crates" / "excel-editor" / "python" / "openpyxl_worker.py"
+PYWIN32_WORKER_SOURCE = REPO_ROOT / "pytools-core" / "python" / "pywin32_excel_conversion_worker.py"
 
 
 def fail(message: str) -> "NoReturn":
@@ -67,17 +71,22 @@ def download_embeddable(version: str, workdir: Path) -> Path:
 
 
 def install_packages(runtime: Path, workdir: Path) -> None:
-    """用宿主 Python 的 pip 下载 wheel 并解压进 runtime/Lib/site-packages。
+    """下载 Windows x64 wheels，并由 pip 正确安装到 embeddable runtime。
 
-    不执行 runtime 里的 python（embeddable 默认无 pip），避免额外 bootstrap。
+    pywin32 wheel 带有 platlib 数据目录，需要 pip 安装而不能简单解压。
+    安装目标固定为产品使用的 CPython 3.12 x64，不依赖暂存主机位数。
     """
     site_packages = runtime / "Lib" / "site-packages"
     site_packages.mkdir(parents=True, exist_ok=True)
     wheels = workdir / "wheels"
     wheels.mkdir(exist_ok=True)
-    requirements = [
-        f"openpyxl=={OPENPYXL_VERSION}",
-        f"et-xmlfile=={ET_XMLFILE_VERSION}",
+    if not WINDOWS_REQUIREMENTS.is_file():
+        fail(f"Windows 依赖清单缺失：{WINDOWS_REQUIREMENTS}")
+    target_tags = [
+        "--platform", "win_amd64",
+        "--python-version", "3.12",
+        "--implementation", "cp",
+        "--abi", "cp312",
     ]
     subprocess.run(
         [
@@ -89,14 +98,33 @@ def install_packages(runtime: Path, workdir: Path) -> None:
             "--no-deps",
             "--dest",
             str(wheels),
-            *requirements,
+            *target_tags,
+            "-r",
+            str(WINDOWS_REQUIREMENTS),
         ],
         check=True,
     )
-    for wheel in sorted(wheels.glob("*.whl")):
-        with zipfile.ZipFile(wheel) as bundle:
-            bundle.extractall(site_packages)
-    for package in ("openpyxl", "et_xmlfile"):
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--only-binary=:all:",
+            "--no-deps",
+            "--upgrade",
+            "--no-index",
+            "--find-links",
+            str(wheels),
+            "--target",
+            str(site_packages),
+            *target_tags,
+            "-r",
+            str(WINDOWS_REQUIREMENTS),
+        ],
+        check=True,
+    )
+    for package in ("openpyxl", "et_xmlfile", "win32com"):
         if not (site_packages / package).is_dir():
             fail(f"包未就位：{package}")
 
@@ -128,7 +156,13 @@ def verify(runtime: Path) -> None:
     if not worker.is_file():
         fail(f"缺少 worker：{worker}")
     result = subprocess.run(
-        [str(python), "-I", "-c", "import openpyxl, et_xmlfile; print(openpyxl.__version__)"],
+        [
+            str(python),
+            "-I",
+            "-c",
+            "import importlib.metadata, openpyxl, et_xmlfile, pythoncom, win32com.client; "
+            "print(openpyxl.__version__ + '|' + et_xmlfile.__version__ + '|' + importlib.metadata.version('pywin32'))",
+        ],
         capture_output=True,
         text=True,
         timeout=120,
@@ -136,39 +170,76 @@ def verify(runtime: Path) -> None:
     if result.returncode != 0:
         fail(f"runtime 自检失败：{result.stderr.strip()[:400]}")
     actual = result.stdout.strip()
-    if actual != OPENPYXL_VERSION:
-        fail(f"openpyxl 版本不符：{actual} != {OPENPYXL_VERSION}")
-    worker_help = subprocess.run(
-        [str(python), "-I", str(worker), "--help"],
+    expected = f"{OPENPYXL_VERSION}|{ET_XMLFILE_VERSION}|{PYWIN32_VERSION}"
+    if actual != expected:
+        fail(f"Python 依赖版本不符：{actual} != {expected}")
+    for worker in (
+        runtime / "openpyxl_worker.py",
+        runtime / "pywin32_excel_conversion_worker.py",
+    ):
+        if not worker.is_file():
+            fail(f"worker 未暂存：{worker}")
+    worker_version = subprocess.run(
+        [str(python), "-I", str(runtime / "pywin32_excel_conversion_worker.py"), "--version"],
         capture_output=True,
         text=True,
         timeout=120,
     )
-    if worker_help.returncode != 0:
-        fail(f"worker 启动失败：{worker_help.stderr.strip()[:400]}")
+    if worker_version.returncode != 0 or worker_version.stdout.strip() != f"protocol=1 pywin32={PYWIN32_VERSION}":
+        fail(f"pywin32 worker 握手失败：{worker_version.stdout.strip()} {worker_version.stderr.strip()[:400]}")
+    openpyxl_help = subprocess.run(
+        [str(python), "-I", str(runtime / "openpyxl_worker.py"), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if openpyxl_help.returncode != 0:
+        fail(f"openpyxl worker 启动失败：{openpyxl_help.stderr.strip()[:400]}")
 
 
 def stage(dist: Path, runtime_source: Path | None) -> None:
-    if not WORKER_SOURCE.is_file():
-        fail(f"worker 源码缺失：{WORKER_SOURCE}")
+    for worker in (OPENPYXL_WORKER_SOURCE, PYWIN32_WORKER_SOURCE):
+        if not worker.is_file():
+            fail(f"worker 源码缺失：{worker}")
     target = dist / "python"
-    if target.exists():
-        shutil.rmtree(target)
-    with tempfile.TemporaryDirectory() as temporary:
-        workdir = Path(temporary)
-        if runtime_source is not None:
-            source = runtime_source.resolve()
-            if not (source / "python.exe").is_file():
-                fail(f"--runtime 目录缺少 python.exe：{source}")
-            shutil.copytree(source, target)
-            install_packages(target, workdir)
-        else:
-            runtime = download_embeddable(pinned_version(), workdir)
-            shutil.copytree(runtime, target)
-            install_packages(target, workdir)
-        enable_site_packages(target)
-        shutil.copy2(WORKER_SOURCE, target / "openpyxl_worker.py")
-        verify(target)
+    stage_root = Path(tempfile.mkdtemp(prefix=".python-stage-", dir=dist))
+    staged = stage_root / "python"
+    backup = dist / f".python-backup-{os.getpid()}"
+    try:
+        with tempfile.TemporaryDirectory() as temporary:
+            workdir = Path(temporary)
+            if runtime_source is not None:
+                source = runtime_source.resolve()
+                if not (source / "python.exe").is_file():
+                    fail(f"--runtime 目录缺少 python.exe：{source}")
+                shutil.copytree(source, staged)
+                install_packages(staged, workdir)
+            else:
+                runtime = download_embeddable(pinned_version(), workdir)
+                shutil.copytree(runtime, staged)
+                install_packages(staged, workdir)
+            enable_site_packages(staged)
+            shutil.copy2(OPENPYXL_WORKER_SOURCE, staged / "openpyxl_worker.py")
+            shutil.copy2(PYWIN32_WORKER_SOURCE, staged / "pywin32_excel_conversion_worker.py")
+            verify(staged)
+
+        # Keep the current runnable runtime intact until the new tree passes
+        # all checks. If publishing fails, restore the previous tree.
+        if backup.exists():
+            fail(f"发现未清理的运行时备份，拒绝覆盖：{backup}")
+        if target.exists():
+            os.replace(target, backup)
+        try:
+            os.replace(staged, target)
+        except Exception:
+            if backup.exists() and not target.exists():
+                os.replace(backup, target)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)
+    finally:
+        shutil.rmtree(stage_root, ignore_errors=True)
+
     digest = hashlib.sha256((target / "python.exe").read_bytes()).hexdigest()[:16]
     size = sum(item.stat().st_size for item in target.rglob("*") if item.is_file())
     print(f"staged openpyxl runtime -> {target}")

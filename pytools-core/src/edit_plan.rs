@@ -126,7 +126,7 @@ pub fn apply_plan_with_capability_file(
     apply_plan(plan, &capabilities, platform)
 }
 
-fn apply_plan(
+pub(crate) fn apply_plan(
     plan: &ExcelEditPlan,
     capabilities: &[BackendCapability],
     platform: &str,

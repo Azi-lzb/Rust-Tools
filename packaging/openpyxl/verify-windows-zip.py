@@ -4,8 +4,8 @@
 对一个已生成的 pytools-windows-x64-*.zip 执行解压后验证：
 
 1. 解压到隔离临时目录；
-2. 解压布局中的 bundled Python + openpyxl_worker.py 完成 --version 协议握手；
-3. bundled 运行时实际 import openpyxl / et_xmlfile；
+2. 解压布局中的 bundled Python + openpyxl_worker.py 完成协议握手；
+3. pywin32 Excel COM worker 完成版本握手，运行时实际 import openpyxl、et_xmlfile、pythoncom 和 win32com；
 4. 用 bundled openpyxl 生成合成工作簿（仅作为测试夹具）；
 5. 通过解压出的 pytools.exe `apply-edit-plan` 以合成 ExcelEditPlan 执行一次
    受限修改（openpyxl 引擎路由 + PlanOutputValidator 回读校验都在产品内完成）；
@@ -74,13 +74,15 @@ def main() -> None:
             names = bundle.namelist()
             bundle.extractall(extract)
         required = ["dist/pytools.exe", "dist/python/python.exe",
-                    "dist/python/openpyxl_worker.py"]
+                    "dist/python/openpyxl_worker.py",
+                    "dist/python/pywin32_excel_conversion_worker.py"]
         for name in required:
             if name not in names:
                 fail(f"ZIP 缺少 {name}")
         dist = extract / "dist"
         python_exe = dist / "python/python.exe"
         worker = dist / "python/openpyxl_worker.py"
+        pywin_worker = dist / "python/pywin32_excel_conversion_worker.py"
         pytools = dist / "pytools.exe"
 
         # 1) 握手
@@ -91,12 +93,20 @@ def main() -> None:
         if "openpyxl=missing" in probe.stdout:
             fail("解压后运行时缺少 openpyxl")
 
+        pywin_probe = run([str(python_exe), "-I", str(pywin_worker), "--version"])
+        if pywin_probe.returncode != 0 or pywin_probe.stdout.strip() != "protocol=1 pywin32=312":
+            fail(f"pywin32 worker 握手失败：{pywin_probe.stdout!r} {pywin_probe.stderr!r}")
+        print("PASS pywin32 Excel COM worker handshake (protocol=1, pywin32=312)")
+
         # 2) import openpyxl
         check = run([str(python_exe), "-I", "-c",
-                     "import openpyxl, et_xmlfile; print(openpyxl.__version__)"])
+                     "import importlib.metadata, openpyxl, et_xmlfile, pythoncom, win32com.client; "
+                     "print(openpyxl.__version__ + '|' + et_xmlfile.__version__ + '|' + importlib.metadata.version('pywin32'))"])
         if check.returncode != 0:
-            fail(f"解压后 import openpyxl 失败：{check.stderr.strip()[:300]}")
-        print(f"PASS import openpyxl ({check.stdout.strip()})")
+            fail(f"解压后 import bundled Python dependencies 失败：{check.stderr.strip()[:300]}")
+        if check.stdout.strip() != "3.1.5|2.0.0|312":
+            fail(f"解压后 Python dependency versions unexpected: {check.stdout.strip()}")
+        print(f"PASS import openpyxl + pywin32 ({check.stdout.strip()})")
 
         # 3) 合成工作簿（夹具）+ 计划 + 能力记录
         fixture = work / "fixture.xlsx"

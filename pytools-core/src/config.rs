@@ -61,6 +61,8 @@ impl GlobalConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct DedupTask {
+    #[serde(skip)]
+    pub config_sheet_name: String,
     pub row_no: usize,
     pub enabled: bool,
     pub task_name: String,
@@ -276,6 +278,7 @@ pub fn load_timeline_rules(config_path: impl AsRef<Path>) -> Result<Vec<Timeline
 
         rules.push(TimelineRule {
             enabled: true,
+            row_no: row,
             name: field_text(sheet, &headers, row, "规则名称"),
             wb_keyword: field_text(sheet, &headers, row, "工作簿关键字"),
             sheet_keyword: field_text(sheet, &headers, row, "工作表关键字"),
@@ -384,6 +387,7 @@ pub fn load_dedup_tasks(config_path: impl AsRef<Path>) -> Result<Vec<DedupTask>>
         let source_wb_text = column_text(sheet, source_wb_col, row);
         let target_wb_text = column_text(sheet, target_wb_col, row);
         tasks.push(DedupTask {
+            config_sheet_name: sheet.name.clone(),
             row_no: row,
             enabled: enabled_col
                 .map(|column| cell_truthy(sheet, row, column))
@@ -1068,6 +1072,8 @@ mod tests {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct TimelineRule {
     pub enabled: bool,
+    #[serde(skip)]
+    pub row_no: usize,
     pub name: String,
     pub wb_keyword: String,
     pub sheet_keyword: String,

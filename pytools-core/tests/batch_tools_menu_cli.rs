@@ -581,7 +581,7 @@ fn interactive_village_split_menu_executes_capability_and_safely_commits_target(
 }
 
 #[test]
-fn interactive_foreign_bank_menu_creates_result_copies_and_user_history() -> Result<()> {
+fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
@@ -608,11 +608,7 @@ fn interactive_foreign_bank_menu_creates_result_copies_and_user_history() -> Res
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
     assert!(stdout.contains("处理结束：工作簿 2 个，失败 0 个"));
     assert!(!stdout.contains("\"mode\""), "user view must not print JSON: {stdout}");
-    assert_eq!(
-        fs::read(&source)?,
-        source_bytes,
-        "copy mode must preserve its source"
-    );
+    assert_ne!(fs::read(&source)?, source_bytes, "in-place mode must update matching source");
     assert_eq!(
         fs::read(&no_change_source)?,
         no_change_bytes,
@@ -620,11 +616,12 @@ fn interactive_foreign_bank_menu_creates_result_copies_and_user_history() -> Res
     );
     assert_eq!(fs::read(&unsupported)?, unsupported_bytes);
     let result_dir = root.path().join("PyTools_专用报表处理结果");
-    let foreign_copy = result_dir.join("foreign(金融局).xlsx");
-    let no_change_copy = result_dir.join("no-change(金融局).xlsx");
+    let foreign_copy = source.clone();
+    let no_change_copy = no_change_source.clone();
     assert!(foreign_copy.exists());
+    assert!(!result_dir.exists());
     assert!(no_change_copy.exists());
-    assert!(find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none());
+    assert!(!root.path().join("app/output").exists() || find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none());
     let copied = read_workbook(&foreign_copy)?;
     let branch = copied
         .sheets
@@ -651,7 +648,7 @@ fn interactive_foreign_bank_menu_creates_result_copies_and_user_history() -> Res
         .context("PT-7-3 user run history was not saved")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["feature_id"], "PT-7-3");
-    assert_eq!(history["mode"], "create_copy");
+    assert_eq!(history["mode"], "in_place");
     assert_eq!(history["summary"]["completed_files"], 2);
     assert_eq!(history["summary"]["planned_deleted_rows"], 3);
     assert_eq!(history["summary"]["deleted_rows"], 3);
@@ -691,11 +688,8 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
-    assert_eq!(fs::read(&source)?, source_bytes);
-    assert!(root
-        .path()
-        .join("PyTools_专用报表处理结果/foreign(金融局).xlsx")
-        .exists());
+    assert_ne!(fs::read(&source)?, source_bytes);
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     Ok(())
 }
 
@@ -751,14 +745,14 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(r#""mode": "execute""#));
+    assert!(stdout.contains(r#""mode": "in_place""#));
     assert!(stdout.contains(r#""ok_files": 1"#));
     assert!(stdout.contains(r#""failed_files": 0"#));
-    assert!(stdout.contains(r#""engine": "umya_spreadsheet""#));
+    assert!(stdout.contains(r#""engine": "umya-spreadsheet""#));
 
-    let output_path = root.path().join("foreign(金融局).xlsx");
+    let output_path = source.clone();
     assert!(output_path.exists());
-    assert_eq!(fs::read(&source)?, source_bytes, "source remains unchanged");
+    assert_ne!(fs::read(&source)?, source_bytes, "in-place mode must update the source");
     let workbook = read_workbook(&output_path)?;
     let branch = workbook
         .sheets
@@ -776,7 +770,7 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert!(history["events"].as_array().is_some_and(|events| {
         events.iter().any(|event| {
-            event["phase"] == "engine_execution" && event["actual_engine"] == "umya_spreadsheet"
+            event["phase"] == "engine_execution" && event["actual_engine"] == "umya-spreadsheet"
         })
     }));
     Ok(())
@@ -942,7 +936,7 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
         } else {
             target.display().to_string()
         };
-        let input = format!("5\n2\n2\n1\n{input_paths}\n0\n0\n");
+        let input = format!("5\n2\n1\n{input_paths}\n0\n0\n");
         let output =
             run_menu_with_arguments(&config, &input, &["--log-view".to_owned(), view.to_owned()])?;
         assert!(
@@ -1021,7 +1015,7 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     fs::write(first_folder.join("unsupported.xlsm"), b"unverified format")?;
     fs::write(second_folder.join("~$locked.xlsx"), b"Excel lock file")?;
 
-    let input = format!("5\n2\n2\n3\n{}\n0\n0\n", source_root.display());
+    let input = format!("5\n2\n3\n{}\n0\n0\n", source_root.display());
     let output = run_menu(&config, &input)?;
     assert!(
         output.status.success(),
@@ -1087,7 +1081,7 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
         serde_json::to_vec_pretty(&institution_normalize_capability(&plan))?,
     )?;
 
-    let input = format!("5\n2\n2\n1\n{}\n0\n0\n", target.display());
+    let input = format!("5\n2\n1\n{}\n0\n0\n", target.display());
     let output = run_menu_with_capability(
         &config,
         &input,
@@ -1800,6 +1794,35 @@ fn village_menu_input(current: &Path, previous: &Path, target: &Path) -> String 
         previous.display(),
         target.display()
     )
+}
+
+#[test]
+fn interactive_village_split_updates_target_with_umya_and_preserves_period_inputs() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let current = root.path().join("current.xlsx");
+    let previous = root.path().join("previous.xlsx");
+    let target = root.path().join("target.xlsx");
+    make_village_period(&current, true)?;
+    make_village_period(&previous, false)?;
+    make_village_target(&target)?;
+    let current_before = fs::read(&current)?;
+    let previous_before = fs::read(&previous)?;
+    let output = run_menu(&config, &village_menu_input(&current, &previous, &target))?;
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let book = read_workbook(&target)?;
+    let branch = book.sheets.iter().find(|s| s.name == "广东分机构本外币")
+        .context("split target sheet missing")?;
+    assert_eq!(branch.values["A3"]["value"], "博罗长江村镇银行");
+    assert_eq!(branch.values["A4"]["value"], "惠东惠民村镇银行");
+    assert_eq!(branch.values["A5"]["value"], "尾行");
+    assert_eq!(branch.formulas["J5"], "A5");
+    assert!(branch.comments.contains_key("M5"));
+    assert!(branch.merges.contains(&"K5:L5".to_owned()));
+    assert_eq!(fs::read(&current)?, current_before);
+    assert_eq!(fs::read(&previous)?, previous_before);
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
+    Ok(())
 }
 
 fn find_file_recursively(root: &Path, suffix: &str) -> Result<Option<PathBuf>> {

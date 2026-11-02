@@ -2486,6 +2486,7 @@ mod tests {
         workbook.save(&source)?;
 
         let task = |row_no, enabled, source_ws: &str, key_cols| DedupTask {
+            config_sheet_name: "去重追加数据配置".to_owned(),
             row_no,
             enabled,
             task_name: format!("task-{row_no}"),
@@ -2535,6 +2536,16 @@ pub struct DeleteDuplicatesRun {
 }
 
 pub fn delete_duplicates_in_place(tasks: &[DedupTask]) -> Result<DeleteDuplicatesRun> {
+    delete_duplicates_in_place_with_progress(tasks, |_| {})
+}
+
+pub fn delete_duplicates_in_place_with_progress<F>(
+    tasks: &[DedupTask],
+    mut on_task_start: F,
+) -> Result<DeleteDuplicatesRun>
+where
+    F: FnMut(&DedupTask),
+{
     use umya_spreadsheet as umya;
     let mut run = DeleteDuplicatesRun::default();
     let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
@@ -2545,6 +2556,7 @@ pub fn delete_duplicates_in_place(tasks: &[DedupTask]) -> Result<DeleteDuplicate
     let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
     for task in enabled {
         let Some(source) = task.source_wb.as_ref() else {
+            on_task_start(task);
             run.task_skipped += 1;
             run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
             continue;
@@ -2552,6 +2564,9 @@ pub fn delete_duplicates_in_place(tasks: &[DedupTask]) -> Result<DeleteDuplicate
         grouped.entry(source.clone()).or_default().push(task);
     }
     for (path, group) in grouped {
+        for task in &group {
+            on_task_start(task);
+        }
         let read_started = std::time::Instant::now();
         let extension = path
             .extension()
@@ -2739,6 +2754,16 @@ fn umya_mark_row_red(sheet: &mut umya_spreadsheet::Worksheet, used_cols: u32, ro
 }
 
 pub fn mark_duplicates_in_place(tasks: &[DedupTask]) -> Result<MarkDuplicatesRun> {
+    mark_duplicates_in_place_with_progress(tasks, |_| {})
+}
+
+pub fn mark_duplicates_in_place_with_progress<F>(
+    tasks: &[DedupTask],
+    mut on_task_start: F,
+) -> Result<MarkDuplicatesRun>
+where
+    F: FnMut(&DedupTask),
+{
     use umya_spreadsheet as umya;
     let mut run = MarkDuplicatesRun::default();
     let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
@@ -2748,6 +2773,7 @@ pub fn mark_duplicates_in_place(tasks: &[DedupTask]) -> Result<MarkDuplicatesRun
     );    let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
     for task in enabled {
         let Some(source) = task.source_wb.as_ref() else {
+            on_task_start(task);
             run.task_skipped += 1;
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
@@ -2764,6 +2790,9 @@ pub fn mark_duplicates_in_place(tasks: &[DedupTask]) -> Result<MarkDuplicatesRun
         grouped.entry(source.clone()).or_default().push(task);
     }
     for (path, group) in grouped {
+        for task in &group {
+            on_task_start(task);
+        }
         let book_read_started = std::time::Instant::now();
         let extension = path
             .extension()

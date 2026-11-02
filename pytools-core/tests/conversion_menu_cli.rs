@@ -285,7 +285,7 @@ fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
     );
     assert!(
         help.contains(
-            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|native]"
+            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|pywin32|native]"
         ),
         "Excel conversion help must list the supported COM engine: {help}"
     );
@@ -294,7 +294,7 @@ fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
         "Word conversion help must list the supported COM engine: {help}"
     );
     assert!(
-        help.contains("convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|native]"),
+        help.contains("convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|pywin32|native]"),
         "single-file conversion help must list the supported COM engine: {help}"
     );
     Ok(())
@@ -1276,7 +1276,8 @@ fn menu_input_for_action(action: u8, mode: u8, selected: &Path) -> String {
         2 => format!("4\n4\n1\n1\n{path}\n0\n0\n"),
         3 => format!("4\n4\n2\n1\n{path}\n0\n0\n"),
         4 => format!("4\n5\n1\n{path}\n0\n0\n"),
-        5 => format!("4\n3\n{mode}\n{path}\n0\n0\n"),
+        // 4-3 现有“添加 / 清理”二级菜单：1=添加前缀，再进入选择方式。
+        5 => format!("4\n3\n1\n{mode}\n{path}\n0\n0\n"),
         8 => format!("4\n6\n{mode}\n{path}\n0\n0\n"),
         9 => format!("4\n2\n1\n{mode}\n{path}\n0\n0\n"),
         10 => format!("4\n2\n2\n{mode}\n{path}\n0\n0\n"),

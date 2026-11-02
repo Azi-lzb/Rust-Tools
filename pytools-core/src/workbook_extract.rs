@@ -286,6 +286,7 @@ mod tests {
         let rule_case = &cases["rule"];
         let rule = TimelineRule {
             enabled: true,
+            row_no: 0,
             name: rule_case["name"].as_str().unwrap().to_owned(),
             wb_keyword: rule_case["wb_keyword"].as_str().unwrap().to_owned(),
             sheet_keyword: rule_case["sheet_keyword"].as_str().unwrap().to_owned(),

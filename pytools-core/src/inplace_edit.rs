@@ -171,6 +171,13 @@ pub struct InPlaceOutcome {
     pub commit: TargetCommitReport,
 }
 
+/// 修改并验证独立候选文件，发布由调用方负责；不替换源工作簿。
+pub fn execute_candidate(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<EditExecutionReport> {
+    anyhow::ensure!(engine.accepts(&plan.input), "{}", engine.unsupported_hint(&plan.input));
+    let capability = capability_for(plan, engine);
+    crate::edit_plan::apply_plan(plan, &[capability], &platform_id())
+}
+
 /// 就地执行一个 plan：先出候选、校验，再替换目标原文件。
 pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
     anyhow::ensure!(

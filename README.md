@@ -8,14 +8,19 @@ Rust-Tools 是独立维护的 PyTools Rust 项目。正式源码目录为 `C:\Us
 - `run-dev.bat` 从当前项目运行 Debug 菜单：调用 `cargo run --offline -p pytools-core --bin pytools -- menu`，复用 `F:\RustBuild\pytools` 增量缓存，并默认读取项目根目录的 `config.xlsx`。首次编译可能较慢；后续按源码变化增量重编译，不打 Release 包。
 - `build-release.bat` 是用户明确要求构建时使用的唯一构建入口，Cargo 输出目录为 `F:\RustBuild\pytools`；成功后将 `pytools.exe` 复制到本项目 `dist\`。
 - `package.bat` 使用已有的 `dist\` 产物、本地配置、启动脚本和 README 创建 Windows ZIP，不构建。
-- 格式转换（XLS/ET→XLSX、DOC→DOCX）由 pytools 内置转换引擎直接完成：Windows 优先本机 Office/WPS COM（Excel→WPS 顺序），非 Windows 使用本机 LibreOffice `soffice`（可选）；没有独立 sidecar EXE。
+- 格式转换（XLS/ET→XLSX、DOC→DOCX）由 pytools 内置转换引擎完成：Windows `.xls/.xlsb/.xlsm` 默认使用随包 CPython + pywin32 调用 Excel/WPS COM，并在批次内复用会话；`.et` 保留 Rust COM/WPS 格式核验；非 Windows 使用本机 LibreOffice `soffice`（可选）。没有独立 sidecar EXE，也不依赖系统 Python。
 - 项目根目录的 `config.xlsx` 是本地用户配置，已被 Git 忽略；不要将业务文件或本地配置提交到仓库。
 
 日常开发和人工测试使用 `run-dev.bat`。修改 Rust 源码后，先退出正在运行的程序，再次双击即可按需增量编译并启动；修改配置无需重新编译，重新加载配置或重启程序即可。两个启动脚本在程序退出后都会显示退出码并等待按键，便于查看错误信息。
 
-## openpyxl 运行时（就地修改类功能）
+## Windows Python 运行时（COM 转换与 openpyxl 就地修改）
 
-部分就地修改功能依赖 openpyxl 子进程。三种分发场景的运行时查找顺序一致（由
+Windows ZIP 随包提供 CPython 3.12.10、pywin32 312、openpyxl 3.1.5 和
+et-xmlfile 2.0.0。Windows Excel 格式转换 Worker 使用本机已安装的 Excel 或 WPS
+建立批次 COM 会话，并在应用重新打开候选文件后对比工作表顺序、公式和非公式单元格值；
+用户无需另行安装 Python。
+
+部分就地修改功能依赖 openpyxl 子进程。三种分发场景的 openpyxl 运行时查找顺序一致（由
 `OpenpyxlWorkerConfig::resolve_runtime` 统一实现，预检与执行共用同一入口，
 预检还会实际启动运行时完成协议握手）：
 
@@ -45,9 +50,9 @@ Object（子进程挂起建组后入 Job）或 Unix 进程组终止整棵受控�
 明确拒绝；5-6 提取功能可读取 `.xlsm` 并输出新的 `.xlsx`。
 
 Windows 打包：先执行 `python packaging/openpyxl/stage-windows-runtime.py
---dist dist` 暂存运行时，`package.bat` 在运行时缺失或握手失败时拒绝打包；
+--dist dist` 暂存运行时，`package.bat` 在 Python、pywin32 或 Worker 握手失败时拒绝打包；
 生成后可用 `python packaging/openpyxl/verify-windows-zip.py <zip>` 做解压
-验证（握手、import、合成 ExcelEditPlan 端到端修改与回读）。Linux 打包：
+验证（pywin32/openpyxl 握手与 import、合成 ExcelEditPlan 端到端修改与回读）。Linux 打包：
 `build_deb.sh` 需要 `OPENPYXL_RUNTIME_SOURCE` 指向 relocatable Python
 运行时（锁定版本见 `packaging/openpyxl/python-version.txt`），缺失时中止。
 

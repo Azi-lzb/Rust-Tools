@@ -195,8 +195,8 @@ fn convert_one_with_runtime(
         "input is already in the requested format: .{target}"
     );
     anyhow::ensure!(
-        matches!(engine, "auto" | "lo" | "com" | "native"),
-        "--engine must be auto, lo, com or native"
+        matches!(engine, "auto" | "lo" | "com" | "pywin32" | "native"),
+        "--engine must be auto, lo, com, pywin32 or native"
     );
     if source_ext == "et" {
         anyhow::ensure!(
@@ -220,7 +220,8 @@ fn convert_one_with_runtime(
     } else {
         output.to_path_buf()
     };
-    let detail = invoke_engine_with_runtime(&staged_input, &staged_output, &target, engine, runtime)?;
+    let detail =
+        invoke_engine_with_runtime(&staged_input, &staged_output, &target, engine, runtime)?;
     if source_ext == "et" {
         ensure_et_source_format_verified(&detail)?;
         crate::file_commit::create_target_from_candidate(&staged_output, output)
@@ -338,24 +339,25 @@ fn invoke_engine_with_runtime(
     engine: &str,
     runtime: &mut crate::conversion_engine::ConversionRuntime,
 ) -> Result<String> {
-    crate::conversion_engine::run_fidelity_conversion_with_runtime(input, output, target, engine, runtime).map_err(
-        |error| {
-            let message = format!("{error:#}");
-            if message.starts_with("该功能需要外部引擎") {
-                anyhow!("{message}")
-            } else if message.contains("install soffice")
-                || message.contains("LibreOffice is unavailable")
-                || message.contains("LibreOffice is required")
-                || message.contains("COM conversion is only available")
-                || message.contains("No supported Office/WPS COM engine is available")
-                || message.contains("No supported spreadsheet COM engine is available")
-            {
-                anyhow!("该功能需要外部引擎: {message}")
-            } else {
-                anyhow!("conversion failed: {}", explain_engine_failure(&message))
-            }
-        },
+    crate::conversion_engine::run_fidelity_conversion_with_runtime(
+        input, output, target, engine, runtime,
     )
+    .map_err(|error| {
+        let message = format!("{error:#}");
+        if message.starts_with("该功能需要外部引擎") {
+            anyhow!("{message}")
+        } else if message.contains("install soffice")
+            || message.contains("LibreOffice is unavailable")
+            || message.contains("LibreOffice is required")
+            || message.contains("COM conversion is only available")
+            || message.contains("No supported Office/WPS COM engine is available")
+            || message.contains("No supported spreadsheet COM engine is available")
+        {
+            anyhow!("该功能需要外部引擎: {message}")
+        } else {
+            anyhow!("conversion failed: {}", explain_engine_failure(&message))
+        }
+    })
 }
 
 fn explain_engine_failure(message: &str) -> String {
@@ -428,9 +430,7 @@ where
     // LO-routed files up front (single shared profile, one soffice process
     // per stage) so the per-file loop never starts a process. Windows auto
     // routes to COM and never creates a session.
-    if engine != "native"
-        && std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none()
-    {
+    if engine != "native" && std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none() {
         let requests = inputs
             .iter()
             .filter(|input| {
@@ -619,6 +619,14 @@ where
                     "output_exists" => "输出文件已存在",
                     _ => "转换失败",
                 };
+                let failure_message = format!(
+                    "第 {input_index}/{} 个文件失败：{}；{message}；原因：{detail}",
+                    inputs.len(),
+                    input
+                        .file_name()
+                        .unwrap_or(input.as_os_str())
+                        .to_string_lossy()
+                );
                 run.items.push(ConversionItem {
                     input: input.clone(),
                     output: None,
@@ -628,7 +636,7 @@ where
                 (
                     native_engine_for_attempt(&ext, &target, engine),
                     Some(error_type.to_owned()),
-                    format!("第 {input_index}/{} 个文件失败：{message}。", inputs.len()),
+                    failure_message,
                     "failed",
                 )
             }
@@ -755,10 +763,29 @@ fn fidelity_engine(detail: &str) -> Option<String> {
     let engine = report.get("engine")?.as_str()?;
     Some(match engine {
         "lo" => "LibreOffice".to_owned(),
+        "pywin32"
+            if report.get("com_bridge").and_then(serde_json::Value::as_str) == Some("pywin32") =>
+        {
+            match report
+                .get("com_application")
+                .and_then(serde_json::Value::as_str)
+            {
+                Some("Excel.Application") => "Microsoft Excel COM (pywin32)".to_owned(),
+                Some(name) if name.eq_ignore_ascii_case("KET.Application") => {
+                    "WPS 表格 COM (pywin32)".to_owned()
+                }
+                _ => "Windows Office/WPS COM (pywin32)".to_owned(),
+            }
+        }
         "com" if report.get("com_bridge").and_then(serde_json::Value::as_str) == Some("rust") => {
-            match report.get("com_application").and_then(serde_json::Value::as_str) {
+            match report
+                .get("com_application")
+                .and_then(serde_json::Value::as_str)
+            {
                 Some("Excel.Application") => "Microsoft Excel COM (Rust)".to_owned(),
-                Some(name) if name.eq_ignore_ascii_case("KET.Application") => "WPS 表格 COM (Rust)".to_owned(),
+                Some(name) if name.eq_ignore_ascii_case("KET.Application") => {
+                    "WPS 表格 COM (Rust)".to_owned()
+                }
                 _ => "Windows Office/WPS COM (Rust)".to_owned(),
             }
         }
@@ -779,7 +806,8 @@ fn native_engine_for_attempt(ext: &str, target: &str, engine: &str) -> Option<St
 }
 
 fn conversion_error_type(detail: &str) -> &'static str {
-    if detail.contains("该功能需要外部引擎") || detail.contains("external fidelity engine") {
+    if detail.contains("该功能需要外部引擎") || detail.contains("external fidelity engine")
+    {
         "external_engine_required"
     } else if detail.contains("unsupported") || detail.contains("only .xlsx and .docx") {
         "unsupported_format"
@@ -1389,8 +1417,8 @@ impl Drop for TempDirGuard {
 mod tests {
     use super::{
         convert_excel_files_in_source_folders, convert_one, ensure_et_source_format_verified,
-        explain_engine_failure, invoke_engine, native_values_equal, stage_sidecar_input,
-        validate_native_source_values,
+        explain_engine_failure, fidelity_engine, invoke_engine, native_values_equal,
+        stage_sidecar_input, validate_native_source_values,
     };
     use excel_reader::{read_workbook, SheetDump, WorkbookDump};
     use excel_writer::Workbook;
@@ -1430,7 +1458,25 @@ mod tests {
             "bogus",
         )
         .expect_err("unknown engine must be rejected");
-        assert!(error.to_string().contains("engine must be auto, lo or com"));
+        assert!(error
+            .to_string()
+            .contains("engine must be auto, lo, com or pywin32"));
+    }
+
+    #[test]
+    fn conversion_report_names_the_pywin32_office_engine() {
+        let excel =
+            r#"{"engine":"pywin32","com_bridge":"pywin32","com_application":"Excel.Application"}"#;
+        assert_eq!(
+            fidelity_engine(excel).as_deref(),
+            Some("Microsoft Excel COM (pywin32)")
+        );
+        let wps =
+            r#"{"engine":"pywin32","com_bridge":"pywin32","com_application":"KET.Application"}"#;
+        assert_eq!(
+            fidelity_engine(wps).as_deref(),
+            Some("WPS 表格 COM (pywin32)")
+        );
     }
 
     #[test]

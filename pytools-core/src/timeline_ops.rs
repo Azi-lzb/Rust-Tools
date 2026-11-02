@@ -82,6 +82,8 @@ pub struct WideSummaryRunEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_row: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stage_elapsed_ms: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workbook_elapsed_ms: Option<u128>,
@@ -138,6 +140,7 @@ struct WideSummaryProgressEmitter<'a> {
     current_workbook_name: Option<String>,
     current_worksheet_name: Option<String>,
     current_rule_name: Option<String>,
+    current_config_row: Option<usize>,
     current_workbook_started: Option<Instant>,
     source_input_index: Option<usize>,
     callback: Option<&'a mut dyn FnMut(WideSummaryRunEvent)>,
@@ -175,6 +178,7 @@ impl WideSummaryProgressEmitter<'_> {
             workbook_name: self.current_workbook_name.clone(),
             worksheet_name: self.current_worksheet_name.clone(),
             rule_name: self.current_rule_name.clone(),
+            config_row: self.current_config_row,
             stage_elapsed_ms: stage_elapsed.map(|elapsed| elapsed.as_millis()),
             workbook_elapsed_ms: self
                 .current_workbook_started
@@ -1532,6 +1536,7 @@ fn run_wide_summary_inner(
         current_workbook_name: None,
         current_worksheet_name: None,
         current_rule_name: None,
+        current_config_row: None,
         current_workbook_started: None,
         source_input_index: None,
         callback,
@@ -1559,6 +1564,7 @@ fn run_wide_summary_inner(
         emitter.current_workbook_name = Some(filename.clone());
         emitter.current_worksheet_name = None;
         emitter.current_rule_name = None;
+        emitter.current_config_row = None;
         emitter.current_workbook_started = None;
         emitter.emit(
             "source_filter",
@@ -1590,6 +1596,7 @@ fn run_wide_summary_inner(
         emitter.current_workbook_name = Some(filename.clone());
         emitter.current_worksheet_name = None;
         emitter.current_rule_name = None;
+        emitter.current_config_row = None;
         emitter.current_workbook_started = Some(Instant::now());
         emitter.progress.processed_inputs += 1;
         emitter.progress.current_input = Some(input_index);
@@ -1858,6 +1865,7 @@ fn run_wide_summary_inner(
         {
             emitter.current_worksheet_name = Some(sheet.name.clone());
             emitter.current_rule_name = None;
+            emitter.current_config_row = None;
             emitter.progress.skipped_worksheets += 1;
             emitter.emit(
                 "worksheet_match",
@@ -1890,6 +1898,7 @@ fn run_wide_summary_inner(
                 };
                 emitter.current_worksheet_name = Some(sheet.name.clone());
                 emitter.current_rule_name = Some(rule_display_name.to_owned());
+                emitter.current_config_row = Some(rule.row_no);
                 let worksheet_started = Instant::now();
                 emitter.emit(
                     "worksheet_aggregation",
@@ -2130,6 +2139,7 @@ fn run_wide_summary_inner(
         emitter.current_workbook_name = None;
         emitter.current_worksheet_name = None;
         emitter.current_rule_name = None;
+        emitter.current_config_row = None;
         emitter.source_input_index = None;
         emitter.emit(
             "summary_write",
@@ -2147,6 +2157,7 @@ fn run_wide_summary_inner(
     emitter.source_input_index = None;
     emitter.current_worksheet_name = None;
     emitter.current_rule_name = None;
+    emitter.current_config_row = None;
     emitter.current_workbook_started = None;
     emitter.progress.output_rows = rule_order
         .iter()
@@ -4123,6 +4134,7 @@ mod keyword_match_tests {
     fn header_path_compare_does_not_treat_column_a_data_as_row_header_when_unconfigured() {
         let rule = TimelineRule {
             enabled: true,
+            row_no: 0,
             name: "header compare".to_owned(),
             wb_keyword: String::new(),
             sheet_keyword: String::new(),

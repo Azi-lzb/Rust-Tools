@@ -1207,10 +1207,7 @@ where
             components,
             Some(engine),
             (event_status == "failed").then_some("file_rename_failed"),
-            format!(
-                "{event_message} 本文件用时 {}ms。",
-                file_started.elapsed().as_millis()
-            ),
+            format!( "{event_message} 本文件用时 {:.3} 秒。", (file_started.elapsed().as_millis()) as f64 / 1000.0),
         );
     }
 
@@ -1806,10 +1803,7 @@ where
             &["Rust"],
             Some("RustFilesystem"),
             (event_status == "failed").then_some("file_rename_failed"),
-            format!(
-                "{event_message} 本文件用时 {}ms。",
-                file_started.elapsed().as_millis()
-            ),
+            format!( "{event_message} 本文件用时 {:.3} 秒。", (file_started.elapsed().as_millis()) as f64 / 1000.0),
         );
     }
 

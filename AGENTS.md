@@ -18,7 +18,7 @@
 - 任何直接 Cargo 命令都必须先按上表为当前工作树设置 `CARGO_TARGET_DIR`，避免默认在 C 盘生成 `target` 或多个工作树共用缓存。`build-release.bat` 会按当前 Git 分支选择对应目录。
 - 所有 BAT 必须以脚本自身目录 `%~dp0` 定位项目，只操作当前工作树，不引用旧 Main、其他项目或旧 Codex 工作树。
 - 本仓库独立拥有业务代码、Cargo workspace、配置和 `crates/` 内的 Excel-Core。不得依赖旧共享 Main、其他项目或旧共享 workspace 的源码、同步、合并或 cherry-pick；可按当前业务需要独立修改本仓库的 Excel-Core，不为统一其他项目而覆盖现有实现。
-- Python 原项目 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 只读，`probe/` 和测试辅助中的 Python 仅供按需比较。隔离 openpyxl worker 仅是既有工作簿修改的受限兼容路径，不得承载 PyTools 业务逻辑。
+- Python 原项目 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 只读，`probe/` 和测试辅助中的 Python 仅供按需比较。隔离 openpyxl worker 仅是既有工作簿修改的受限兼容路径；新增随包的 Windows pywin32 worker 仅负责 Office/WPS COM 格式转换，不得承载 PyTools 业务逻辑。
 - 保留根目录本地 `config.xlsx` 和业务文件；它们不应提交到 Git。不得改写原始 Python 项目、RustHistory 原始归档或业务原件；不得删除业务源码、配置、测试夹具及人工验收记录。针对明确任务可按需维护合成测试夹具，保留既有验收证据。
 
 ## 工作方式和业务安全

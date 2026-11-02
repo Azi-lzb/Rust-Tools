@@ -106,3 +106,70 @@ fn spreadsheet_com_reuses_session_preserves_sources_and_recovers_after_bad_et() 
     );
     Ok(())
 }
+
+#[test]
+#[ignore = "requires locally installed Excel or WPS COM and the bundled pywin32 runtime"]
+fn automatic_xls_conversion_uses_pywin32_batch_session_and_preserves_sources() -> Result<()> {
+    let root = TempDir::new()?;
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/timeline/wide_summary_elapsed_duration.xls");
+    let first = root.path().join("first.xls");
+    let second = root.path().join("second.xls");
+    for path in [&first, &second] {
+        fs::copy(&fixture, path)?;
+    }
+    let before = [&first, &second]
+        .iter()
+        .map(|path| fs::read(path))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    let mut events = Vec::new();
+    let output = root.path().join("output");
+    let run = convert_excel_files_with_progress(
+        &[first.clone(), second.clone()],
+        Some(&output),
+        "xlsx",
+        "auto",
+        |event| events.push(event.clone()),
+    )?;
+
+    assert_eq!(run.converted, 2, "{:?}", run.items);
+    assert_eq!(run.failed, 0, "{:?}", run.items);
+    let details = run
+        .items
+        .iter()
+        .map(|item| serde_json::from_str::<Value>(&item.detail))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(details.iter().all(|detail| detail["engine"] == "pywin32"));
+    assert!(details
+        .iter()
+        .all(|detail| detail["com_bridge"] == "pywin32"));
+    assert!(details.iter().all(|detail| {
+        detail["validation"]["verified"] == true
+            && detail["validation"]["level"] == "excel_com_sheet_order_formula_text_and_cell_values"
+    }));
+    let worker_process_ids = details
+        .iter()
+        .map(|detail| detail["com_worker_process_id"].as_u64())
+        .collect::<Vec<_>>();
+    assert!(worker_process_ids[0].is_some());
+    assert_eq!(worker_process_ids[0], worker_process_ids[1]);
+    let office_process_ids = details
+        .iter()
+        .map(|detail| detail["com_process_id"].as_u64())
+        .collect::<Vec<_>>();
+    if office_process_ids.iter().all(Option::is_some) {
+        assert_eq!(office_process_ids[0], office_process_ids[1]);
+    }
+    assert_eq!(
+        [&first, &second]
+            .iter()
+            .map(|path| fs::read(path))
+            .collect::<std::io::Result<Vec<_>>>()?,
+        before
+    );
+    assert!(events.iter().any(|event| {
+        event.actual_engine.as_deref() == Some("Microsoft Excel COM (pywin32)")
+            || event.actual_engine.as_deref() == Some("WPS 表格 COM (pywin32)")
+    }));
+    Ok(())
+}

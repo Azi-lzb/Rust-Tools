@@ -711,6 +711,7 @@ pub fn retain_completed_events(
 }
 
 pub fn terminal_line(level: Level, message: &str) -> String {
+    let message = message.replace(r"\\?\UNC\", r"\\").replace(r"\\?\", "");
     let label = match level {
         Level::Debug => "DEBUG",
         Level::Info => "INFO",

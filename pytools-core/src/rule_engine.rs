@@ -613,6 +613,7 @@ mod configured_range_boundary_tests {
         ];
         let rule = TimelineRule {
             enabled: true,
+            row_no: 0,
             name: "short-sheet".to_owned(),
             wb_keyword: String::new(),
             sheet_keyword: String::new(),

@@ -96,7 +96,7 @@ fn fx_header_cli_command_defaults_to_plan_only() -> Result<()> {
 }
 
 #[test]
-fn fx_header_menu_creates_validated_copy_without_capability_and_skips_unverified_xls() -> Result<()>
+fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls() -> Result<()>
 {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
@@ -124,31 +124,25 @@ fn fx_header_menu_creates_validated_copy_without_capability_and_skips_unverified
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("4  修改外汇工作表页眉单位"));
     assert!(stdout.contains("PT-7-4 当前仅验收 .xlsx"));
-    assert!(stdout.contains("[新建副本]"));
-    assert_eq!(fs::read(&target)?, original);
+    assert!(stdout.contains("[就地模式]"));
+    assert_ne!(fs::read(&target)?, original);
     assert_eq!(fs::read(&unsupported)?, unsupported_original);
 
     let result = parse_result(&stdout, "PT-7-4")?;
-    assert_eq!(result["mode"], "create_copy");
+    assert_eq!(result["mode"], "commit_target");
     assert_eq!(result["files"], 1);
     assert_eq!(result["planned_files"], 0);
-    assert_eq!(result["created_copies"], 1);
+    assert_eq!(result["committed_files"], 1);
     assert_eq!(result["failed_files"], 0);
     assert!(result["events"]
         .as_array()
         .is_some_and(|events| !events.is_empty()));
 
-    // developer JSON 不含 outputs 数组；副本位置按约定目录定位。
-    let output_copy = root.path().join("PyTools_专用报表处理结果").join("target.xlsx");
-    assert!(output_copy.is_file());
-    assert_eq!(
-        output_copy.parent().unwrap().file_name().unwrap(),
-        "PyTools_专用报表处理结果"
-    );
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     let baseline: Value = serde_json::from_slice(&fs::read(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("probe/reports/fx_header_python_baseline.json"),
     )?)?;
-    assert_headers_match_baseline(&output_copy, &baseline)?;
+    assert_headers_match_baseline(&target, &baseline)?;
     assert!(!root.path().join("app/output/plans/PT-7-4").exists());
 
     let history_path = PathBuf::from(
@@ -159,7 +153,7 @@ fn fx_header_menu_creates_validated_copy_without_capability_and_skips_unverified
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["feature_id"], "PT-7-4");
     assert_eq!(history["summary"]["planned_files"], 0);
-    assert_eq!(history["summary"]["created_copies"], 1);
+    assert_eq!(history["summary"]["committed_files"], 1);
     let history_text = serde_json::to_string(&history)?;
     assert!(!history_text.contains("target.xlsx"));
     assert!(!history_text.contains("万元"));
@@ -212,7 +206,7 @@ fn fx_header_menu_commits_only_with_matching_capability_and_matches_python_basel
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[执行模式]"));
+    assert!(stdout.contains("[就地模式]"));
     assert!(stderr.contains("\"phase\":\"safe_commit\""));
     assert!(stderr.contains("\"actual_engine\":\"ooxml_patch\""));
 
@@ -332,9 +326,9 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
-    assert_eq!(fs::read(&target)?, original);
+    assert_ne!(fs::read(&target)?, original);
     let copy = root.path().join("PyTools_专用报表处理结果").join("target.xlsx");
-    assert!(copy.is_file());
+    assert!(!copy.exists());
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
     Ok(())
