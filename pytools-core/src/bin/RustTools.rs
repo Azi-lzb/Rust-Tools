@@ -2588,7 +2588,7 @@ where
             let config_rows = append_tasks
                 .iter()
                 .filter(|task| task.enabled && task.target_wb.as_ref() == Some(&plan.target))
-                .map(|task| format!("{} 行「{}」", task.row_no, if task.task_name.trim().is_empty() { "未命名" } else { task.task_name.trim() }))
+                .map(|task| format!("第 {} 行「{}」", task.row_no, dedup_task_label(task)))
                 .collect::<Vec<_>>()
                 .join("、");
             let status = report[index]["status"].as_str().unwrap_or("unknown");
@@ -2604,13 +2604,12 @@ where
                 pytools_core::run_logging::terminal_line(
                     if status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info },
                     &format!(
-                        "目标汇总结果：关联配置 {}；目标：{}；过滤重复 {} 行；追加 {} 行；修改：{}；保存：{}",
-                        config_rows_label,
+                        "目标汇总结果：目标 {}；关联配置 {}；过滤重复 {} 行，追加 {} 行{}",
                         display_path_for_user(&plan.target),
+                        config_rows_label,
                         plan.duplicate_rows_filtered,
                         plan.appended_rows,
-                        if committed { "是" } else { "否" },
-                        if committed { "是" } else { "否" }
+                        if committed { "，目标工作簿已保存" } else { "；目标工作簿未修改" }
                     )
                 )
             )?;
@@ -2628,10 +2627,9 @@ where
                 pytools_core::run_logging::terminal_line(
                     pytools_core::run_logging::Level::Warn,
                     &format!(
-                        "配置结果：工作表「{}」第 {} 行「{}」；未生成目标计划，未执行去重；修改：否；保存：否",
-                        task.config_sheet_name,
+                        "配置结果：第 {} 行「{}」；未生成目标计划，未执行去重",
                         task.row_no,
-                        if task.task_name.trim().is_empty() { "未命名" } else { task.task_name.trim() }
+                        dedup_task_label(task)
                     )
                 )
             )?;
@@ -2926,16 +2924,37 @@ fn write_temporary_dedup_append_plan(plan: &AppendTargetPlan) -> Result<Temporar
     bail!("unable to allocate a temporary dedup append plan")
 }
 
+/// 去重任务的可读标识：有名称用名称；无名任务用
+/// 「源工作表 → 目标文件：目标工作表」表达业务身份，替代无信息量的“未命名”。
+fn dedup_task_label(task: &pytools_core::config::DedupTask) -> String {
+    let name = task.task_name.trim();
+    if !name.is_empty() {
+        return name.to_owned();
+    }
+    let source_sheet = if task.source_ws.trim().is_empty() {
+        "（未指定源工作表）"
+    } else {
+        task.source_ws.trim()
+    };
+    let target_file = task
+        .target_wb
+        .as_ref()
+        .and_then(|target| target.file_stem().map(|stem| stem.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "（未配置目标文件）".to_owned());
+    let target_sheet = if task.target_ws.trim().is_empty() {
+        "（未指定目标工作表）"
+    } else {
+        task.target_ws.trim()
+    };
+    format!("{source_sheet} → {target_file}：{target_sheet}")
+}
+
 fn write_dedup_task_start<W: Write>(
     output: &mut W,
     task: &pytools_core::config::DedupTask,
     include_target: bool,
 ) -> std::io::Result<()> {
-    let task_name = if task.task_name.trim().is_empty() {
-        "（未命名）"
-    } else {
-        task.task_name.trim()
-    };
+    let task_label = dedup_task_label(task);
     let source = task
         .source_wb
         .as_deref()
@@ -2956,9 +2975,9 @@ fn write_dedup_task_start<W: Write>(
             .join(", ")
     };
     let mut line = format!(
-        "{} [INFO] 正在检查：配置工作表「{}」第 {} 行；任务「{}」；源文件：{}；源工作表：{}；标识列：{}",
+        "{} [INFO] 正在检查：配置工作表「{}」第 {} 行「{task_label}」；源文件：{}；源工作表：{}；标识列：{}",
         pytools_core::engine_diag::now_prefix(), task.config_sheet_name, task.row_no,
-        task_name, source, source_sheet, key_columns
+        source, source_sheet, key_columns
     );
     if include_target {
         let target = task.target_wb.as_deref()
@@ -3010,14 +3029,13 @@ fn write_dedup_task_results<W: Write>(
             } else {
                 "WARN"
             };
+            let event_message = event.message.clone();
             writeln!(
                 output,
-                "{prefix} [{level}] 配置结果：工作表「{}」第 {} 行「{}」；状态：{}；原因：{}；修改：否；保存：否",
-                task.config_sheet_name,
+                "{prefix} [{level}] 配置结果：第 {} 行「{}」；{}：{event_message}；源工作簿未修改",
                 task.row_no,
-                if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() },
-                event.outcome,
-                event.message
+                dedup_task_label(task),
+                if event.outcome == DiagOutcome::Failed { "失败" } else { "已跳过" },
             )?;
             continue;
         }
@@ -3032,10 +3050,9 @@ fn write_dedup_task_results<W: Write>(
         let Some(duplicate_count) = duplicate_count else {
             writeln!(
                 output,
-                "{prefix} [WARN] 配置结果：工作表「{}」第 {} 行「{}」；未找到对应的重复检查结果",
-                task.config_sheet_name,
+                "{prefix} [WARN] 配置结果：第 {} 行「{}」；未找到对应的重复检查结果",
                 task.row_no,
-                if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() }
+                dedup_task_label(task)
             )?;
             continue;
         };
@@ -3043,15 +3060,19 @@ fn write_dedup_task_results<W: Write>(
             saved_books.iter().any(|saved_path| saved_path == source)
         });
         let modified = duplicate_count > 0;
+        // 有结果的行按功能语义给结论；无变化的行明确说明源工作簿未修改。
+        let (level, outcome_text) = if duplicate_count > 0 && saved {
+            ("INFO", format!("{duplicate_label} {duplicate_count} 行，已更新并保存源工作簿"))
+        } else if duplicate_count > 0 {
+            ("WARN", format!("{duplicate_label} {duplicate_count} 行；源工作簿未保存"))
+        } else {
+            ("INFO", format!("未发现{duplicate_label}，源工作簿未修改"))
+        };
         writeln!(
             output,
-            "{prefix} [INFO] 配置结果：工作表「{}」第 {} 行「{}」；重复行：{} 行；修改：{}；源工作簿保存：{}",
-            task.config_sheet_name,
+            "{prefix} [{level}] 配置结果：第 {} 行「{}」；{outcome_text}",
             task.row_no,
-            if task.task_name.trim().is_empty() { "（未命名）" } else { task.task_name.trim() },
-            duplicate_count,
-            if modified { "是" } else { "否" },
-            if saved { "是" } else { "否" }
+            dedup_task_label(task)
         )?;
     }
     Ok(())
