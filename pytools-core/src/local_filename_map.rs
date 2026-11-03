@@ -154,7 +154,7 @@ where
         &["Rust"],
         None,
         None,
-        "开始处理所选文件。",
+        "开始读取局部文件名映射规则并匹配所选文件。",
     );
     for (index, source) in files.iter().enumerate() {
         let input_index = index + 1;
@@ -169,7 +169,7 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在处理第 {input_index}/{} 个文件。", files.len()),
+            format!("正在按局部文件名映射检查第 {input_index}/{} 个文件。", files.len()),
         );
         let row = map_local_filename(source, &mappings);
         if row.new_name.is_empty() {

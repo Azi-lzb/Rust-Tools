@@ -94,8 +94,9 @@
 | 1-1 | 时序宽表汇总 | `tests/timeline_menu_cli.rs`（wide_summary_* 约 25 例：日期边界、时长、legacy XLS、中间目标写入与能力门控） | `tests/fixtures/timeline/`、运行时生成 | Python 基线/手工断言（测试内） | 否 | 已通过 |
 | 1-2 | 按使用区域汇总 | `tests/summary_menu_cli.rs`、`tests/summary_used_range_error.rs`（错误矩阵、XLSM、未知错误值） | 运行时生成 | 测试内断言 | 否 | 已通过 |
 | 1-3 | 按模板命名区域/批注汇总 | `tests/summary_menu_cli.rs`（named_range_*）、`tests/summary_comments_cli.rs`（合并锚点、set 标记、公式表头） | `tests/fixtures/summary_comments/` | Python 基线 + 测试内断言 | 否 | 已通过 |
-| 1-4 | 表头路径比对与映射 | `tests/timeline_menu_cli.rs`（header_path_compare_*） | 运行时生成 | 测试内断言 | 否 | 已通过 |
-| 1-5 | 时序配置预校验 | `tests/timeline_menu_cli.rs`（timeline_precheck_*）、`tests/config_task_loader_parity.rs` | `tests/fixtures/config_loader.xlsx` | Python 基线 `probe/reports/config_loader_baseline.json` | 否 | 已通过 |
+| 1-4 | 按模板校验区域提取校验 | `summary_ops::named_range_spec_tests::validation_template_does_not_require_summary_regions`；`tests/summary_menu_cli.rs` 确认 1-3 不附加校验结果页 | 合成定义名称；COM 菜单流程待补充 | 未运行 | Excel/WPS COM | 未验证 |
+| 1-5 | 表头路径比对与映射 | `tests/timeline_menu_cli.rs`（header_path_compare_*） | 运行时生成 | 测试内断言 | 否 | 已通过 |
+| 1-6 | 时序配置预校验 | `tests/timeline_menu_cli.rs`（timeline_precheck_*）、`tests/config_task_loader_parity.rs` | `tests/fixtures/config_loader.xlsx` | Python 基线 `probe/reports/config_loader_baseline.json` | 否 | 已通过 |
 
 ## 第 2 类：去重与追加
 

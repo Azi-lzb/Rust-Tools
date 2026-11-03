@@ -450,7 +450,7 @@ where
         &["Rust"],
         None,
         None,
-        "开始处理所选文件。",
+        "开始读取工作簿内容并按匹配规则添加文件名前缀。",
     );
 
     for (index, source) in files.iter().enumerate() {
@@ -467,7 +467,7 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在处理第 {input_index}/{} 个文件。", files.len()),
+            format!("正在读取第 {input_index}/{} 个工作簿并匹配文件名前缀。", files.len()),
         );
         let (row, used_reader) = content_prefix_rename_row(source, &specs);
         if row.new_name.is_empty() {
@@ -537,7 +537,7 @@ where
         Some("Calamine + RustFilesystem"),
         None,
         format!(
-            "内容前缀处理完成：成功 {} 个，跳过 {} 个。",
+            "按工作簿内容添加文件名前缀完成：成功 {} 个，跳过 {} 个。",
             report.ok, report.skip
         ),
     );
@@ -687,7 +687,7 @@ where
         &["Rust"],
         None,
         None,
-        "开始处理所选文件。",
+        "开始读取工作簿内容并按记录撤销文件名前缀。",
     );
     for (index, source) in files.iter().enumerate() {
         let input_index = index + 1;
@@ -703,7 +703,7 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在处理第 {input_index}/{} 个文件。", files.len()),
+            format!("正在读取第 {input_index}/{} 个工作簿并匹配待撤销的文件名前缀。", files.len()),
         );
         let (row, used_reader) = content_prefix_unrename_row(source, &specs, &sort_prefixes);
         if row.new_name.is_empty() {
@@ -1051,7 +1051,7 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在处理文件 {}/{}。", index + 1, files.len()),
+            format!("正在按文件排序规则取消前缀：第 {}/{} 个文件。", index + 1, files.len()),
         );
         let mut row = FileSortPrefixRemovalRow {
             source_path: source.to_string_lossy().into_owned(),
@@ -1681,7 +1681,7 @@ where
             &["Rust"],
             Some("RustFilesystem"),
             None,
-            format!("正在处理文件 {}/{}。", index + 1, files.len()),
+            format!("正在按文件排序规则添加前缀：第 {}/{} 个文件。", index + 1, files.len()),
         );
         let source_path = source.to_string_lossy().into_owned();
         let original_name = source

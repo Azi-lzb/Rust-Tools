@@ -322,7 +322,7 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // off 视图：stdout 只输出人类可读汇总行，不输出 JSON、不写运行记录。
-    assert!(stdout.contains("处理结束：输入 1 个，已处理 1 个，失败 0 个"), "{stdout}");
+    assert!(stdout.contains("外汇页眉处理结束：输入 1 个，已完成 1 个，失败 0 个"), "{stdout}");
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());

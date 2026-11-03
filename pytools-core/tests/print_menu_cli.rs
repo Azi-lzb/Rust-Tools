@@ -79,16 +79,16 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     );
     let umya_stdout = String::from_utf8_lossy(&umya.stdout);
     assert!(!umya_stdout.contains("输入 y/yes/是"), "{umya_stdout}");
-    assert!(umya_stdout.contains("处理完成：成功 1 项"), "{umya_stdout}");
+    assert!(umya_stdout.contains("静态打印文件生成完成：成功 1 项"), "{umya_stdout}");
     // 统一日志要求：开始与完成行都带本机时间戳。
     let start_line = umya_stdout
         .lines()
-        .find(|line| line.contains("开始处理：按配置生成静态打印文件"))
+        .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
     assert!(starts_with_timestamp(start_line), "{start_line}");
     let done_line = umya_stdout
         .lines()
-        .find(|line| line.contains("处理完成：成功"))
+        .find(|line| line.contains("静态打印文件生成完成：成功"))
         .context("done line missing")?;
     assert!(starts_with_timestamp(done_line), "{done_line}");
     let history_path = umya_stdout.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("print run summary missing")?;
@@ -166,7 +166,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
     let stdout = String::from_utf8_lossy(&execution.stdout);
     let start_line = stdout
         .lines()
-        .find(|line| line.contains("开始处理：按配置生成静态打印文件"))
+        .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
     assert!(
         start_line.contains("（umya-spreadsheet）"),
@@ -222,7 +222,7 @@ fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Resul
     let stdout = String::from_utf8_lossy(&output.stdout);
     let printed = target.clone();
     if printed.is_file() {
-        assert!(stdout.contains("处理完成"), "{stdout}");
+        assert!(stdout.contains("静态打印文件生成完成"), "{stdout}");
         let dump = read_workbook(&printed)?;
         assert_eq!(dump.sheets[0].name, "Printed");
         assert_eq!(dump.sheets[0].values["B3"]["value"], 0.0001);
@@ -285,8 +285,8 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     let user = run_menu_with_view(&config, "3\n3\n0\n0\n", "user")?;
     assert!(user.status.success());
     let user_stdout = String::from_utf8_lossy(&user.stdout);
-    assert!(user_stdout.contains("开始处理：按配置预校验打印任务"));
-    assert!(user_stdout.contains("处理完成：通过 1 项、警告 0 项、失败 0 项"));
+    assert!(user_stdout.contains("开始：按配置预校验打印任务"));
+    assert!(user_stdout.contains("按配置预校验打印任务完成：通过 1 项、警告 0 项、失败 0 项"));
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
     let off = run_menu_with_view(&config, "3\n3\n0\n0\n", "off")?;

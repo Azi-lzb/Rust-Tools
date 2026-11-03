@@ -69,7 +69,7 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
         "developer",
         &format!(
             "1
-4
+5
 {}
 {}
 0
@@ -85,8 +85,8 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
     );
     let compare_stdout = String::from_utf8_lossy(&compare.stdout);
     assert!(compare_stdout.contains("1  数据提取与汇总"));
-    assert!(compare_stdout.contains("4  表头路径比对与映射"));
-    assert!(compare_stdout.contains("表头路径比对模板"));
+    assert!(compare_stdout.contains("5  表头路径比对与映射"));
+    assert!(compare_stdout.contains("选择表头路径比对模板"));
     assert!(compare_stdout.contains(r#""output""#));
     let output_dir = root.path().join("app").join("output");
     assert!(find_output(&output_dir, "compare_3_9_3_")?.is_file());
@@ -168,7 +168,7 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
 
     let precheck = run_menu(
         &config, "1
-5
+6
 0
 ",
     )?;
@@ -178,7 +178,7 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
         String::from_utf8_lossy(&precheck.stderr)
     );
     let precheck_stdout = String::from_utf8_lossy(&precheck.stdout);
-    assert!(precheck_stdout.contains("5  时序配置预校验"));
+    assert!(precheck_stdout.contains("6  时序配置预校验"));
     assert!(precheck_stdout.contains("预校验完成：错误 0 项，警告 0 项"));
     assert!(precheck_stdout.contains("时序配置预校验通过。"));
     assert!(precheck_stdout.contains("再见。"));
@@ -945,7 +945,7 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
     let user = run_menu_with_view(
         &config,
         "user",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), source.display()),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), source.display()),
     )?;
     assert!(
         user.status.success(),
@@ -978,7 +978,7 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
     let developer = run_menu_with_view(
         &config,
         "developer",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), developer_sources),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), developer_sources),
     )?;
     assert!(
         developer.status.success(),
@@ -1036,7 +1036,7 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
     let off = run_menu_with_view(
         &config,
         "off",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), source.display()),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), source.display()),
     )?;
     assert!(
         off.status.success(),
@@ -1060,7 +1060,7 @@ fn header_path_compare_formats_date_headers_as_python_datetime_text() -> Result<
     create_date_header_source(&template, 2024, 1, 31)?;
     create_date_header_source(&source, 2024, 2, 29)?;
 
-    let input = format!("1\n4\n{}\n{}\n0\n", template.display(), source.display());
+    let input = format!("1\n5\n{}\n{}\n0\n", template.display(), source.display());
     let output = run_menu_with_view(&config, "off", &input)?;
     assert!(
         output.status.success(),
@@ -1109,7 +1109,7 @@ fn header_path_compare_displays_merged_multilevel_paths_like_wide_summary() -> R
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
 
-    let input = format!("1\n4\n{}\n{}\n0\n", template.display(), source.display());
+    let input = format!("1\n5\n{}\n{}\n0\n", template.display(), source.display());
     let output = run_menu_with_view(&config, "off", &input)?;
     assert!(
         output.status.success(),
@@ -1168,7 +1168,7 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
     let user = run_menu_with_view(
         &config,
         "user",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), selected_sources),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), selected_sources),
     )?;
     assert!(
         user.status.success(),
@@ -1213,7 +1213,7 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
         &config,
         "developer",
         &format!(
-            "1\n4\n{}\n{}\n0\n",
+            "1\n5\n{}\n{}\n0\n",
             template.display(),
             unmatched_workbook.display()
         ),
@@ -1252,7 +1252,7 @@ fn header_path_compare_menu_records_terminal_failure_summary() -> Result<()> {
     let user = run_menu_with_view(
         &config,
         "user",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), source.display()),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), source.display()),
     )?;
     assert!(!user.status.success());
     let user_stderr = String::from_utf8_lossy(&user.stderr);
@@ -1268,7 +1268,7 @@ fn header_path_compare_menu_records_terminal_failure_summary() -> Result<()> {
     let developer = run_menu_with_view(
         &config,
         "developer",
-        &format!("1\n4\n{}\n{}\n0\n", template.display(), source.display()),
+        &format!("1\n5\n{}\n{}\n0\n", template.display(), source.display()),
     )?;
     assert!(!developer.status.success());
     let history = read_single_run_history(&log_dir, "PT-1-1")?;
@@ -2592,7 +2592,7 @@ fn excluded_pt_1_2_is_not_exposed_by_the_v2_data_menu() -> Result<()> {
 fn timeline_precheck_menu_prints_readable_success_and_returns_to_main() -> Result<()> {
     let directory = TestDirectory::new()?;
     let config = create_timeline_config(directory.path())?;
-    let output = run_menu(&config, "1\n5\n0\n")?;
+    let output = run_menu(&config, "1\n6\n0\n")?;
     assert!(
         output.status.success(),
         "successful precheck menu route failed: {}",
@@ -2615,7 +2615,7 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
     let input_directory = directory.path().join("app").join("input");
     fs::remove_dir_all(&input_directory)?;
 
-    let output = run_menu(&config, "1\n5\n0\n")?;
+    let output = run_menu(&config, "1\n6\n0\n")?;
     assert!(
         output.status.success(),
         "failed precheck must return to the menu: {}",

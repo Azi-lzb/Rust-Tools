@@ -236,13 +236,13 @@ impl DiagEvent {
         if let Some(sheet) = &self.sheet { line.push_str(&format!("；工作表 {sheet}")); }
         if matches!(self.outcome, DiagOutcome::Failed | DiagOutcome::Skipped) {
             let text = self.message.to_lowercase();
-            let reason = if text.contains("工作表") && (text.contains("缺失") || text.contains("不存在") || text.contains("missing")) { "工作表不存在，请检查名称" }
-                else if text.contains("不存在") || text.contains("not found") || text.contains("no such file") { "文件或配置项不存在，请检查路径" }
-                else if text.contains("permission") || text.contains("权限") || text.contains("被占用") { "文件被占用或没有访问权限，请关闭占用程序并检查权限" }
-                else if text.contains("区域") || text.contains("range") { "区域配置或复制失败，请检查区域和工作表" }
-                else if text.contains("格式") || text.contains("unsupported") { "文件格式或配置不受支持，请检查输入" }
-                else if self.outcome == DiagOutcome::Skipped { "当前配置未执行，请检查相关文件和配置" }
-                else { "操作失败，请检查相关文件、配置和访问权限" };
+            let reason = if text.contains("工作表") && (text.contains("缺失") || text.contains("不存在") || text.contains("missing")) { "工作表不存在，请检查名称".to_owned() }
+                else if text.contains("不存在") || text.contains("not found") || text.contains("no such file") { "文件或配置项不存在，请检查路径".to_owned() }
+                else if text.contains("permission") || text.contains("权限") || text.contains("被占用") { "文件被占用或没有访问权限，请关闭占用程序并检查权限".to_owned() }
+                else if text.contains("区域") || text.contains("range") { "区域配置或复制失败，请检查区域和工作表".to_owned() }
+                else if text.contains("格式") || text.contains("unsupported") { "文件格式或配置不受支持，请检查输入".to_owned() }
+                else if self.outcome == DiagOutcome::Skipped { format!("{}阶段未执行，请检查对应文件和配置", self.stage) }
+                else { format!("{}阶段失败，请检查对应文件、配置和访问权限", self.stage) };
             line.push_str(&format!("；{reason}"));
         }
         line

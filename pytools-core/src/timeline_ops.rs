@@ -162,6 +162,13 @@ impl WideSummaryProgressEmitter<'_> {
             return;
         }
         self.sequence += 1;
+        let raw_message = user_message.into();
+        let workbook_path = self.current_workbook_name.as_deref().map(Path::new);
+        let user_message = crate::run_logging::workbook_sheet_context_message(
+            &raw_message,
+            workbook_path,
+            self.current_worksheet_name.as_deref(),
+        );
         let mut recorded_components = Vec::with_capacity(components.len() + 1);
         recorded_components.push("Rust".to_owned());
         recorded_components.extend(components.iter().map(|component| (*component).to_owned()));
@@ -171,7 +178,7 @@ impl WideSummaryProgressEmitter<'_> {
             feature_id: self.feature_id.clone(),
             phase: phase.to_owned(),
             status: status.to_owned(),
-            user_message: user_message.into(),
+            user_message,
             progress: self.progress.clone(),
             input_index,
             source_input_index: self.source_input_index,
@@ -1904,7 +1911,7 @@ fn run_wide_summary_inner(
                     "worksheet_aggregation",
                     "started",
                     format!(
-                        "工作簿 {filename}：开始处理工作表 {}（规则 {rule_display_name}）",
+                        "工作簿 {filename}：开始按时序规则「{rule_display_name}」汇总工作表 {}",
                         sheet.name
                     ),
                     Some(input_index),
@@ -2109,7 +2116,7 @@ fn run_wide_summary_inner(
                     "worksheet_aggregation",
                     "completed",
                     format!(
-                        "工作簿 {filename}：工作表 {} 处理完成，提取 {worksheet_cells} 个单元格",
+                        "工作簿 {filename}：工作表 {} 按时序规则汇总完成，提取 {worksheet_cells} 个单元格",
                         sheet.name
                     ),
                     Some(input_index),

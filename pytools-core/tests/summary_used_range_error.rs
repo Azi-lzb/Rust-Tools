@@ -517,10 +517,10 @@ fn summary_used_range_cli_preserves_unknown_xlsx_error_value_as_text() -> Result
         "calamine + OOXML error-token normalization"
     );
     assert!(normalization_event["stage_elapsed_ms"].is_number());
-    assert_eq!(
-        normalization_event["user_message"],
-        "已按文本兼容读取 1 个未知错误值"
-    );
+    // 用户消息现带工作簿标识前缀（多文件批次中可定位来源）。
+    assert!(normalization_event["user_message"]
+        .as_str()
+        .is_some_and(|message| message.contains("已按文本兼容读取 1 个未知错误值")));
     assert!(normalization_event["components"]
         .as_array()
         .unwrap()

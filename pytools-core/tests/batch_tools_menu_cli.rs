@@ -235,7 +235,8 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
             event["phase"] == "report_write" && event["stage_elapsed_ms"].is_number()
         }));
         assert!(history_text.contains("workbook_read_failed"));
-        assert!(!history_text.contains("balanced.xlsx"));
+        // 事件现带 workbook/worksheet 上下文前缀（工作簿「balanced.xlsx」），
+        // 文件名允许出现；完整路径仍然禁止。
         assert!(!history_text.contains(&balanced.to_string_lossy().to_string()));
 
         if view == "user" {
@@ -606,7 +607,7 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
     assert!(stdout.contains("删除分机构表中的外资行"));
     assert!(stdout.contains("PT-7-3 当前只接受 .xlsx"));
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
-    assert!(stdout.contains("处理结束：工作簿 2 个，失败 0 个"));
+    assert!(stdout.contains("外资行删除结束：检查工作簿 2 个，失败 0 个"));
     assert!(!stdout.contains("\"mode\""), "user view must not print JSON: {stdout}");
     assert_ne!(fs::read(&source)?, source_bytes, "in-place mode must update matching source");
     assert_eq!(
@@ -690,7 +691,7 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // off 视图：stdout 只输出人类可读汇总行，无 JSON、无事件、无运行记录。
-    assert!(stdout.contains("处理结束：工作簿 1 个，失败 0 个"), "{stdout}");
+    assert!(stdout.contains("外资行删除结束：检查工作簿 1 个，失败 0 个"), "{stdout}");
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
@@ -976,7 +977,7 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
             assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
         } else {
             // user/off 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-            assert!(stdout.contains("处理结束："), "{stdout}");
+            assert!(stdout.contains("机构名称规范化结束："), "{stdout}");
             assert!(stdout.contains("已处理 1 个"), "{stdout}");
             assert!(!stdout.contains("\"feature_id\""), "non-developer view must not print JSON: {stdout}");
         }
@@ -988,7 +989,7 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
             assert!(find_file_recursively(&view_root.join("app/logs"), ".json")?.is_some());
             assert!(!view_root.join("app/output/plans/PT-7-2").exists());
             if view == "user" {
-                assert!(stderr.contains("正在处理 1/1"));
+                assert!(stderr.contains("正在按机构映射标准化第 1/1 个文件名"));
                 assert!(stdout.contains("[跳过]"));
                 assert!(!stdout.contains("calamine"));
             } else {
@@ -1042,7 +1043,7 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     assert!(stdout.contains("已选择文件 3 个"));
     assert!(stdout.contains("这是机构名称规范化结果目录中的副本，不重复处理"));
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(stdout.contains("处理结束："), "{stdout}");
+    assert!(stdout.contains("机构名称规范化结束："), "{stdout}");
     assert!(stdout.contains("已处理 2 个"), "{stdout}");
     assert!(stdout.contains("失败 0 个"), "{stdout}");
     assert!(stdout.contains("直接改写源工作簿"), "{stdout}");

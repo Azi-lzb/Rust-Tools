@@ -388,7 +388,7 @@ where
             &mut on_event,
             "task",
             "completed",
-            "任务结束：机构映射表为空，未处理工作簿。".to_owned(),
+            "机构名称规范化结束：机构映射表为空，未处理所选工作簿。".to_owned(),
             final_progress,
             None,
             Some(elapsed_ms),
@@ -414,7 +414,7 @@ where
             &mut on_event,
             "file_processing",
             "started",
-            format!("正在处理 {}/{}：{}", index + 1, inputs.len(), file_name),
+            format!("正在按机构映射标准化第 {}/{} 个文件名：{}", index + 1, inputs.len(), file_name),
             progress.clone(),
             Some(file_name.clone()),
             None,
@@ -534,7 +534,7 @@ where
     report.elapsed_ms = run_started.elapsed().as_millis();
     let final_status = report.status.clone();
     let final_message = format!(
-        "处理结束：成功 {} 个，失败 {} 个，修改 {} 个文件。",
+        "机构名称规范化结束：成功 {} 个，失败 {} 个，修改 {} 个文件。",
         report.completed_files, report.failed_files, report.modified_files
     );
     let final_progress = current_institution_progress(&report, inputs.len());

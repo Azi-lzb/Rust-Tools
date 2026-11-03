@@ -95,12 +95,18 @@ impl ExtractSheetsProgressEmitter<'_> {
         error_type: Option<&str>,
     ) {
         self.sequence += 1;
+        let raw_message = user_message.into();
+        let user_message = crate::run_logging::workbook_sheet_context_message(
+            &raw_message,
+            file,
+            self.progress.current_sheet.as_deref(),
+        );
         (self.callback)(SummaryRunEvent {
             sequence: self.sequence,
             timestamp: Local::now().to_rfc3339(),
             phase: phase.to_owned(),
             status: status.to_owned(),
-            user_message: user_message.into(),
+            user_message,
             progress: self.progress.clone(),
             file_name: file
                 .and_then(Path::file_name)
@@ -1151,7 +1157,7 @@ where
             "source_extract",
             "succeeded",
             format!(
-                "源工作簿处理完成，本文件新增 {} 张提取工作表",
+                "源工作簿数据提取完成，本文件新增 {} 张提取工作表",
                 result.extracted_sheets - extracted_sheets_before
             ),
             Some(source_path),

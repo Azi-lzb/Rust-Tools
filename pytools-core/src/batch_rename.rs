@@ -175,7 +175,7 @@ where
         result.skip,
         None,
         None,
-        format!("开始处理 {} 个文件或目录", paths.len()),
+        format!("开始按机构命名规则重命名 {} 个文件或目录", paths.len()),
     );
     for (index, path) in paths.iter().enumerate() {
         let original_name = path
@@ -234,7 +234,7 @@ where
         (!paths.is_empty()).then_some("RustFilesystem"),
         None,
         format!(
-            "文件处理完成：改名 {} 个，跳过 {} 个",
+            "机构命名规则应用完成：改名 {} 个，跳过 {} 个",
             result.ok, result.skip
         ),
     );

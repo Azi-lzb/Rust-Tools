@@ -243,6 +243,38 @@ pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: 
 }
 
 impl ConversionRuntime {
+    /// Copy template validation formulas into a disposable source-workbook copy,
+    /// recalculate it through the packaged Office/WPS COM worker, and return
+    /// matching formula results. One runtime reuses the same COM session for
+    /// every workbook in a batch.
+    pub(crate) fn recalculate_named_validation_regions(
+        &mut self,
+        template: &Path,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+    ) -> Result<NamedValidationCalculation> {
+        ensure!(!regions.is_empty(), "校验区域请求不能为空");
+        if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+            bail!("校验区域计算需要 Excel/WPS COM；当前环境已禁用外部引擎");
+        }
+        #[cfg(windows)]
+        {
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self
+                .pywin32
+                .as_mut()
+                .expect("pywin32 worker initialized")
+                .recalculate_named_validation_regions(template, source_copy, regions)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (template, source_copy, regions);
+            bail!("校验区域公式重算需要 Windows Excel/WPS COM 与随包 pywin32 Worker");
+        }
+    }
+
     #[cfg(windows)]
     fn com(&mut self) -> Result<&mut crate::conversion_com::ComWorker> {
         if self.com.is_none() {
@@ -571,6 +603,26 @@ impl ConversionRuntime {
     }
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub(crate) struct NamedValidationRegionRequest {
+    pub template_sheet: String,
+    pub source_sheet: String,
+    pub address: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct NamedValidationCellResult {
+    pub sheet: String,
+    pub address: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct NamedValidationCalculation {
+    pub application: String,
+    pub cells: Vec<NamedValidationCellResult>,
+}
+
 #[cfg(windows)]
 struct PyWin32Conversion {
     application: String,
@@ -717,6 +769,88 @@ impl PythonExcelWorker {
             process_id,
             worker_process_id: self.child.id(),
             validation,
+        })
+    }
+
+    fn recalculate_named_validation_regions(
+        &mut self,
+        template: &Path,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+    ) -> Result<NamedValidationCalculation> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .context("检查 pywin32 worker 进程状态失败")?
+        {
+            bail!("pywin32 worker 已退出（状态：{status}）");
+        }
+        let request = serde_json::json!({
+            "op": "recalculate_named_validation",
+            "template": template.to_string_lossy(),
+            "source_copy": source_copy.to_string_lossy(),
+            "regions": regions,
+        });
+        serde_json::to_writer(&mut self.input, &request)
+            .context("写入校验区域 COM 重算请求失败")?;
+        self.input
+            .write_all(b"\n")
+            .and_then(|()| self.input.flush())
+            .context("发送校验区域 COM 重算请求失败")?;
+
+        let mut line = String::new();
+        let bytes = self
+            .output
+            .read_line(&mut line)
+            .context("读取校验区域 COM 重算结果失败")?;
+        ensure!(bytes > 0, "pywin32 worker 未返回校验区域重算结果");
+        let response: serde_json::Value = serde_json::from_str(&line)
+            .context("pywin32 worker 返回的校验区域结果不是有效 JSON")?;
+        ensure!(
+            response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
+            "校验区域 COM 重算失败（阶段：{}）：{}",
+            response
+                .get("stage")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("未知阶段"),
+            response
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("worker 未提供错误详情")
+        );
+        let application = response
+            .get("application")
+            .and_then(serde_json::Value::as_str)
+            .context("校验区域 COM 结果未报告 Excel/WPS 应用")?
+            .to_owned();
+        let cells = response
+            .get("cells")
+            .and_then(serde_json::Value::as_array)
+            .context("校验区域 COM 结果缺少单元格数组")?
+            .iter()
+            .map(|cell| {
+                Ok(NamedValidationCellResult {
+                    sheet: cell
+                        .get("sheet")
+                        .and_then(serde_json::Value::as_str)
+                        .context("校验结果缺少工作表名")?
+                        .to_owned(),
+                    address: cell
+                        .get("address")
+                        .and_then(serde_json::Value::as_str)
+                        .context("校验结果缺少单元格地址")?
+                        .to_owned(),
+                    value: cell
+                        .get("value")
+                        .and_then(serde_json::Value::as_str)
+                        .context("校验结果缺少公式文本")?
+                        .to_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(NamedValidationCalculation {
+            application,
+            cells,
         })
     }
 }
@@ -911,6 +1045,12 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         candidate.is_file() && fs::metadata(&candidate)?.len() > 0,
         "conversion engine did not create a non-empty output file"
     );
+    // The COM routes call CalculateFullRebuild before SaveAs. Keep this as a
+    // follow-up request for Office/WPS when the delivered workbook is opened;
+    // this OOXML flag alone does not create formula caches for Calamine now.
+    if target == "xlsx" {
+        crate::conversion::patch_full_calc_on_load(&candidate)?;
+    }
     let validation = validate_conversion(
         input,
         &candidate,

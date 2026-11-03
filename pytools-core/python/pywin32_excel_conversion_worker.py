@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-"""Batch-scoped Excel COM converter used by the Windows PyTools package.
+"""Batch-scoped Excel/WPS COM worker used by the Windows PyTools package.
 
 The Rust process owns file discovery, output paths, logging, and final publish.
-This worker only drives Excel/WPS through pywin32, then verifies worksheet
-order, formula text/locations, and non-formula cell values before Rust accepts
-the candidate. Requests and responses use one UTF-8 JSON object per line.
+This worker drives Excel/WPS through pywin32 for conversion and disposable-copy
+validation recalculation. Conversion candidates are verified before Rust accepts
+them. Requests and responses use one UTF-8 JSON object per line.
 """
 
 from __future__ import annotations
@@ -230,6 +230,9 @@ class ConversionSession:
 
             stage = "读取源工作簿并记录公式和值"
             workbook = application.Workbooks.Open(str(source), 0, True)
+            stage = "调用 Excel/WPS 完整重算工作簿"
+            application.CalculateFullRebuild()
+            stage = "读取完整重算后的源工作簿公式和值"
             source_snapshot = _snapshot(workbook)
             stage = "通过 pywin32 写入 XLSX 候选"
             workbook.SaveAs(str(output), XLSX_FILE_FORMAT)
@@ -241,6 +244,7 @@ class ConversionSession:
             stage = "读取候选工作簿并验证公式和值"
             output_snapshot = _snapshot(reopened)
             validation = _compare(source_snapshot, output_snapshot)
+            validation["calculation"] = "CalculateFullRebuild before SaveAs"
             reopened.Close(SaveChanges=False)
             reopened = None
             return {
@@ -257,6 +261,109 @@ class ConversionSession:
                     except Exception:
                         pass
             # Reset only the DispatchEx instance owned by this worker.
+            self._reset_application()
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
+    def recalculate_named_validation(
+        self,
+        template_text: str,
+        source_copy_text: str,
+        regions: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        template_path = Path(template_text)
+        source_copy_path = Path(source_copy_text)
+        stage = "检查校验区域临时副本"
+        template_workbook: Any | None = None
+        source_workbook: Any | None = None
+        try:
+            if not template_path.is_file():
+                raise FileNotFoundError(f"校验区域模板不存在：{template_path}")
+            if not source_copy_path.is_file():
+                raise FileNotFoundError(f"校验区域工作簿副本不存在：{source_copy_path}")
+            if not regions:
+                raise ValueError("没有可复制的校验区域")
+            self._ensure_application()
+            application = self._application
+            if application is None:
+                raise RuntimeError("Excel/WPS COM 尚未启动")
+
+            stage = "通过 COM 打开校验模板和工作簿副本"
+            template_workbook = application.Workbooks.Open(
+                str(template_path), 0, True, AddToMru=False
+            )
+            source_workbook = application.Workbooks.Open(
+                str(source_copy_path), 0, False, AddToMru=False
+            )
+
+            stage = "复制模板校验公式到工作簿副本"
+            for region in regions:
+                template_sheet = str(region["template_sheet"])
+                source_sheet = str(region["source_sheet"])
+                address = str(region["address"])
+                source_range = template_workbook.Worksheets(template_sheet).Range(address)
+                target_range = source_workbook.Worksheets(source_sheet).Range(address)
+                source_range.Copy(Destination=target_range)
+            application.CutCopyMode = False
+
+            stage = "调用 Excel/WPS 完整重算校验公式"
+            application.CalculateFullRebuild()
+            source_workbook.Save()
+
+            stage = "读取校验区域公式计算结果"
+            cells: list[dict[str, str]] = []
+            for region in regions:
+                sheet_name = str(region["source_sheet"])
+                address = str(region["address"])
+                worksheet = source_workbook.Worksheets(sheet_name)
+                selected = worksheet.Range(address)
+                row_count = int(selected.Rows.Count)
+                column_count = int(selected.Columns.Count)
+                first_row = int(selected.Row)
+                first_column = int(selected.Column)
+                formulas = _matrix(selected.Formula, row_count, column_count)
+                values = _matrix(selected.Value2, row_count, column_count)
+                for row_offset in range(row_count):
+                    for column_offset in range(column_count):
+                        formula = formulas[row_offset][column_offset]
+                        value = values[row_offset][column_offset]
+                        if not (isinstance(formula, str) and formula.startswith("=")):
+                            continue
+                        if not isinstance(value, str):
+                            continue
+                        if not any(keyword in value for keyword in ("错", "硬性", "软性", "校验失败")):
+                            continue
+                        cells.append(
+                            {
+                                "sheet": sheet_name,
+                                "address": _cell_name(
+                                    (first_row + row_offset, first_column + column_offset)
+                                ),
+                                "value": value,
+                            }
+                        )
+
+            source_workbook.Close(SaveChanges=False)
+            source_workbook = None
+            template_workbook.Close(SaveChanges=False)
+            template_workbook = None
+            return {
+                "ok": True,
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "cells": cells,
+            }
+        except Exception as error:
+            for opened in (source_workbook, template_workbook):
+                if opened is not None:
+                    try:
+                        opened.Close(SaveChanges=False)
+                    except Exception:
+                        pass
             self._reset_application()
             return {
                 "ok": False,
@@ -288,6 +395,15 @@ def _serve() -> int:
                 if operation == "shutdown":
                     _write_json({"ok": True})
                     break
+                if operation == "recalculate_named_validation":
+                    _write_json(
+                        session.recalculate_named_validation(
+                            str(request["template"]),
+                            str(request["source_copy"]),
+                            request["regions"],
+                        )
+                    )
+                    continue
                 if operation != "convert":
                     _write_json({"ok": False, "error": f"未知操作：{operation!r}"})
                     continue

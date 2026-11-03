@@ -89,7 +89,7 @@ fn batch_plan_cli_matches_python_baseline_and_filters_user_view() -> Result<()> 
         event["phase"] == "工作簿结构检查" && event["status"] == "已完成"
     }));
     let live_user_messages = String::from_utf8_lossy(&output.stderr);
-    assert!(live_user_messages.contains("正在处理 1/3"));
+    assert!(live_user_messages.contains("正在按机构映射标准化第 1/3 个文件名"));
     assert!(live_user_messages.contains("原文件未修改"));
 
     let stored_report: Value = serde_json::from_slice(&fs::read(&report_path)?)?;

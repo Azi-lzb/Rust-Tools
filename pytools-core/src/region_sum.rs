@@ -86,6 +86,10 @@ pub struct RegionSumRunEvent {
     pub phase: String,
     pub status: String,
     pub user_message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workbook_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worksheet_name: Option<String>,
     pub progress: RegionSumProgress,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_index: Option<usize>,
@@ -104,6 +108,8 @@ struct RegionSumProgressEmitter<'a> {
     sequence: usize,
     run_id: String,
     progress: RegionSumProgress,
+    current_workbook_name: Option<String>,
+    current_worksheet_name: Option<String>,
     callback: Option<&'a mut dyn FnMut(RegionSumRunEvent)>,
 }
 
@@ -126,6 +132,13 @@ impl RegionSumProgressEmitter<'_> {
         let mut recorded_components = Vec::with_capacity(components.len() + 1);
         recorded_components.push("Rust".to_owned());
         recorded_components.extend(components.iter().map(|component| (*component).to_owned()));
+        let raw_message = user_message.into();
+        let workbook_path = self.current_workbook_name.as_deref().map(Path::new);
+        let user_message = crate::run_logging::workbook_sheet_context_message(
+            &raw_message,
+            workbook_path,
+            self.current_worksheet_name.as_deref(),
+        );
         let event = RegionSumRunEvent {
             sequence: self.sequence,
             timestamp: Local::now().to_rfc3339(),
@@ -135,7 +148,9 @@ impl RegionSumProgressEmitter<'_> {
             run_id: self.run_id.clone(),
             phase: phase.to_owned(),
             status: status.to_owned(),
-            user_message: user_message.into(),
+            user_message,
+            workbook_name: self.current_workbook_name.clone(),
+            worksheet_name: self.current_worksheet_name.clone(),
             progress: self.progress.clone(),
             input_index,
             stage_elapsed_ms: stage_elapsed.map(|elapsed| elapsed.as_millis()),
@@ -270,6 +285,8 @@ where
             total_files: target_workbooks.len(),
             ..Default::default()
         },
+        current_workbook_name: None,
+        current_worksheet_name: None,
         callback,
     };
     emitter.emit(
@@ -336,6 +353,9 @@ where
 
     for (index, source) in target_workbooks.iter().enumerate() {
         let input_index = index + 1;
+        let file_name = crate::run_logging::portable_file_name(source);
+        emitter.current_workbook_name = Some(file_name.clone());
+        emitter.current_worksheet_name = None;
         if !openpyxl_compatible_extension(source) {
             emitter.progress.processed_files += 1;
             emitter.progress.failed_files += 1;
@@ -344,8 +364,7 @@ where
                 log_stamp,
                 "ERROR",
                 &format!(
-                    "打开失败: {} - unsupported workbook extension",
-                    source.display()
+                    "打开失败: {file_name} - unsupported workbook extension"
                 ),
             );
             emitter.emit(
@@ -380,11 +399,13 @@ where
             Err(error) => {
                 emitter.progress.processed_files += 1;
                 emitter.progress.failed_files += 1;
+                let error_message = format!("打开失败: {file_name} - {error:#}")
+                    .replace(&source.display().to_string(), &file_name);
                 write_log(
                     &mut log,
                     log_stamp,
                     "ERROR",
-                    &format!("打开失败: {} - {error:#}", source.display()),
+                    &error_message,
                 );
                 emitter.emit(
                     "workbook_read",
@@ -416,27 +437,46 @@ where
         let check_started = Instant::now();
         let mut file_sheets = 0usize;
         let mut file_errors = 0usize;
-        let file_name = source
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-
         for sheet in &sheets {
             if !sheet.name.contains(REGION_SHEET_KEY) {
                 continue;
             }
+            emitter.current_worksheet_name = Some(sheet.name.clone());
+            let sheet_started = Instant::now();
+            emitter.emit(
+                "sheet_check",
+                "started",
+                "正在核对分地区总分",
+                Some(input_index),
+                None,
+                &["calamine"],
+                Some("calamine"),
+                None,
+            );
             let check = check_one_sheet(sheet);
             emitter.progress.matched_sheets += 1;
             emitter.progress.errors += check.error_count;
             file_sheets += 1;
             file_errors += check.error_count;
+            let sheet_error_count = check.error_count;
             result_rows.push(make_result_row(
                 result_rows.len() + 1,
                 &file_name,
                 &sheet.name,
                 check,
             ));
+            emitter.emit(
+                "sheet_check",
+                if sheet_error_count > 0 { "warning" } else { "completed" },
+                format!("分地区总分核对完成：发现 {sheet_error_count} 处差异"),
+                Some(input_index),
+                Some(sheet_started.elapsed()),
+                &["calamine"],
+                Some("calamine"),
+                None,
+            );
         }
+        emitter.current_worksheet_name = None;
         write_log(
             &mut log,
             log_stamp,

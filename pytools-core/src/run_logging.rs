@@ -21,6 +21,56 @@ pub fn portable_file_name(path: &Path) -> String {
     full.rsplit(['/', '\\']).next().unwrap_or(&full).to_owned()
 }
 
+/// Add concise workbook and worksheet identifiers to a user-facing message.
+/// Any occurrence of the supplied workbook path is reduced to its basename;
+/// structured event fields remain available for developer diagnostics.
+pub fn workbook_sheet_context_message(
+    message: &str,
+    workbook: Option<&Path>,
+    worksheet_name: Option<&str>,
+) -> String {
+    let workbook_name = workbook.map(portable_file_name);
+    let mut message = message.to_owned();
+    if let (Some(path), Some(name)) = (workbook, workbook_name.as_deref()) {
+        let path_text = path.to_string_lossy();
+        if path_text != name {
+            let extended_path = if path_text.starts_with(r"\\?\") {
+                path_text.to_string()
+            } else {
+                format!(r"\\?\{path_text}")
+            };
+            message = message.replace(&extended_path, name);
+            message = message.replace(path_text.as_ref(), name);
+        }
+    }
+
+    let mut context = Vec::with_capacity(2);
+    if let Some(name) = workbook_name.as_deref().filter(|name| !name.trim().is_empty()) {
+        let label = format!("工作簿「{name}」");
+        let plain_label = format!("工作簿 {name}");
+        if !message.contains(&label) && !message.contains(&plain_label) {
+            context.push(label);
+        }
+    }
+    if let Some(name) = worksheet_name.filter(|name| !name.trim().is_empty()) {
+        let label = format!("工作表「{name}」");
+        let debug_label = format!("工作表 {:?}", name);
+        let plain_label = format!("工作表 {name}");
+        if !message.contains(&label)
+            && !message.contains(&debug_label)
+            && !message.contains(&plain_label)
+        {
+            context.push(label);
+        }
+    }
+
+    if context.is_empty() {
+        message
+    } else {
+        format!("{}：{message}", context.join("，"))
+    }
+}
+
 /// Return full paths only for the explicitly selected developer log view.
 pub fn path_for_log_view(path: &Path, developer_view: bool) -> String {
     if developer_view {

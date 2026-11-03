@@ -550,7 +550,7 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     assert!(user_output_dir.join("user-private-report.xlsx").is_file());
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("已发现 1 个待处理文件"));
-    assert!(user_stderr.contains("正在处理第 1/1 个文件"));
+    assert!(user_stderr.contains("正在检查第 1/1 个待转换文件"));
     assert!(user_stderr.contains("转换结束：成功 1，失败 0"));
     assert!(!user_stderr.contains("user-private-report"));
     let user_report = output_json(&user)?;
@@ -880,7 +880,7 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     assert_eq!(fs::read(&user_target)?, user_source_bytes);
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(user_stdout.contains("处理结束：成功 1 个，跳过 0 个，失败 0 个"), "{user_stdout}");
+    assert!(user_stdout.contains("按工作簿内容添加文件名前缀结束：成功 1 个，跳过 0 个，失败 0 个"), "{user_stdout}");
     assert!(!user_stdout.contains("\"ok\""), "user view must not print JSON: {user_stdout}");
     assert!(!user_stdout.contains("run_history_path"), "user view must not reference a run history path: {user_stdout}");
     let user_stderr = stderr(&user);

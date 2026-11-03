@@ -543,6 +543,8 @@ impl Application {
         } else {
             None
         };
+        method(&self.object, "CalculateFullRebuild", Vec::new())
+            .with_context(|| format!("{} 完整重算工作簿失败", self.prog_id))?;
         method(
             &book.object,
             "SaveAs",

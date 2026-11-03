@@ -291,6 +291,31 @@ fn is_ooxml_spreadsheet_package(path: &Path) -> Result<bool> {
         || (has_workbook_binary && binary_spreadsheet_type))
 }
 
+/// 请求 Excel/WPS 在下次打开转出文件时全量重算。
+/// 该标记不代替转换时计算：COM 保真转换会在 SaveAs 前显式完整重算；
+/// native 值转换保留公式文本，但不会计算公式缓存。
+pub(crate) fn patch_full_calc_on_load(candidate: &Path) -> Result<()> {
+    let patched = candidate.with_file_name(format!(
+        ".{}.calc-on-load.xlsx",
+        candidate
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "candidate".to_owned())
+    ));
+    ooxml_patch::patch_workbook_calculation_properties(
+        candidate,
+        &patched,
+        ooxml_patch::WorkbookCalculationProperties {
+            full_calc_on_load: Some(true),
+            force_full_calc: None,
+        },
+    )
+    .with_context(|| format!("标记转出工作簿打开时全量重算失败：{}", candidate.display()))?;
+    fs::rename(&patched, candidate)
+        .with_context(|| format!("替换为已标记重算的文件失败：{}", candidate.display()))?;
+    Ok(())
+}
+
 fn stage_sidecar_input(
     input: &Path,
     output: &Path,
@@ -472,7 +497,7 @@ where
             initial_components.clone(),
             None,
             None,
-            format!("正在处理第 {input_index}/{} 个文件。", inputs.len()),
+            format!("正在检查第 {input_index}/{} 个待转换文件。", inputs.len()),
         );
         if !input.is_file() {
             run.failed += 1;
@@ -605,7 +630,11 @@ where
                 (
                     actual_engine,
                     None,
-                    format!("第 {input_index}/{} 个文件处理完成。", inputs.len()),
+                    if ext == target {
+                        format!("第 {input_index}/{} 个文件格式相同，已复制到目标目录。", inputs.len())
+                    } else {
+                        format!("第 {input_index}/{} 个文件已转换为 .{target}。", inputs.len())
+                    },
                     "completed",
                 )
             }
@@ -974,6 +1003,8 @@ fn convert_native_csv_values(input: &Path, output: &Path) -> Result<String> {
         )
     })?;
     validate_native_csv_output(&candidate, &rows)?;
+    // 打开时全量重算：CSV 转出的 xlsx 没有公式缓存，Excel/WPS 打开时统一计算。
+    patch_full_calc_on_load(&candidate)?;
     fs::hard_link(&candidate, output).with_context(|| {
         format!(
             "commit native CSV conversion without replacing an existing file {}",
@@ -1122,6 +1153,9 @@ fn convert_native_excel_values(input: &Path, output: &Path, source_ext: &str) ->
     let converted = read_workbook(&candidate)
         .with_context(|| format!("reopen native conversion candidate {}", candidate.display()))?;
     validate_native_conversion(&source, &converted)?;
+    // 打开时全量重算：native 路径只写公式文本不带缓存值，转出文件在
+    // Excel/WPS 打开的瞬间按用户本机环境全量计算。
+    patch_full_calc_on_load(&candidate)?;
     fs::hard_link(&candidate, output).with_context(|| {
         format!(
             "publish validated native conversion without replacing {}",
