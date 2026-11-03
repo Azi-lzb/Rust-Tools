@@ -13900,13 +13900,22 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         && log_view != "off"
         && !events.last().is_some_and(|event| event.status == "failed")
     {
+        // 模板/配置级失败（未进入逐文件处理）：没有 file_name 是正常语义，
+        // 但必须把根因（缺表头区域、缺汇总区域等）带进失败事件。
+        let had_file_failure = events.iter().any(|event| event.status == "failed");
+        let error_chain = result
+            .as_ref()
+            .err()
+            .map(|error| format!("{error:#}"))
+            .unwrap_or_default();
+        let (classified_type, root_hint) = classify_named_range_failure(&error_chain);
         let prior = events.last();
         events.push(SummaryRunEvent {
             sequence: events.len() + 1,
             timestamp: Local::now().to_rfc3339(),
             phase: "summary".to_owned(),
             status: "failed".to_owned(),
-            user_message: "按模板命名区域汇总失败".to_owned(),
+            user_message: format!("按模板命名区域汇总失败：{root_hint}"),
             progress: prior
                 .map(|event| event.progress.clone())
                 .unwrap_or_else(|| SummaryProgress {
@@ -13918,8 +13927,20 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
             total_elapsed_ms: run_started.elapsed().as_millis(),
             components: vec!["pytools-core".to_owned()],
             actual_engine: None,
-            error_type: Some("summary_error".to_owned()),
+            error_type: Some(classified_type.to_owned()),
         });
+        // 统一摘要此前按“最后一个失败事件”填充；模板级失败时它可能是空的，
+        // 用分类结果覆盖，保证运行汇总直接给出根因。若批内已有逐文件失败
+        // 事件（带文件归属），保留原有摘要不覆盖。
+        if !had_file_failure {
+            unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
+                stage: "summary".to_owned(),
+                code: summary_event_error_code(Some(classified_type), "summary"),
+                message: format!("按模板命名区域汇总失败：{root_hint}"),
+                file_name: None,
+                sheet_name: None,
+            });
+        }
         let event = events.last().expect("failure event was just appended");
         if log_view == "developer" {
             eprintln!("{}", serde_json::to_string(event)?);
@@ -13940,12 +13961,14 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
             Ok(_) => "skipped",
             Err(_) => "failed",
         };
-        let failure = result.as_ref().err().map(|_| {
+        let failure = result.as_ref().err().map(|error| {
             let event = events.last();
+            let (error_type, root_hint) =
+                classify_named_range_failure(&format!("{error:#}"));
             serde_json::json!({
                 "stage": event.map(|event| event.phase.as_str()).unwrap_or("summary"),
-                "error_type": event.and_then(|event| event.error_type.as_deref()).unwrap_or("summary_error"),
-                "detail": "原始错误未写入日志，请根据失败阶段检查文件与配置"
+                "error_type": event.and_then(|event| event.error_type.as_deref()).unwrap_or(error_type),
+                "message": root_hint,
             })
         });
         let report = serde_json::json!({
@@ -16567,6 +16590,51 @@ fn record_summary_progress_event(
             );
             *log_write_warning_emitted = true;
         }
+    }
+}
+
+/// 把命名区域汇总（PT-6-2）的错误链分类为具体错误类型与用户可读根因。
+/// 错误链由 anyhow 按“外层上下文在前、根因在后”打印；根因即最末一行，
+/// 承载真正的业务失败点（如“模板缺少表头区域_N”“缺少汇总区域”等）。
+/// 返回 (error_type, 用户可读根因说明)。
+fn classify_named_range_failure(error_chain: &str) -> (&'static str, String) {
+    let root = error_chain.lines().map(str::trim).rev().find(|line| !line.is_empty()).unwrap_or_default();
+    let matched = |needle: &str| root.contains(needle) || error_chain.contains(needle);
+    // 按业务检查点从细到粗匹配；root 优先，避免被外层上下文抢走。
+    if root.contains("has no 表头区域") {
+        return ("missing_header_region", root.to_owned());
+    }
+    if root.contains("配置了汇总区域，但缺少表头区域") {
+        return ("missing_header_region", root.to_owned());
+    }
+    if root.contains("needs 固定行汇总区域") {
+        return ("missing_summary_region", root.to_owned());
+    }
+    if root.contains("没有相交的表头区域") {
+        return ("summary_region_without_header_intersection", root.to_owned());
+    }
+    if matched("模板中没有可用命名区域") {
+        return (
+            "template_has_no_named_regions",
+            "模板中没有可用命名区域；请配置 表头区域_N 与 固定行汇总区域_N 或 任意行汇总区域_N".to_owned(),
+        );
+    }
+    if root.contains("模板工作表") && root.contains("不存在") {
+        return ("template_sheet_missing", root.to_owned());
+    }
+    if matched("named-range summary template must be") {
+        return ("template_format_error", "命名区域模板只支持 XLSX/XLSM".to_owned());
+    }
+    if matched("没有可汇总的源工作簿") {
+        return (
+            "no_summarizable_source",
+            "没有可汇总的源工作簿；请检查输入文件与源工作簿表头结构".to_owned(),
+        );
+    }
+    if root.is_empty() {
+        ("summary_error", "汇总失败；请查看诊断日志了解失败阶段".to_owned())
+    } else {
+        ("summary_error", root.to_owned())
     }
 }
 

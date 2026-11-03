@@ -298,6 +298,15 @@ fn interactive_named_range_template_error_keeps_menu_open_and_logs_detail() -> R
     let logs = root.path().join("app").join("logs");
     let (_, history, history_text) = read_single_history(&logs, "PT-6-2_")?;
     assert_eq!(history["status"], "failed");
+    // 失败分类契约：run.json 的 failure 必须给出具体错误类型与用户可读根因
+    // （缺表头区域 / 缺汇总区域等），而不是笼统的 summary_error + 空文件名。
+    assert_eq!(
+        history["failure"]["error_type"],
+        "summary_region_without_header_intersection"
+    );
+    assert!(history["failure"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("没有相交的表头区域")));
     // 失败细节（错误链）现记录在统一摘要 error_summary / 诊断日志中。
     let diagnostic = fs::read_dir(&logs.join("run-events"))
         .ok()
