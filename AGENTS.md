@@ -15,7 +15,7 @@
 - 开始修改或运行 Cargo 前，先确认 `git rev-parse --show-toplevel` 和 `git branch --show-current` 与当前工作目录/任务一致；不要在一个工作树里改写另一个工作树的源码、配置或 `dist`。
 - Feature 与 Test 都可以修改 Rust 业务代码、Excel-Core 和测试。若要共同修改同一公共模块，先明确各自文件/接口边界；各自先提交到本分支，再通过普通 Git merge 集成到 `main`。冲突应针对性解决，禁止用强制 reset、覆盖或丢弃修改来处理。
 - 只有 `main` 可进行正式集成和发布；Feature/Test 的构建与压缩包必须清楚标记为测试产物。正式发布前在 `main` 运行所需回归并完成验收。
-- 任何直接 Cargo 命令都必须先按上表为当前工作树设置 `CARGO_TARGET_DIR`，避免默认在 C 盘生成 `target` 或多个工作树共用缓存。`build-release.bat` 会按当前 Git 分支选择对应目录。
+- 任何直接 Cargo 命令都必须先按上表为当前工作树设置 `CARGO_TARGET_DIR`，避免默认在 C 盘生成 `target` 或多个工作树共用缓存。Release 构建使用 `cargo build --release --offline -p pytools-core --bin RustTools`（main 分支映射 `F:\RustBuild\pytools`）。
 - 所有 BAT 必须以脚本自身目录 `%~dp0` 定位项目，只操作当前工作树，不引用旧 Main、其他项目或旧 Codex 工作树。
 - 本仓库独立拥有业务代码、Cargo workspace、配置和 `crates/` 内的 Excel-Core。不得依赖旧共享 Main、其他项目或旧共享 workspace 的源码、同步、合并或 cherry-pick；可按当前业务需要独立修改本仓库的 Excel-Core，不为统一其他项目而覆盖现有实现。
 - Python 原项目 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 只读，`probe/` 和测试辅助中的 Python 仅供按需比较。隔离 openpyxl worker 仅是既有工作簿修改的受限兼容路径；新增随包的 Windows pywin32 worker 仅负责 Office/WPS COM 格式转换，不得承载 PyTools 业务逻辑。
@@ -35,6 +35,6 @@
 
 - 实现或代码审查不等于构建授权。只有当前用户请求明确授权相应操作时，才可编译、构建、执行或安装 Rust 代码；禁止未授权的 `cargo build/check/test/run/clippy/bench/install`、`rustc` 及通过脚本间接触发这些操作。运行已有 EXE 也须有相应的明确运行授权。
 - 允许静态检查、Git diff 和 `cargo fmt`（含 `cargo fmt --check`）。未执行编译或测试必须明确记录为未验证，不能把写了测试当作通过。
-- `run.bat` 只运行当前工作树 `%~dp0dist\pytools.exe`，缺少 EXE 时明确失败，不调用 Cargo。用户主动要求构建时，`build-release.bat` 按当前分支映射到上表中独立的 F 盘 target，成功后只更新当前工作树的 `dist`。`package.bat` 只打包当前工作树已有 `dist`；Feature/Test 包标记为测试包，正式包只允许从 `main` 在明确确认验证通过后生成。BAT 均从 `%~dp0` 定位本项目。
+- 用户直接双击 `dist\RustTools.exe` 运行（程序自动向上探测 `config.xlsx`，无需启动脚本）；`dist` 缺少 EXE 时由构建流程补齐，不隐式调用 Cargo。Release 构建成功后只更新当前工作树的 `dist`。正式包只允许从 `main` 在明确确认验证通过后生成；Feature/Test 产物标记为测试包。打包/构建一律使用显式 Cargo 与 `packaging/` 脚本，不再使用 BAT。
 - 分别记录实现状态、单元/冒烟测试、Windows 用户或真实样本验收、Linux/deb 验证；不得把菜单入口、编译或合成样本视为人工验收通过。
 - Linux 交付要求保持为 x86_64、glibc 2.28 兼容和离线 deb；核心路径不要求用户预装 Python、Go、Office、WPS、LibreOffice 或 JVM。外部引擎仅为明确、按能力选择的可选项。

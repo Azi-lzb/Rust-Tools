@@ -1,10 +1,10 @@
-Package: pytools
+Package: rusttools
 Version: @VERSION@
 Section: utils
 Priority: optional
 Architecture: amd64
 Installed-Size: @INSTALLED_SIZE@
-Maintainer: pytools local build <noreply@localhost>
+Maintainer: rusttools local build <noreply@localhost>
 Depends: libc6 (>= 2.28), xdg-utils
 Description: 通用汇总工具（Rust 版）
  时序、宽表汇总、去重、打印、转换、汇总、归档等报表批量处理工具。

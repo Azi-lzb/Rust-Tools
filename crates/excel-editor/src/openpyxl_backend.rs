@@ -4669,6 +4669,7 @@ mod tests {
             let _ = fs::remove_dir_all(&empty);
         }
 
+#[cfg(windows)]
         #[test]
         fn resolves_windows_zip_layout_only() {
             let exe = temp_dir("zip");
@@ -4725,6 +4726,7 @@ mod tests {
             let _ = fs::remove_dir_all(&exe);
         }
 
+#[cfg(windows)]
         #[test]
         fn dev_tree_fallback_requires_explicit_python() {
             // 合成开发树：<root>/Cargo.toml + crates/excel-editor/python/worker。
@@ -4861,6 +4863,7 @@ mod tests {
             let _ = fs::remove_dir_all(&empty);
         }
 
+#[cfg(windows)]
         #[test]
         fn unicode_and_space_paths_resolve() {
             let base = temp_dir("unicode-base");

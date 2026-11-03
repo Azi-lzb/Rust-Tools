@@ -91,7 +91,7 @@ fn reloading_configuration_updates_output_directory_for_the_running_menu() -> Re
     source_workbook.save(&source)?;
     let source_before = fs::read(&source)?;
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(&config)
@@ -297,7 +297,7 @@ fn default_menu_configuration_is_created_beside_executable_not_working_directory
     fs::create_dir_all(&application_dir)?;
     fs::create_dir_all(&launch_dir)?;
 
-    let source_executable = Path::new(env!("CARGO_BIN_EXE_pytools"));
+    let source_executable = Path::new(env!("CARGO_BIN_EXE_RustTools"));
     let executable_name = source_executable
         .file_name()
         .context("PyTools executable has no file name")?;
@@ -679,7 +679,7 @@ fn run_menu(config: &Path, input: &str, log_view: &str) -> Result<Output> {
         .and_then(Path::parent)
         .context("configuration app directory missing")?
         .join("logs");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

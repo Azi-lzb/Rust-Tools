@@ -207,7 +207,7 @@ fn operation_48_cli_executes_rust_mapping_against_python_baseline() {
         .filter_map(|path| fs::read(path).ok().map(|bytes| (path.clone(), bytes)))
         .collect::<BTreeMap<_, _>>();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("rename-local-map")
         .arg("--config")
         .arg(&config)

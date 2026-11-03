@@ -316,7 +316,7 @@ fn operation_410_cli_executes_rust_workflow_against_python_baseline() {
         .filter_map(|path| fs::read(path).ok().map(|bytes| (path.clone(), bytes)))
         .collect::<BTreeMap<_, _>>();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("remove-file-sort-prefix")
         .arg("--config")
         .arg(&config)
@@ -428,7 +428,7 @@ fn operation_410_cli_accepts_empty_input_and_writes_blank_report() {
     let log_dir = root.join("logs");
     write_config(&config, &cases, true);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("remove-file-sort-prefix")
         .arg("--config")
         .arg(&config)

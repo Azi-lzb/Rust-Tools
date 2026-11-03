@@ -859,7 +859,7 @@ fn summary_named_ranges_cli_is_a_real_standalone_entry() -> Result<()> {
     create_named_range_source(&source, "结构A", true)?;
     let template_before = fs::read(&template)?;
     let source_before = fs::read(&source)?;
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-named-ranges")
         .arg("--template")
         .arg(&template)
@@ -904,7 +904,7 @@ fn summary_comments_cli_matches_python_missing_region_error() -> Result<()> {
         .join("tests/fixtures/summary_comments/merged_children_source.xlsx");
     let output_dir = root.path().join("output");
     let log_dir = root.path().join("logs");
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-comments")
         .arg("--template")
         .arg(&fixture)
@@ -1204,7 +1204,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
         .and_then(Path::parent)
         .context("configuration app directory missing")?
         .join("logs");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

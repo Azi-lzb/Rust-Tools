@@ -219,7 +219,7 @@ fn operation_46_cli_executes_rust_workflow_against_python_baseline() {
         .filter_map(|path| fs::read(path).ok().map(|bytes| (path.clone(), bytes)))
         .collect::<BTreeMap<_, _>>();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("rename-by-content")
         .arg("--config")
         .arg(&config)
@@ -293,7 +293,7 @@ fn operation_46_xls_integer_values_match_legacy_com_float_text() {
     fs::copy(&fixture, &source).unwrap();
     let original_bytes = fs::read(&source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("rename-by-content")
         .arg("--config")
         .arg(&config)

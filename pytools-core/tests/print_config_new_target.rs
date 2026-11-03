@@ -179,7 +179,7 @@ fn pt_3_3_rejects_existing_target_before_output_side_effects() -> Result<()> {
     make_print_config(&config, &source, &target)?;
     let original_target = fs::read(&target)?;
 
-    let precheck = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let precheck = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["print-config-precheck", "--config"])
         .arg(&config)
         .output()?;
@@ -190,7 +190,7 @@ fn pt_3_3_rejects_existing_target_before_output_side_effects() -> Result<()> {
         String::from_utf8_lossy(&precheck.stdout)
     );
 
-    let plan = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let plan = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["print-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -225,7 +225,7 @@ fn pt_3_3_rejects_formula_without_cached_value_before_output() -> Result<()> {
     let source_before = fs::read(&source)?;
     let config_before = fs::read(&config)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["print-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -261,7 +261,7 @@ fn pt_3_3_new_target_creates_a_plan_without_touching_source_or_target() -> Resul
     let source_before = fs::read(&source)?;
     let config_before = fs::read(&config)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["print-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -320,7 +320,7 @@ fn pt_3_3_new_target_creates_a_plan_without_touching_source_or_target() -> Resul
         &capability_path,
         serde_json::to_vec_pretty(&capability_for(&plan))?,
     )?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["print-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])

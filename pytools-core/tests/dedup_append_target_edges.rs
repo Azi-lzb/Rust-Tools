@@ -142,7 +142,7 @@ fn assert_success(output: &Output) -> Result<Value> {
 }
 
 fn plan_report(config: &Path, output_dir: &Path) -> Result<(Value, PathBuf)> {
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(config)
         .args(["--output-dir"])
@@ -209,7 +209,7 @@ fn target_also_used_as_source_is_rejected_without_modifying_workbook() -> Result
     make_config(&config, &source, &source, "1")?;
     let source_before = fs::read(&source)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -297,7 +297,7 @@ fn existing_header_only_target_appends_all_unique_rows() -> Result<()> {
         &capability_path,
         serde_json::to_vec_pretty(&capability_for(edit_plan))?,
     )?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .args(["--capabilities"])

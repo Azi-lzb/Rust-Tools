@@ -144,7 +144,19 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
                 .is_some_and(|name| name.starts_with("1-1_") && name.ends_with(".jsonl"))
         })
         .with_context(|| "1-1 event log missing")?;
-    let event_text = fs::read_to_string(&event_log)?;
+    // 可能存在多次 1-1 运行（本用例后续没有，但并行用例可能重入同一 root
+    // 布局）；合并所有 1-1 事件日志后再判定首现顺序。
+    let mut event_text = String::new();
+    for path in fs::read_dir(&events_dir)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("1-1_") && name.ends_with(".jsonl"))
+        })
+    {
+        event_text.push_str(&fs::read_to_string(&path)?);
+    }
     let first_position = |needle: &str| event_text.find(needle).with_context(|| format!("{needle} missing from events"));
     let earlier_event = first_position("earliest")?;
     let nested_event = first_position("nested")?;
@@ -231,7 +243,7 @@ fn wide_summary_cli_filters_missing_and_unconfigured_extensions_before_reading()
     let source_before = fs::read(&source)?;
     let unsupported_before = fs::read(&unsupported)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("wide-summary")
         .arg("--config")
         .arg(&config)
@@ -291,7 +303,7 @@ fn wide_summary_cli_projects_elapsed_duration_as_numeric_for_both_row_modes() ->
         let source = root.path().join("sample elapsed duration.xlsx");
         create_wide_source_with_elapsed_duration(&source, "累计时长", 1.123_456_789)?;
 
-        let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .arg(command)
             .arg("--config")
             .arg(&config)
@@ -352,7 +364,7 @@ fn wide_summary_cli_preserves_excel_1900_leap_boundary_dates_in_both_row_modes()
             create_wide_source_with_date_serial(&source, "1900序列边界", serial)?;
             let source_before = fs::read(&source)?;
 
-            let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+            let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
                 .arg(command)
                 .arg("--config")
                 .arg(&config)
@@ -399,7 +411,7 @@ fn wide_summary_cli_projects_1900_zero_serial_as_midnight_time() -> Result<()> {
         create_wide_source_with_date_serial(&source, "1900零序列", 0.0)?;
         let source_before = fs::read(&source)?;
 
-        let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .arg(command)
             .arg("--config")
             .arg(&config)
@@ -444,7 +456,7 @@ fn wide_summary_cli_preserves_time_format_serials_at_and_above_one_day() -> Resu
             create_wide_source_with_number_format_serial(&source, "跨日时分秒", serial, "h:mm:ss")?;
             let source_before = fs::read(&source)?;
 
-            let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+            let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
                 .arg(command)
                 .arg("--config")
                 .arg(&config)
@@ -511,7 +523,7 @@ fn wide_summary_cli_projects_clock_formats_across_midnight_rounding() -> Result<
             )?;
             let source_before = fs::read(&source)?;
 
-            let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+            let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
                 .arg(command)
                 .arg("--config")
                 .arg(&config)
@@ -568,7 +580,7 @@ fn wide_summary_cli_processes_legacy_xls_without_ooxml_metadata() -> Result<()> 
         fs::copy(&fixture, &source)?;
         let source_before = fs::read(&source)?;
 
-        let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .arg(command)
             .arg("--config")
             .arg(&config)
@@ -626,7 +638,7 @@ fn wide_summary_cli_summarizes_nonempty_legacy_xls_elapsed_values() -> Result<()
         fs::copy(&fixture, &source)?;
         let source_before = fs::read(&source)?;
 
-        let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .arg(command)
             .arg("--config")
             .arg(&config)
@@ -701,7 +713,7 @@ fn wide_summary_cli_discovers_default_sources_for_both_row_modes() -> Result<()>
     )?;
 
     for command in ["wide-summary", "wide-summary-row-suffix"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .arg(command)
             .arg("--config")
             .arg(&config)
@@ -775,7 +787,7 @@ fn wide_summary_cli_resolves_relative_configured_directories_for_discovery() -> 
         b"not xlsb",
     )?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("wide-summary")
         .arg("--config")
         .arg(&config)
@@ -837,7 +849,7 @@ fn timeline_extract_cli_discovers_default_sources_recursively_and_skips_lock_fil
     create_wide_source(&lock_source, "锁文件必须跳过", 41.0)?;
     fs::write(&unsupported_source, b"unsupported workbook format")?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("timeline-extract")
         .arg("--config")
         .arg(&config)
@@ -894,7 +906,7 @@ fn timeline_extract_cli_discovers_default_sources_recursively_and_skips_lock_fil
 fn timeline_extract_cli_with_empty_default_input_directory_skips_output() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_timeline_config(root.path())?;
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("timeline-extract")
         .arg("--config")
         .arg(&config)
@@ -2509,7 +2521,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 }
 
 fn run_default_menu(input: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -2620,7 +2632,7 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
 }
 
 fn run_menu_with_view(config: &Path, log_view: &str, input: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -2649,7 +2661,7 @@ fn run_menu_with_capabilities(
     platform: &str,
     input: &str,
 ) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

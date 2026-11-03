@@ -59,7 +59,7 @@ fn fx_header_cli_command_defaults_to_plan_only() -> Result<()> {
     let log_dir = root.path().join("cli/logs");
     let plan_dir = root.path().join("cli/plans");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("fx-header")
         .arg(&target)
         .arg("--output-dir")
@@ -386,7 +386,7 @@ fn create_config(root: &Path) -> Result<PathBuf> {
 }
 
 fn run_menu(config: &Path, input: &str, extra: &[String]) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

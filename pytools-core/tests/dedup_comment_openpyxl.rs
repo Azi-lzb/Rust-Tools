@@ -56,7 +56,7 @@ impl StagedProductRuntime {
             .parent()
             .context("isolated python has no runtime root")?
             .canonicalize()?;
-        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_pytools"));
+        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_RustTools"));
         let installation_root = product_binary
             .parent()
             .context("pytools binary has no bin directory")?
@@ -156,7 +156,7 @@ fn pt_2_1_comment_duplicate_mark_executes_through_pytools_cli_and_excel_modifier
     make_source(&input)?;
     let source_bytes = fs::read(&input)?;
 
-    let plan_only = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let plan_only = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-comment-plan", "--action", "check", "--input"])
         .arg(&input)
         .arg("--output")
@@ -185,7 +185,7 @@ fn pt_2_1_comment_duplicate_mark_executes_through_pytools_cli_and_excel_modifier
     let capability = capability_for(&plan);
     fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-comment-plan", "--action", "check", "--input"])
         .arg(&input)
         .arg("--output")

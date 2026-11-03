@@ -568,7 +568,7 @@ fn run_cli(
     root: &Path,
     log_view: Option<&str>,
 ) -> Result<Output> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     command
         .arg("summary-comments")
         .arg("--template")

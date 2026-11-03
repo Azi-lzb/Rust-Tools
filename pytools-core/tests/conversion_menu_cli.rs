@@ -270,7 +270,7 @@ fn v2_file_menu_hides_native_value_conversion() -> Result<()> {
 
 #[test]
 fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("--help")
         .output()?;
     assert!(
@@ -313,7 +313,7 @@ fn conversion_cli_rejects_xlsx_payload_mislabeled_as_et() -> Result<()> {
     let source_before = fs::read(&mislabeled_et)?;
     let output_dir = root.path().join("output");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("convert-excel")
         .arg("--config")
         .arg(&config)
@@ -359,7 +359,7 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
     let source_before = fs::read(&mislabeled_et)?;
     let output_dir = root.path().join("output");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("convert-excel")
         .arg("--config")
         .arg(&config)
@@ -470,7 +470,7 @@ fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<(
     let source_before = fs::read(&native_et)?;
     let output_dir = root.path().join("output");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("convert-excel")
         .arg("--config")
         .arg(&config)
@@ -1337,7 +1337,7 @@ fn run_convert_excel_cli(
     engine: &str,
     log_view: &str,
 ) -> Result<Output> {
-    Command::new(env!("CARGO_BIN_EXE_pytools"))
+    Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("convert-excel")
         .arg("--config")
         .arg(config)
@@ -1359,7 +1359,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 }
 
 fn menu_command(config: &Path) -> Command {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     child
         .arg("menu")
         .arg("--config")

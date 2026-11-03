@@ -46,7 +46,7 @@ fn v2_configuration_menu_routes_all_three_quick_actions_without_starting_a_deskt
     fs::write(&blocked_parent, b"not a directory")?;
     let config = blocked_parent.join("config").join("config.xlsx");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args([
             "menu",
             "--config",
@@ -106,7 +106,7 @@ fn v2_configuration_menu_routes_all_three_quick_actions_without_starting_a_deskt
 
 #[test]
 fn launching_without_arguments_opens_the_legacy_numbered_main_menu() -> Result<()> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -148,7 +148,7 @@ fn launching_without_arguments_opens_the_legacy_numbered_main_menu() -> Result<(
 fn launching_with_global_menu_options_without_command_opens_the_menu() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = root.path().join("selected config.xlsx");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("--config")
         .arg(&config)
         .args(["--log-view", "off"])
@@ -179,7 +179,7 @@ fn launching_with_global_menu_options_without_command_opens_the_menu() -> Result
 fn launching_without_arguments_honors_the_legacy_config_path_override() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = root.path().join("selected config.xlsx");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .env("PYTOOLS_CONFIG_PATH", &config)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -208,7 +208,7 @@ fn launching_without_arguments_honors_the_legacy_config_path_override() -> Resul
 
 #[test]
 fn cli_help_lists_quick_tools_menu_category() -> Result<()> {
-    let result = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let result = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("--help")
         .output()?;
     assert!(

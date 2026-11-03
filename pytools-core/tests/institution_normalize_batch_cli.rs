@@ -475,7 +475,7 @@ fn configuration_failure_is_saved_in_user_and_developer_history() -> Result<()> 
 }
 
 fn run_cli<const N: usize>(arguments: [&str; N]) -> Result<Output> {
-    Command::new(env!("CARGO_BIN_EXE_pytools"))
+    Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(arguments)
         .output()
         .context("run pytools CLI")

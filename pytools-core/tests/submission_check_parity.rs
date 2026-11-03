@@ -55,7 +55,7 @@ fn submission_check_cli_matches_python_workbook_and_statistics() -> Result<()> {
         .map(|path| fs::read(path).map(|bytes| (path.clone(), bytes)))
         .collect::<std::io::Result<Vec<_>>>()?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("submission-check")
         .arg("--config")
         .arg(&config)
@@ -190,7 +190,7 @@ fn submission_check_cli_matches_python_workbook_and_statistics() -> Result<()> {
         assert_eq!(fs::read(source_path)?, *bytes);
         fs::write(destination, bytes)?;
     }
-    let recursive_output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let recursive_output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("submission-check")
         .arg("--config")
         .arg(&config)
@@ -261,7 +261,7 @@ fn submission_check_uses_and_between_columns_and_or_for_institution_aliases() ->
         .map(|path| fs::read(path).map(|bytes| (path.clone(), bytes)))
         .collect::<std::io::Result<Vec<_>>>()?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("submission-check")
         .arg("--config")
         .arg(&config)
@@ -641,7 +641,7 @@ fn submission_check_developer_history_records_report_write_failure() -> Result<(
     fs::write(&blocked_output, b"must remain unchanged")?;
     let logs = root.join("logs");
     fs::create_dir_all(&logs)?;
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("submission-check")
         .arg("--config")
         .arg(&config)
@@ -695,7 +695,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 }
 
 fn run_menu_with_log_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -822,6 +822,10 @@ fn create_and_or_submission_config(root: &Path) -> Result<PathBuf> {
     Ok(config)
 }
 
+fn char_backslash() -> String {
+    String::from_utf8_lossy(&[0x5C]).into_owned()
+}
+
 fn normalize_cell(value: &Value, root: &Path) -> Option<Value> {
     match value["type"].as_str()? {
         "empty" => None,
@@ -832,7 +836,12 @@ fn normalize_cell(value: &Value, root: &Path) -> Option<Value> {
             }
             Some(json!({
                 "type": "string",
-                "value": text.replace(root.to_string_lossy().as_ref(), "<ROOT>"),
+                // 统一分隔符：报告中的路径分隔符随平台变化，断言两侧都归一为 /。
+                "value": text
+                    .replace(root.to_string_lossy().as_ref(), "<ROOT>")
+                    .replace(std::path::MAIN_SEPARATOR, "/")
+                    .replace(std::path::MAIN_SEPARATOR_STR, "/")
+                    .replace(char_backslash().as_str(), "/"),
             }))
         }
         "integer" => Some(json!({ "type": "number", "value": value["value"] })),

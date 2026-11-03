@@ -440,7 +440,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 }
 
 fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

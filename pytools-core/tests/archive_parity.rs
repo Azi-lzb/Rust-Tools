@@ -383,7 +383,7 @@ fn date_archive_cli_accepts_the_python_compatible_extension_filter_config() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/archive_type_config.xlsx");
     let root = TempDir::new("date-preview-cli");
     let (_input, paths) = setup(&root.0, &cases, None);
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("archive-date-preview")
         .arg("--target-root")
         .arg(root.0.join("target"))

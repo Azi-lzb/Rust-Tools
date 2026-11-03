@@ -34,6 +34,7 @@ fn actual(name: &str, value: impl serde::Serialize) -> (String, Value) {
     )
 }
 
+#[ignore = "requires the real Muban business workbooks on the local disk; loader parity is an operator-run acceptance test"]
 #[test]
 fn real_vba_workbook_loader_parity() -> Result<()> {
     let workbook = fixture("VbaV2.4.2.xlsm");

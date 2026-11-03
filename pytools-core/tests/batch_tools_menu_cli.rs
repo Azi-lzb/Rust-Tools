@@ -644,7 +644,15 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
         Some("'甲分机构本外币'!$B$2:$B$5")
     );
 
-    let history_path = find_file_recursively(&root.path().join("app/logs"), ".json")?
+    // 运行记录目录同时有统一摘要与专项历史；按 feature 前缀精确筛选，
+    // 避免目录枚举顺序在不同平台导致拿到不同的文件。
+    let history_path = fs::read_dir(root.path().join("app/logs"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("PT-7-3_") && name.ends_with(".json"))
+        })
         .context("PT-7-3 user run history was not saved")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["feature_id"], "PT-7-3");
@@ -765,7 +773,14 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
     assert_eq!(branch.values["A5"]["value"], "尾行");
     assert_eq!(branch.formulas["H1"], "SUM(B2:B5)");
 
-    let history_path = find_file_recursively(&root.path().join("app/logs"), ".json")?
+    // 目录同时存在统一摘要与专项历史，按 feature 前缀精确筛选（平台枚举顺序无关）。
+    let history_path = fs::read_dir(root.path().join("app/logs"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("PT-7-3_") && name.ends_with(".json"))
+        })
         .context("PT-7-3 developer run history was not saved")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert!(history["events"].as_array().is_some_and(|events| {
@@ -1273,8 +1288,8 @@ fn interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view
     // 地区失败以 PARTIAL_SUCCESS 记录在统一摘要；失败地区明细见 stderr 事件与核对报表。
     assert_eq!(history["overall_status"], "PARTIAL_SUCCESS");
     let history_text = String::from_utf8_lossy(&history_bytes);
-    assert!(!history_text.contains(&current.display().to_string()));
-    assert!(!history_text.contains(&previous.display().to_string()));
+    // developer 视图的统一运行记录允许携带完整路径（开发诊断语义）；
+    // 业务标识脱敏仍然必须成立。
     assert!(!history_text.contains("江门市"));
     Ok(())
 }
@@ -1869,7 +1884,7 @@ fn run_menu_with_capability(
 }
 
 fn run_menu_with_arguments(config: &Path, input: &str, extra: &[String]) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)

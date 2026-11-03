@@ -29,7 +29,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         &unsupported_xlsb,
         b"not an Excel workbook; PyCode skips .xlsb",
     )?;
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(output_dir.join("output"))
@@ -92,7 +92,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
     assert!(!run_log_text.contains("#DATA!"));
 
     let developer_output_dir = output_dir.join("developer");
-    let developer = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let developer = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(developer_output_dir.join("output"))
@@ -165,7 +165,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
     );
 
     let quiet_output_dir = output_dir.join("quiet");
-    let quiet = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let quiet = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(quiet_output_dir.join("output"))
@@ -386,7 +386,7 @@ fn summary_used_range_cli_reads_vba_enabled_xlsm() -> Result<()> {
     assert!(vba_project_size > 0);
 
     let output_dir = unique_test_dir();
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(output_dir.join("output"))
@@ -569,7 +569,7 @@ fn run_unknown_error_cli(
     run_dir: &Path,
     log_view: Option<&str>,
 ) -> Result<(std::process::Output, Value)> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     command
         .arg("summary-used-range")
         .arg("--output-dir")
@@ -640,7 +640,7 @@ fn worksheet_cell_type_and_value(
 #[test]
 fn summary_used_range_cli_reports_no_reader_when_no_workbook_is_read() -> Result<()> {
     let output_dir = unique_test_dir();
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(output_dir.join("output"))
@@ -688,7 +688,7 @@ fn summary_used_range_failure_event_keeps_file_and_stage_context() -> Result<()>
     let log_dir = root.join("logs");
     fs::write(&source, b"not an OOXML workbook")?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
         .arg("--output-dir")
         .arg(root.join("output"))

@@ -250,7 +250,7 @@ fn run_cli_case(case: &Value, expected: &Value, root: &Path, include_sort_sheet:
         .filter_map(|path| fs::read(path).ok().map(|bytes| (path.clone(), bytes)))
         .collect::<BTreeMap<_, _>>();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("unrename-by-content")
         .arg("--config")
         .arg(&config)

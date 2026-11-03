@@ -322,7 +322,7 @@
           },
           "B2": {
             "type": "string",
-            "value": "<ROOT>\\sources\\misc_submission.txt"
+            "value": "<ROOT>/sources/misc_submission.txt"
           },
           "C2": {
             "type": "string",
@@ -358,7 +358,7 @@
           },
           "B2": {
             "type": "string",
-            "value": "<ROOT>\\sources\\2026_Area_Bank_multi.txt"
+            "value": "<ROOT>/sources/2026_Area_Bank_multi.txt"
           },
           "C2": {
             "type": "string",

@@ -148,7 +148,7 @@ fn run_menu(config: &Path, input: &str) -> std::process::Output {
 }
 
 fn run_menu_with_view(config: &Path, input: &str, view: &str) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -175,7 +175,7 @@ fn run_menu_with_capability(
     capability: &Path,
     platform: &str,
 ) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -350,7 +350,7 @@ fn run_extract_cli(
     platform: Option<&str>,
     source: &Path,
 ) -> std::process::Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     command
         .arg("extract-sheets")
         .arg("--config")
@@ -685,7 +685,7 @@ fn cli_loads_config_and_runs_the_area_extraction_candidate() {
     let cases = cases();
     let root = temporary_directory("sheet-extract-cli");
     let output_dir = root.join("output");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     command
         .arg("extract-sheets-area")
         .arg("--config")

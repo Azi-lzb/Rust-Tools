@@ -149,7 +149,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
 
     // 菜单不再打印 JSON；追加/预校验的机器可读结果通过 CLI 子命令验证。
     let append_output_dir = root.path().join("append-out");
-    let append_plan = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let append_plan = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -170,7 +170,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     assert!(append_plan_file.is_file());
     assert!(!target.exists());
 
-    let precheck = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let precheck = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-precheck", "--config"])
         .arg(&config)
         .output()?;
@@ -658,7 +658,7 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
 
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .output()
@@ -1002,7 +1002,7 @@ fn read_2_3_events(root: &Path) -> Result<Vec<Value>> {
 }
 
 fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -1030,7 +1030,7 @@ fn run_menu_with_capability(
     capability: &Path,
     platform: &str,
 ) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -1072,7 +1072,7 @@ fn output_json(output: &Output) -> Result<Value> {
 
 /// 菜单不再打印 JSON：追加计划通过 CLI 子命令获取（仍输出数组 JSON）。
 fn append_plan_json(config: &Path, output_dir: &Path) -> Result<Value> {
-    let run = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let run = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(config)
         .args(["--output-dir"])

@@ -143,7 +143,7 @@ fn region_sum_cli_runs_python_baseline_workflow() -> Result<()> {
     let log_dir = test_dir.join("logs");
     let config_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/config_loader.xlsx");
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("region-sum-check")
         .arg("--config")
         .arg(config_path)
@@ -228,7 +228,7 @@ fn region_sum_cli_projects_cached_formula_totals_like_python() -> Result<()> {
     let log_dir = test_dir.join("logs");
     let config_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/config_loader.xlsx");
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("region-sum-check")
         .arg("--config")
         .arg(config_path)
@@ -341,7 +341,7 @@ fn interactive_region_sum_menu_matches_python_baseline_workbook() -> Result<()> 
         .collect::<Vec<_>>()
         .join(";");
     let input = format!("5\n5\n1\n{paths}\n0\n0\n");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(&config_path)
@@ -449,7 +449,7 @@ fn region_sum_cli_uses_configured_output_and_log_directories() -> Result<()> {
     let global = load_global(&config_path)?;
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/region_sum/balanced.xlsx");
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("region-sum-check")
         .arg("--config")
         .arg(&config_path)

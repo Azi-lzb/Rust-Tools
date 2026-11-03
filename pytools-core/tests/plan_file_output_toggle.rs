@@ -88,7 +88,7 @@ fn make_workbooks(dir: &Dir, toggle: Option<&str>) -> Result<()> {
 }
 
 fn run_plan_cli(config: &Path, output_dir: &Path) -> Result<serde_json::Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(config)
         .args(["--output-dir"])

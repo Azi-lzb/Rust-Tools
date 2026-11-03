@@ -51,7 +51,7 @@ impl StagedProductRuntime {
             .parent()
             .context("isolated Python has no runtime root")?
             .canonicalize()?;
-        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_pytools"));
+        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_RustTools"));
         let installation_root = product_binary
             .parent()
             .context("pytools binary has no bin directory")?
@@ -201,7 +201,7 @@ fn pt_7_2_batch_apply_uses_openpyxl_worker_and_preserves_fixture_objects() -> Re
     let capability = capability_for(&plan);
     fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
 
-    let execution = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let execution = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args([
             "institution-normalize",
             "--config",

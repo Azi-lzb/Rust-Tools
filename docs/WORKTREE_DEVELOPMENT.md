@@ -28,8 +28,8 @@ Main 是正式集成和唯一正式发布分支，不承担日常业务开发。
 
 - 源码、Cargo 清单与锁文件、配置、BAT、文档、测试资源以及每个工作树自己的 `dist` 保留在 C 盘对应目录。
 - Cargo 构建产物分别写入上表的 F 盘目录。直接执行 Cargo 命令前，必须按当前分支设置对应的 `CARGO_TARGET_DIR`；PowerShell 使用 `$env:CARGO_TARGET_DIR='对应的 F 盘路径'`，CMD 使用 `set "CARGO_TARGET_DIR=对应的 F 盘路径"`。不要让 Cargo 默认在 C 盘创建 `target`，也不要让并行 Worktree 共用 target。
-- `build-release.bat` 根据当前仓库根目录和分支选择 target；成功后只复制到当前工作树的 `dist`。`run.bat` 只运行当前工作树的 `dist\pytools.exe`，缺少文件时失败退出，不自动编译。
-- `package.bat` 只打包当前工作树已有的 `dist` 和资源，不隐式构建。Feature/Test 包必须标记为测试包；正式 Release 构建与正式交付包只允许来自 `main`。
+- Release 构建使用 `cargo build --release --offline -p pytools-core --bin RustTools`（按分支映射 `CARGO_TARGET_DIR`），成功后只复制到当前工作树的 `dist`。用户直接双击 `dist\RustTools.exe` 运行，程序自动定位配置。
+- 打包使用已有 `dist` 和 `packaging/` 脚本，不隐式构建。Feature/Test 包必须标记为测试包；正式 Release 构建与正式交付包只允许来自 `main`。
 - 本规范不授予编译、运行、测试或打包权限。仍须遵守当前用户对本次任务的明确授权；没有授权时不得运行 Cargo 或通过脚本间接编译。不得执行 `cargo clean` 或清理 F 盘缓存。
 
 ## 4. 修改权限与跨工作树边界

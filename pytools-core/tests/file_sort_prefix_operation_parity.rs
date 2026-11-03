@@ -276,7 +276,7 @@ fn operation_49_cli_executes_rust_workflow_against_python_baseline() {
     let config =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/file_sort_prefix_config.xlsx");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("file-sort-prefix")
         .arg("--config")
         .arg(&config)

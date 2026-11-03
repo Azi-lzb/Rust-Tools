@@ -212,7 +212,7 @@ fn pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references() -> 
     make_source(&input)?;
     let source_bytes = fs::read(&input)?;
 
-    let plan_only = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let plan_only = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-comment-plan", "--input"])
         .arg(&input)
         .args(["--output"])
@@ -246,7 +246,7 @@ fn pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references() -> 
         ))?,
     )?;
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-comment-plan", "--input"])
         .arg(&input)
         .args(["--output"])
@@ -395,7 +395,7 @@ fn pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch() -> Resul
     make_config(&config, &input)?;
     let source_bytes = fs::read(&input)?;
 
-    let plan_only = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let plan_only = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -415,7 +415,7 @@ fn pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch() -> Resul
     let capability = capability_for(&plan, "synthetic-pt-2-4-config-delete");
     fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-config-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])

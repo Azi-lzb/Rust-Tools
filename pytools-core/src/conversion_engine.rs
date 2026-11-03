@@ -1087,9 +1087,16 @@ fn validate_conversion(
             "com" if cfg!(windows) => {
                 // Same batch-owned Word/WPS instance that produced the
                 // candidate also extracts both texts - no extra process.
-                let source_text = runtime.com()?.extract_word_text(input)?;
-                let output_text = runtime.com()?.extract_word_text(output)?;
-                (source_text, output_text)
+                #[cfg(windows)]
+                {
+                    let source_text = runtime.com()?.extract_word_text(input)?;
+                    let output_text = runtime.com()?.extract_word_text(output)?;
+                    (source_text, output_text)
+                }
+                #[cfg(not(windows))]
+                {
+                    unreachable!("COM conversion is only available on Windows")
+                }
             }
             _ => bail!("unsupported text-validation engine {engine:?}"),
         };

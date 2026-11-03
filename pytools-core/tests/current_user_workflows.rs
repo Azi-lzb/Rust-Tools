@@ -88,7 +88,7 @@ fn foreign_bank_in_place_deletes_only_matching_rows_without_copy_or_plan() -> Re
     sheet.write_string(1, 1, "外资甲")?;
     sheet.write_number(1, 2, 1.0)?;
     settings.save(&config)?;
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["remove-foreign-bank", "--in-place", "umya", "--config"])
         .arg(&config).arg(&source).output()?;
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));

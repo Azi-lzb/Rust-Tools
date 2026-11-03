@@ -83,7 +83,7 @@ fn plan_for(config: &Path, input: &Path, output: &Path) -> Result<ExcelEditPlan>
 }
 
 fn run_cli(config: &Path, capability: &Path, input: &Path) -> Result<std::process::Output> {
-    Ok(Command::new(env!("CARGO_BIN_EXE_pytools"))
+    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["rename-sheets", "--config"])
         .arg(config)
         .args(["--capabilities"])
@@ -267,7 +267,7 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     let capability = dir.path("passed-capability.json");
     write_capability(&capability, &plan, CapabilityStatus::Passed)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["rename-sheets", "--config"])
         .arg(&config)
         .args(["--capabilities"])
@@ -312,7 +312,7 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
         unsupported_hash
     );
 
-    let second_output = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let second_output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["rename-sheets", "--config"])
         .arg(&config)
         .args(["--capabilities"])

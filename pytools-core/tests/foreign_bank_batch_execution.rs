@@ -199,7 +199,7 @@ fn pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets() 
     let source_bytes = fs::read(&source)?;
     let no_change_bytes = fs::read(&no_change_source)?;
 
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["remove-foreign-bank", "--config"])
         .arg(&config)
         .arg(&source)
@@ -228,7 +228,7 @@ fn pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets() 
         &capability_path,
         serde_json::to_vec_pretty(&capability_for(&plan))?,
     )?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["remove-foreign-bank", "--config"])
         .arg(&config)
         .args(["--capabilities"])
@@ -326,7 +326,7 @@ fn pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets() 
     let foreign_output_bytes = fs::read(&foreign_output)?;
     let no_change_output_bytes = fs::read(&no_change_output)?;
 
-    let collision_run = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let collision_run = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["remove-foreign-bank", "--config"])
         .arg(&config)
         .args(["--capabilities"])
@@ -377,7 +377,7 @@ fn pt_7_3_refuses_dynamic_or_complex_cross_sheet_references_before_writing() -> 
         make_source(&source, true, external_formula, defined_name)?;
         let source_bytes = fs::read(&source)?;
 
-        let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .args(["remove-foreign-bank", "--config"])
             .arg(&config)
             .arg(&source)
@@ -389,7 +389,7 @@ fn pt_7_3_refuses_dynamic_or_complex_cross_sheet_references_before_writing() -> 
             serde_json::to_vec_pretty(&capability_for(&plan))?,
         )?;
 
-        let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .args(["remove-foreign-bank", "--config"])
             .arg(&config)
             .args(["--capabilities"])

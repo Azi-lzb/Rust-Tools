@@ -242,7 +242,7 @@ fn pt_2_5_absent_target_appends_unique_rows_through_the_rust_cli() -> Result<()>
 
     let source_before = fs::read(&source)?;
     let config_before = fs::read(&config)?;
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -275,7 +275,7 @@ fn pt_2_5_absent_target_appends_unique_rows_through_the_rust_cli() -> Result<()>
     assert!(plan.edit_plan.is_none());
     assert_eq!(plan.new_workbook.as_ref().unwrap().sheets.len(), 1);
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .output()?;
@@ -358,7 +358,7 @@ fn pt_2_5_skips_existing_targets_when_header_names_order_or_width_differ() -> Re
         make_config(&config, &source, &target)?;
         let target_before = fs::read(&target)?;
 
-        let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .args(["dedup-append-plan", "--config"])
             .arg(&config)
             .args(["--output-dir"])
@@ -404,7 +404,7 @@ fn pt_2_5_existing_target_edits_a_candidate_without_overwriting_the_target() -> 
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
     let config_before = fs::read(&config)?;
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -437,7 +437,7 @@ fn pt_2_5_existing_target_edits_a_candidate_without_overwriting_the_target() -> 
         serde_json::to_vec_pretty(&capability_for(edit_plan))?,
     )?;
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .args(["--capabilities"])
@@ -538,7 +538,7 @@ fn pt_1_3_pt_1_4_explicitly_commit_existing_target_after_capability_validation()
     let target_before = fs::read(&target)?;
     let target_hash = pytools_core::file_commit::sha256_file(&target)?;
     let config_before = fs::read(&config)?;
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -558,7 +558,7 @@ fn pt_1_3_pt_1_4_explicitly_commit_existing_target_after_capability_validation()
         serde_json::to_vec_pretty(&capability_for(edit_plan))?,
     )?;
 
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .args(["--capabilities"])
@@ -633,7 +633,7 @@ fn pt_1_3_pt_1_4_refuse_commit_if_target_changed_after_planning() -> Result<()> 
     make_existing_target(&target)?;
     make_config(&config, &source, &target)?;
 
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -656,7 +656,7 @@ fn pt_1_3_pt_1_4_refuse_commit_if_target_changed_after_planning() -> Result<()> 
     // plan was issued. The commit flag must reject it before running the engine.
     fs::write(&target, b"changed after planning")?;
     let changed_target = fs::read(&target)?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .args(["--capabilities"])
@@ -694,7 +694,7 @@ fn pt_2_5_explicitly_commit_new_target_and_return_commit_receipt() -> Result<()>
     make_source(&source)?;
     make_config(&config, &source, &target)?;
 
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -708,7 +708,7 @@ fn pt_2_5_explicitly_commit_new_target_and_return_commit_receipt() -> Result<()>
     );
     let plan: AppendTargetPlan = serde_json::from_slice(&fs::read(&plan_path)?)?;
     assert!(plan.target_sha256.is_none());
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .arg("--commit-target")
@@ -740,7 +740,7 @@ fn pt_2_5_refuses_to_overwrite_target_created_after_plan() -> Result<()> {
     make_source(&source)?;
     make_config(&config, &source, &target)?;
 
-    let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-plan", "--config"])
         .arg(&config)
         .args(["--output-dir"])
@@ -758,7 +758,7 @@ fn pt_2_5_refuses_to_overwrite_target_created_after_plan() -> Result<()> {
     // Simulate another writer claiming the absent destination after planning.
     fs::write(&target, b"another writer owns this path")?;
     let competing_bytes = fs::read(&target)?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["dedup-append-execute", "--plan"])
         .arg(&plan_path)
         .arg("--commit-target")

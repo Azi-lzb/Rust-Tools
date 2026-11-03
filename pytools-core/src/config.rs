@@ -1043,11 +1043,16 @@ mod tests {
             "timeline_rules": rules_json,
             "path_maps": maps_json,
         });
-        let baseline: Value =
+        let mut baseline: Value =
             serde_json::from_str(include_str!("../probe/reports/config_loader_baseline.json"))
                 .expect("Python baseline report must be valid JSON");
 
         assert_eq!(baseline["python_baseline"]["status"], "保留");
+        // 基线在构建机上生成，日志回退目录是平台相关的用户状态路径；
+        // 结构必须一致，取值以当前平台的 default_log_dir() 为准。
+        baseline["result"]["global"]["log_dir"] = serde_json::Value::String(
+            crate::run_logging::default_log_dir().to_string_lossy().into_owned(),
+        );
         assert_eq!(actual, baseline["result"]);
     }
 

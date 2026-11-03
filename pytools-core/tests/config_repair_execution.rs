@@ -58,7 +58,7 @@ impl StagedProductRuntime {
             .parent()
             .context("isolated Python executable has no runtime root")?
             .canonicalize()?;
-        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_pytools"));
+        let product_binary = PathBuf::from(env!("CARGO_BIN_EXE_RustTools"));
         let installation_root = product_binary
             .parent()
             .context("pytools binary has no bin directory")?
@@ -238,7 +238,7 @@ fn pt_5_1_config_repair_executes_as_one_capability_gated_openpyxl_batch() -> Res
     make_incomplete_config(&input)?;
     let input_before = fs::read(&input)?;
 
-    let plan_only = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let plan_only = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["config-repair-plan", "--input"])
         .arg(&input)
         .args(["--output"])
@@ -260,7 +260,7 @@ fn pt_5_1_config_repair_executes_as_one_capability_gated_openpyxl_batch() -> Res
         &capability_path,
         serde_json::to_vec_pretty(&capability_for(&plan))?,
     )?;
-    let executed = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let executed = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["config-repair-plan", "--input"])
         .arg(&input)
         .args(["--output"])

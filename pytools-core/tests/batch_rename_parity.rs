@@ -164,7 +164,7 @@ fn rust_operation_matches_python_baseline_and_keeps_contents_and_collisions() {
 fn rust_cli_runs_the_same_operation_and_writes_a_log() {
     let (root, config_path, paths, expected_entries) = setup("cli");
     let log_dir = root.0.join("logs");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pytools"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
     command
         .arg("rename-batch")
         .arg("--config")

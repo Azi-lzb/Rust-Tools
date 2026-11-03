@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble the pytools deb from the glibc 2.28 release binary.
+# Assemble the rusttools deb from the glibc 2.28 release binary.
 # Runs inside WSL/Ubuntu (needs cargo-zigbuild, Zig, objdump, dpkg-deb).
 # Stage-level packaging only: final packaging acceptance on Kylin V10/UOS V20
 # belongs to the independent PyTools project acceptance stage.
@@ -10,7 +10,7 @@ WORKSPACE="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CRATE="pytools-core"
 VERSION="0.1.0-$(date +%Y%m%d)"
 TARGET="x86_64-unknown-linux-gnu.2.28"
-STAGING="$(mktemp -d /tmp/pytools-deb-XXXXXX)"
+STAGING="$(mktemp -d /tmp/rusttools-deb-XXXXXX)"
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/mnt/f/RustBuild/pytools}"
 OUT_DIR="$CARGO_TARGET_DIR/deb"
 
@@ -18,10 +18,16 @@ cd "$WORKSPACE"
 export CARGO_TARGET_DIR
 export PATH="/root/.cargo/bin:/root/.local/bin:$PATH"
 
-echo "== building $TARGET release =="
-cargo zigbuild --release --offline --locked --target "$TARGET" -p "$CRATE" --bin pytools
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+    echo "== building $TARGET release =="
+    cargo zigbuild --release --offline --locked --target "$TARGET" -p "$CRATE" --bin RustTools
+fi
 
-binary="$CARGO_TARGET_DIR/x86_64-unknown-linux-gnu/release/pytools"
+# zigbuild normalizes the ".2.28" musl-style suffix onto the base triple dir.
+binary="${BINARY:-$CARGO_TARGET_DIR/$TARGET/release/RustTools}"
+if [ ! -f "$binary" ]; then
+    binary="${BINARY:-$CARGO_TARGET_DIR/x86_64-unknown-linux-gnu/release/RustTools}"
+fi
 echo "== checking GLIBC symbol ceiling =="
 max_glibc="$(objdump -T "$binary" \
     | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' \
@@ -38,15 +44,15 @@ echo "== staging openpyxl runtime (required; failure aborts the deb) =="
 "$WORKSPACE/packaging/openpyxl/stage-runtime.sh" pytools     "${OPENPYXL_RUNTIME_SOURCE:?set OPENPYXL_RUNTIME_SOURCE to the relocatable python runtime root}"     "$STAGING"
 
 echo "== assembling package tree =="
-install -D -m 0755 "$binary" "$STAGING/usr/bin/pytools"
-install -d -m 0755 "$STAGING/usr/share/doc/pytools" "$STAGING/DEBIAN"
-cat > "$STAGING/usr/share/doc/pytools/copyright" <<'EOF'
+install -D -m 0755 "$binary" "$STAGING/usr/bin/RustTools"
+install -d -m 0755 "$STAGING/usr/share/doc/rusttools" "$STAGING/DEBIAN"
+cat > "$STAGING/usr/share/doc/rusttools/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: pytools
+Upstream-Name: rusttools
 Source: workspace-internal Rust migration of py_statistics_tools
 Disclaimer: workspace-internal build; licensing follows the workspace repository.
 EOF
-cp "$WORKSPACE/$CRATE/packaging/deb/README" "$STAGING/usr/share/doc/pytools/README"
+cp "$WORKSPACE/$CRATE/packaging/deb/README" "$STAGING/usr/share/doc/rusttools/README"
 
 installed_size="$(du -sk --exclude=DEBIAN "$STAGING/usr" | cut -f1)"
 sed -e "s/@VERSION@/$VERSION/" -e "s/@INSTALLED_SIZE@/$installed_size/" \
@@ -54,7 +60,7 @@ sed -e "s/@VERSION@/$VERSION/" -e "s/@INSTALLED_SIZE@/$installed_size/" \
 
 echo "== building deb =="
 mkdir -p "$OUT_DIR"
-deb="$OUT_DIR/pytools_${VERSION}_amd64.deb"
+deb="$OUT_DIR/rusttools_${VERSION}_amd64.deb"
 dpkg-deb --build --root-owner-group "$STAGING" "$deb"
 
 echo "== verifying package =="
@@ -65,7 +71,7 @@ echo "== smoke test (extracted binary, no dpkg install) =="
 smoke_dir="$(mktemp -d /tmp/pytools-deb-smoke-XXXXXX)"
 dpkg -x "$deb" "$smoke_dir"
 fixture="$WORKSPACE/$CRATE/tests/fixtures/summary_used_range/error_token_matrix.xlsx"
-"$smoke_dir/usr/bin/pytools" summary-used-range \
+"$smoke_dir/usr/bin/RustTools" summary-used-range \
     --output-dir "$smoke_dir/out" --log-dir "$smoke_dir/out/logs" --log-view off \
     "$fixture" | head -c 400
 echo
@@ -76,7 +82,7 @@ smoke_plan_dir="$(mktemp -d /tmp/pytools-deb-plan-XXXXXX)"
 RUNTIME_PY="$smoke_dir/usr/libexec/pytools/openpyxl/runtime/bin/python3"
 WORKER_PY="$smoke_dir/usr/libexec/pytools/openpyxl/worker/openpyxl_worker.py"
 # 合成夹具 + 计划 + 能力记录，通过解压出的 pytools apply-edit-plan 执行。
-"$RUNTIME_PY" -I - "$smoke_plan_dir" "$smoke_dir/usr/bin/pytools" <<'PYEOF'
+"$RUNTIME_PY" -I - "$smoke_plan_dir" "$smoke_dir/usr/bin/RustTools" <<'PYEOF'
 import json, subprocess, sys
 from pathlib import Path
 
@@ -161,19 +167,19 @@ if [ $? -ne 0 ]; then
 fi
 echo "== install test: dpkg -i + runtime resolution from /usr/bin =="
 if dpkg -i "$deb" >/dev/null 2>&1; then
-    if command -v pytools >/dev/null 2>&1; then
+    if command -v RustTools >/dev/null 2>&1 || [ -x /usr/bin/RustTools ]; then
         # worker 要求输出为全新文件；清掉解压路径冒烟生成的结果后重跑。
         rm -f "$smoke_plan_dir/result.xlsx"
-        /usr/bin/pytools apply-edit-plan \
+        /usr/bin/RustTools apply-edit-plan \
             --plan "$smoke_plan_dir/plan.json" \
             --capabilities "$smoke_plan_dir/capabilities.json" \
             --platform linux-x86_64 >/dev/null 2>&1 &&
             echo "installed-path openpyxl edit: PASS" ||
             echo "WARN: installed-path edit failed (see logs)" >&2
     else
-        echo "WARN: pytools not on PATH after install" >&2
+        echo "WARN: RustTools not on PATH after install" >&2
     fi
-    dpkg -r pytools >/dev/null 2>&1 || true
+    dpkg -r rusttools >/dev/null 2>&1 || true
 else
     echo "WARN: dpkg -i failed in this WSL environment; extracted-tree smoke passed" >&2
 fi

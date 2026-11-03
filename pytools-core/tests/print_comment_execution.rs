@@ -122,7 +122,7 @@ fn run_print_candidate(
         "--platform",
         PLATFORM,
     ];
-    let result = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let result = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(args)
         .output()?;
     success_json(&result)
@@ -158,7 +158,7 @@ fn pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier() -> Result<()> {
         let output = dir.path(&format!("{name}.xlsx"));
         let plan_output = dir.path(&format!("{name}.plan.json"));
         let capability_path = dir.path(&format!("{name}.capability.json"));
-        let planned = Command::new(env!("CARGO_BIN_EXE_pytools"))
+        let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
             .args(["print-comment-plan", "--input"])
             .arg(&source)
             .args(["--output"])

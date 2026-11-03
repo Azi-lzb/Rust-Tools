@@ -267,17 +267,45 @@ fn build_banner() -> String {
     format!("  v{}  构建 {}", env!("CARGO_PKG_VERSION"), stamp)
 }
 
+/// Locate the application configuration without any launcher script, so a
+/// double-click on dist/RustTools.exe finds the project-root config.xlsx.
+/// Search order (first existing wins):
+///   1. PYTOOLS_CONFIG_PATH environment override
+///   2. <exe dir>/config/config.xlsx        (packaged layout)
+///   3. <exe dir>/config.xlsx
+///   4. <exe dir>/../config/config.xlsx     (repo worktree layout)
+///   5. <exe dir>/../config.xlsx
+///   6. <cwd>/config/config.xlsx
+///   7. <cwd>/config.xlsx
+/// When nothing exists, return the exe-parent candidate so 7-1 初始化 places
+/// a new configuration next to the project data instead of inside dist/.
 fn default_app_config_path() -> PathBuf {
     if let Some(config_path) = std::env::var_os("PYTOOLS_CONFIG_PATH") {
         return PathBuf::from(config_path);
     }
 
-    std::env::current_exe()
+    let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|executable| executable.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("config")
-        .join("config.xlsx")
+        .unwrap_or_else(|| PathBuf::from("."));
+    let exe_parent = exe_dir
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| exe_dir.clone());
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let mut candidates = Vec::new();
+    for base in [exe_dir.clone(), exe_parent.clone(), cwd.clone()] {
+        candidates.push(base.join("config").join("config.xlsx"));
+        candidates.push(base.join("config.xlsx"));
+    }
+    if let Some(found) = candidates.iter().find(|candidate| candidate.is_file()) {
+        return found.clone();
+    }
+
+    // Default for 初始化/修复配置: the executable's own directory (portable
+    // install layout) — never a parent that the install does not control.
+    candidates[0].clone()
 }
 
 fn run_interactive_main_menu<R, W>(

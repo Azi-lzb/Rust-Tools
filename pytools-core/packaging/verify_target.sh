@@ -1,5 +1,5 @@
 #!/bin/sh
-# PyTools target-machine acceptance smoke test (Kylin V10 / UOS V20 x86_64).
+# RustTools target-machine acceptance smoke test (Kylin V10 / UOS V20 x86_64).
 # Self-contained: embeds synthetic fixtures, needs no Python/network/Office.
 # Usage:
 #   sh verify_target.sh                     # auto-locates pytools
@@ -10,14 +10,14 @@
 # the real target machine and real business workbooks.
 set -u
 
-PYTOOLS="${PYTOOLS_BIN:-}"
+PYTOOLS="${RUSTTOOLS_BIN:-${PYTOOLS_BIN:-}}"
 if [ -z "$PYTOOLS" ]; then
-    for candidate in "./pytools" "$(dirname "$0")/pytools" "/usr/bin/pytools"; do
+    for candidate in "./RustTools" "$(dirname "$0")/RustTools" "/usr/bin/RustTools"; do
         if [ -x "$candidate" ]; then PYTOOLS="$candidate"; break; fi
     done
 fi
 if [ -z "$PYTOOLS" ] || [ ! -x "$PYTOOLS" ]; then
-    echo "FAIL: pytools executable not found (set PYTOOLS_BIN=/path/to/pytools)"
+    echo "FAIL: RustTools executable not found (set RUSTTOOLS_BIN=/path/to/RustTools)"
     exit 2
 fi
 

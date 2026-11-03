@@ -280,7 +280,7 @@ fn write_source(path: &Path, contents: &[u8]) -> Result<()> {
 }
 
 fn run_menu(config: &Path, log_view: &str, input: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_pytools"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")
         .arg(config)
