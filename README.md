@@ -7,7 +7,9 @@ Rust-Tools 是独立维护的 PyTools Rust 项目。正式源码目录为 `C:\Us
 - 直接双击 `dist\RustTools.exe` 即可运行交互菜单；程序自动定位配置（依次探测 exe 目录、上级目录与当前目录的 `config.xlsx`），无需任何启动脚本。
 - `run-dev.bat` 从当前项目运行 Debug 菜单：调用 `cargo run --offline -p pytools-core --bin pytools -- menu`，复用 `F:\RustBuild\pytools` 增量缓存，并默认读取项目根目录的 `config.xlsx`。首次编译可能较慢；后续按源码变化增量重编译，不打 Release 包。
 - Release 构建入口：`cargo build --release --offline -p pytools-core --bin RustTools`（`CARGO_TARGET_DIR=F:\RustBuild\pytools`）；成功后将 `RustTools.exe` 复制到本项目 `dist\`。
-- Windows 包使用已有 `dist\` 产物与 `packaging/openpyxl/stage-windows-runtime.py` 组装，不隐式构建。
+- Windows 包：先 `python packaging/openpyxl/stage-windows-runtime.py --dist dist` 暂存运行时，再
+  `powershell -File packaging/windows-package.ps1` 组装。包内布局（解压后在根目录双击 exe 即用）：
+  `RustTools.exe` + `config/config.xlsx` + `python/`（openpyxl 运行时）+ `doc/README.md`。
 - 格式转换（XLS/ET→XLSX、DOC→DOCX）由 pytools 内置转换引擎完成：Windows `.xls/.xlsb/.xlsm` 默认使用随包 CPython + pywin32 调用 Excel/WPS COM，并在批次内复用会话；`.et` 保留 Rust COM/WPS 格式核验；非 Windows 使用本机 LibreOffice `soffice`（可选）。没有独立 sidecar EXE，也不依赖系统 Python。
 - 项目根目录的 `config.xlsx` 是本地用户配置，已被 Git 忽略；不要将业务文件或本地配置提交到仓库。
 
