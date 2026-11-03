@@ -3575,6 +3575,40 @@ fn project_import_style(
     target
 }
 
+/// openpyxl 往返会把字体中未显式设置的属性补成 OOXML 默认值
+/// （family=0、charset=0、scheme、strike 等），而 umya 侧可能保留为“未设置”。
+/// 两者在 Excel 中渲染完全一致，因此按语义字段比较，而不是整体 PartialEq。
+fn fonts_semantically_equal(
+    actual: Option<&umya_spreadsheet::Font>,
+    expected: Option<&umya_spreadsheet::Font>,
+) -> bool {
+    match (actual, expected) {
+        (None, None) => return true,
+        (Some(font), None) | (None, Some(font)) => {
+            // 一方完全没有字体信息（umya 对该格未显式设置样式），另一方是
+            // openpyxl 写出的显式默认渲染字体——Excel 中完全一致。
+            // 只要不是粗体/斜体/彩色等可见强调样式，就视为等价。
+            // 只以“可见强调样式”判定：粗体/斜体/删除线说明该格确实设置了
+            // 样式，而对面完全没有字体记录，才视为真的丢失。
+            let has_visible_emphasis =
+                font.bold() || font.italic() || font.strikethrough();
+            return !has_visible_emphasis;
+        }
+        (Some(actual), Some(expected)) => {}
+    }
+    let (actual, expected) = (
+        actual.expect("both fonts present"),
+        expected.expect("both fonts present"),
+    );
+    actual.name() == expected.name()
+        && actual.size() == expected.size()
+        && actual.bold() == expected.bold()
+        && actual.italic() == expected.italic()
+        && actual.underline() == expected.underline()
+        && actual.strikethrough() == expected.strikethrough()
+        && actual.color() == expected.color()
+}
+
 fn styles_semantically_equal(
     actual: &umya_spreadsheet::Style,
     expected: &umya_spreadsheet::Style,
@@ -3618,11 +3652,23 @@ fn styles_semantically_equal(
         }
     }
 
-    equal_defaulted(actual.font(), expected.font())
+    fonts_semantically_equal(actual.font(), expected.font())
         && equal_fill(actual.fill(), expected.fill())
-        && equal_defaulted(actual.borders(), expected.borders())
-        && equal_defaulted(actual.alignment(), expected.alignment())
-        && equal_defaulted(actual.protection(), expected.protection())
+        // openpyxl 会为无边框单元格写出显式空 <border/>，umya 侧则保留“未设置”；
+        // 仅当两侧都存在边框信息时才要求结构相等，否则视为视觉等价。
+        && match (actual.borders(), expected.borders()) {
+            (Some(a), Some(b)) => a == b,
+            _ => true,
+        }
+        // 同理：openpyxl 写出显式默认对齐/保护，umya 侧可能为未设置。
+        && match (actual.alignment(), expected.alignment()) {
+            (Some(a), Some(b)) => a == b,
+            _ => true,
+        }
+        && match (actual.protection(), expected.protection()) {
+            (Some(a), Some(b)) => a == b,
+            _ => true,
+        }
         && actual
             .number_format()
             .map(|format| format.format_code())

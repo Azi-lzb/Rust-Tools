@@ -578,7 +578,9 @@ fn interactive_dedup_append_creates_missing_sheet_in_existing_target() -> Result
 }
 
 #[test]
-fn interactive_dedup_append_rejects_unverified_target_parts() -> Result<()> {
+fn interactive_dedup_append_rejects_unknown_package_parts() -> Result<()> {
+    // 语义更新：含**真实**图表部件的目标现在由 umya→openpyxl 逐级尝试并保留；
+    // 但包里出现完全未知、无法确认保真的部件时，仍然拒绝改写（保护不变量）。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -587,18 +589,33 @@ fn interactive_dedup_append_rejects_unverified_target_parts() -> Result<()> {
     create_initial_target(&target)?;
     let file = fs::OpenOptions::new().read(true).write(true).open(&target)?;
     let mut archive = zip::ZipWriter::new_append(file)?;
-    archive.start_file("xl/charts/chart1.xml", zip::write::SimpleFileOptions::default())?;
-    archive.write_all(b"<chart/>")?;
+    archive.start_file(
+        "xl/totally-unknown-feature/thing.xml",
+        zip::write::SimpleFileOptions::default(),
+    )?;
+    archive.write_all(b"<unknown/>")?;
     archive.finish()?;
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
 
-    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
+    let output = run_menu_with_view(&config, "2
+3
+0
+", "developer")?;
     assert!(output.status.success());
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "failed", "{report}");
-    assert!(report[0]["error"].as_str().is_some_and(|error| error.contains("不支持安全追加的结构")));
-    let candidate = PathBuf::from(report[0]["candidate"].as_str().context("candidate path missing")?);
+    assert!(
+        report[0]["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("无法确认的结构")),
+        "unknown parts must still be refused: {report}"
+    );
+    let candidate = PathBuf::from(
+        report[0]["candidate"]
+            .as_str()
+            .context("candidate path missing")?,
+    );
     assert!(!candidate.exists());
     assert_eq!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&source)?, source_before);

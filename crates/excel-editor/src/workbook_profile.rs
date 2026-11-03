@@ -143,6 +143,13 @@ pub fn inspect_xlsx_profile(path: impl AsRef<Path>) -> Result<WorkbookProfile> {
     })
 }
 
+/// Package parts this inspector understands well enough to keep the
+/// preservation inventory complete. Every part recognised here is already
+/// mapped to a `WorkbookFeature` by `inspect_xlsx_profile`, so nothing is
+/// hidden: the feature is still reported and still gates backends through
+/// `supported_features`. Leaving a detected part out of this list only forces
+/// `inventory_complete = false`, which makes *every* rewrite backend refuse the
+/// workbook — including backends that do preserve the part.
 fn known_part(name: &str) -> bool {
     name == "[content_types].xml"
         || name.starts_with("_rels/")
@@ -159,6 +166,23 @@ fn known_part(name: &str) -> bool {
         || (name.starts_with("xl/drawings/") && name.ends_with(".vml"))
         || name.starts_with("xl/printersettings/")
         || name.ends_with(".rels")
+        // Structured/embedded parts reported individually as a WorkbookFeature
+        // above (Charts, Drawings, Images, PivotTables, Slicers, ExternalLinks,
+        // Macros, ActiveX, DigitalSignatures).
+        || name.starts_with("xl/charts/")
+        || name.starts_with("xl/drawings/")
+        || name.starts_with("xl/media/")
+        || name.starts_with("xl/pivot")
+        || name.starts_with("xl/slicers/")
+        || name.starts_with("xl/externallinks/")
+        || name.starts_with("xl/tables/")
+        || name.starts_with("xl/querytables/")
+        || name.starts_with("xl/ctrlprops/")
+        || name.starts_with("xl/activex/")
+        || name == "xl/vbaproject.bin"
+        || name.starts_with("_xmlsignatures/")
+        || name.starts_with("xl/_xmlsignatures/")
+        || name.starts_with("customxml/")
 }
 
 #[cfg(test)]
@@ -171,6 +195,31 @@ mod tests {
     #[test]
     fn recognizes_openpyxl_legacy_comment_vml_part_name() {
         assert!(known_part("xl/drawings/commentsDrawing1.vml"));
+    }
+
+    /// 含图表/图片/表格等结构化部件的真实工作簿必须保持 inventory_complete，
+    /// 否则所有重写引擎都会被拒（历史缺陷：2-3 追加报“丢失原工作簿结构”）。
+    #[test]
+    fn structured_parts_keep_the_inventory_complete() {
+        for part in [
+            "xl/charts/chart1.xml",
+            "xl/drawings/drawing1.xml",
+            "xl/drawings/_rels/drawing1.xml.rels",
+            "xl/media/image1.png",
+            "xl/pivottables/pivottable1.xml",
+            "xl/pivotcache/pivotcachedefinition1.xml",
+            "xl/slicers/slicer1.xml",
+            "xl/externallinks/externallink1.xml",
+            "xl/tables/table1.xml",
+            "xl/querytables/querytable1.xml",
+            "xl/activex/activex1.xml",
+            "xl/vbaproject.bin",
+            "customxml/item1.xml",
+        ] {
+            assert!(known_part(part), "part must be recognised: {part}");
+        }
+        // A genuinely unknown part still marks the inventory incomplete.
+        assert!(!known_part("xl/totally-new-feature/thing.xml"));
     }
 
     #[test]

@@ -779,3 +779,138 @@ fn pt_2_5_refuses_to_overwrite_target_created_after_plan() -> Result<()> {
     );
     Ok(())
 }
+
+/// 含图表的目标工作簿：umya 往返会丢失 `xl/charts/` 部件（结构校验失败），
+/// 追加执行器必须自动回退到内置 openpyxl worker，并在回退后仍然保留图表。
+///
+/// 该测试需要可用的 openpyxl 运行时（发行包的 dist/python，或显式设置
+/// PYTOOLS_OPENPYXL_PYTHON / PYTOOLS_OPENPYXL_WORKER）；运行时缺失时跳过，
+/// 因为回退本身无法执行，环境限制必须如实记录而不是伪造通过。
+#[test]
+fn pt_2_5_chart_target_falls_back_to_openpyxl_and_keeps_charts() -> Result<()> {
+    if !openpyxl_runtime_available() {
+        eprintln!("skipping: no openpyxl runtime available for the fallback path");
+        return Ok(());
+    }
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let target = dir.path("target.xlsx");
+    let config = dir.path("config.xlsx");
+    let output_dir = dir.path("output");
+    make_source(&source)?;
+    make_config(&config, &source, &target)?;
+    make_chart_target(&target)?;
+
+    let target_profile_before = excel_editor::inspect_xlsx_profile(&target)?;
+    anyhow::ensure!(
+        target_profile_before
+            .features_present
+            .contains(&excel_editor::WorkbookFeature::Charts),
+        "fixture must carry a chart"
+    );
+    anyhow::ensure!(
+        target_profile_before.inventory_complete,
+        "a chart workbook must keep a complete preservation inventory"
+    );
+
+    let planned = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["dedup-append-plan", "--config"])
+        .arg(&config)
+        .args(["--output-dir"])
+        .arg(&output_dir)
+        .output()?;
+    let reports = assert_success(&planned)?;
+    let plan_path = PathBuf::from(
+        reports[0]["plan_file"]
+            .as_str()
+            .context("plan path missing from CLI output")?,
+    );
+    let plan: AppendTargetPlan = serde_json::from_slice(&fs::read(&plan_path)?)?;
+    anyhow::ensure!(plan.target_existed, "fixture target must pre-exist");
+
+    // 直接调用 planner 的直连追加执行器（菜单 2-3 在没有 capability 时
+    // 走的正是这条路径）：umya 结构校验失败后应自动回退 openpyxl。
+    let candidate = pytools_core::dedup_ops::write_existing_append_candidate(&plan)
+        .context("direct append with openpyxl fallback")?;
+    anyhow::ensure!(
+        candidate.is_file(),
+        "fallback candidate was not produced: {}",
+        candidate.display()
+    );
+    let after = excel_editor::inspect_xlsx_profile(&candidate)?;
+    anyhow::ensure!(
+        target_profile_before
+            .features_present
+            .is_subset(&after.features_present),
+        "fallback candidate lost workbook features: before={:?} after={:?}",
+        target_profile_before.features_present,
+        after.features_present
+    );
+    assert!(
+        after
+            .features_present
+            .contains(&excel_editor::WorkbookFeature::Charts),
+        "charts must survive the fallback append"
+    );
+
+    // 追加结果本身也必须正确：既有行保留、新行写入。
+    let output = read_workbook(&candidate)?;
+    let combined = sheet(&output, "Combined")?;
+    assert_eq!(text_at(combined, "A1"), Some("ID"));
+    assert_eq!(text_at(combined, "A2"), Some("Z"));
+    Ok(())
+}
+
+/// 带图表的既有目标工作簿（openpyxl 写出，确保图表是真实 OOXML 部件）。
+fn make_chart_target(path: &Path) -> Result<()> {
+    let python = std::env::var("PYTOOLS_OPENPYXL_PYTHON")?;
+    let script = format!(
+        r#"
+import sys
+from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
+wb = Workbook()
+ws = wb.active
+ws.title = "Combined"
+for column, header in enumerate(["ID", "Amount", "Derived"], start=1):
+    ws.cell(row=1, column=column, value=header)
+ws["A2"] = "Z"
+ws["B2"] = 99
+ws["C2"] = "=B2*2"
+chart = BarChart()
+chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=2), titles_from_data=True)
+ws.add_chart(chart, "E2")
+wb.save(r"{path}")
+"#,
+        path = path.display()
+    );
+    let script_path = path.with_extension("make-chart.py");
+    fs::write(&script_path, script)?;
+    let status = Command::new(&python).arg("-I").arg(&script_path).status()?;
+    let _ = fs::remove_file(&script_path);
+    anyhow::ensure!(status.success(), "failed to build the chart fixture");
+    Ok(())
+}
+
+/// 回退路径是否可执行：显式环境变量或发行包 dist/python 皆可。
+fn openpyxl_runtime_available() -> bool {
+    if let (Ok(python), Ok(_worker)) = (
+        std::env::var("PYTOOLS_OPENPYXL_PYTHON"),
+        std::env::var("PYTOOLS_OPENPYXL_WORKER"),
+    ) {
+        return Path::new(&python).is_file();
+    }
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(_) => return false,
+    };
+    let mut cursor = exe.parent();
+    while let Some(directory) = cursor {
+        let candidate = directory.join("python").join("python.exe");
+        if candidate.is_file() {
+            return true;
+        }
+        cursor = directory.parent();
+    }
+    false
+}

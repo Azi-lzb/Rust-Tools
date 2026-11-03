@@ -1336,8 +1336,11 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         edit_plan.format == WorkbookFormat::Xlsx,
         "直接追加仅支持 .xlsx 目标工作簿"
     );
-    ooxml_patch::reject_unverified_parts(&plan.target)
-        .context("目标工作簿含不支持安全追加的结构")?;
+    // 结构清单必须完整：未知部件无法确认保真，任何引擎都不应改写。
+    // 注意这里不再套用 ooxml-patch 的部件黑名单——那份名单描述的是
+    // “页眉文本补丁适配器”的改写范围，不是 umya/openpyxl 的能力边界；
+    // 含图表/图片/数据透视的目标由下面的引擎逐个尝试（umya → openpyxl），
+    // 最终以候选文件的 features 子集校验为准。
     anyhow::ensure!(
         edit_plan.workbook.inventory_complete,
         "目标工作簿包含无法确认的结构，未执行追加"
@@ -1392,14 +1395,50 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
         Ok(())
     })();
-    if let Err(error) = result {
+    if let Err(umya_error) = result {
         if let Err(cleanup_error) = fs::remove_file(&plan.candidate) {
-            return Err(error.context(format!(
+            return Err(umya_error.context(format!(
                 "清理未通过校验的候选文件失败：{}；{cleanup_error}",
                 plan.candidate.display()
             )));
         }
-        return Err(error);
+        // umya 重建候选可能丢失原工作簿结构（features 清单子集校验失败等）。
+        // 回退到内置 openpyxl worker 执行同一追加计划；openpyxl 的往返保留
+        // 率更高。两个引擎都失败时，返回双错误链供诊断。
+        let fallback = (|| -> Result<()> {
+            let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
+            let platform = crate::inplace_edit::platform_id();
+            crate::edit_plan::apply_plan(edit_plan, &[capability], &platform)
+                .context("openpyxl 回退：执行追加计划失败")?;
+            crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
+                .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
+            let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
+            validate_append_candidate(edit_plan, &before, &after)?;
+            let actual_names = read_defined_names(&plan.candidate)?;
+            anyhow::ensure!(
+                comparable_defined_names(&before_names)? == comparable_defined_names(&actual_names)?,
+                "目标工作簿名称定义发生变化"
+            );
+            let after_comments = read_ooxml_comments(&plan.candidate)?;
+            for sheet in &before.sheets {
+                anyhow::ensure!(
+                    before_comments.get(&sheet.name) == after_comments.get(&sheet.name),
+                    "目标工作表 {:?} 的批注或作者发生变化",
+                    sheet.name
+                );
+            }
+            let candidate_profile = inspect_xlsx_profile(&plan.candidate)?;
+            anyhow::ensure!(
+                edit_plan.workbook.features_present.is_subset(&candidate_profile.features_present),
+                "openpyxl 回退候选仍丢失了原工作簿结构"
+            );
+            Ok(())
+        })();
+        if let Err(openpyxl_error) = fallback {
+            return Err(umya_error.context(format!(
+                "openpyxl 回退也失败：{openpyxl_error:#}；两条路径均无法保真追加该目标工作簿"
+            )));
+        }
     }
     Ok(plan.candidate.clone())
 }

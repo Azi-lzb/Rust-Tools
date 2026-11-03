@@ -75,7 +75,7 @@ impl InPlaceEngine {
     }
 }
 
-fn platform_id() -> String {
+pub(crate) fn platform_id() -> String {
     if cfg!(windows) {
         "windows-x86_64".to_owned()
     } else if cfg!(target_os = "macos") {
@@ -104,6 +104,14 @@ fn capability_for(plan: &ExcelEditPlan, engine: InPlaceEngine) -> BackendCapabil
             platform,
         }),
     }
+}
+
+/// 供内置追加执行器（2-3 已有目标）在 umya 结构校验失败时构造 openpyxl
+/// 回退能力记录：operations/features/preserve 全部由追加计划推导。
+pub(crate) fn openpyxl_worker_capability_for_plan(
+    plan: &ExcelEditPlan,
+) -> excel_editor::BackendCapability {
+    capability_for(plan, InPlaceEngine::Openpyxl)
 }
 
 /// 预检用的最小 openpyxl 能力记录：仅用于触发运行时解析与路径校验，
