@@ -17,3 +17,15 @@
 性质与限制：Windows 合成样本验证；不构成真实业务文件、原生 ET/ETT 正向转换或 Linux/deb 验收。真实 ET 样本仍需用户提供后按 `PYTOOLS_NATIVE_ET_FIXTURE` 运行。
 
 回滚：恢复 `conversion_com.rs` 与 `mod conversion_com`，并将 `select_conversion_engine`/`select_fidelity_engine` 的 pywin32 分支改回 com。
+
+补充（2026-11-04，重算降级）：
+- `pywin32_excel_conversion_worker.py` 新增 `_force_recalc`：`CalculateFullRebuild` →
+  `CalculateFull`，不使用 `Application.Calculate`。
+- 实测证据：Excel 生成 `=A1*3+4`（缓存 34），改写缓存为 999 后重开，
+  `Application.Calculate` 后仍 999；`CalculateFull` 与 `CalculateFullRebuild` 均为 34；
+  不经重算直接 SaveAs 会把 999 写入 xlsx。Application 与 KET 都有这三个方法，
+  Workbook 三者都没有（hasattr 实测 False）。
+- 有公式且重算全失败时拒绝转换；无公式时继续并在证据记录 `recalc_failed`。
+- 1-4 校验区域重算同用 `_force_recalc`，失败中止提取。
+- 验证：`cargo test -p pytools-core` 全绿；`stale.xls`（缓存 999）经 release exe 与
+  重新打包的 ZIP 转换均得 `<v>34</v>`；`formula.xls` 得 `<v>27</v>`。

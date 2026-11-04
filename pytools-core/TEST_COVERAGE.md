@@ -99,6 +99,13 @@
    显式启用的 Windows COM 用例 `conversion_pywin32_windows` 2/2（XLS 批次复用；DOC/WPS/WPT
    三种 Word 源均转换成功、源字节不变）与 `conversion_cli_does_not_publish_xls_payload_mislabeled_as_et` 1/1。
    未验证：真实原生 .et/.ett 正向转换（无合法夹具）、Linux/deb。
+13. 重算方法降级与证据（2026-11-04）：`_force_recalc` 优先 `CalculateFullRebuild`，
+   失败降级 `CalculateFull`，不把 `Application.Calculate` 当成功——实测把 Excel 生成的
+   `=A1*3+4` 缓存改成 999 后重开，`Calculate` 后仍为 999（只重算脏单元格），
+   `CalculateFull`/`CalculateFullRebuild` 均为 34；同一陈旧工作簿不经重算直接 SaveAs
+   会把 999 原样写入 xlsx。有公式且两种方法都失败时拒绝转换（否则源/候选比较会拿同一份
+   陈旧值互相印证而静默通过），无公式时才继续并记录 `recalc_failed`。证据字段：
+   `recalc_method`、`recalc_fallback_errors`、`recalc_failed`/`recalc_errors`。
 
 ## 第 1 类：数据提取与汇总
 
