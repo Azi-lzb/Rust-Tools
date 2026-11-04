@@ -582,16 +582,48 @@ class ConversionSession:
                     except Exception:
                         pass
                 if attempt == 2:
+                    diagnostics = self._host_diagnostics(first_error, error)
                     raise RuntimeError(
                         f"无法打开校验模板或工作簿副本：\n"
                         f"模板：{template_path}\n副本：{source_copy_path}\n"
                         f"第一次错误：{type(first_error).__name__}: {first_error}\n"
-                        f"重建 Excel/WPS 实例后重试仍失败：{type(error).__name__}: {error}"
+                        f"重建 Excel/WPS 实例后重试仍失败：{type(error).__name__}: {error}\n"
+                        f"{diagnostics}"
                     ) from error
                 first_error = error
                 self._reset_application()
                 self._ensure_application()
         raise AssertionError("unreachable")
+
+    def _host_diagnostics(self, first_error: Any, second_error: Any) -> str:
+        """State of the COM host at the moment both Open attempts failed.
+
+        `Application.Ready` distinguishes "Excel is busy/blocked by a dialog"
+        from "Excel rejected this file", which is otherwise indistinguishable
+        from the single generic 1004 message.
+        """
+        parts = [f"宿主应用：{self._application_name or '未知'}"]
+        process_id = self._process_id
+        parts.append(f"宿主进程 PID：{process_id if process_id is not None else '未取得'}")
+        if process_id is not None:
+            parts.append(f"进程仍在运行：{'是' if _process_is_alive(process_id) else '否'}")
+        application = self._application
+        if application is not None:
+            try:
+                parts.append(f"Application.Ready：{bool(application.Ready)}")
+            except Exception as error:
+                parts.append(f"Application.Ready：读取失败（{type(error).__name__}）")
+            try:
+                parts.append(f"已打开的文档数：{int(application.Workbooks.Count)}")
+            except Exception:
+                parts.append("已打开的文档数：读取失败")
+        same_error = type(first_error) is type(second_error) and str(first_error) == str(second_error)
+        parts.append(
+            "两次错误完全相同（更像文件或宿主状态问题，而非偶发）"
+            if same_error
+            else "两次错误不同（更像宿主实例的偶发状态）"
+        )
+        return "；".join(parts)
 
     def recalculate_named_validation(
         self,
