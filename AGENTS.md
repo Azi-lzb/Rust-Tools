@@ -18,7 +18,7 @@
 - 任何直接 Cargo 命令都必须先按上表为当前工作树设置 `CARGO_TARGET_DIR`，避免默认在 C 盘生成 `target` 或多个工作树共用缓存。Release 构建使用 `cargo build --release --offline -p pytools-core --bin RustTools`（main 分支映射 `F:\RustBuild\pytools`）。
 - 所有 BAT 必须以脚本自身目录 `%~dp0` 定位项目，只操作当前工作树，不引用旧 Main、其他项目或旧 Codex 工作树。
 - 本仓库独立拥有业务代码、Cargo workspace、配置和 `crates/` 内的 Excel-Core。不得依赖旧共享 Main、其他项目或旧共享 workspace 的源码、同步、合并或 cherry-pick；可按当前业务需要独立修改本仓库的 Excel-Core，不为统一其他项目而覆盖现有实现。
-- Python 原项目 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 只读，`probe/` 和测试辅助中的 Python 仅供按需比较。隔离 openpyxl worker 仅是既有工作簿修改的受限兼容路径；新增随包的 Windows pywin32 worker 仅负责 Office/WPS COM 格式转换，不得承载 PyTools 业务逻辑。
+- Python 原项目 `C:\Users\AZI\Desktop\VibeCode\4.pytools-main` 只读，`probe/` 和测试辅助中的 Python 仅供按需比较。现有隔离 openpyxl worker 仅用于受能力门控的既有 XLSX 修改。随包 pywin32 worker 当前负责 Office/WPS COM 格式转换及 1-4 明确触发的命名校验区域重算；它不得承载 PyTools 业务规则，也不是通用 Excel 修改器或通用计算 API。其他 COM 计算/修改能力属于未来可选设计，须由明确任务授权并单独验证。
 - 保留根目录本地 `config.xlsx` 和业务文件；它们不应提交到 Git。不得改写原始 Python 项目、RustHistory 原始归档或业务原件；不得删除业务源码、配置、测试夹具及人工验收记录。针对明确任务可按需维护合成测试夹具，保留既有验收证据。
 
 ## 工作方式和业务安全
@@ -26,7 +26,7 @@
 - 后续以用户逐项人工测试与明确反馈为主。用户没有指定功能时，不主动扩大迁移、审计、对拍或优化；出现问题时仅修复该功能及必要依赖。既有已迁移功能优先保留，不自动重写，不得未经测试删除旧功能或以未测试的替代品移除现有业务行为。
 - 保留七类菜单、既定子功能和明确排除项，见 `DEVELOPMENT_GOAL.md`、`pytools-core/MIGRATION_PLAN.md` 和 `pytools-core/MIGRATION_INVENTORY.md`。历史文档和修改记录是参考，不是新的执行任务。
 - 保护原始 Excel 文件、业务数据、公式、必要结构和明确约定保留的对象；优先在副本上操作。涉及覆盖原文件时，必须有明确授权及备份或快照保护。不因普通字体、边框、颜色等外观差异阻塞功能交付；用户明确要求的业务格式和重要结构仍应保护。
-- Excel 原语放在本仓库 `crates/`，PyTools 业务逻辑放在 `pytools-core/`。按需遵循 `rules/13_Rust_Excel读写修改与引擎路由规范.md` 的当前安全约束；遇到冲突，以本轮用户明确要求和本文件为准。
+- Excel 引擎统一选型与安全规范见 `rules/13_Rust_Excel读写修改与引擎路由规范.md`：读取、新建、既有工作簿修改、特殊属性处理、格式转换和公式计算按操作分别选择引擎。该规则的默认矩阵指导未来功能，不要求存量功能立即迁移；发现当前实现与候选规范不同，先记录差异，不因此修改业务代码。Excel 原语放在本仓库 `crates/`，PyTools 业务逻辑放在 `pytools-core/`。规则冲突以本轮用户明确要求和根 AGENTS.md 为准。
 - 新增或修改业务功能必须遵守 `docs/RUN_LOGGING_STANDARD.md`；它是运行日志的唯一权威规范。
 - 新增批处理入口须关联 run_id，记录开始/结束时间、阶段、文件最终状态、必要的 Sheet/单元格定位、输出结果、用户可读错误、结构化错误及统一运行汇总，并为统计和状态判定补充测试；不得凭读取成功推断业务成功，也不得删除旧运行 JSON 的兼容字段。
 - 未经用户批准，不执行 Git 强制操作、push 或远端修改。不得主动清除 Cargo target 缓存。

@@ -13,12 +13,14 @@ Rust-Tools 独立维护现有 PyTools 业务和仓库内 Excel-Core。Rust 负�
 
 - 核心主路径不依赖 Office、WPS、LibreOffice、COM 或 UNO。
 - 公式计算、同类别格式转换及未来 Windows COM 修改只能作为独立、显式选择的可选能力；其不可用不影响读取、新建和其他业务路径。
-- 公式计算通过独立 ExcelCalculator 提供，默认关闭。用户可显式请求普通重算或完整重算；必须验证公式语义、结果和依赖关系，并检查引擎保存造成的公式、样式或结构变化。不得用旧缓存、零值或静态重建冒充重算；未安装/不可用时报告“该功能需要外部引擎”。
+- 通用公式计算通过独立 ExcelCalculator 提供，默认关闭。用户可显式请求普通重算或完整重算；必须验证公式语义、结果和依赖关系，并检查引擎保存造成的公式、样式或结构变化。不得用旧缓存、零值或静态重建冒充重算；未安装/不可用时报告“该功能需要外部引擎”。当前 1-4 命名校验区域提取是由用户选择的独立业务操作，可调用现有 pywin32 Worker 在临时副本上执行专用重算；这不代表通用 ExcelCalculator 已实现或普通读取/汇总会自动重算。
 - 同类转换由用户明确触发，可选择经对拍的保真转换，或经说明损失范围的 Rust/Go 转换。已确认方向包括 Excel .et/.xls → .xlsx、Word .doc → .docx；.xls 可作为改工作表名等操作前的显式转换。具体方向/引擎未登记通过前仍属未验证；结果必须验证 sheet、数据和契约要求保留的对象。
 - PDF、纸张渲染、打印机输出和跨类别转换不在当前迁移范围。打印只写页面设置。
-- sidecar/worker 是独立进程，主程序启动时不检查外部引擎。用户显式触发时才检查依赖；缺失/失败不能阻塞纯 Rust 主路径，未验证输出不得报告成功。
+- 外部 Worker 是独立进程，主程序启动时不检查外部引擎。用户显式触发时才检查依赖；缺失/失败不能阻塞纯 Rust 主路径，未验证输出不得报告成功。
 - 未来 ExcelModifier 可选接入 Microsoft Excel COM、WPS 表格 COM 两个独立 Windows 后端：优先使用 pywin32 / `win32com.client` 与工作簿级 JSON IPC，Excel 使用 `Excel.Application`，WPS 优先验证 `KET.Application`。二者使用独立 EngineId 和 capability 证据，按真实 COM 激活及具体操作验收；不能仅凭软件已安装判定可用。显式选择不可用后端须报错，不静默切换。COM 不提供 Reader/Writer，也不进入 Linux 依赖；不使用 Rust COM、PyO3 或 FFI。只有端到端测量证实 IPC 为瓶颈后才评估替代通信方式。
 - LibreOffice Calc 可作为未来独立 ExcelCalculator 后端（Windows/Linux）；Microsoft Excel COM、WPS COM 计算候选仅限 Windows，WPS 单独验收。ExcelCalculator 不纳入 ExcelModifier；LibreOffice 暂不纳入修改后端。计算适配器可使用适合引擎的通信接口，不强制 JSON IPC。
+- COM 批处理应优先评估在一个受控批次内复用应用实例，按工作簿串行处理；COM 初始化、对象创建和释放须在所属 STA 线程内完成，禁止跨线程共享 COM 对象。复用前后应处理工作簿关闭、计算状态、事件/警告设置、文件占用、超时、异常退出和宿主进程归属，避免关闭用户自行打开的 Office。不得未经测量默认每个文件启动一个 Office 实例，也不得仅凭复用推断性能或稳定性改善。
+- Windows 计算应使用真正的 Excel 计算调用，等待计算完成并检查计算状态，再保存和验证结果；仅设置自动计算/全量计算标志或执行格式转换不等于已经生成公式缓存。需要重建依赖时才使用完整重建，普通计算不默认承担该成本。Linux LibreOffice 计算应使用隔离用户配置目录及无界面/UNO 调用，等待进程完成、检查输出并核验关键公式；格式转换不等同于强制计算，不能假设目标机预装 LibreOffice。
 - PDF、纸张渲染、打印机输出和跨类别转换不在当前迁移范围。打印只写页面设置。旧 COM 业务工作流不得整体搬入 sidecar/worker 以规避 Rust 迁移。
 - 可选 LibreOffice 计算能力不得假设 Linux 目标机预装；发布前须说明独立离线组件/安装包或受支持外部安装等运行时来源，并完成目标平台验证。
 
@@ -32,7 +34,7 @@ Rust-Tools 独立维护现有 PyTools 业务和仓库内 Excel-Core。Rust 负�
 
 ## 2. 项目结构与依赖边界
 
-本仓库的业务逻辑位于 pytools-core/，Excel 原语位于本仓库 crates/，转换辅助位于本仓库 sidecar/lo-convert/。它们是 Rust-Tools 自己维护的实现，不依赖旧 Main、其他项目或旧共享 workspace，不通过合并、cherry-pick 或自动同步取得更新。
+本仓库的业务逻辑位于 `pytools-core/`，Excel 原语位于本仓库 `crates/`。Windows Office/WPS COM Worker 位于 `pytools-core/python/pywin32_excel_conversion_worker.py`，由 Rust 的 `pytools-core/src/conversion_engine.rs` 管理；LibreOffice 转换通过同一 Rust 转换运行时启动本机 `soffice`，没有独立的 LibreOffice sidecar 可执行模块。它们是 Rust-Tools 自己维护的实现，不依赖旧 Main、其他项目或旧共享 workspace，不通过合并、cherry-pick 或自动同步取得更新。
 
 - 通用第三方依赖由本项目根 Cargo.toml 管理；Excel 原语不得承载 PyTools 业务规则。
 - 既有工作簿修改以引擎无关的 ExcelEditPlan/ExcelModifier 表达，按具体操作及保留项选择已验证路径，避免反复打开和保存。
@@ -174,11 +176,12 @@ Rust 业务规则、统计和结果判定始终由 Rust 承担。Rust 项目未�
 | probe | 读取/JSON 导出和部分比较 | 修改计划与全引擎路由探针未形成。 |
 | Excelize worker | 当前没有 Go module/worker/IPC | 当前 unsupported（未实现）；达到 §4.3 门槛后再立项。 |
 | openpyxl worker | `crates/excel-editor/python/openpyxl_worker.py` + Rust `OpenpyxlXlsxBackend`；pytools capability dispatcher 已注册；支持有限 XLSX EditPlan 批处理 | 已实现并通过合成 worker/进程集成测试；Rust 独立读回覆盖已测样本的样式语义、显式行高列宽、填充色、页面设置和 OOXML Print_Area。真实项目模板、操作级 capability、Windows 原生 Rust、glibc 2.28 隔离 runtime、deb 打包和目标机均未验证。无生产 capability JSON、无默认路由；不支持行插删与 ImportRange 尺寸复制，非空公式缓存/未知 parts 写前拒绝。 |
-| sidecar/lo-convert | 同类格式转换已接入；`recalculate` 命令已实现，含缓存清理/完整计算标记、输出校验和 Ubuntu/WSL2 LibreOffice 合成 `SUM` 测试 | 仅候选实现；用户已实际验证 LibreOffice 基础公式计算可行性，不重复泛泛可行性调研；真实业务公式、Excel/WPS 一致性、复杂依赖、Windows COM、超时、目标 Linux/glibc 2.28 和离线运行时来源均未验收；不能宣称通用公式能力或生产默认。 |
-| Excel COM / WPS COM worker | 当前未实现；现有 ExcelModifier 无对应已验收后端 | 尚未实现。未来分别登记 Windows-only Microsoft Excel 与 WPS capability；不得展示为可用选项或用于 Linux 依赖。 |
-| ExcelCalculator | 尚未形成统一公共计算接口 | 未来独立能力；LibreOffice Calc、Excel COM、WPS COM 为候选，按后端/公式/平台验收，不改变当前读写修改默认。 |
+| `pytools-core/src/conversion_engine.rs` / LibreOffice | 当前 Rust 转换运行时可按路由批量启动 `soffice`，并在批次阶段复用进程/配置；现有测试含模拟进程验证 | 属于格式转换路由，不代表通用公式计算已实现。当前 Windows 环境无 LibreOffice；目标 Linux 运行时、业务公式语义和发布依赖仍须按功能验证。 |
+| `pytools-core/python/pywin32_excel_conversion_worker.py` | 随包 CPython + pywin32 Worker 调用 Excel/WPS COM；当前用于指定格式转换，并为 1-4 提供命名校验区域专用重算；批次内复用宿主会话 | 只证明这些具体路径已实现。不能据此声明通用 ExcelCalculator 或 ExcelModifier；公式/格式、Office 版本和保留契约仍按实际测试范围记录。 |
+| ExcelModifier 的 Excel COM / WPS COM 编辑后端 | 当前未实现通用既有工作簿 COM 修改路由 | 未来候选；分别登记 Windows-only Microsoft Excel 与 WPS capability，不得展示为当前可用的通用编辑选项或进入 Linux 依赖。 |
+| ExcelCalculator | 尚未形成通用公共计算接口；1-4 有专用命名校验重算路径 | 通用能力仍为未来独立设计；Windows Excel COM、Linux LibreOffice Calc 等候选须按后端/公式/平台验收，不改变当前读写修改默认。 |
 
-细节和报告见根目录 EXCEL_ENGINE_ARCHITECTURE.md、PYTHON_EXCEL_OPERATION_INVENTORY.md 及各自 probe/reports。报告数字只适用于其中样本和断言。已经通过的窄范围实现继续保留，不因本规则接入而重构。
+当前功能状态和已执行验证见 `pytools-core/MIGRATION_INVENTORY.md` 与 `pytools-core/TEST_COVERAGE.md`；性能证据见本文件引用的基准报告。报告数字只适用于其中样本和断言。已经通过的窄范围实现继续保留，不因本规则接入而重构。
 
 ### 6.2 限定范围的性能证据（报告时间：2026-10-23）
 
