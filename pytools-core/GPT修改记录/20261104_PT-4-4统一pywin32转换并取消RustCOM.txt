@@ -1,0 +1,19 @@
+功能：PT-4-4 Office 格式转换统一走 pywin32 com（方案 B）
+
+变更文件：
+- `pytools-core/python/pywin32_excel_conversion_worker.py`：协议 v2；新增 `.et/.ett`（KET 优先，核验 WPS 原生 FileFormat>=65521）与 `.doc/.wps/.wpt`（KWPS 优先）；新增 `convert_word` / `extract_word_text` 操作；DOCX 改用 wdFormatXMLDocument(12) 并检查候选为 OOXML ZIP；混批时按 WPS 原生格式要求重建 Excel/WPS 宿主实例。
+- `pytools-core/src/conversion_engine.rs`：删除 Rust COM 通道入口（`ComWorker` 访问器、`spreadsheet_com`、`word_com`、ET 二次探测转换），所有 Windows 转换统一 `run_pywin32`；路由表与单元测试同步；DOCX 校验改为 Worker 内文本提取，并保留 `source_extension` 证据。
+- `pytools-core/src/conversion.rs`：扩展 `ConversionCategory::Excel/Word` 与 `is_same_category` 的扩展名矩阵（ett/wps/wpt）；ET 证据校验泛化为 `ensure_wps_source_format_verified`；`explain_engine_failure` 覆盖 ET/ETT。
+- `pytools-core/src/lib.rs`：移除 `mod conversion_com`；`pytools-core/src/conversion_com.rs` 删除。
+- `pytools-core/src/bin/RustTools.rs`：菜单与 CLI 帮助文本同步新格式范围。
+- 测试：`conversion_rust_com_windows.rs` 移除，新增 `conversion_pywin32_windows.rs`（XLS 批次复用；DOC/WPS/WPT 三源转换）；`conversion_menu_cli.rs` 断言更新为 pywin32 证据。
+
+验证：
+- `cargo check --offline --workspace --all-targets`
+- `cargo test --offline -p pytools-core`（全部目标通过；conversion_menu_cli 14/14；LO 用例按环境门控忽略）
+- 显式启用的 Windows COM 用例：`conversion_pywin32_windows` 2/2、`conversion_cli_does_not_publish_xls_payload_mislabeled_as_et` 1/1
+- `cargo fmt -p pytools-core -- --check`（改动文件段无新增差异；本 crate 既有大量未格式化段落，未全库重排）
+
+性质与限制：Windows 合成样本验证；不构成真实业务文件、原生 ET/ETT 正向转换或 Linux/deb 验收。真实 ET 样本仍需用户提供后按 `PYTOOLS_NATIVE_ET_FIXTURE` 运行。
+
+回滚：恢复 `conversion_com.rs` 与 `mod conversion_com`，并将 `select_conversion_engine`/`select_fidelity_engine` 的 pywin32 分支改回 com。

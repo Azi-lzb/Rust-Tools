@@ -10,7 +10,7 @@ Rust-Tools 是独立维护的 PyTools Rust 项目。正式源码目录为 `C:\Us
 - Windows 包：先 `python packaging/openpyxl/stage-windows-runtime.py --dist dist` 暂存运行时，再
   `powershell -File packaging/windows-package.ps1` 组装。包内布局（解压后在根目录双击 exe 即用）：
   `RustTools.exe` + `config/config.xlsx` + `python/`（openpyxl 运行时）+ `doc/README.md`。
-- 格式转换（XLS/ET→XLSX、DOC→DOCX）由 pytools 内置转换引擎完成：Windows `.xls/.xlsb/.xlsm` 默认使用随包 CPython + pywin32 调用 Excel/WPS COM，并在批次内复用会话；`.et` 保留 Rust COM/WPS 格式核验；非 Windows 使用本机 LibreOffice `soffice`（可选）。没有独立 sidecar EXE，也不依赖系统 Python。
+- 格式转换（XLS/ET/ETT→XLSX、DOC/WPS/WPT→DOCX）由 pytools 内置转换引擎完成：Windows 全部 Office 格式统一使用随包 CPython + pywin32 调用本机 Excel/WPS（`.et/.ett` 走 WPS 表格、`.wps/.wpt` 走 WPS 文字，并核验 WPS 原生文件格式），在批次内复用同一 COM 会话；不再保留 Rust 直连 COM 通道。非 Windows 使用本机 LibreOffice `soffice`（可选，仅支持 `.xls/.xlsb/.xlsm→.xlsx`、`.doc→.docx`）。没有独立 sidecar EXE，也不依赖系统 Python。
 - 项目根目录的 `config.xlsx` 是本地用户配置，已被 Git 忽略；不要将业务文件或本地配置提交到仓库。
 
 日常开发和人工测试使用 `run-dev.bat`。修改 Rust 源码后，先退出正在运行的程序，再次双击即可按需增量编译并启动；修改配置无需重新编译，重新加载配置或重启程序即可。两个启动脚本在程序退出后都会显示退出码并等待按键，便于查看错误信息。

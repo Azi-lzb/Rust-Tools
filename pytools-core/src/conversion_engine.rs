@@ -27,10 +27,18 @@ use std::{
     process::{Child, ChildStdin, ChildStdout},
 };
 
+/// Protocol version written by the bundled pywin32 worker. Bumped whenever the
+/// JSON-lines request/response contract changes (v2 added ET/ETT and Word).
+#[cfg(windows)]
+const PYWIN32_PROTOCOL_VERSION: u32 = 2;
+
+/// Lowest FileFormat WPS assigns to its own spreadsheet containers. Values
+/// below it come from Excel (56 = XLS, 51 = XLSX, ...), which would mean the
+/// `.et`/`.ett` extension was only a rename.
+const WPS_NATIVE_FILE_FORMAT_MIN: i32 = 65_521;
+
 /// State scoped to one user conversion request or batch.
 pub(crate) struct ConversionRuntime {
-    #[cfg(windows)]
-    com: Option<crate::conversion_com::ComWorker>,
     #[cfg(windows)]
     pywin32: Option<PythonExcelWorker>,
     libreoffice: Option<LibreOfficeBatchSession>,
@@ -41,8 +49,6 @@ pub(crate) struct ConversionRuntime {
 impl Default for ConversionRuntime {
     fn default() -> Self {
         Self {
-            #[cfg(windows)]
-            com: None,
             #[cfg(windows)]
             pywin32: None,
             libreoffice: None,
@@ -191,42 +197,43 @@ fn run_soffice_process(arguments: &[String]) -> Result<LibreOfficeRunOutcome> {
 /// Resolve the effective fidelity engine exactly like
 /// [`run_fidelity_conversion_with_runtime`] does, so the batch planner and
 /// the per-file path cannot drift apart.
+///
+/// There is no Rust COM channel anymore: every Windows conversion goes
+/// through the bundled pywin32 worker. `com` is kept as a compatibility
+/// alias for `pywin32`.
 pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
     if engine == "auto" {
         if cfg!(windows) {
-            "com"
+            "pywin32"
         } else {
             "lo"
         }
     } else if engine == "lo" {
         "lo"
     } else {
-        "com"
+        "pywin32"
     }
 }
 
 fn select_conversion_engine(
     engine: &str,
-    source_ext: &str,
-    target: &str,
+    _source_ext: &str,
+    _target: &str,
     is_windows: bool,
 ) -> &'static str {
     if engine != "auto" {
         return match engine {
             "lo" => "lo",
-            "com" => "com",
-            "pywin32" => "pywin32",
+            "com" | "pywin32" => "pywin32",
             _ => "lo",
         };
     }
     if !is_windows {
         return "lo";
     }
-    if target == "xlsx" && matches!(source_ext, "xls" | "xlsb" | "xlsm") {
-        "pywin32"
-    } else {
-        "com"
-    }
+    // All Windows fidelity conversions (Excel/WPS spreadsheets and Word/WPS
+    // Writer documents) use one batch-scoped pywin32 worker.
+    "pywin32"
 }
 
 /// Whether this source would run through LibreOffice under the requested
@@ -235,9 +242,9 @@ pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: 
     if select_fidelity_engine(engine) != "lo" {
         return false;
     }
-    // .et stays on the per-file path: its conversion result is rejected
-    // after the fact by the ET source-format evidence check in
-    // `conversion.rs`, so batching it cannot succeed anyway.
+    // .et/.ett stay on the per-file path: their native WPS source format can
+    // only be verified by Office/WPS COM, so a LibreOffice result is rejected
+    // afterwards anyway.
     (target == "xlsx" && matches!(source_ext, "xls" | "xlsb" | "xlsm"))
         || (target == "docx" && source_ext == "doc")
 }
@@ -276,32 +283,6 @@ impl ConversionRuntime {
     }
 
     #[cfg(windows)]
-    fn com(&mut self) -> Result<&mut crate::conversion_com::ComWorker> {
-        if self.com.is_none() {
-            self.com = Some(crate::conversion_com::ComWorker::start()?);
-        }
-        Ok(self.com.as_mut().expect("COM worker initialized"))
-    }
-
-    #[cfg(windows)]
-    fn spreadsheet_com(
-        &mut self,
-        input: &Path,
-        output: &Path,
-        source_ext: &str,
-    ) -> Result<ComExecution> {
-        let converted = self.com()?.convert(input, output, source_ext)?;
-        Ok(ComExecution {
-            source_format: converted.source_format,
-            bridge: "rust",
-            application: Some(converted.application.to_owned()),
-            process_id: Some(converted.process_id),
-            worker_process_id: None,
-            validation: None,
-        })
-    }
-
-    #[cfg(windows)]
     fn spreadsheet_pywin32(&mut self, input: &Path, output: &Path) -> Result<ComExecution> {
         if self.pywin32.is_none() {
             self.pywin32 = Some(PythonExcelWorker::start()?);
@@ -312,7 +293,16 @@ impl ConversionRuntime {
             .expect("pywin32 worker initialized")
             .convert(input, output)?;
         Ok(ComExecution {
-            source_format: None,
+            source_format: converted
+                .validation
+                .get("source_file_format")
+                .and_then(serde_json::Value::as_i64)
+                .and_then(|value| i32::try_from(value).ok()),
+            source_extension: converted
+                .validation
+                .get("source_extension")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
             bridge: "pywin32",
             application: Some(converted.application),
             process_id: converted.process_id,
@@ -322,16 +312,35 @@ impl ConversionRuntime {
     }
 
     #[cfg(windows)]
-    fn word_com(&mut self, input: &Path, output: &Path) -> Result<ComExecution> {
-        let converted = self.com()?.convert_word(input, output)?;
+    fn word_pywin32(&mut self, input: &Path, output: &Path) -> Result<ComExecution> {
+        if self.pywin32.is_none() {
+            self.pywin32 = Some(PythonExcelWorker::start()?);
+        }
+        let converted = self
+            .pywin32
+            .as_mut()
+            .expect("pywin32 worker initialized")
+            .convert_word(input, output)?;
         Ok(ComExecution {
             source_format: None,
-            bridge: "rust",
-            application: Some(converted.application.to_owned()),
+            source_extension: None,
+            bridge: "pywin32",
+            application: Some(converted.application),
             process_id: converted.process_id,
-            worker_process_id: None,
-            validation: None,
+            worker_process_id: Some(converted.worker_process_id),
+            validation: Some(converted.validation),
         })
+    }
+
+    #[cfg(windows)]
+    fn extract_word_text_pywin32(&mut self, input: &Path) -> Result<String> {
+        if self.pywin32.is_none() {
+            self.pywin32 = Some(PythonExcelWorker::start()?);
+        }
+        self.pywin32
+            .as_mut()
+            .expect("pywin32 worker initialized")
+            .extract_word_text(input)
     }
 
     /// Stage and convert every requested file through one LibreOffice
@@ -680,7 +689,8 @@ impl PythonExcelWorker {
                 serde_json::from_str(&line).context("pywin32 worker 启动握手不是有效 JSON")?;
             ensure!(
                 ready.get("ready").and_then(serde_json::Value::as_bool) == Some(true)
-                    && ready.get("protocol").and_then(serde_json::Value::as_u64) == Some(1),
+                    && ready.get("protocol").and_then(serde_json::Value::as_u64)
+                        == Some(u64::from(PYWIN32_PROTOCOL_VERSION)),
                 "pywin32 worker 启动失败：{}",
                 ready
                     .get("error")
@@ -704,7 +714,8 @@ impl PythonExcelWorker {
         }
     }
 
-    fn convert(&mut self, input: &Path, output: &Path) -> Result<PyWin32Conversion> {
+    /// Send one JSON request and read the single JSON response line.
+    fn request(&mut self, request: &serde_json::Value, what: &str) -> Result<serde_json::Value> {
         if let Some(status) = self
             .child
             .try_wait()
@@ -712,29 +723,24 @@ impl PythonExcelWorker {
         {
             bail!("pywin32 worker 已退出（状态：{status}）");
         }
-        let request = serde_json::json!({
-            "op": "convert",
-            "input": input.to_string_lossy(),
-            "output": output.to_string_lossy(),
-        });
-        serde_json::to_writer(&mut self.input, &request)
-            .context("写入 pywin32 Excel 转换请求失败")?;
+        serde_json::to_writer(&mut self.input, request)
+            .with_context(|| format!("写入 {what} 请求失败"))?;
         self.input
             .write_all(b"\n")
             .and_then(|()| self.input.flush())
-            .context("发送 pywin32 Excel 转换请求失败")?;
+            .with_context(|| format!("发送 {what} 请求失败"))?;
 
         let mut line = String::new();
         let bytes = self
             .output
             .read_line(&mut line)
-            .context("读取 pywin32 Excel 转换结果失败")?;
-        ensure!(bytes > 0, "pywin32 worker 未返回转换结果");
+            .with_context(|| format!("读取 {what} 结果失败"))?;
+        ensure!(bytes > 0, "pywin32 worker 未返回{what}结果");
         let response: serde_json::Value =
-            serde_json::from_str(&line).context("pywin32 worker 返回的转换结果不是有效 JSON")?;
+            serde_json::from_str(&line).with_context(|| format!("{what}结果不是有效 JSON"))?;
         ensure!(
             response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
-            "pywin32 Excel 转换失败（阶段：{}）：{}",
+            "{what}失败（阶段：{}）：{}",
             response
                 .get("stage")
                 .and_then(serde_json::Value::as_str)
@@ -744,6 +750,18 @@ impl PythonExcelWorker {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("worker 未提供错误详情")
         );
+        Ok(response)
+    }
+
+    fn convert(&mut self, input: &Path, output: &Path) -> Result<PyWin32Conversion> {
+        let response = self.request(
+            &serde_json::json!({
+                "op": "convert",
+                "input": input.to_string_lossy(),
+                "output": output.to_string_lossy(),
+            }),
+            "pywin32 Excel 转换",
+        )?;
         let validation = response
             .get("validation")
             .cloned()
@@ -770,6 +788,50 @@ impl PythonExcelWorker {
             worker_process_id: self.child.id(),
             validation,
         })
+    }
+
+    fn convert_word(&mut self, input: &Path, output: &Path) -> Result<PyWin32Conversion> {
+        let response = self.request(
+            &serde_json::json!({
+                "op": "convert_word",
+                "input": input.to_string_lossy(),
+                "output": output.to_string_lossy(),
+            }),
+            "pywin32 Word 转换",
+        )?;
+        let application = response
+            .get("application")
+            .and_then(serde_json::Value::as_str)
+            .context("pywin32 worker 未报告 Word/WPS Writer COM 应用")?
+            .to_owned();
+        let process_id = response
+            .get("process_id")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok());
+        Ok(PyWin32Conversion {
+            application,
+            process_id,
+            worker_process_id: self.child.id(),
+            validation: response
+                .get("validation")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({"level": "docx_package_and_text_content"})),
+        })
+    }
+
+    fn extract_word_text(&mut self, input: &Path) -> Result<String> {
+        let response = self.request(
+            &serde_json::json!({
+                "op": "extract_word_text",
+                "input": input.to_string_lossy(),
+            }),
+            "pywin32 Word 文本提取",
+        )?;
+        Ok(response
+            .get("text")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned())
     }
 
     fn recalculate_named_validation_regions(
@@ -947,6 +1009,9 @@ fn unique_lo_session_dir() -> Result<PathBuf> {
 
 struct ComExecution {
     source_format: Option<i32>,
+    /// Native extension reported by the worker for the opened source (used
+    /// to cross-check ET/ETT source-format evidence).
+    source_extension: Option<String>,
     bridge: &'static str,
     application: Option<String>,
     process_id: Option<u32>,
@@ -978,15 +1043,28 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
     );
     let source_ext = extension(input)?;
     ensure!(
-        (matches!(target, "xlsx") && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "et"))
-            || (target == "docx" && source_ext == "doc"),
+        (matches!(target, "xlsx")
+            && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "et" | "ett"))
+            || (target == "docx" && matches!(source_ext.as_str(), "doc" | "wps" | "wpt")),
         "unsupported conversion: .{source_ext} -> .{target}"
     );
-    ensure!(
-        engine != "pywin32"
-            || (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm")),
-        "pywin32 conversion supports .xls, .xlsb or .xlsm to .xlsx"
-    );
+    if !cfg!(windows) {
+        // Every Windows fidelity conversion runs through the pywin32 worker
+        // (`com` is only a compatibility alias); non-Windows keeps LibreOffice.
+        ensure!(
+            (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm"))
+                || (target == "docx" && source_ext == "doc"),
+            "该功能需要外部引擎: .{source_ext} -> .{target} requires Windows Office/WPS COM; LibreOffice only supports .xls/.xlsb/.xlsm -> .xlsx and .doc -> .docx"
+        );
+    } else if engine == "lo" {
+        // LibreOffice cannot prove the native WPS container for .et/.ett/.wps/
+        // .wpt, and the WPS-specific validation would reject its result anyway.
+        ensure!(
+            (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm"))
+                || (target == "docx" && source_ext == "doc"),
+            "LibreOffice 引擎只支持 .xls/.xlsb/.xlsm → .xlsx 和 .doc → .docx；.{source_ext} → .{target} 需要 Windows Office/WPS COM（请用 --engine auto 或 --engine com）"
+        );
+    }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1021,21 +1099,18 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
             }
             None
         }
-        "com" if cfg!(windows) => {
-            Some(run_com(input, &converted, target, &source_ext, runtime, false)?)
-        }
-        "com" => bail!(
-            "该功能需要外部引擎: COM conversion is only available on Windows; install LibreOffice or use --engine lo"
+        "pywin32" if cfg!(windows) => Some(run_pywin32(input, &converted, target, &source_ext, runtime)?),
+        "pywin32" => bail!(
+            "该功能需要外部引擎: Windows Office/WPS COM conversion is only available on Windows; install LibreOffice or use --engine lo"
         ),
-        "pywin32" if cfg!(windows) => {
-            Some(run_com(input, &converted, target, &source_ext, runtime, true)?)
-        }
-        "pywin32" => bail!("pywin32 Excel COM conversion is only available on Windows"),
         _ => unreachable!(),
     };
     let source_file_format = com_execution
         .as_ref()
         .and_then(|execution| execution.source_format);
+    let source_extension = com_execution
+        .as_ref()
+        .and_then(|execution| execution.source_extension.clone());
     let candidate = if converted.exists() {
         converted
     } else {
@@ -1059,6 +1134,7 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         selected,
         temp_dir,
         source_file_format,
+        source_extension.as_deref(),
         com_execution
             .as_ref()
             .and_then(|execution| execution.validation.as_ref()),
@@ -1132,13 +1208,12 @@ fn run_libreoffice(input: &Path, temp_dir: &Path, target: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_com(
+fn run_pywin32(
     input: &Path,
     output: &Path,
     target: &str,
     source_ext: &str,
     runtime: &mut ConversionRuntime,
-    use_pywin32: bool,
 ) -> Result<ComExecution> {
     let output_parent = output
         .parent()
@@ -1159,35 +1234,34 @@ fn run_com(
             input.display()
         )
     })?;
-    match target {
+    let result = match target {
         "xlsx" => {
             #[cfg(windows)]
-            let result = if use_pywin32 {
-                runtime.spreadsheet_pywin32(&com_input, output)
-            } else {
-                runtime.spreadsheet_com(&com_input, output, source_ext)
-            };
-            #[cfg(not(windows))]
-            let result = {
-                let _ = (runtime, use_pywin32);
-                Err(anyhow!("COM conversion is only available on Windows"))
-            };
-            let _ = fs::remove_file(&com_input);
-            return result;
-        }
-        "docx" => {
-            #[cfg(windows)]
-            let result = runtime.word_com(&com_input, output);
+            let result = runtime.spreadsheet_pywin32(&com_input, output);
             #[cfg(not(windows))]
             let result = {
                 let _ = runtime;
                 Err(anyhow!("COM conversion is only available on Windows"))
             };
-            let _ = fs::remove_file(&com_input);
-            return result;
+            result
         }
-        other => bail!("unsupported COM conversion target {other}"),
-    }
+        "docx" => {
+            #[cfg(windows)]
+            let result = runtime.word_pywin32(&com_input, output);
+            #[cfg(not(windows))]
+            let result = {
+                let _ = runtime;
+                Err(anyhow!("COM conversion is only available on Windows"))
+            };
+            result
+        }
+        other => {
+            let _ = fs::remove_file(&com_input);
+            bail!("unsupported COM conversion target {other}");
+        }
+    };
+    let _ = fs::remove_file(&com_input);
+    result
 }
 
 fn validate_conversion(
@@ -1198,6 +1272,7 @@ fn validate_conversion(
     engine: &str,
     temp_dir: &Path,
     source_file_format: Option<i32>,
+    source_extension: Option<&str>,
     external_validation: Option<&serde_json::Value>,
     runtime: &mut ConversionRuntime,
 ) -> Result<String> {
@@ -1224,13 +1299,13 @@ fn validate_conversion(
                     },
                 )
             }
-            "com" if cfg!(windows) => {
+            "pywin32" if cfg!(windows) => {
                 // Same batch-owned Word/WPS instance that produced the
                 // candidate also extracts both texts - no extra process.
                 #[cfg(windows)]
                 {
-                    let source_text = runtime.com()?.extract_word_text(input)?;
-                    let output_text = runtime.com()?.extract_word_text(output)?;
+                    let source_text = runtime.extract_word_text_pywin32(input)?;
+                    let output_text = runtime.extract_word_text_pywin32(output)?;
                     (source_text, output_text)
                 }
                 #[cfg(not(windows))]
@@ -1244,7 +1319,16 @@ fn validate_conversion(
             normalize_document_text(&source_text) == normalize_document_text(&output_text),
             "converted DOCX text content differs from the source document"
         );
-        return Ok("{\"level\":\"docx_package_and_text_content\"}".into());
+        // Keep the worker's source evidence in the final report so callers can
+        // tell which native format (.doc/.wps/.wpt) actually produced the DOCX.
+        let mut validation = serde_json::json!({"level": "docx_package_and_text_content"});
+        if let Some(source_extension) = external_validation
+            .and_then(|value| value.get("source_extension"))
+            .cloned()
+        {
+            validation["source_extension"] = source_extension;
+        }
+        return Ok(validation.to_string());
     }
     let converted = read_comparable_workbook(output)
         .with_context(|| format!("validate converted workbook {}", output.display()))?;
@@ -1259,73 +1343,56 @@ fn validate_conversion(
         );
     }
     if let Some(validation) = external_validation {
-        ensure!(
-            engine == "pywin32"
-                && matches!(source_ext, "xls" | "xlsb" | "xlsm")
-                && validation
-                    .get("verified")
-                    .and_then(serde_json::Value::as_bool)
-                    == Some(true),
-            "pywin32 external validation evidence is invalid for this conversion"
-        );
-        return serde_json::to_string(validation)
-            .context("encode pywin32 Excel preservation validation");
-    }
-    let source_path = if source_ext == "et" {
-        // ET is a CFB container, not necessarily an OOXML ZIP. Convert the
-        // original source separately with the selected engine, then compare
-        // that workbook's sheets, values and formulas with the candidate.
-        // Never disguise the source by changing its extension and asking
-        // Calamine to read it as XLSX.
-        let probe_dir = temp_dir.join("source-probe");
-        fs::create_dir_all(&probe_dir)?;
-        match engine {
-            "lo" => {
-                run_libreoffice(input, &probe_dir, target)
-                    .context("convert ET source for preservation validation with LibreOffice")?;
-                locate_converted(&probe_dir, target)
-                    .context("locate separately converted ET source for validation")?
-            }
-            "com" if cfg!(windows) => {
-                let probe = probe_dir.join(format!("source.{target}"));
-                let probe_file_format = run_com(input, &probe, target, source_ext, runtime, false)
-                    .context("convert ET source for preservation validation with COM")?
-                    .source_format;
-                ensure!(
-                    source_file_format == probe_file_format,
-                    "ET source format verification differed between candidate and preservation probe"
-                );
-                ensure!(
-                    probe.is_file() && fs::metadata(&probe)?.len() > 0,
-                    "COM did not create a non-empty ET source validation workbook"
-                );
-                probe
-            }
-            _ => bail!("unsupported ET source-validation engine {engine:?}"),
+        let verified = validation
+            .get("verified")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+        if matches!(source_ext, "xls" | "xlsb" | "xlsm") {
+            ensure!(
+                engine == "pywin32" && verified,
+                "pywin32 external validation evidence is invalid for this conversion"
+            );
+            return serde_json::to_string(validation)
+                .context("encode pywin32 Excel preservation validation");
         }
-    } else {
-        input.to_path_buf()
-    };
-    let source = read_comparable_workbook(&source_path).with_context(|| {
+        if matches!(source_ext, "et" | "ett") {
+            // The worker compared the WPS-side source snapshot with the
+            // reopened XLSX candidate; only accept it together with the
+            // native WPS FileFormat evidence recorded during that pass.
+            ensure!(
+                engine == "pywin32" && verified,
+                "pywin32 external validation evidence is invalid for this conversion"
+            );
+            let native_format =
+                source_file_format.is_some_and(|format| format >= WPS_NATIVE_FILE_FORMAT_MIN);
+            ensure!(
+                native_format
+                    && source_extension == Some(source_ext)
+                    && validation
+                        .get("source_format_verified")
+                        .and_then(serde_json::Value::as_bool)
+                        == Some(true)
+                    && validation
+                        .get("source_extension")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(source_ext),
+                "WPS-native source-format evidence is missing or inconsistent"
+            );
+            return serde_json::to_string(validation)
+                .context("encode WPS-native Excel preservation validation");
+        }
+    }
+    let source = read_comparable_workbook(input).with_context(|| {
         format!(
             "read source workbook for preservation validation {}",
             input.display()
         )
     })?;
     compare_workbooks(&source, &converted)?;
-    if source_ext == "et" {
-        let (source_format_verified, source_format, source_file_format) =
-            match (engine, source_file_format) {
-                ("com", Some(65521)) => (true, "et", 65521),
-                _ => (false, "unknown", 0),
-            };
-        Ok(format!("{{\"level\":\"worksheet_order_names_values_and_formula_text\",\"source_probe\":\"separate_conversion_using_selected_engine\",\"numeric_tolerance\":1e-15,\"source_format_verified\":{source_format_verified},\"source_format\":\"{source_format}\",\"source_file_format\":{source_file_format}}}"))
-    } else {
-        Ok(
-            "{\"level\":\"worksheet_order_names_values_and_formula_text\",\"numeric_tolerance\":1e-15}"
-                .into(),
-        )
-    }
+    Ok(
+        "{\"level\":\"worksheet_order_names_values_and_formula_text\",\"numeric_tolerance\":1e-15}"
+            .into(),
+    )
 }
 
 fn extract_word_text_lo(input: &Path, output_dir: &Path) -> Result<String> {
@@ -2063,16 +2130,21 @@ mod tests {
     fn libreoffice_batch_request_matrix_matches_per_file_routing() {
         assert_eq!(
             select_fidelity_engine("auto"),
-            if cfg!(windows) { "com" } else { "lo" }
+            if cfg!(windows) { "pywin32" } else { "lo" }
         );
         assert_eq!(select_fidelity_engine("lo"), "lo");
-        assert_eq!(select_fidelity_engine("com"), "com");
+        assert_eq!(select_fidelity_engine("com"), "pywin32");
+        assert_eq!(select_fidelity_engine("pywin32"), "pywin32");
         assert!(libreoffice_batch_request("xls", "xlsx", "lo"));
         assert!(libreoffice_batch_request("xlsb", "xlsx", "lo"));
         assert!(libreoffice_batch_request("xlsm", "xlsx", "lo"));
         assert!(libreoffice_batch_request("doc", "docx", "lo"));
-        // ET stays per-file: its LO result is rejected afterwards anyway.
+        // WPS-native containers stay per-file: only COM can prove the source
+        // really is a native WPS file, so an LO result would be rejected.
         assert!(!libreoffice_batch_request("et", "xlsx", "lo"));
+        assert!(!libreoffice_batch_request("ett", "xlsx", "lo"));
+        assert!(!libreoffice_batch_request("wps", "docx", "lo"));
+        assert!(!libreoffice_batch_request("wpt", "docx", "lo"));
         // Same-category copies and other engines never batch.
         assert!(!libreoffice_batch_request("xlsx", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "com"));
@@ -2080,23 +2152,28 @@ mod tests {
     }
 
     #[test]
-    fn automatic_windows_excel_conversion_uses_the_packaged_pywin32_worker() {
-        assert_eq!(
-            select_conversion_engine("auto", "xls", "xlsx", true),
-            "pywin32"
-        );
-        assert_eq!(
-            select_conversion_engine("auto", "xlsb", "xlsx", true),
-            "pywin32"
-        );
-        assert_eq!(
-            select_conversion_engine("auto", "xlsm", "xlsx", true),
-            "pywin32"
-        );
-        assert_eq!(select_conversion_engine("auto", "et", "xlsx", true), "com");
-        assert_eq!(select_conversion_engine("auto", "doc", "docx", true), "com");
+    fn automatic_windows_conversion_uses_the_packaged_pywin32_worker() {
+        for source in ["xls", "xlsb", "xlsm", "et", "ett"] {
+            assert_eq!(
+                select_conversion_engine("auto", source, "xlsx", true),
+                "pywin32",
+                "auto on Windows must route .{source} through pywin32"
+            );
+        }
+        for source in ["doc", "wps", "wpt"] {
+            assert_eq!(
+                select_conversion_engine("auto", source, "docx", true),
+                "pywin32",
+                "auto on Windows must route .{source} through pywin32"
+            );
+        }
         assert_eq!(select_conversion_engine("auto", "xls", "xlsx", false), "lo");
-        assert_eq!(select_conversion_engine("com", "xls", "xlsx", true), "com");
+        assert_eq!(select_conversion_engine("auto", "doc", "docx", false), "lo");
+        // The retired Rust COM channel is only kept as a CLI alias.
+        assert_eq!(
+            select_conversion_engine("com", "xls", "xlsx", true),
+            "pywin32"
+        );
         assert_eq!(
             select_conversion_engine("pywin32", "xls", "xlsx", true),
             "pywin32"

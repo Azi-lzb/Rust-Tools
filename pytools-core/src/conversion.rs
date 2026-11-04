@@ -198,10 +198,10 @@ fn convert_one_with_runtime(
         matches!(engine, "auto" | "lo" | "com" | "pywin32" | "native"),
         "--engine must be auto, lo, com, pywin32 or native"
     );
-    if source_ext == "et" {
+    if is_wps_native_spreadsheet(&source_ext) {
         anyhow::ensure!(
             !is_ooxml_spreadsheet_package(input)?,
-            "unsupported format: input content is an OOXML Excel workbook with an .et extension; refusing extension-only conversion"
+            "unsupported format: input content is an OOXML Excel workbook with an .{source_ext} extension; refusing extension-only conversion"
         );
     }
     if engine == "native" {
@@ -215,42 +215,58 @@ fn convert_one_with_runtime(
         return convert_native_excel_values(input, output, &source_ext);
     }
     let (staged_input, _staging_guard) = stage_sidecar_input(input, output, &source_ext)?;
-    let staged_output = if source_ext == "et" {
+    let staged_output = if is_wps_native_spreadsheet(&source_ext) {
         staged_input.with_extension(&target)
     } else {
         output.to_path_buf()
     };
     let detail =
         invoke_engine_with_runtime(&staged_input, &staged_output, &target, engine, runtime)?;
-    if source_ext == "et" {
-        ensure_et_source_format_verified(&detail)?;
-        crate::file_commit::create_target_from_candidate(&staged_output, output)
-            .context("publish ET conversion only after source format is verified")?;
+    if is_wps_native_spreadsheet(&source_ext) {
+        ensure_wps_source_format_verified(&detail, &source_ext)?;
+        crate::file_commit::create_target_from_candidate(&staged_output, output).context(
+            "publish WPS-native spreadsheet conversion only after source format is verified",
+        )?;
     }
     Ok(detail)
 }
 
-fn ensure_et_source_format_verified(detail: &str) -> Result<()> {
+fn is_wps_native_spreadsheet(source_ext: &str) -> bool {
+    matches!(source_ext, "et" | "ett")
+}
+
+/// ET/ETT are CFB containers that Excel would silently open as a renamed XLS.
+/// Only the Windows Office/WPS COM worker may publish them, and only with
+/// explicit native-format evidence for the exact source extension.
+fn ensure_wps_source_format_verified(detail: &str, source_ext: &str) -> Result<()> {
     let Ok(report) = serde_json::from_str::<serde_json::Value>(detail) else {
-        bail!("unsupported format: conversion engine did not provide ET source-format evidence");
+        bail!("unsupported format: conversion engine did not provide WPS-native source-format evidence");
     };
     let validation = report.get("validation");
+    let reported_format = validation
+        .and_then(|value| value.get("source_file_format"))
+        .and_then(serde_json::Value::as_i64);
+    let native_format = match source_ext {
+        "et" => reported_format == Some(65_521),
+        "ett" => matches!(reported_format, Some(65_521) | Some(65_522)),
+        _ => false,
+    };
     anyhow::ensure!(
         report.get("status").and_then(serde_json::Value::as_str) == Some("converted")
-            && report.get("engine").and_then(serde_json::Value::as_str) == Some("com")
+            && matches!(
+                report.get("engine").and_then(serde_json::Value::as_str),
+                Some("pywin32") | Some("com")
+            )
             && validation
                 .and_then(|value| value.get("source_format_verified"))
                 .and_then(serde_json::Value::as_bool)
                 == Some(true)
             && validation
-                .and_then(|value| value.get("source_format"))
+                .and_then(|value| value.get("source_extension"))
                 .and_then(serde_json::Value::as_str)
-                == Some("et")
-            && validation
-                .and_then(|value| value.get("source_file_format"))
-                .and_then(serde_json::Value::as_i64)
-                == Some(65_521),
-        "unsupported format: conversion engine did not verify that the .et source is native ET; output was not published"
+                == Some(source_ext)
+            && native_format,
+        "unsupported format: conversion engine did not verify that the .{source_ext} source is native WPS; output was not published"
     );
     Ok(())
 }
@@ -321,7 +337,7 @@ fn stage_sidecar_input(
     output: &Path,
     source_ext: &str,
 ) -> Result<(PathBuf, Option<TempDirGuard>)> {
-    if source_ext != "et" {
+    if !is_wps_native_spreadsheet(source_ext) {
         return Ok((input.to_path_buf(), None));
     }
 
@@ -331,7 +347,7 @@ fn stage_sidecar_input(
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(output_parent).with_context(|| {
         format!(
-            "create ET conversion staging parent {}",
+            "create WPS-native conversion staging parent {}",
             output_parent.display()
         )
     })?;
@@ -339,11 +355,11 @@ fn stage_sidecar_input(
     let guard = TempDirGuard(staging_dir.clone());
     let file_name = input
         .file_name()
-        .context("ET conversion input has no file name")?;
+        .context("WPS-native conversion input has no file name")?;
     let staged_input = staging_dir.join(file_name);
     fs::copy(input, &staged_input).with_context(|| {
         format!(
-            "stage ET source {} for external conversion",
+            "stage WPS-native source {} for external conversion",
             input.display()
         )
     })?;
@@ -386,8 +402,10 @@ fn invoke_engine_with_runtime(
 }
 
 fn explain_engine_failure(message: &str) -> String {
-    if message.contains("Input has .et extension but KET opened FileFormat") {
-        return "KET 未将该 .et 文件识别为原生 ET 工作簿，未生成 XLSX。请确认输入是有效的 WPS ET 文件。"
+    if message.contains("Input has .et extension but")
+        || message.contains("Input has .ett extension but")
+    {
+        return "WPS 未将该文件识别为原生 ET/ETT 工作簿（读出的文件格式不是 WPS 原生格式），未生成 XLSX。请确认输入是有效的 WPS ET/ETT 文件。"
             .to_owned();
     }
     message.trim().to_owned()
@@ -536,13 +554,11 @@ where
             .unwrap_or_default()
             .to_ascii_lowercase();
         let category_ok = match category {
-            ConversionCategory::Excel => {
-                matches!(
-                    ext.as_str(),
-                    "csv" | "et" | "xls" | "xlsx" | "xlsm" | "xlsb"
-                )
-            }
-            ConversionCategory::Word => matches!(ext.as_str(), "doc" | "docx"),
+            ConversionCategory::Excel => matches!(
+                ext.as_str(),
+                "csv" | "et" | "ett" | "xls" | "xlsx" | "xlsm" | "xlsb"
+            ),
+            ConversionCategory::Word => matches!(ext.as_str(), "doc" | "docx" | "wps" | "wpt"),
         };
         if !category_ok {
             run.failed += 1;
@@ -800,12 +816,22 @@ fn fidelity_engine(detail: &str) -> Option<String> {
                 .and_then(serde_json::Value::as_str)
             {
                 Some("Excel.Application") => "Microsoft Excel COM (pywin32)".to_owned(),
-                Some(name) if name.eq_ignore_ascii_case("KET.Application") => {
+                Some(name) if name.eq_ignore_ascii_case("ket.Application") => {
                     "WPS 表格 COM (pywin32)".to_owned()
+                }
+                Some("Word.Application") => "Microsoft Word COM (pywin32)".to_owned(),
+                Some(name)
+                    if matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "kwps.application" | "wps.application"
+                    ) =>
+                {
+                    "WPS 文字 COM (pywin32)".to_owned()
                 }
                 _ => "Windows Office/WPS COM (pywin32)".to_owned(),
             }
         }
+        // Compatibility for reports produced by the retired Rust COM bridge.
         "com" if report.get("com_bridge").and_then(serde_json::Value::as_str) == Some("rust") => {
             match report
                 .get("com_application")
@@ -916,10 +942,10 @@ fn conversion_source_matches_category(path: &Path, category: ConversionCategory)
         ConversionCategory::Excel => {
             matches!(
                 extension.as_str(),
-                "csv" | "et" | "xls" | "xlsx" | "xlsm" | "xlsb"
+                "csv" | "et" | "ett" | "xls" | "xlsx" | "xlsm" | "xlsb"
             )
         }
-        ConversionCategory::Word => matches!(extension.as_str(), "doc" | "docx"),
+        ConversionCategory::Word => matches!(extension.as_str(), "doc" | "docx" | "wps" | "wpt"),
     }
 }
 
@@ -931,8 +957,11 @@ fn is_lock_file(path: &Path) -> bool {
 
 fn is_same_category(source: &str, target: &str) -> bool {
     match target {
-        "xlsx" => matches!(source, "csv" | "et" | "xls" | "xlsx" | "xlsm" | "xlsb"),
-        "docx" => matches!(source, "doc" | "docx"),
+        "xlsx" => matches!(
+            source,
+            "csv" | "et" | "ett" | "xls" | "xlsx" | "xlsm" | "xlsb"
+        ),
+        "docx" => matches!(source, "doc" | "docx" | "wps" | "wpt"),
         _ => false,
     }
 }
@@ -1450,7 +1479,7 @@ impl Drop for TempDirGuard {
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_excel_files_in_source_folders, convert_one, ensure_et_source_format_verified,
+        convert_excel_files_in_source_folders, convert_one, ensure_wps_source_format_verified,
         explain_engine_failure, fidelity_engine, invoke_engine, native_values_equal,
         stage_sidecar_input, validate_native_source_values,
     };
@@ -1533,22 +1562,47 @@ mod tests {
     }
 
     #[test]
-    fn et_sidecar_must_explicitly_verify_native_source_format() {
-        let verified = r#"{"status":"converted","engine":"com","validation":{"level":"worksheet_order_names_values_and_formula_text","source_format":"et","source_format_verified":true,"source_file_format":65521}}"#;
-        ensure_et_source_format_verified(verified)
+    fn wps_native_sidecar_must_explicitly_verify_native_source_format() {
+        let verified = r#"{"status":"converted","engine":"pywin32","validation":{"level":"excel_com_sheet_order_formula_text_and_cell_values","source_extension":"et","source_format_verified":true,"source_file_format":65521,"verified":true}}"#;
+        ensure_wps_source_format_verified(verified, "et")
             .expect("explicit native ET source evidence should pass");
+        let verified_template = r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"ett","source_format_verified":true,"source_file_format":65522,"verified":true}}"#;
+        ensure_wps_source_format_verified(verified_template, "ett")
+            .expect("explicit native ETT source evidence should pass");
 
-        for detail in [
-            r#"{"status":"converted","engine":"com","validation":{"source_probe":"separate_conversion_using_selected_engine"}}"#,
-            r#"{"status":"converted","engine":"com","validation":{"source_format":"xls","source_format_verified":true}}"#,
-            r#"{"status":"converted","engine":"com","validation":{"source_format":"et","source_format_verified":true,"source_file_format":56}}"#,
-            r#"{"status":"converted","engine":"com","validation":{"source_format":"et","source_format_verified":true}}"#,
-            r#"{"status":"converted","engine":"lo","validation":{"source_format":"et","source_format_verified":true,"source_file_format":65521}}"#,
-            r#"{"status":"failed","validation":{"source_format":"et","source_format_verified":true}}"#,
-            "not json",
+        for (detail, ext) in [
+            (
+                r#"{"status":"converted","engine":"pywin32","validation":{"source_probe":"separate_conversion_using_selected_engine"}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"xls","source_format_verified":true}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"et","source_format_verified":true,"source_file_format":56}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"et","source_format_verified":true}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"converted","engine":"lo","validation":{"source_extension":"et","source_format_verified":true,"source_file_format":65521}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"failed","validation":{"source_extension":"et","source_format_verified":true}}"#,
+                "et",
+            ),
+            (
+                r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"ett","source_format_verified":true,"source_file_format":65521}}"#,
+                "et",
+            ),
+            ("not json", "et"),
         ] {
             assert!(
-                ensure_et_source_format_verified(detail).is_err(),
+                ensure_wps_source_format_verified(detail, ext).is_err(),
                 "sidecar evidence must reject: {detail}"
             );
         }
@@ -1557,12 +1611,12 @@ mod tests {
     #[test]
     fn et_engine_rejection_explains_source_format_without_staging_path() {
         let message = explain_engine_failure(
-            r#"powershell stack at F:\staging\convert.ps1: Input has .et extension but KET opened FileFormat 56; expected native ET FileFormat 65521"#,
+            r#"pywin32 Excel 转换失败（阶段：校验源文件确为原生 ET/ETT 工作簿）：ValueError: Input has .et extension but the application opened FileFormat 56; expected a WPS-native FileFormat >= 65521 (native ET is 65521)"#,
         );
-        assert!(message.contains("未将该 .et 文件识别为原生 ET 工作簿"));
+        assert!(message.contains("未将该文件识别为原生 ET/ETT 工作簿"));
         assert!(message.contains("未生成 XLSX"));
-        assert!(!message.contains("F:\\staging"));
         assert!(!message.contains("FileFormat 56"));
+        assert!(!message.contains("65521"));
     }
 
     #[test]

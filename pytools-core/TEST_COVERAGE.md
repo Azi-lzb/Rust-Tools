@@ -86,6 +86,19 @@
    定解释器）。输出为源文件旁 `*_umya探针.xlsx` / `*_openpyxl探针.xlsx`，拒绝覆盖、源
    不变；供用户人工对比"区域复制保格式"选型，**结论后移除**。新增代码**未编译**，
    状态：**待运行**。
+12. Office 格式转换统一到 pywin32 COM（2026-11-04，经用户明确选择方案 B）：删除 Rust 直连
+   COM 通道（`pytools-core/src/conversion_com.rs` 及 `mod conversion_com`），Windows 上
+   `.xls/.xlsb/.xlsm/.et/.ett → .xlsx` 与 `.doc/.wps/.wpt → .docx` 全部由随包 pywin32
+   Worker 完成；`--engine com` 保留为 CLI 兼容别名（路由到 pywin32），Worker 协议升到 v2。
+   `.et/.ett` 走 KET 并核验 WPS 原生 `FileFormat >= 65521`（Excel 会把它当改名 XLS 打开；
+   本机实测 `SaveAs(65521)` 仍写出 FileFormat 56，故正向 ET 夹具仍无法程序化生成）；
+   `.wps/.wpt` 走 KWPS 并优先 WPS 文字。DOCX 另存改用 wdFormatXMLDocument(12)——实测
+   WPS 文字忽略 wdFormatDocumentDefault(16) 并写出二进制 .doc，Worker 现会检查候选是否为
+   OOXML ZIP。回归：`cargo test --offline -p pytools-core` 全部测试目标通过（含
+   `conversion_menu_cli` 14/14、`conversion_lo_session` 1 通过 3 个 LO 环境门控忽略）；
+   显式启用的 Windows COM 用例 `conversion_pywin32_windows` 2/2（XLS 批次复用；DOC/WPS/WPT
+   三种 Word 源均转换成功、源字节不变）与 `conversion_cli_does_not_publish_xls_payload_mislabeled_as_et` 1/1。
+   未验证：真实原生 .et/.ett 正向转换（无合法夹具）、Linux/deb。
 
 ## 第 1 类：数据提取与汇总
 

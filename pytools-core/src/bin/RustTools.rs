@@ -4621,7 +4621,7 @@ where
         writeln!(output, "  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】")?;
         writeln!(
             output,
-            "  4  Office 格式转换（XLS / ET → XLSX，DOC → DOCX）  【全局配置：excel目的格式/word目的格式】"
+            "  4  Office 格式转换（XLS/ET/ETT → XLSX，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】"
         )?;
         writeln!(output, "  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】")?;
         writeln!(output, "  6  机构提交完整性检查  【提交检查配置】")?;
@@ -4669,8 +4669,8 @@ where
             }
             "4" => {
                 writeln!(output, "选择格式转换：")?;
-                writeln!(output, "  1  Excel 格式转换（XLS / ET → XLSX）")?;
-                writeln!(output, "  2  Word 格式转换（DOC → DOCX）")?;
+                writeln!(output, "  1  Excel 格式转换（XLS / ET / ETT → XLSX）")?;
+                writeln!(output, "  2  Word 格式转换（DOC / WPS / WPT → DOCX）")?;
                 let Some(format_choice) = read_menu_choice(input, output, "选择格式> ")? else {
                     return Ok(());
                 };
@@ -17520,7 +17520,7 @@ fn print_usage() {
          archive-type-copy --config <config.xlsx> --target-root <dir> [--output-dir <dir>] <file-or-directory>...\n\
          archive-execute-plan --plan <archive-plan.xlsx> [--output-dir <dir>]\n\
          convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|pywin32|native] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
-         convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
+         convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com|pywin32] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|pywin32|native]\n\
          native = 按值重建（C01，丢弃样式/公式缓存）；Excel 公式文本保留但不重算，CSV 按文本写入\n\
                    ISO 日期/时长、错误值、空文本和检测到的 1904 epoch XLS/XLSM/XLSB 会拒绝转换\n\

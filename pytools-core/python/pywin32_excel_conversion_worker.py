@@ -17,8 +17,22 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 XLSX_FILE_FORMAT = 51  # xlOpenXMLWorkbook
+# wdFormatXMLDocument. `wdFormatDocumentDefault` (16) is accepted by Microsoft
+# Word but WPS Writer ignores it and writes a binary .doc under a .docx name,
+# so use the classic OOXML constant and verify the saved package afterwards.
+DOCX_FILE_FORMAT = 12
+# WPS-native spreadsheet containers. `.et` / `.ett` are CFB files that Excel
+# would happily open as a renamed XLS, so the native FileFormat is verified
+# before anything is published. WPS reports its own formats in a private range
+# starting at 65521 (ET workbook); any value below that is an Excel container.
+WPS_NATIVE_FILE_FORMAT_MIN = 65521
+ET_FILE_FORMAT = 65521
+SPREADSHEET_SUFFIXES = (".xls", ".xlsb", ".xlsm", ".et", ".ett")
+WORD_SUFFIXES = (".doc", ".wps", ".wpt")
+WPS_WORD_SUFFIXES = (".wps", ".wpt")
+WPS_SPREADSHEET_SUFFIXES = (".et", ".ett")
 
 
 def _write_json(value: dict[str, Any]) -> None:
@@ -150,56 +164,129 @@ class ConversionSession:
         self._application: Any | None = None
         self._application_name: str | None = None
         self._process_id: int | None = None
+        self._word_application: Any | None = None
+        self._word_application_name: str | None = None
+        self._word_process_id: int | None = None
 
-    def _ensure_application(self) -> None:
+    # ProgID preference per host family. WPS-native spreadsheet formats (.et /
+    # .ett) must be opened by WPS Spreadsheets (KET): Excel would open them as a
+    # renamed XLS and report a plausible FileFormat for the wrong container.
+    _SPREADSHEET_PROG_IDS = ("Excel.Application", "ket.Application", "KET.Application")
+    _SPREADSHEET_PROG_IDS_WPS_FIRST = ("ket.Application", "KET.Application", "Excel.Application")
+    _WORD_PROG_IDS = (
+        "Word.Application",
+        "kwps.Application",
+        "KWPS.Application",
+        "wps.Application",
+    )
+    _WORD_PROG_IDS_WPS_FIRST = (
+        "kwps.Application",
+        "KWPS.Application",
+        "wps.Application",
+        "Word.Application",
+    )
+
+    def _is_wps_spreadsheet(self) -> bool:
+        return (self._application_name or "").lower().startswith("ket.")
+
+    def _is_wps_writer(self) -> bool:
+        name = (self._word_application_name or "").lower()
+        return name.startswith("kwps.") or name.startswith("wps.")
+
+    def _ensure_application(self, prefer_wps: bool = False) -> None:
         if self._application is not None:
-            return
+            # A batch may mix .et with .xls; WPS-native files need a KET host,
+            # so replace an already-created Excel host instead of reusing it.
+            if not prefer_wps or self._is_wps_spreadsheet():
+                return
+            self._reset_application()
+        application, name, process_id = self._dispatch_empty_application(
+            self._SPREADSHEET_PROG_IDS_WPS_FIRST
+            if prefer_wps
+            else self._SPREADSHEET_PROG_IDS,
+            "Workbooks",
+            document_alerts=False,
+        )
+        self._application = application
+        self._application_name = name
+        self._process_id = process_id
+
+    def _ensure_word_application(self, prefer_wps: bool = False) -> None:
+        if self._word_application is not None:
+            # `.wps` / `.wpt` are WPS Writer formats; Word may not open them.
+            if not prefer_wps or self._is_wps_writer():
+                return
+            self._reset_word_application()
+        application, name, process_id = self._dispatch_empty_application(
+            self._WORD_PROG_IDS_WPS_FIRST if prefer_wps else self._WORD_PROG_IDS,
+            "Documents",
+            document_alerts=True,
+        )
+        self._word_application = application
+        self._word_application_name = name
+        self._word_process_id = process_id
+
+    def _dispatch_empty_application(
+        self,
+        prog_ids: tuple[str, ...],
+        collection_name: str,
+        document_alerts: bool,
+    ) -> tuple[Any, str, int | None]:
+        """Create a COM host only when it can be proven to be a fresh, empty
+        instance owned by this worker. Never attach to a session that already
+        holds user documents."""
         import win32com.client
 
         errors: list[str] = []
-        for prog_id in ("Excel.Application", "KET.Application"):
+        for prog_id in prog_ids:
             try:
                 application = win32com.client.DispatchEx(prog_id)
             except Exception as error:
                 errors.append(f"{prog_id}: {error}")
                 continue
             try:
-                open_workbooks = int(application.Workbooks.Count)
+                collection = getattr(application, collection_name)
+                open_documents = int(collection.Count)
             except Exception as error:
                 # We cannot prove this is an empty instance, so release only
                 # our COM reference; never call Quit on an unknown session.
-                errors.append(f"{prog_id}: 无法确认实例中的工作簿数量：{error}")
+                errors.append(f"{prog_id}: 无法确认实例中的文档数量：{error}")
                 continue
-            if open_workbooks != 0:
+            if open_documents != 0:
                 errors.append(
-                    f"{prog_id}: 返回了含 {open_workbooks} 个已打开工作簿的实例；为保护用户数据已跳过"
+                    f"{prog_id}: 返回了含 {open_documents} 个已打开文档的实例；为保护用户数据已跳过"
                 )
                 continue
             try:
                 application.Visible = False
-                application.DisplayAlerts = False
-                application.ScreenUpdating = False
-                application.EnableEvents = False
+                if document_alerts:
+                    # Word expects the WdAlertLevel enum (wdAlertsNone = 0).
+                    application.DisplayAlerts = 0
+                else:
+                    application.DisplayAlerts = False
+                    application.ScreenUpdating = False
+                    application.EnableEvents = False
                 try:
                     application.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
                 except Exception:
                     pass
-                self._application = application
-                self._application_name = prog_id
+                process_id: int | None = None
                 try:
                     import win32process
 
-                    self._process_id = int(win32process.GetWindowThreadProcessId(int(application.Hwnd))[1])
+                    process_id = int(
+                        win32process.GetWindowThreadProcessId(int(application.Hwnd))[1]
+                    )
                 except Exception:
-                    self._process_id = None
-                return
+                    process_id = None
+                return application, prog_id, process_id
             except Exception as error:
                 try:
                     application.Quit()
                 except Exception:
                     pass
                 errors.append(f"{prog_id}: 初始化空 COM 实例失败：{error}")
-        raise RuntimeError("无法启动 Excel/WPS COM：" + "；".join(errors))
+        raise RuntimeError("无法启动 Office/WPS COM：" + "；".join(errors))
 
     def _reset_application(self) -> None:
         application = self._application
@@ -212,24 +299,51 @@ class ConversionSession:
             except Exception:
                 pass
 
+    def _reset_word_application(self) -> None:
+        application = self._word_application
+        self._word_application = None
+        self._word_application_name = None
+        self._word_process_id = None
+        if application is not None:
+            try:
+                application.Quit()
+            except Exception:
+                pass
+
     def convert(self, source_text: str, output_text: str) -> dict[str, Any]:
         source = Path(source_text)
         output = Path(output_text)
         stage = "检查转换路径"
         workbook: Any | None = None
         reopened: Any | None = None
+        source_file_format: int | None = None
         try:
             if not source.is_file():
                 raise FileNotFoundError(f"输入文件不存在：{source}")
             if output.exists():
                 raise FileExistsError(f"拒绝覆盖已存在的候选文件：{output}")
-            self._ensure_application()
+            suffix = source.suffix.lower()
+            # WPS-native spreadsheet formats must be opened by WPS itself.
+            self._ensure_application(prefer_wps=suffix in WPS_SPREADSHEET_SUFFIXES)
             application = self._application
             if application is None:
                 raise RuntimeError("Excel/WPS COM 尚未启动")
 
-            stage = "读取源工作簿并记录公式和值"
+            stage = "读取源工作簿"
             workbook = application.Workbooks.Open(str(source), 0, True)
+            # `.et` / `.ett` are CFB containers: a rename to `.xls` would still
+            # open with a plausible FileFormat, so require a WPS-native format
+            # before publishing anything.
+            if suffix in WPS_SPREADSHEET_SUFFIXES:
+                stage = "校验源文件确为原生 ET/ETT 工作簿"
+                source_file_format = int(workbook.FileFormat)
+                if source_file_format < WPS_NATIVE_FILE_FORMAT_MIN:
+                    raise ValueError(
+                        f"Input has {suffix} extension but the application opened "
+                        f"FileFormat {source_file_format}; expected a WPS-native "
+                        f"FileFormat >= {WPS_NATIVE_FILE_FORMAT_MIN} "
+                        f"(native ET is {ET_FILE_FORMAT})"
+                    )
             stage = "调用 Excel/WPS 完整重算工作簿"
             application.CalculateFullRebuild()
             stage = "读取完整重算后的源工作簿公式和值"
@@ -245,6 +359,10 @@ class ConversionSession:
             output_snapshot = _snapshot(reopened)
             validation = _compare(source_snapshot, output_snapshot)
             validation["calculation"] = "CalculateFullRebuild before SaveAs"
+            if source_file_format is not None:
+                validation["source_extension"] = suffix.lstrip(".")
+                validation["source_file_format"] = source_file_format
+                validation["source_format_verified"] = True
             reopened.Close(SaveChanges=False)
             reopened = None
             return {
@@ -372,8 +490,112 @@ class ConversionSession:
                 "traceback": traceback.format_exc(limit=6),
             }
 
+    def convert_word(self, source_text: str, output_text: str) -> dict[str, Any]:
+        """Convert a Word/WPS Writer document to .docx through Word COM."""
+        source = Path(source_text)
+        output = Path(output_text)
+        stage = "检查转换路径"
+        document: Any | None = None
+        try:
+            if not source.is_file():
+                raise FileNotFoundError(f"输入文件不存在：{source}")
+            if output.exists():
+                raise FileExistsError(f"拒绝覆盖已存在的候选文件：{output}")
+            # `.wps` / `.wpt` are WPS Writer formats; Word cannot open them.
+            self._ensure_word_application(
+                prefer_wps=source.suffix.lower() in WPS_WORD_SUFFIXES
+            )
+            application = self._word_application
+            if application is None:
+                raise RuntimeError("Word/WPS Writer COM 尚未启动")
+
+            stage = "读取源文档"
+            document = application.Documents.Open(str(source), False, True)
+            stage = "保存为 DOCX 候选"
+            try:
+                document.SaveAs2(str(output), DOCX_FILE_FORMAT)
+            except Exception:
+                # Older WPS Writer builds lack SaveAs2.
+                document.SaveAs(str(output), DOCX_FILE_FORMAT)
+            document.Close(False)
+            document = None
+            stage = "校验 DOCX 候选文件"
+            if not output.is_file():
+                raise RuntimeError(f"Word/WPS Writer 未生成候选文件：{output}")
+            with output.open("rb") as candidate:
+                if candidate.read(4) != b"PK\x03\x04":
+                    raise ValueError(
+                        "Word/WPS Writer 没有写出 OOXML 包（候选文件不是 ZIP），"
+                        "请确认本机 Word 或 WPS 文字支持 DOCX 另存"
+                    )
+            return {
+                "ok": True,
+                "application": self._word_application_name,
+                "process_id": self._word_process_id,
+                "validation": {
+                    "level": "docx_package_and_text_content",
+                    "source_extension": source.suffix.lower().lstrip("."),
+                },
+            }
+        except Exception as error:
+            if document is not None:
+                try:
+                    document.Close(False)
+                except Exception:
+                    pass
+            self._reset_word_application()
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
+    def extract_word_text(self, input_text: str) -> dict[str, Any]:
+        """Plain text of a document, for fidelity validation after conversion."""
+        source = Path(input_text)
+        stage = "检查文档路径"
+        document: Any | None = None
+        try:
+            if not source.is_file():
+                raise FileNotFoundError(f"文档不存在：{source}")
+            self._ensure_word_application(
+                prefer_wps=source.suffix.lower() in WPS_WORD_SUFFIXES
+            )
+            application = self._word_application
+            if application is None:
+                raise RuntimeError("Word/WPS Writer COM 尚未启动")
+
+            stage = "读取文档正文"
+            document = application.Documents.Open(str(source), False, True)
+            text = document.Content.Text
+            if not isinstance(text, str):
+                text = "" if text is None else str(text)
+            document.Close(False)
+            document = None
+            return {
+                "ok": True,
+                "application": self._word_application_name,
+                "process_id": self._word_process_id,
+                "text": text,
+            }
+        except Exception as error:
+            if document is not None:
+                try:
+                    document.Close(False)
+                except Exception:
+                    pass
+            self._reset_word_application()
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
     def close(self) -> None:
         self._reset_application()
+        self._reset_word_application()
         try:
             self._pythoncom.CoUninitialize()
         except Exception:
@@ -403,6 +625,16 @@ def _serve() -> int:
                             request["regions"],
                         )
                     )
+                    continue
+                if operation == "convert_word":
+                    _write_json(
+                        session.convert_word(
+                            str(request["input"]), str(request["output"])
+                        )
+                    )
+                    continue
+                if operation == "extract_word_text":
+                    _write_json(session.extract_word_text(str(request["input"])))
                     continue
                 if operation != "convert":
                     _write_json({"ok": False, "error": f"未知操作：{operation!r}"})

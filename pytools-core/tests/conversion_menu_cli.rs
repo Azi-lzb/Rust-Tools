@@ -263,7 +263,7 @@ fn v2_file_menu_hides_native_value_conversion() -> Result<()> {
     let output = run_menu(&config, "4\n0\n0\n")?;
     assert!(output.status.success(), "menu failed: {}", stderr(&output));
     let menu = String::from_utf8_lossy(&output.stdout);
-    assert!(menu.contains("Office 格式转换（XLS / ET → XLSX，DOC → DOCX）"));
+    assert!(menu.contains("Office 格式转换（XLS/ET/ETT → XLSX，DOC/WPS/WPT → DOCX）"));
     assert!(!menu.contains("批量原生值转换"));
     Ok(())
 }
@@ -290,7 +290,9 @@ fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
         "Excel conversion help must list the supported COM engine: {help}"
     );
     assert!(
-        help.contains("convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com]"),
+        help.contains(
+            "convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com|pywin32]"
+        ),
         "Word conversion help must list the supported COM engine: {help}"
     );
     assert!(
@@ -392,8 +394,8 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
 }
 
 #[test]
-#[ignore = "requires Windows Excel COM; converts temporary copies through the V2 menu"]
-fn conversion_menu_batch_uses_rust_com_and_preserves_sources() -> Result<()> {
+#[ignore = "requires Windows Excel/WPS COM and the bundled pywin32 runtime; converts temporary copies through the V2 menu"]
+fn conversion_menu_batch_uses_pywin32_and_preserves_sources() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let sources = root.path().join("sources");
@@ -431,7 +433,7 @@ fn conversion_menu_batch_uses_rust_com_and_preserves_sources() -> Result<()> {
         let detail: Value = serde_json::from_str(
             item["detail"].as_str().context("conversion detail missing")?,
         )?;
-        assert_eq!(detail["com_bridge"], "rust");
+        assert_eq!(detail["com_bridge"], "pywin32");
         assert_eq!(detail["com_application"], "Excel.Application");
         let output_path = PathBuf::from(
             item["output"]
@@ -450,7 +452,9 @@ fn conversion_menu_batch_uses_rust_com_and_preserves_sources() -> Result<()> {
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert!(history["actual_engines"]
         .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "Microsoft Excel COM (Rust)")));
+        .is_some_and(|engines| engines
+            .iter()
+            .any(|engine| engine == "Microsoft Excel COM (pywin32)")));
     Ok(())
 }
 
@@ -499,13 +503,13 @@ fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<(
         .context("successful ET conversion omitted its sidecar report")?;
     let sidecar_report: Value = serde_json::from_str(detail)?;
     assert_eq!(sidecar_report["status"], "converted");
-    assert_eq!(sidecar_report["engine"], "com");
+    assert_eq!(sidecar_report["engine"], "pywin32");
     assert_eq!(sidecar_report["validation"]["source_format_verified"], true);
-    assert_eq!(sidecar_report["validation"]["source_format"], "et");
+    assert_eq!(sidecar_report["validation"]["source_extension"], "et");
     assert_eq!(sidecar_report["validation"]["source_file_format"], 65521);
     assert_eq!(
         sidecar_report["validation"]["level"],
-        "worksheet_order_names_values_and_formula_text"
+        "excel_com_sheet_order_formula_text_and_cell_values"
     );
 
     let converted = output_dir.join("native.xlsx");

@@ -53,7 +53,9 @@
 - 4-1 文件名机构标准化：**已实现，待人工验收**。
 - 4-2 文件排序前缀添加与清理：**已实现，待人工验收**。
 - 4-3 根据工作簿单元格内容命名：**已实现，待人工验收**。输入格式和内容语义按实际能力处理。
-- 4-4 Office 格式转换（XLS/ET→XLSX、DOC→DOCX）：**部分实现或存在已知限制**。历史 XLS、DOC 有合成正向冒烟；原生 ET 正向转换、真实业务文件和目标平台仍未充分验证，相关外部引擎与格式证据必须显式满足。
+- 4-4 Office 格式转换（XLS/ET/ETT→XLSX、DOC/WPS/WPT→DOCX）：**部分实现或存在已知限制**。历史 XLS、DOC 有合成正向冒烟；原生 ET/ETT 正向转换、真实业务文件和目标平台仍未充分验证，相关外部引擎与格式证据必须显式满足。
+
+  2026-11-04：经用户选择方案 B，取消 Rust 直连 COM 通道（删除 `pytools-core/src/conversion_com.rs`），Windows 全部保真转换统一走随包 pywin32 Worker：`.xls/.xlsb/.xlsm/.et/.ett→.xlsx`、`.doc/.wps/.wpt→.docx`；`--engine com` 保留为兼容别名（路由到 pywin32），Worker 协议升到 v2。`.et/.ett` 用 KET 打开并核验 WPS 原生 `FileFormat >= 65521`；`.wps/.wpt` 用 KWPS 优先。DOCX 另存改用 wdFormatXMLDocument(12)：本机实测 WPS 文字会忽略 wdFormatDocumentDefault(16) 并写出二进制 .doc，Worker 现在还会检查候选是否为 OOXML ZIP。Rust 侧删除 ET 二次探测转换，改用 Worker 在同一批次内完成的源/候选双向比较证据。Windows 合成样本验证：XLS 批次复用 Worker 与 Excel 进程、DOC/WPS/WPT 三种 Word 源均转换成功且源字节不变、伪装 ET 被拒绝。真实原生 ET/ETT 正向转换仍无合法夹具，Linux/deb 未验证。
 
   2026-10-30：按用户要求比较 Windows Excel/WPS 下 Rust COM、PowerShell COM、pywin32 COM。合成数据为 4 个 XLS、每个 3 张表且每表 250 行，每种引擎/模式计时两轮；全批次输出与相同应用的基准结果一致。计时来自产品接入前的独立 Rust COM bridge 原型，不是 UI 端到端数据。Excel 批量中位耗时：Rust 6.433 秒、PowerShell 6.199 秒、pywin32 18.361 秒（两轮为 29.389/7.334 秒，波动较大）；WPS 批量：Rust 2.923 秒、PowerShell 4.457 秒、pywin32 4.675 秒。样本和轮数有限，仅作当前机器参考。原始样本哈希未变；WPS 会修改交给它打开的临时副本，因此正式转换仍先复制源文件。
 
