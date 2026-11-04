@@ -1564,8 +1564,53 @@ fn file_stem(path: &Path) -> String {
         .unwrap_or_else(|| "converted".into())
 }
 
+/// Pre-seed an isolated LibreOffice profile so headless `--convert-to`
+/// always recalculates formulas when loading Excel workbooks.
+///
+/// LO decides whether to recalculate on load from
+/// `/org.openoffice.Office.Calc/Formula/Load/OOXMLRecalcMode`
+/// (0 = always recalculate, 1 = never, 2 = prompt). The shipped default can
+/// vary by build and locale, which would make conversion output depend on the
+/// machine — so the isolated profile pins it to "always". Calamine (and 1-1 /
+/// 1-2 / 1-3) read the cached formula results from the converted file; a
+/// deterministic recalculation is what keeps those caches trustworthy.
+fn seed_lo_recalc_profile(profile: &Path) {
+    let registry = profile.join("user").join("registrymodifications.xcu");
+    if registry.exists() {
+        // The profile has been launched before; LO owns this file now.
+        return;
+    }
+    let content = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        "\n",
+        r#"<oor:items xmlns:oor="http://openoffice.org/2001/registry""#,
+        r#" xmlns:xs="http://www.w3.org/2001/XMLSchema""#,
+        r#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">"#,
+        "\n",
+        r#" <item oor:path="/org.openoffice.Office.Calc/Formula/Load">"#,
+        r#"<prop oor:name="OOXMLRecalcMode" oor:op="fuse"><value>0</value></prop></item>"#,
+        "\n",
+        r#"</oor:items>"#,
+        "\n",
+    );
+    let user_dir = registry.parent().expect("profile user dir has a parent");
+    if fs::create_dir_all(user_dir).is_err() {
+        return;
+    }
+    if let Err(error) = fs::write(&registry, content) {
+        eprintln!(
+            "{}",
+            crate::run_logging::terminal_line(
+                crate::run_logging::Level::Warn,
+                &format!("预置 LibreOffice 重算配置失败（不影响转换，按 LO 默认设置执行）：{error:#}"),
+            )
+        );
+    }
+}
+
 fn libreoffice_user_installation_arg(profile: &Path) -> Result<String> {
     fs::create_dir_all(profile).context("create LibreOffice isolated profile directory")?;
+    seed_lo_recalc_profile(profile);
     Ok(format!("-env:UserInstallation={}", file_uri(profile)?))
 }
 
