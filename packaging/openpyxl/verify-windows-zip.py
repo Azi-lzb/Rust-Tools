@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """Windows ZIP 发布包验证脚本。
 
-对一个已生成的 pytools-windows-x64-*.zip 执行解压后验证：
+对一个已生成的 RustTools-windows-x64-*.zip 执行解压后验证：
 
 1. 解压到隔离临时目录；
-2. 解压布局中的 bundled Python + openpyxl_worker.py 完成协议握手；
-3. pywin32 Excel COM worker 完成版本握手，运行时实际 import openpyxl、et_xmlfile、pythoncom 和 win32com；
-4. 用 bundled openpyxl 生成合成工作簿（仅作为测试夹具）；
-5. 通过解压出的 pytools.exe `apply-edit-plan` 以合成 ExcelEditPlan 执行一次
+2. 校验包根布局（RustTools.exe + config/config.xlsx + python/ + doc/README.md）；
+3. 解压布局中的 bundled Python + openpyxl_worker.py 完成协议握手；
+4. pywin32 Excel COM worker 完成版本握手，运行时实际 import openpyxl、et_xmlfile、pythoncom 和 win32com；
+5. 用 bundled openpyxl 生成合成工作簿（仅作为测试夹具）；
+6. 通过解压出的 RustTools.exe `apply-edit-plan` 以合成 ExcelEditPlan 执行一次
    受限修改（openpyxl 引擎路由 + PlanOutputValidator 回读校验都在产品内完成）；
-6. 校验输出与输入快照。
+7. 校验输出与输入快照。
 
 用法:
     python packaging/openpyxl/verify-windows-zip.py <path-to-zip>
-    # 省略路径时自动选择 dist 下最新的 pytools-windows-x64-*.zip
+    # 省略路径时自动选择 dist 下最新的 RustTools-windows-x64-*.zip
 退出码 0 表示全部通过；任何一步失败都以非零退出并打印原因。
 """
 
@@ -30,6 +31,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# Must match `PYWIN32_PROTOCOL_VERSION` in pytools-core/src/conversion_engine.rs
+# and `PROTOCOL_VERSION` in pytools-core/python/pywin32_excel_conversion_worker.py.
+PYWIN32_PROTOCOL_VERSION = 2
+
 
 def fail(message: str) -> "NoReturn":
     print(f"verify-windows-zip: FAIL {message}", file=sys.stderr)
@@ -42,9 +47,9 @@ def find_zip(explicit: str | None) -> Path:
         if not archive.is_file():
             fail(f"指定的 ZIP 不存在：{archive}")
         return archive
-    candidates = sorted((REPO_ROOT / "dist").glob("pytools-windows-x64-*.zip"))
+    candidates = sorted((REPO_ROOT / "dist").glob("RustTools-windows-x64-*.zip"))
     if not candidates:
-        fail("dist 下没有 pytools-windows-x64-*.zip；请先运行 package.bat")
+        fail("dist 下没有 RustTools-windows-x64-*.zip；请先运行 packaging/windows-package.ps1")
     return candidates[-1]
 
 
@@ -73,17 +78,17 @@ def main() -> None:
         with zipfile.ZipFile(archive) as bundle:
             names = bundle.namelist()
             bundle.extractall(extract)
-        required = ["dist/pytools.exe", "dist/python/python.exe",
-                    "dist/python/openpyxl_worker.py",
-                    "dist/python/pywin32_excel_conversion_worker.py"]
+        required = ["RustTools.exe", "config/config.xlsx",
+                    "python/python.exe", "python/openpyxl_worker.py",
+                    "python/pywin32_excel_conversion_worker.py", "doc/README.md"]
         for name in required:
             if name not in names:
                 fail(f"ZIP 缺少 {name}")
-        dist = extract / "dist"
-        python_exe = dist / "python/python.exe"
-        worker = dist / "python/openpyxl_worker.py"
-        pywin_worker = dist / "python/pywin32_excel_conversion_worker.py"
-        pytools = dist / "pytools.exe"
+        root = extract
+        python_exe = root / "python/python.exe"
+        worker = root / "python/openpyxl_worker.py"
+        pywin_worker = root / "python/pywin32_excel_conversion_worker.py"
+        pytools = root / "RustTools.exe"
 
         # 1) 握手
         probe = run([str(python_exe), "-I", str(worker), "--version"])
@@ -94,9 +99,9 @@ def main() -> None:
             fail("解压后运行时缺少 openpyxl")
 
         pywin_probe = run([str(python_exe), "-I", str(pywin_worker), "--version"])
-        if pywin_probe.returncode != 0 or pywin_probe.stdout.strip() != "protocol=1 pywin32=312":
+        if pywin_probe.returncode != 0 or pywin_probe.stdout.strip() != f"protocol={PYWIN32_PROTOCOL_VERSION} pywin32=312":
             fail(f"pywin32 worker 握手失败：{pywin_probe.stdout!r} {pywin_probe.stderr!r}")
-        print("PASS pywin32 Excel COM worker handshake (protocol=1, pywin32=312)")
+        print(f"PASS pywin32 Excel COM worker handshake (protocol={PYWIN32_PROTOCOL_VERSION}, pywin32=312)")
 
         # 2) import openpyxl
         check = run([str(python_exe), "-I", "-c",
@@ -176,7 +181,7 @@ def main() -> None:
         report = json.loads(applied.stdout)
         if report.get("engine") != "openpyxl_worker":
             fail(f"执行引擎不是 openpyxl_worker：{report.get('engine')}")
-        print("PASS apply-edit-plan via packaged pytools.exe (openpyxl_worker)")
+        print("PASS apply-edit-plan via packaged RustTools.exe (openpyxl_worker)")
 
         # 5) 输出回读 + 输入快照
         if not output.is_file():
