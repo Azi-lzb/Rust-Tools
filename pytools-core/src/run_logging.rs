@@ -438,7 +438,14 @@ pub enum BatchEventKind {
 pub struct BatchLogPolicy {
     total: usize,
     checkpoint_interval: usize,
+    /// How long the run has been going when this event fires. Short tasks
+    /// collapse routine checkpoints entirely (start plus summary is enough).
+    elapsed_ms: Option<u128>,
 }
+
+/// Runs finishing faster than this only report their start and final summary;
+/// checkpoint lines in between carry no value the summary lacks.
+const SHORT_TASK_ELAPSED_MS: u128 = 800;
 
 impl BatchLogPolicy {
     pub fn new(total: usize) -> Self {
@@ -450,7 +457,14 @@ impl BatchLogPolicy {
         Self {
             total,
             checkpoint_interval,
+            elapsed_ms: None,
         }
+    }
+
+    /// Attach the run's elapsed time so short tasks can skip checkpoints.
+    pub fn with_elapsed_ms(mut self, elapsed_ms: u128) -> Self {
+        self.elapsed_ms = Some(elapsed_ms);
+        self
     }
 
     pub fn checkpoint_interval(self) -> usize {
@@ -463,6 +477,15 @@ impl BatchLogPolicy {
             | BatchEventKind::BusinessIssue
             | BatchEventKind::PhaseChange => true,
             BatchEventKind::Routine if self.total <= 8 => true,
+            BatchEventKind::Routine
+                if self
+                    .elapsed_ms
+                    .is_some_and(|elapsed| elapsed < SHORT_TASK_ELAPSED_MS) =>
+            {
+                // Sub-second run: the final summary carries everything the
+                // checkpoints would say.
+                current.is_some_and(|index| index == 1 || index >= self.total)
+            }
             BatchEventKind::Routine => current.is_some_and(|index| {
                 index == 1 || index >= self.total || index % self.checkpoint_interval == 0
             }),
@@ -602,6 +625,13 @@ pub fn format_terminal_summary_with_outputs(
         }
     }
     for (name, value) in &summary.business_metrics {
+        // Zero counters repeat what the status line already implies and push
+        // the useful numbers down; a metric that matters is non-zero.
+        let is_zero = matches!(value, serde_json::Value::Number(number)
+            if number.as_f64() == Some(0.0));
+        if is_zero {
+            continue;
+        }
         let value = match value {
             serde_json::Value::String(text) => text.clone(),
             other => other.to_string(),
@@ -645,7 +675,14 @@ pub fn format_terminal_summary_with_outputs(
                         .count
                         .map(|value| format!("（{value} 项）"))
                         .unwrap_or_default();
-                    format!("    {}：{}{count}", issue.category, location_lead(&location))
+                    if location.is_empty() {
+                        format!("    [{}] {}{count}", issue.category, issue.message)
+                    } else {
+                        format!(
+                            "    [{}] {}（{location}）{count}",
+                            issue.category, issue.message
+                        )
+                    }
                 }),
         );
         if summary.business_issues.len() > issue_limit {
@@ -725,6 +762,41 @@ fn summarize_error_message(message: &str) -> String {
     }
     let truncated = joined.chars().take(LIMIT).collect::<String>();
     format!("{truncated}…")
+}
+
+/// Whether a grouped-summary line is decorative framing (`====` rules and
+/// blank separators). Emitters print these without the `[LEVEL]` prefix so the
+/// frame stays readable.
+pub fn is_summary_frame_line(line: &str) -> bool {
+    line.starts_with(SUMMARY_RULE) || line.is_empty()
+}
+
+/// Per-line log level for the grouped summary.
+///
+/// The overall task status decides the header, but every inner line keeps its
+/// own nature: routine statistics and output paths stay INFO even when the
+/// task partially failed, attention items are WARN, and the recorded
+/// execution-error line is ERROR.
+pub fn summary_line_level(line: &str, overall: TaskStatus) -> Level {
+    if is_summary_frame_line(line) {
+        return Level::Info;
+    }
+    // The recorded execution failure (`[CODE] …（阶段 stage）：…`) is the one
+    // line that is an actual program error.
+    if line.trim_start().starts_with('[') && line.contains("（阶段 ") {
+        return Level::Error;
+    }
+    let attention = line.contains("需要关注：")
+        || line.trim_start().starts_with("[业务异常]")
+        || line.trim_start().starts_with('[');
+    if attention {
+        return Level::Warn;
+    }
+    match overall {
+        TaskStatus::Failed => Level::Error,
+        TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
+        TaskStatus::Success | TaskStatus::NoOp => Level::Info,
+    }
 }
 
 /// Each selected input is identified by its position, including repeated paths.
@@ -1264,9 +1336,9 @@ mod tests {
         assert_eq!(summary.overall_status, TaskStatus::Success);
         let lines = format_terminal_summary(&summary, 8).join("\n");
         assert!(lines.contains("执行完成，发现业务异常"));
-        assert!(lines.contains("提取行数 42"));
-        assert!(lines.contains("机构甲.xlsx / 资产 / B4"));
-        assert!(lines.contains("输出：result.xlsx"));
+        assert!(lines.contains("提取行数：42"));
+        assert!(lines.contains("[结构异常] 模板表头不匹配（机构甲.xlsx / 资产 / B4）（2 项）"));
+        assert!(lines.contains("输出结果：") && lines.contains("result.xlsx"));
     }
 
     #[test]
@@ -1282,7 +1354,7 @@ mod tests {
 
         let lines = format_terminal_summary(&summary, 8).join("\n");
         assert!(lines.contains("执行完成，发现业务异常"));
-        assert!(lines.contains("检查任务数 3"));
+        assert!(lines.contains("检查任务数：3"));
         assert!(lines.contains("配置校验"));
         assert!(!lines.contains("选择 0"));
         assert!(!lines.contains("成功 0，失败 0"));
@@ -1317,8 +1389,7 @@ mod tests {
         });
 
         let lines = format_terminal_summary(&summary, 8).join("\n");
-        assert!(lines.contains("失败阶段 workbook_read [EXCEL_READ_FAILED]"));
-        assert!(lines.contains("机构甲.xlsx / 资产：工作簿无法打开"));
+        assert!(lines.contains("[EXCEL_READ_FAILED] 机构甲.xlsx / 资产（阶段 workbook_read）：工作簿无法打开"));
     }
 
     #[test]

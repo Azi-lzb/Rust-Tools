@@ -1420,10 +1420,12 @@ fn interactive_menu_supports_user_and_off_log_views() {
     assert!(user_output.status.success());
     let user_stdout = String::from_utf8_lossy(&user_output.stdout);
     let user_stderr = String::from_utf8_lossy(&user_output.stderr);
-    // user 视图完成行改为人类可读的“工作表提取结束”计数行。
+    // user 视图：分组摘要在 stderr（状态行 + 提取/输出计数）。
     assert!(
-        user_stdout.contains("工作表提取结束：选择 1 个，成功 1 个，失败 0 个"),
-        "{user_stdout}"
+        user_stderr.contains("工作表数据提取：执行成功")
+            && user_stderr.contains("提取工作表数：2")
+            && user_stderr.contains("输出工作簿数：1"),
+        "{user_stderr}"
     );
     assert!(user_stderr.contains("正在读取源工作簿"));
     assert!(user_stderr.contains("工作表提取运行记录已保存"));

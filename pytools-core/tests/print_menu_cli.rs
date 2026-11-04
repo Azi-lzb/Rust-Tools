@@ -83,7 +83,8 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     let umya_stdout = String::from_utf8_lossy(&umya.stdout);
     assert!(!umya_stdout.contains("输入 y/yes/是"), "{umya_stdout}");
     assert!(
-        umya_stdout.contains("静态打印文件生成完成：成功 1 项"),
+        umya_stdout.contains("按配置生成静态打印文件：执行成功")
+            && umya_stdout.contains("保存工作簿 1 个"),
         "{umya_stdout}"
     );
     // 统一日志要求：开始与完成行都带本机时间戳。
@@ -94,7 +95,7 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     assert!(starts_with_timestamp(start_line), "{start_line}");
     let done_line = umya_stdout
         .lines()
-        .find(|line| line.contains("静态打印文件生成完成：成功"))
+        .find(|line| line.contains("按配置生成静态打印文件：执行成功"))
         .context("done line missing")?;
     assert!(starts_with_timestamp(done_line), "{done_line}");
     let history_path = umya_stdout
@@ -158,13 +159,14 @@ fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<
         "menu must stay usable after a failure"
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
+    // 分组摘要：状态行「…：执行失败」+ 需要关注里的错误明细（保留中断原因）。
     let failure_line = stdout
         .lines()
-        .find(|line| line.contains("处理失败"))
-        .context("failure summary line missing")?;
+        .find(|line| line.contains("按配置生成静态打印文件：执行失败"))
+        .context("failure status header missing")?;
     assert!(
-        failure_line.contains("处理失败：打印任务中断，无法统计完整的成功、跳过和失败数量"),
-        "{failure_line}"
+        stdout.contains("打印任务中断"),
+        "error detail must name the interruption: {stdout}"
     );
     assert!(
         starts_with_timestamp(failure_line),
@@ -172,7 +174,7 @@ fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<
     );
     assert!(stdout.contains(".xlsx"), "{stdout}");
     assert!(
-        stdout.contains("======== PyTools 菜单 ========"),
+        stdout.contains("======== rustTools 菜单 ========"),
         "{stdout}"
     );
     assert_eq!(fs::read(&source)?, source_before);
@@ -268,7 +270,7 @@ fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Resul
     let stdout = String::from_utf8_lossy(&output.stdout);
     let printed = target.clone();
     if printed.is_file() {
-        assert!(stdout.contains("静态打印文件生成完成"), "{stdout}");
+        assert!(stdout.contains("按配置生成静态打印文件：执行成功"), "{stdout}");
         let dump = read_workbook(&printed)?;
         assert_eq!(dump.sheets[0].name, "Printed");
         assert_eq!(dump.sheets[0].values["B3"]["value"], 0.0001);
@@ -332,7 +334,7 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     assert!(user.status.success());
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     assert!(user_stdout.contains("开始：按配置预校验打印任务"));
-    assert!(user_stdout.contains("按配置预校验打印任务完成：通过 1 项、警告 0 项、失败 0 项"));
+    assert!(user_stdout.contains("通过配置数：1"), "{user_stdout}");
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
     let off = run_menu_with_view(&config, "3\n3\n0\n0\n", "off")?;

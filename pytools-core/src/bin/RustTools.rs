@@ -94,6 +94,7 @@ fn emit_batch_event_view(
     phase_change: bool,
     message: &str,
     event_value: Option<&serde_json::Value>,
+    elapsed_ms: Option<u128>,
 ) {
     use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy, Level};
 
@@ -123,7 +124,10 @@ fn emit_batch_event_view(
     } else {
         BatchEventKind::Routine
     };
-    let policy = BatchLogPolicy::new(total);
+    let mut policy = BatchLogPolicy::new(total);
+    if let Some(elapsed) = elapsed_ms {
+        policy = policy.with_elapsed_ms(elapsed);
+    }
     let interactive_terminal = io::stderr().is_terminal();
     let should_emit = if interactive_terminal {
         policy.should_emit_interactive(current, kind)
@@ -172,16 +176,10 @@ fn emit_unified_terminal_summary_with_outputs(
     output_paths: &[PathBuf],
 ) {
     use pytools_core::run_logging::{
-        format_terminal_summary, format_terminal_summary_with_outputs, terminal_line, Level,
-        TaskStatus,
+        format_terminal_summary, format_terminal_summary_with_outputs, is_summary_frame_line,
+        summary_line_level, terminal_line,
     };
     finish_terminal_batch_line();
-    let level = match summary.overall_status {
-        TaskStatus::Failed => Level::Error,
-        TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
-        TaskStatus::Success if !summary.business_issues.is_empty() => Level::Warn,
-        TaskStatus::Success | TaskStatus::NoOp => Level::Info,
-    };
     let paths = output_paths
         .iter()
         .map(|path| display_path_for_user(path))
@@ -192,6 +190,12 @@ fn emit_unified_terminal_summary_with_outputs(
         format_terminal_summary_with_outputs(summary, 8, &paths)
     };
     for line in lines {
+        if is_summary_frame_line(&line) {
+            // Decorative rules and blank separators read better untagged.
+            eprintln!("{line}");
+            continue;
+        }
+        let level = summary_line_level(&line, summary.overall_status);
         eprintln!("{}", terminal_line(level, &line));
     }
 }
@@ -202,16 +206,10 @@ fn write_unified_terminal_summary<W: Write>(
     output_paths: &[PathBuf],
 ) -> io::Result<()> {
     use pytools_core::run_logging::{
-        format_terminal_summary, format_terminal_summary_with_outputs, terminal_line, Level,
-        TaskStatus,
+        format_terminal_summary, format_terminal_summary_with_outputs, is_summary_frame_line,
+        summary_line_level, terminal_line,
     };
     finish_terminal_batch_line();
-    let level = match summary.overall_status {
-        TaskStatus::Failed => Level::Error,
-        TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
-        TaskStatus::Success if !summary.business_issues.is_empty() => Level::Warn,
-        TaskStatus::Success | TaskStatus::NoOp => Level::Info,
-    };
     let paths = output_paths
         .iter()
         .map(|path| display_path_for_user(path))
@@ -222,9 +220,31 @@ fn write_unified_terminal_summary<W: Write>(
         format_terminal_summary_with_outputs(summary, 8, &paths)
     };
     for line in lines {
+        if is_summary_frame_line(&line) {
+            writeln!(output, "{line}")?;
+            continue;
+        }
+        let level = summary_line_level(&line, summary.overall_status);
         writeln!(output, "{}", terminal_line(level, &line))?;
     }
     Ok(())
+}
+
+/// Serialized form of a summary event as shown on the developer terminal:
+/// the raw event plus the display `level` and `event_name` fields, so the
+/// history file and the stderr stream never drift apart.
+fn summary_event_json(event: &SummaryRunEvent) -> serde_json::Value {
+    let level = match event.status.as_str() {
+        "failed" => pytools_core::run_logging::Level::Error,
+        "warning" | "partial" | "business_issue" => pytools_core::run_logging::Level::Warn,
+        _ => pytools_core::run_logging::Level::Info,
+    };
+    let mut value = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
+    if value.is_object() {
+        value["level"] = serde_json::json!(level);
+        value["event_name"] = serde_json::json!(event.phase);
+    }
+    value
 }
 
 fn emit_summary_batch_event_view(log_view: &str, event: &SummaryRunEvent) {
@@ -252,6 +272,7 @@ fn emit_summary_batch_event_view(log_view: &str, event: &SummaryRunEvent) {
         phase_change,
         &event.user_message,
         value.as_ref(),
+        Some(event.total_elapsed_ms),
     );
 }
 
@@ -519,7 +540,7 @@ where
     W: Write,
 {
     loop {
-        writeln!(output, "======== PyTools 菜单 ========")?;
+        writeln!(output, "======== rustTools 菜单 ========")?;
         writeln!(output, "{}", build_banner())?;
         writeln!(output, "  1  数据提取与汇总")?;
         writeln!(output, "  2  数据去重与追加")?;
@@ -1664,7 +1685,7 @@ where
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-        "PyTools configuration must use the .xlsx format"
+        "rustTools configuration must use the .xlsx format"
     );
 
     if !config_path.exists() {
@@ -2859,14 +2880,14 @@ where
     for index in executable_indices.iter().copied() {
         let plan = &plans[index];
         if log_view == "user" {
+            // 目标路径集中展示在「目标汇总结果」；写入过程只报状态与数量。
             writeln!(
                 output,
                 "{}",
                 pytools_core::run_logging::terminal_line(
                     pytools_core::run_logging::Level::Info,
                     &format!(
-                        "正在写入目标：{}（追加 {} 行，过滤重复 {} 行）",
-                        display_path_for_user(&plan.target),
+                        "正在写入目标工作簿（追加 {} 行，过滤重复 {} 行）",
                         plan.appended_rows,
                         plan.duplicate_rows_filtered
                     )
@@ -2932,12 +2953,13 @@ where
                 report[index]["status"] = serde_json::Value::String("succeeded".to_owned());
                 report[index]["execution_result"] = execution;
                 if log_view == "user" {
+                    // 路径由「目标汇总结果」统一展示一次。
                     writeln!(
                         output,
                         "{}",
                         pytools_core::run_logging::terminal_line(
                             pytools_core::run_logging::Level::Info,
-                            &format!("已写入：{}", display_path_for_user(&plan.target))
+                            "已写入目标工作簿",
                         )
                     )?;
                 }
@@ -3011,14 +3033,13 @@ where
                     } else {
                         pytools_core::run_logging::Level::Info
                     },
+                    // 追加/过滤数量由统一摘要集中展示；这里只定位目标与保存状态。
                     &format!(
-                        "目标汇总结果：目标 {}；关联配置 {}；过滤重复 {} 行，追加 {} 行{}",
+                        "目标工作簿：{}；关联配置 {}{}",
                         display_path_for_user(&plan.target),
                         config_rows_label,
-                        plan.duplicate_rows_filtered,
-                        plan.appended_rows,
                         if committed {
-                            "，目标工作簿已保存"
+                            "；目标工作簿已保存"
                         } else {
                             "；目标工作簿未修改"
                         }
@@ -4815,8 +4836,7 @@ where
             result
         })
     } else {
-        writeln!(output, "  处理中...")?;
-        output.flush()?;
+        // 非交互输出（管道/重定向）不打印占位行：最终摘要已包含结果与耗时。
         run_print()
     };
     if let (Some(tasks), Ok(run)) = (print_tasks_for_display.as_ref(), result.as_ref()) {
@@ -8795,20 +8815,17 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
             );
         }
     }
-    if interactive && log_view != "developer" {
-        if log_view == "user" {
-            if let Some(summary) = unified_summary.as_ref() {
-                let output_paths = legacy_report_output_paths(&result);
-                emit_unified_terminal_summary_with_outputs(summary, &output_paths);
-            } else {
-                println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "村镇银行数据拆分结束：输入 {total} 个，已拆分 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
-            }
+    if !interactive || log_view == "developer" {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else if log_view == "user" {
+        if let Some(summary) = unified_summary.as_ref() {
+            let output_paths = legacy_report_output_paths(&result);
+            emit_unified_terminal_summary_with_outputs(summary, &output_paths);
         } else {
             println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "村镇银行数据拆分结束：输入 {total} 个，已拆分 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
         }
-    } else {
-        println!("{}", serde_json::to_string_pretty(&result)?);
     }
+    // off 视图：静默。
     Ok(())
 }
 
@@ -12422,6 +12439,7 @@ fn emit_submission_check_event_view(
         current.is_none() || event.phase == "complete",
         &event.user_message,
         Some(event_value),
+        Some(event.total_elapsed_ms),
     );
 }
 
@@ -12883,16 +12901,17 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
             )
         );
     }
-    if interactive && log_view != "developer" {
+    if !interactive || log_view == "developer" {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else if log_view == "user" {
         let outputs = result
             .items
             .iter()
             .filter_map(|item| item.output.clone())
             .collect::<Vec<_>>();
         emit_unified_terminal_summary_with_outputs(&unified, &outputs);
-    } else {
-        println!("{}", serde_json::to_string_pretty(&output)?);
     }
+    // off 视图：静默。
     if result.failed > 0 {
         bail!("{} conversion(s) failed", result.failed);
     }
@@ -12931,6 +12950,7 @@ fn emit_conversion_event_view(
         phase_change,
         &event.user_message,
         Some(event_value),
+        Some(event.total_elapsed_ms),
     );
 }
 
@@ -14479,6 +14499,7 @@ fn emit_header_path_compare_event_view(
         current.is_none(),
         &event.user_message,
         value.as_ref(),
+        Some(event.total_elapsed_ms),
     );
     events.push(event);
 }
@@ -16506,7 +16527,9 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             "summary": result.as_ref().ok(),
             "failure": failure,
             "elapsed_ms": run_started.elapsed().as_millis(),
-            "events": events,
+            // 与开发者 stderr 流使用同一份注入 level/event_name 后的事件，
+            // 保证两个通道逐字段一致（历史记录即终端所见）。
+            "events": events.iter().map(summary_event_json).collect::<Vec<_>>(),
         });
         match write_json_report_create_new(&path, &report) {
             Ok(()) => Some(path),
@@ -18734,6 +18757,7 @@ fn emit_local_filename_map_event_view(
         current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
         &event.user_message,
         Some(event_value),
+        Some(event.elapsed_ms),
     );
 }
 
@@ -19115,11 +19139,12 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
             object.insert("history_warning".to_owned(), serde_json::json!(warning));
         }
     }
-    if interactive && log_view != "developer" {
-        emit_unified_terminal_summary_with_outputs(&unified, &[]);
-    } else {
+    if !interactive || log_view == "developer" {
         println!("{}", serde_json::to_string_pretty(&output)?);
+    } else if log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
     }
+    // off 视图：静默（不输出终端事件，也不输出机器 JSON）。
     Ok(())
 }
 
@@ -19135,6 +19160,7 @@ fn emit_batch_rename_event_view(log_view: &str, event: &BatchRenameProgressEvent
         current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
         &event.user_message,
         value.as_ref(),
+        Some(event.total_elapsed_ms),
     );
 }
 
@@ -19778,6 +19804,7 @@ fn emit_file_sort_event_view(
         current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
         &event.user_message,
         Some(event_value),
+        Some(event.elapsed_ms),
     );
 }
 
@@ -20454,20 +20481,9 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     );
                 }
                 if interactive && view == "user" {
+                    // 用户视图的定位指针已由分组摘要的「详细日志」行承载；
+                    // run_id 与统一记录属于开发者视图与机器接口。
                     emit_unified_terminal_summary_with_outputs(&summary, &[]);
-                    if let Some(path) = unified_path {
-                        eprintln!(
-                            "{}",
-                            pytools_core::run_logging::terminal_line(
-                                Level::Info,
-                                &format!(
-                                    "运行编号 {}；统一记录：{}",
-                                    tracker.run_id,
-                                    pytools_core::run_logging::path_for_log_view(&path, false)
-                                )
-                            )
-                        );
-                    }
                 }
             }
             return Err(error);
@@ -20579,23 +20595,11 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     }
 
     if interactive && view == "user" {
+        // 用户视图的定位指针已由分组摘要的「详细日志」行承载。
         emit_unified_terminal_summary_with_outputs(
             &unified_summary,
             &result.paths.iter().map(PathBuf::from).collect::<Vec<_>>(),
         );
-        if let Some(path) = unified_path {
-            eprintln!(
-                "{}",
-                pytools_core::run_logging::terminal_line(
-                    Level::Info,
-                    &format!(
-                        "运行编号 {}；统一记录：{}",
-                        tracker.run_id,
-                        pytools_core::run_logging::path_for_log_view(&path, view == "developer")
-                    )
-                )
-            );
-        }
     } else {
         let mut output = serde_json::to_value(&result)?;
         if view != "off" {
@@ -21175,22 +21179,7 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     .map(std::slice::from_ref)
                     .unwrap_or(&[]);
                 emit_unified_terminal_summary_with_outputs(&unified_summary, outputs);
-                if let Some(path) = unified_path {
-                    eprintln!(
-                        "{}",
-                        pytools_core::run_logging::terminal_line(
-                            Level::Info,
-                            &format!(
-                                "运行编号 {}；统一记录：{}",
-                                tracker.run_id,
-                                pytools_core::run_logging::path_for_log_view(
-                                    &path,
-                                    view == "developer"
-                                )
-                            )
-                        )
-                    );
-                }
+                // 用户视图的定位指针已由分组摘要的「详细日志」行承载。
             } else {
                 let path = result
                     .path
@@ -21214,20 +21203,8 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         }
         Err(error) => {
             if view == "user" {
+                // 用户视图的定位指针已由分组摘要的「详细日志」行承载。
                 emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
-                if let Some(path) = unified_path {
-                    eprintln!(
-                        "{}",
-                        pytools_core::run_logging::terminal_line(
-                            Level::Info,
-                            &format!(
-                                "运行编号 {}；统一记录：{}",
-                                tracker.run_id,
-                                pytools_core::run_logging::path_for_log_view(&path, false)
-                            )
-                        )
-                    );
-                }
             }
             Err(error)
         }
@@ -21312,7 +21289,12 @@ fn record_region_sum_progress_event(
 fn emit_region_sum_event(log_view: &str, event: &RegionSumRunEvent, file_labels: &[String]) {
     match log_view {
         "user" => {
-            use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy};
+            use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy, Level};
+            // 业务模块自带的「完成：成功 N 个…」与统一分组摘要完全重复；
+            // 用户只保留一份最终摘要（目标 4.4 避免重复摘要）。
+            if event.phase == "run" && event.status == "completed" {
+                return;
+            }
             let total = event.progress.total_files;
             let current = event.input_index;
             let mut message = event.user_message.clone();
@@ -21331,7 +21313,7 @@ fn emit_region_sum_event(log_view: &str, event: &RegionSumRunEvent, file_labels:
                 event.phase.as_str(),
                 "run" | "output_setup" | "report_write" | "log_setup"
             );
-            let policy = BatchLogPolicy::new(total);
+            let policy = BatchLogPolicy::new(total).with_elapsed_ms(event.total_elapsed_ms);
             let kind = if event.status == "failed" {
                 BatchEventKind::Failure
             } else if matches!(event.status.as_str(), "warning" | "skipped") {
@@ -21355,6 +21337,7 @@ fn emit_region_sum_event(log_view: &str, event: &RegionSumRunEvent, file_labels:
                     phase_change,
                     &message,
                     None,
+                    Some(event.total_elapsed_ms),
                 );
             }
         }
@@ -21429,7 +21412,7 @@ fn write_region_sum_run_history(
 }
 
 fn print_usage() {
-    eprintln!("PyTools {}", build_banner().trim());
+    eprintln!("rustTools {}", build_banner().trim());
     eprintln!(
         "Usage:\n\
          pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id>]\n\

@@ -61,7 +61,12 @@ fn interactive_archive_menu_routes_all_five_workflows() -> Result<()> {
     assert_menu_success(&date_preview, "PT-8-1")?;
     assert!(String::from_utf8_lossy(&date_preview.stdout).contains("6  归档整理"));
     assert!(String::from_utf8_lossy(&date_preview.stdout).contains("按日期归档预览"));
-    assert!(String::from_utf8_lossy(&date_preview.stdout).contains("用时="));
+    // 分组摘要的耗时行在 stderr（含「耗时：」），stdout 保留菜单文本。
+    assert!(
+        String::from_utf8_lossy(&date_preview.stderr).contains("耗时"),
+        "{}",
+        String::from_utf8_lossy(&date_preview.stderr)
+    );
     assert_eq!(fs::read(&date_source)?, b"date preview source");
     let date_history = read_history(&log_dir, "PT-8-1_")?;
     assert_eq!(date_history["status"], "succeeded");

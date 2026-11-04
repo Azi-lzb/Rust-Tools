@@ -1,5 +1,5 @@
-======== PyTools 菜单 ========
-  v0.1.0  构建 2026-11-04 22:41
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-05 00:52
   1  数据提取与汇总
   2  数据去重与追加
   3  报表打印
@@ -34,32 +34,8 @@
   4. institution-004.xlsx
   5. institution-005.xlsx
   …… 其余 45 个文件将按批次处理
-[2026-11-04 22:43:52] [INFO] 开始地区总分校验，共 50 个工作簿
-[2026-11-04 22:43:52] [INFO] 进度 1/50（2%）：工作簿「north/duplicate.xlsx」：第 1 个工作簿地区核对完成
-[2026-11-04 22:43:52] [WARN] 进度 2/50（4%）：工作簿「south/duplicate.xlsx」，工作表「分地区汇总」：分地区总分核对完成：发现 1 处差异
-[2026-11-04 22:43:52] [ERROR] 进度 3/50（6%）：地区总分校验阶段 workbook_read 失败：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
-[2026-11-04 22:43:52] [INFO] 进度 5/50（10%）：工作簿「institution-005.xlsx」：第 5 个工作簿地区核对完成
-[2026-11-04 22:43:52] [INFO] 进度 10/50（20%）：工作簿「institution-010.xlsx」：第 10 个工作簿地区核对完成
-[2026-11-04 22:43:52] [INFO] 进度 15/50（30%）：工作簿「institution-015.xlsx」：第 15 个工作簿地区核对完成
-[2026-11-04 22:43:52] [INFO] 进度 20/50（40%）：工作簿「institution-020.xlsx」：第 20 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 25/50（50%）：工作簿「institution-025.xlsx」：第 25 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 30/50（60%）：工作簿「institution-030.xlsx」：第 30 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 35/50（70%）：工作簿「institution-035.xlsx」：第 35 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 40/50（80%）：工作簿「institution-040.xlsx」：第 40 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 45/50（90%）：工作簿「institution-045.xlsx」：第 45 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 进度 50/50（100%）：工作簿「institution-050.xlsx」：第 50 个工作簿地区核对完成
-[2026-11-04 22:43:53] [INFO] 正在生成地区总分核对结果
-[2026-11-04 22:43:53] [INFO] 地区总分核对报表已生成
-[2026-11-04 22:43:53] [INFO] 地区总分校验完成：成功 49 个，失败 1 个，核对 49 张工作表，发现 1 项错误
-[2026-11-04 22:43:53] [WARN] 部分完成：地区总分校验；选择 50，尝试 50，成功 49，失败 1，跳过 0，取消 0，未完成 0；工作表发现 49，尝试 49，成功 49，失败 0，跳过 0；保存工作簿 1 个；发现差异数 1，失败工作簿数 1，核对工作表数 49；耗时 0.334 秒；运行编号 pytools-pt-7-5-23996-1793803432884493500
-[2026-11-04 22:43:53] [WARN] 业务异常：1 项，明细 1 条
-[2026-11-04 22:43:53] [WARN] [地区总分校验] 校验发现不一致项（1 项）
-[2026-11-04 22:43:53] [WARN] 失败阶段 workbook_read [EXCEL_READ_FAILED]：broken.xlsx：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
-[2026-11-04 22:43:53] [WARN] 输出：C:\Users\AZI\AppData\Local\Temp\RustTools-CLI-acceptance-final-du2ml8kg\output\地区数值核对结果_20261104_224352_1.xlsx
-[2026-11-04 22:43:53] [WARN] 详细事件：run-events\PT-7-5_pytools-pt-7-5-23996-1793803432884493500.jsonl
-[2026-11-04 22:43:53] [INFO] 运行编号 pytools-pt-7-5-23996-1793803432884493500；统一记录：PT-7-5_pytools-pt-7-5-23996-1793803432884493500.json
-======== PyTools 菜单 ========
-  v0.1.0  构建 2026-11-04 22:41
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-05 00:52
   1  数据提取与汇总
   2  数据去重与追加
   3  报表打印
@@ -70,3 +46,30 @@
   0  退出
 ==============================
 主菜单选择> 再见。
+[2026-11-05 00:53:31] [INFO] 开始地区总分校验，共 50 个工作簿
+[2026-11-05 00:53:31] [INFO] 进度 1/50（2%）：工作簿「north/duplicate.xlsx」：第 1 个工作簿地区核对完成
+[2026-11-05 00:53:31] [WARN] 进度 2/50（4%）：工作簿「south/duplicate.xlsx」，工作表「分地区汇总」：分地区总分核对完成：发现 1 处差异
+[2026-11-05 00:53:31] [ERROR] 进度 3/50（6%）：地区总分校验阶段 workbook_read 失败：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
+[2026-11-05 00:53:31] [INFO] 进度 50/50（100%）：工作簿「institution-050.xlsx」：第 50 个工作簿地区核对完成
+[2026-11-05 00:53:31] [INFO] 正在生成地区总分核对结果
+[2026-11-05 00:53:31] [INFO] 地区总分核对报表已生成
+========================================
+[2026-11-05 00:53:31] [WARN] 地区总分校验：部分完成
+========================================
+[2026-11-05 00:53:31] [WARN] 输入：50，成功：49，失败：1
+[2026-11-05 00:53:31] [WARN] 已核对工作表：成功 49
+[2026-11-05 00:53:31] [WARN] 输出：保存工作簿 1 个
+[2026-11-05 00:53:31] [WARN] 发现差异数：1
+[2026-11-05 00:53:31] [WARN] 失败工作簿数：1
+[2026-11-05 00:53:31] [WARN] 核对工作表数：49
+
+[2026-11-05 00:53:31] [WARN] 需要关注：
+[2026-11-05 00:53:31] [WARN]   [业务异常] 1 项（明细 1 条）
+[2026-11-05 00:53:31] [WARN]     [地区总分校验] 校验发现不一致项（1 项）
+[2026-11-05 00:53:31] [ERROR]   [EXCEL_READ_FAILED] broken.xlsx（阶段 workbook_read）：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD
+
+[2026-11-05 00:53:31] [WARN] 输出结果：
+[2026-11-05 00:53:31] [WARN]   C:\Users\AZI\AppData\Local\Temp\region-50-u1x584vd\app\output\地区数值核对结果_20261105_005331.xlsx
+[2026-11-05 00:53:31] [WARN] 详细日志：run-events\PT-7-5_pytools-pt-7-5-29960-1793811211675398100.jsonl
+[2026-11-05 00:53:31] [WARN] 耗时：0.300 秒
+========================================

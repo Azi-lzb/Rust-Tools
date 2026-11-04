@@ -65,15 +65,15 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     assert!(config_check.status.success());
     let config_check_stdout = String::from_utf8_lossy(&config_check.stdout);
     assert!(
-        config_check_stdout.contains("处理完成：任务成功 1 项，跳过 0 项，失败 0 项"),
+        config_check_stdout.contains("执行完成，发现业务异常"),
         "{config_check_stdout}"
     );
     assert!(
-        config_check_stdout.contains("标记重复行 1 行"),
+        config_check_stdout.contains("标记重复行数：1"),
         "{config_check_stdout}"
     );
     assert!(
-        config_check_stdout.contains("已就地标记"),
+        config_check_stdout.contains("已更新并保存源工作簿"),
         "{config_check_stdout}"
     );
     assert!(
@@ -110,12 +110,9 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     let config_delete = run_menu(&config, "2\n2\n0\n")?;
     assert!(config_delete.status.success());
     let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
-    assert!(
-        delete_stdout.contains("处理完成：任务成功 1 项，跳过 0 项，失败 0 项"),
-        "{delete_stdout}"
-    );
-    assert!(delete_stdout.contains("删除重复行 1 行"), "{delete_stdout}");
-    assert!(delete_stdout.contains("已就地删除"), "{delete_stdout}");
+    assert!(delete_stdout.contains("执行成功"), "{delete_stdout}");
+    assert!(delete_stdout.contains("删除重复行数：1"), "{delete_stdout}");
+    assert!(delete_stdout.contains("已更新并保存源工作簿"), "{delete_stdout}");
     assert!(
         !delete_stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -233,7 +230,10 @@ fn configured_duplicate_check_marks_formula_workbook_in_place() -> Result<()> {
     let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
+    assert!(
+        stdout.contains("执行完成，发现业务异常") && stdout.contains("标记重复行数：1"),
+        "{stdout}"
+    );
     assert!(
         !stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -258,7 +258,10 @@ fn configured_duplicate_check_marks_comment_workbook_in_place() -> Result<()> {
     let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
+    assert!(
+        stdout.contains("执行完成，发现业务异常") && stdout.contains("标记重复行数：1"),
+        "{stdout}"
+    );
     assert_ne!(fs::read(&source)?, source_before);
     Ok(())
 }
@@ -275,8 +278,8 @@ fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
     let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
-    assert!(stdout.contains("已就地删除"), "{stdout}");
+    assert!(stdout.contains("执行成功") && stdout.contains("删除重复行数：1"), "{stdout}");
+    assert!(stdout.contains("已更新并保存源工作簿"), "{stdout}");
     assert!(
         !stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -416,7 +419,9 @@ fn interactive_dedup_append_repeated_run_filters_existing_target_rows() -> Resul
     assert!(!first_stdout.contains("确认提交上述追加"));
     assert!(!first_stdout.contains("计划已生成，目标未修改"));
     assert!(
-        first_stdout.contains("已写入 1 个目标，追加 2 行，过滤重复 1 行"),
+        first_stdout.contains("写入目标数：1")
+            && first_stdout.contains("追加行数：2")
+            && first_stdout.contains("过滤重复行数：1"),
         "{first_stdout}"
     );
     let target_after_first = fs::read(&target)?;
@@ -425,10 +430,9 @@ fn interactive_dedup_append_repeated_run_filters_existing_target_rows() -> Resul
     assert!(second.status.success());
     let second_stdout = String::from_utf8_lossy(&second.stdout);
     assert!(!second_stdout.contains("确认提交上述追加"));
-    assert!(
-        second_stdout.contains("已写入 0 个目标，追加 0 行，过滤重复 3 行"),
-        "{second_stdout}"
-    );
+    // 全部命中既有目标行：写入/追加数量为 0，按摘要规范不显示零值指标，
+    // 只保留过滤行数；目标工作簿保持字节不变（下方断言）。
+    assert!(second_stdout.contains("过滤重复行数：3"), "{second_stdout}");
     assert_eq!(fs::read(&target)?, target_after_first);
     assert_eq!(fs::read(&source)?, source_before);
     Ok(())
@@ -562,7 +566,9 @@ fn interactive_dedup_append_direct_copies_source_formula_and_summarizes() -> Res
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("确认提交上述追加"));
     assert!(
-        stdout.contains("已写入 1 个目标，追加 1 行，过滤重复 2 行"),
+        stdout.contains("写入目标数：1")
+            && stdout.contains("追加行数：1")
+            && stdout.contains("过滤重复行数：2"),
         "{stdout}"
     );
     let saved = read_workbook(&target)?;
@@ -839,8 +845,8 @@ fn interactive_dedup_menu_reports_in_place_marking_without_json() -> Result<()> 
         String::from_utf8_lossy(&developer.stderr)
     );
     let stdout = String::from_utf8_lossy(&developer.stdout);
-    assert!(stdout.contains("处理完成：任务成功 1 项"), "{stdout}");
-    assert!(stdout.contains("标记重复行 1 行"), "{stdout}");
+    assert!(stdout.contains("执行完成，发现业务异常"), "{stdout}");
+    assert!(stdout.contains("标记重复行数：1"), "{stdout}");
     assert!(!stdout.contains("\"execution\""), "{stdout}");
 
     let off = run_menu_with_view(&config, "2\n1\n0\n", "off")?;

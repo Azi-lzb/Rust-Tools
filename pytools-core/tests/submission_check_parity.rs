@@ -522,12 +522,15 @@ fn submission_check_menu_logs_user_developer_and_off_views() -> Result<()> {
             String::from_utf8_lossy(&output.stderr)
         );
         let report = if log_view == "user" {
-            // user 视图：stdout 只输出人类可读汇总行。
+            // user 视图：分组摘要在 stderr（发现/已复制计数），stdout 只保留菜单文本。
             let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(
-                stdout.contains("提交检查完成：发现 3 个文件，提交 2 项"),
-                "{stdout}"
+                stderr.contains("已提交配置项：2")
+                    && stderr.contains("[缺失提交] 完整性检查发现待处理项（2 项）"),
+                "{stderr}"
             );
+            assert!(!stdout.contains("\"files\""));
             continue;
         } else {
             let report_start = output
@@ -547,7 +550,7 @@ fn submission_check_menu_logs_user_developer_and_off_views() -> Result<()> {
         match log_view {
             "user" => {
                 assert!(stderr.contains("正在读取提交检查配置"));
-                assert!(stderr.contains("阶段用时"));
+                assert!(stderr.contains("耗时"), "{stderr}");
                 assert!(stderr.contains("总用时"));
                 assert!(!stderr.contains(&sources.to_string_lossy().to_string()));
                 assert!(!stderr.contains("2026_Area_Bank_base.txt"));

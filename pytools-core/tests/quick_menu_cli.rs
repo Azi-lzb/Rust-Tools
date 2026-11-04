@@ -125,7 +125,7 @@ fn launching_without_arguments_opens_the_legacy_numbered_main_menu() -> Result<(
 
     let stdout = String::from_utf8_lossy(&result.stdout);
     for legacy_entry in [
-        "======== PyTools 菜单 ========",
+        "======== rustTools 菜单 ========",
         "  1  数据提取与汇总",
         "  2  数据去重与追加",
         "  3  报表打印",

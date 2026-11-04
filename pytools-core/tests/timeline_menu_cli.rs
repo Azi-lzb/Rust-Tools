@@ -965,7 +965,7 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
     assert!(user_stderr.contains("路径标准化映射"));
     assert!(user_stderr.contains("第 1/1 个源工作簿读取完成"));
     assert!(user_stderr.contains("表头路径比对结束"));
-    assert!(user_stderr.contains("阶段用时"));
+    assert!(user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&source.display().to_string()));
     assert!(!user_stderr.contains("来源甲"));
     let user_report = latest_timeline_compare_report(&user)?;
@@ -1190,11 +1190,16 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
     assert!(user_log.contains("未匹配 2 个"));
 
     let report = latest_timeline_compare_report(&user)?;
-    let result_path = PathBuf::from(
+    let mut result_path = PathBuf::from(
         report["output"]
             .as_str()
             .context("unmatched-rule comparison output path missing")?,
     );
+    if !result_path.is_file() {
+        // user 视图摘要可能只显示文件名；按配置的输出目录定位。
+        let output_dir = root.path().join("app").join("output");
+        result_path = find_output(&output_dir, result_path.file_name().context("output file name missing")?.to_string_lossy().as_ref())?;
+    }
     let workbook = read_workbook(result_path)?;
     let summary = workbook
         .sheets
@@ -2422,18 +2427,35 @@ fn latest_timeline_compare_report(output: &Output) -> Result<Value> {
             return Ok(report);
         }
     }
-    // user/off 视图：stdout 输出人类可读汇总行（“报告：<路径>”），据此构造最小报告对象。
+    // user 视图：分组摘要在 stderr 的「输出结果：」块（其后一行是带
+    // [时间][级别] 前缀的输出路径）；off 在 stdout 的「报告：<路径>」行。
+    let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let report_path = stdout
-        .lines()
-        .rev()
-        .find_map(|line| {
+    let mut report_path = None::<String>;
+    let stderr_lines: Vec<&str> = stderr.lines().collect();
+    for (index, line) in stderr_lines.iter().enumerate() {
+        if line.contains("输出结果：") {
+            if let Some(next) = stderr_lines.get(index + 1) {
+                // 剥离「[时间] [级别] 」前缀，保留路径。
+                let body = next
+                    .split_once("] ")
+                    .and_then(|(_, rest)| rest.split_once("] ").map(|(_, r)| r))
+                    .unwrap_or(next);
+                report_path = Some(body.trim().to_owned());
+            }
+            break;
+        }
+    }
+    let report_path = report_path.or_else(|| {
+        stdout.lines().rev().find_map(|line| {
             line.split_once("报告：").and_then(|(_, tail)| {
                 let end = tail.find("；").unwrap_or(tail.len());
                 Some(tail[..end].trim().to_owned())
             })
         })
-        .with_context(|| "interactive menu did not print a timeline comparison report")?;
+    });
+    let report_path =
+        report_path.with_context(|| "interactive menu did not print a timeline comparison report")?;
     Ok(serde_json::json!({ "output": report_path }))
 }
 
@@ -2637,7 +2659,7 @@ fn launching_without_arguments_opens_the_numbered_main_menu() -> Result<()> {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     for expected in [
-        "======== PyTools 菜单 ========",
+        "======== rustTools 菜单 ========",
         "1  数据提取与汇总",
         "2  数据去重与追加",
         "3  报表打印",
@@ -2691,7 +2713,7 @@ fn timeline_precheck_menu_prints_readable_success_and_returns_to_main() -> Resul
     assert!(stdout.contains("=== 预校验报告 ==="));
     assert!(stdout.contains("预校验完成：错误 0 项，警告 0 项"));
     assert!(stdout.contains("时序配置预校验通过。"));
-    assert!(stdout.contains("======== PyTools 菜单 ========"));
+    assert!(stdout.contains("======== rustTools 菜单 ========"));
     assert!(stdout.contains("再见。"));
     assert!(!stdout.contains("\"errors\""));
     Ok(())
@@ -2714,7 +2736,7 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
     assert!(stdout.contains("[错误] 全局配置/输入目录: 输入目录不存在:"));
     assert!(stdout.contains("预校验完成：错误 1 项，警告 0 项"));
     assert!(stdout.contains("发现 1 项错误，请按上方位置修正后重试。"));
-    assert!(stdout.contains("======== PyTools 菜单 ========"));
+    assert!(stdout.contains("======== rustTools 菜单 ========"));
     assert!(stdout.contains("再见。"));
     assert!(!stdout.contains("\"errors\""));
     Ok(())

@@ -664,7 +664,11 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
         stderr(&off)
     );
     assert!(off_output_dir.join("off-private.xlsx").is_file());
-    assert!(stderr(&off).is_empty());
+    assert!(
+        stderr(&off).is_empty(),
+        "off view must not write stderr: {}",
+        stderr(&off)
+    );
     assert_eq!(fs::read_dir(&log_dir)?.count(), history_count);
 
     let failed_source = sources.join("private-needs-engine.xls");
@@ -826,10 +830,10 @@ fn file_sort_menu_supports_user_developer_and_off_progress_views() -> Result<()>
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取文件排序配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
-    assert!(user_stderr.contains("阶段用时"));
+    assert!(user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("sort-user-payload"));
-    assert!(String::from_utf8_lossy(&user.stdout).contains("重命名 1 个"));
+    assert!(user_stderr.contains("实际改名数：1"), "{user_stderr}");
     // user 视图同样保存统一运行记录（1 个 .run.json + 1 个 .jsonl 事件日志）。
     assert_eq!(fs::read_dir(&log_dir)?.count(), 2);
 
@@ -888,7 +892,11 @@ fn file_sort_menu_supports_user_developer_and_off_progress_views() -> Result<()>
     let off = run_action_with_log_view(&config, 9, 1, &off_source, "off")?;
     assert!(off.status.success(), "off view failed: {}", stderr(&off));
     assert!(sources.join("1_sort-off-payload.txt").is_file());
-    assert!(stderr(&off).is_empty());
+    assert!(
+        stderr(&off).is_empty(),
+        "off view must not write stderr: {}",
+        stderr(&off)
+    );
     assert_eq!(fs::read_dir(&log_dir)?.count(), logs_before_off);
 
     Ok(())
@@ -910,10 +918,11 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     let user_target = sources.join("Bank_content-user.xlsx");
     assert_eq!(fs::read(&user_target)?, user_source_bytes);
     let user_stdout = String::from_utf8_lossy(&user.stdout);
-    // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+    let user_stderr = String::from_utf8_lossy(&user.stderr);
+    // user 视图：分组摘要在 stderr，stdout 只保留菜单文本，不输出 JSON。
     assert!(
-        user_stdout.contains("按工作簿内容添加文件名前缀结束：成功 1 个，跳过 0 个，失败 0 个"),
-        "{user_stdout}"
+        user_stderr.contains("实际改名数：1"),
+        "{user_stderr}"
     );
     assert!(
         !user_stdout.contains("\"ok\""),
@@ -926,7 +935,7 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取内容前缀配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
-    assert!(user_stderr.contains("阶段用时"));
+    assert!(user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("content-user.xlsx"));
     // user 视图同样保存统一运行记录（1 个 .run.json）。
@@ -994,7 +1003,11 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     let off = run_action_with_log_view(&config, 5, 1, &off_source, "off")?;
     assert!(off.status.success(), "off view failed: {}", stderr(&off));
     assert!(sources.join("Bank_content-off.xlsx").is_file());
-    assert!(stderr(&off).is_empty());
+    assert!(
+        stderr(&off).is_empty(),
+        "off view must not write stderr: {}",
+        stderr(&off)
+    );
     assert_eq!(fs::read_dir(&log_dir)?.count(), history_count);
     assert!(output_json(&off)?.get("run_history_path").is_none());
 
@@ -1034,7 +1047,7 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取批量重命名配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件或目录"));
-    assert!(user_stderr.contains("阶段用时"));
+    assert!(user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("Bank-user-report"));
     let user_history_name = user_stderr
@@ -1107,7 +1120,11 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     assert!(off_dir
         .join("2026-10-24 B01 Example Bank Monthly.txt")
         .is_file());
-    assert!(stderr(&off).is_empty());
+    assert!(
+        stderr(&off).is_empty(),
+        "off view must not write stderr: {}",
+        stderr(&off)
+    );
     assert_eq!(
         find_files_with_extension(&log_dir, "json")?.len(),
         json_count_before_off

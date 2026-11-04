@@ -105,19 +105,31 @@
 
 完整实际 CLI 捕获：[conversion-pywin32com-cli.terminal.txt](captures/conversion-pywin32com-cli.terminal.txt)。另有较短的 worker 返回捕获：[conversion-pywin32com-formula.stdout.txt](captures/conversion-pywin32com-formula.stdout.txt)。交互菜单输出仍待验收。
 
-## 5-5 地区总分校验：10 / 50 / 100 个工作簿
+## 5-5 地区总分校验：10 / 50 / 100 个工作簿（第二轮分组摘要）
 
-以下来自真实交互菜单的合并输出。测试副本包含一个地区差异、一个损坏 xlsx 和 `north/duplicate.xlsx`、`south/duplicate.xlsx` 两个同名文件。
+第二轮把最终摘要改为多行分组布局：状态与输入统计、业务指标、需要关注、输出结果、耗时各自成组；同一错误链去重后只出现一次；run_id 与 JSONL 文件名从用户视图移除（保留详细日志指针）；短任务（<0.8 秒）的常规进度检查点折叠为仅首尾。以下为 100 个工作簿的真实合并输出（2026-11-05 重跑，样本结构同第一轮）。
 
 ```text
-[2026-11-04 22:43:53] [INFO] 开始地区总分校验，共 100 个工作簿
-[2026-11-04 22:43:53] [WARN] 进度 2/100（2%）：工作簿「south/duplicate.xlsx」，工作表「分地区汇总」：分地区总分核对完成：发现 1 处差异
-[2026-11-04 22:43:53] [ERROR] 进度 3/100（3%）：地区总分校验阶段 workbook_read 失败：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
-[2026-11-04 22:43:54] [INFO] 地区总分校验完成：成功 99 个，失败 1 个，核对 99 张工作表，发现 1 项错误
-[2026-11-04 22:43:54] [WARN] 部分完成：地区总分校验；选择 100，尝试 100，成功 99，失败 1，跳过 0，取消 0，未完成 0；工作表发现 99，尝试 99，成功 99，失败 0，跳过 0；保存工作簿 1 个；发现差异数 1，失败工作簿数 1，核对工作表数 99；耗时 0.657 秒；运行编号 pytools-pt-7-5-4316-1793803433703812700
-[2026-11-04 22:43:54] [WARN] 业务异常：1 项，明细 1 条
-[2026-11-04 22:43:54] [WARN] [地区总分校验] 校验发现不一致项（1 项）
-[2026-11-04 22:43:54] [WARN] 失败阶段 workbook_read [EXCEL_READ_FAILED]：broken.xlsx：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
+[2026-11-05 00:51:32] [INFO] 开始地区总分校验，共 100 个工作簿
+[2026-11-05 00:51:31] [WARN] 进度 2/100（2%）：工作簿「south/duplicate.xlsx」，工作表「分地区汇总」：分地区总分核对完成：发现 1 处差异
+[2026-11-05 00:51:32] [ERROR] 进度 3/100（3%）：地区总分校验阶段 workbook_read 失败：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD
+[2026-11-05 00:51:32] [INFO] 进度 50/100（50%）：工作簿「institution-050.xlsx」：第 50 个工作簿地区核对完成
+[2026-11-05 00:51:32] [INFO] 进度 100/100（100%）：工作簿「institution-100.xlsx」：第 100 个工作簿地区核对完成
+========================================
+[2026-11-05 00:51:32] [WARN] 地区总分校验：部分完成
+========================================
+[2026-11-05 00:51:32] [WARN] 输入：100，成功：99，失败：1
+[2026-11-05 00:51:32] [WARN] 已核对工作表：成功 49
+[2026-11-05 00:51:32] [WARN] 发现差异数：1
+[2026-11-05 00:51:32] [WARN] 需要关注：
+[2026-11-05 00:51:32] [ERROR]   [EXCEL_READ_FAILED] broken.xlsx（阶段 workbook_read）：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD
+[2026-11-05 00:51:32] [WARN] 输出结果：
+[2026-11-05 00:51:32] [WARN]   C:\Users\AZI\AppData\Local\Temp\…\app\output\地区数值核对结果_20261105_005131.xlsx
+[2026-11-05 00:51:32] [WARN] 详细日志：run-events\PT-7-5_….jsonl
+[2026-11-05 00:51:32] [WARN] 耗时：0.564 秒
+========================================
 ```
 
-完整原始输出分别保存为：[10 文件](captures/region-sum-10.terminal.txt)、[50 文件](captures/region-sum-50.terminal.txt)、[100 文件](captures/region-sum-100.terminal.txt)。全部真实行数分别为 74、72、72；全部成功创建核对结果文件。程序摘要耗时分别为 0.101、0.334、0.657 秒。错误原因重复了 ZIP 链，虽能定位但仍偏长。
+与第一轮对比：同一错误链从三次重复压缩为一次；单行 12 项统计拆为多组；run_id/统一 JSON 记录名移出用户视图；错误行降回 ERROR、统计行保持 INFO/WARN；进度检查点从 10 个减为 4 个（两条异常 + 首尾）。
+
+完整原始输出：[100 文件 stderr](captures/region-sum-100.stderr.txt)、[10 文件合并流](captures/region-sum-10.terminal.txt)（79 行，0.090 秒）、[50 文件合并流](captures/region-sum-50.terminal.txt)（75 行，0.300 秒）。10 文件为小批量（0.090 秒），按文件显示进度；50/100 均只显示异常与首尾检查点。

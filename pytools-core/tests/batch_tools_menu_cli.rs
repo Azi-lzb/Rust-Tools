@@ -94,9 +94,9 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
     assert!(stdout.contains("先显式转换为 .xlsx"));
     // user 视图：终端输出人类可读统一摘要，不再输出 JSON。
     assert!(
-        terminal.contains("部分完成：地区总分校验")
-            && terminal.contains("成功 4")
-            && terminal.contains("发现差异数 1"),
+        terminal.contains("地区总分校验：部分完成")
+            && terminal.contains("成功：4")
+            && terminal.contains("发现差异数：1"),
         "{terminal}"
     );
     assert!(
@@ -206,7 +206,7 @@ fn interactive_batch_menu_summarizes_large_region_sum_selection() -> Result<()> 
     assert!(stderr.contains("broken.xlsx"), "{stderr}");
     assert!(stderr.contains("Zip error"), "{stderr}");
     assert!(
-        terminal.contains("成功 99") && terminal.contains("失败 1"),
+        terminal.contains("成功：99") && terminal.contains("失败：1"),
         "{terminal}"
     );
     Ok(())
@@ -239,11 +239,8 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
         let terminal = format!("{stdout}\n{stderr}");
         // user 视图输出人类可读汇总；developer/off 视图输出 JSON。
         if view == "user" {
-            assert!(
-                terminal.contains("执行失败：地区总分校验")
-                    || terminal.contains("部分完成：地区总分校验")
-            );
-            assert!(terminal.contains("成功 1，失败 1"));
+            assert!(terminal.contains("地区总分校验：部分完成"));
+            assert!(terminal.contains("成功：1") && terminal.contains("失败：1"));
             assert!(
                 !terminal.contains("\"files\""),
                 "user view must not print JSON: {terminal}"
@@ -700,9 +697,8 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
     let terminal = format!("{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
     assert!(
-        terminal.contains("删除分机构表中的外资行")
-            && terminal.contains("成功 2")
-            && terminal.contains("失败 0"),
+        terminal.contains("删除分机构表中的外资行：执行成功")
+            && terminal.contains("输入：2，成功：2"),
         "{terminal}"
     );
     assert!(
