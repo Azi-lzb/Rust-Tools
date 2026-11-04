@@ -957,8 +957,9 @@ fn normalize_unknown_error_cells(xml: &[u8]) -> Result<(Vec<u8>, usize)> {
                     || child.tag_name().namespace() != Some(SPREADSHEET_MAIN_NS)
                     || child.tag_name().name() != "f"
             }),
-            "formula error cell {:?} cannot be normalized as a literal string",
-            cell.attribute("r")
+            "公式单元格 {cell_address:?} 的错误结果 {value:?} 不受读取引擎支持，且无法降级为文本（会丢失公式语义）；请在该工作簿中改用受支持的 Excel 错误值，或先把该公式的结果改为普通值。Calamine 0.37 仅识别 #DIV/0!、#N/A、#NAME?、#NULL!、#NUM!、#REF!、#VALUE!。",
+            cell_address = cell.attribute("r"),
+            value = value,
         );
         let type_attribute = cell
             .attribute_node("t")
