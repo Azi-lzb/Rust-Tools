@@ -554,9 +554,20 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     assert!(user_output_dir.join("user-private-report.xlsx").is_file());
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("已发现 1 个待处理文件"));
-    assert!(user_stderr.contains("正在检查第 1/1 个待转换文件"));
+    // 用户视图必须能辨认当前转换的是哪个文件，但不得暴露绝对路径。
+    assert!(
+        user_stderr.contains("正在检查第 1/1 个待转换文件「user-private-report.csv」"),
+        "user view must name the file being converted: {user_stderr}"
+    );
+    assert!(
+        user_stderr.contains("个文件「user-private-report.csv」已转换为 .xlsx"),
+        "completion line must name the converted file: {user_stderr}"
+    );
     assert!(user_stderr.contains("转换结束：成功 1，失败 0"));
-    assert!(!user_stderr.contains("user-private-report"));
+    assert!(
+        !user_stderr.contains(&sources.display().to_string()),
+        "user view must not expose the absolute source path: {user_stderr}"
+    );
     let user_report = output_json(&user)?;
     let unified_path = PathBuf::from(user_report["run_summary_path"].as_str().context("unified summary path missing")?);
     let unified: Value = serde_json::from_slice(&fs::read(unified_path)?)?;
@@ -595,8 +606,10 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     assert!(native_output_dir.join("native-private.xlsx").is_file());
     let native_history_bytes = fs::read(&native_history_path)?;
     let native_history_text = String::from_utf8_lossy(&native_history_bytes);
+    // 历史仍不得写入绝对路径；文件名与结构化事件的 file_name 字段一致，
+    // 按规范第 62 行允许出现在开发者视图中，便于定位。
     assert!(!native_history_text.contains(&native_source.display().to_string()));
-    assert!(!native_history_text.contains("native-private.csv"));
+    assert!(native_history_text.contains("native-private.csv"));
     let native_history: Value = serde_json::from_slice(&native_history_bytes)?;
     assert_eq!(native_history["feature_id"], "PT-4-2");
     assert!(native_history["actual_engines"]

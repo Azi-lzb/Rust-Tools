@@ -515,7 +515,11 @@ where
             initial_components.clone(),
             None,
             None,
-            format!("正在检查第 {input_index}/{} 个待转换文件。", inputs.len()),
+            format!(
+                "正在检查第 {input_index}/{} 个待转换文件{}。",
+                inputs.len(),
+                conversion_file_suffix(input)
+            ),
         );
         if !input.is_file() {
             run.failed += 1;
@@ -542,8 +546,9 @@ where
                 None,
                 Some("input_not_found".to_owned()),
                 format!(
-                    "第 {input_index}/{} 个文件失败：输入文件不存在。",
-                    inputs.len()
+                    "第 {input_index}/{} 个文件{}失败：输入文件不存在。",
+                    inputs.len(),
+                    conversion_file_suffix(input)
                 ),
             );
             continue;
@@ -647,9 +652,17 @@ where
                     actual_engine,
                     None,
                     if ext == target {
-                        format!("第 {input_index}/{} 个文件格式相同，已复制到目标目录。", inputs.len())
+                        format!(
+                            "第 {input_index}/{} 个文件{}格式相同，已复制到目标目录。",
+                            inputs.len(),
+                            conversion_file_suffix(input)
+                        )
                     } else {
-                        format!("第 {input_index}/{} 个文件已转换为 .{target}。", inputs.len())
+                        format!(
+                            "第 {input_index}/{} 个文件{}已转换为 .{target}。",
+                            inputs.len(),
+                            conversion_file_suffix(input)
+                        )
                     },
                     "completed",
                 )
@@ -665,12 +678,10 @@ where
                     _ => "转换失败",
                 };
                 let failure_message = format!(
-                    "第 {input_index}/{} 个文件失败：{}；{message}；原因：{detail}",
+                    "第 {input_index}/{} 个文件{}失败：{}；原因：{detail}",
                     inputs.len(),
-                    input
-                        .file_name()
-                        .unwrap_or(input.as_os_str())
-                        .to_string_lossy()
+                    conversion_file_suffix(input),
+                    message
                 );
                 run.items.push(ConversionItem {
                     input: input.clone(),
@@ -732,6 +743,17 @@ where
         format!("转换结束：成功 {}，失败 {}。", run.converted, run.failed),
     );
     Ok(run)
+}
+
+/// File-name tail for a user-facing progress line.
+///
+/// The logging standard asks the user view to name the file but never expose
+/// its absolute path, so only the file name is used here.
+fn conversion_file_suffix(input: &Path) -> String {
+    match input.file_name() {
+        Some(name) => format!("「{}」", name.to_string_lossy()),
+        None => String::new(),
+    }
 }
 
 fn emit_conversion_event<F>(

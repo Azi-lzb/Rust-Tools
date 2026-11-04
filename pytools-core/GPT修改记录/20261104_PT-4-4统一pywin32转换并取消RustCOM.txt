@@ -48,3 +48,15 @@
 - 验证：容器校验单测（完整/截断/空/改名 xls）通过；重试与双失败消息单测通过；
   僵尸清理实测（Quit 被屏蔽后 5.0 秒内按 PID 终止）；真实 22 文件批次两次通过；
   `cargo test -p pytools-core` 全绿。
+
+补充（2026-11-04，4-4 转换日志显示文件名）：
+- 用户反馈批量转换日志只有“第 N/22 个文件已转换为 .xlsx”，无法辨认具体文件。
+- 依据 `docs/RUN_LOGGING_STANDARD.md` 第 64/114 行（用户视图可显示文件名、不显示
+  绝对路径；开发者视图可含路径），改为在开始/成功/同格式复制/失败四类日志中附带
+  「文件名」。`conversion_file_suffix` 只取 `file_name()`，不输出目录。
+- 测试 `conversion_menu_and_cli_emit_redacted_dual_view_progress` 更新：断言用户视图
+  含文件名、不含绝对源路径；转换运行历史仍不得写绝对路径，文件名与结构化事件的
+  `file_name` 字段一致。
+- 验证：conversion_menu_cli 14/14；全量 `cargo test -p pytools-core` 通过；用真实
+  仲恺样本实测输出形如
+  `正在检查第 1/3 个待转换文件「2026.09 3030 中国银行 仲恺区存贷统计月报.xls」。`
