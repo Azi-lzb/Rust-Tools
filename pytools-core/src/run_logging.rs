@@ -5,6 +5,7 @@
 use chrono::Local;
 use serde::Serialize;
 use std::{
+    collections::BTreeMap,
     env,
     fs::{self, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -19,6 +20,61 @@ static RUN_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 pub fn portable_file_name(path: &Path) -> String {
     let full = path.as_os_str().to_string_lossy();
     full.rsplit(['/', '\\']).next().unwrap_or(&full).to_owned()
+}
+
+/// Return short file labels that remain distinguishable when selected files
+/// from different directories share the same basename.
+pub fn disambiguated_file_names(paths: &[PathBuf]) -> Vec<String> {
+    let mut labels = paths
+        .iter()
+        .map(|path| portable_file_name(path))
+        .collect::<Vec<_>>();
+    let mut groups = BTreeMap::<String, Vec<usize>>::new();
+    for (index, label) in labels.iter().enumerate() {
+        groups.entry(label.clone()).or_default().push(index);
+    }
+
+    for indices in groups.values().filter(|indices| indices.len() > 1) {
+        let parts = indices
+            .iter()
+            .map(|index| {
+                paths[*index]
+                    .components()
+                    .filter_map(|component| match component {
+                        std::path::Component::Normal(value) => {
+                            Some(value.to_string_lossy().into_owned())
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let max_depth = parts.iter().map(Vec::len).max().unwrap_or(1);
+        let mut resolved = false;
+        for depth in 2..=max_depth {
+            let candidates = parts
+                .iter()
+                .map(|components| {
+                    let start = components.len().saturating_sub(depth);
+                    components[start..].join("/")
+                })
+                .collect::<Vec<_>>();
+            let unique = candidates.iter().collect::<std::collections::HashSet<_>>();
+            if unique.len() == candidates.len() {
+                for (index, candidate) in indices.iter().zip(candidates) {
+                    labels[*index] = candidate;
+                }
+                resolved = true;
+                break;
+            }
+        }
+        if !resolved {
+            for (occurrence, index) in indices.iter().enumerate() {
+                labels[*index] = format!("{} [{}]", labels[*index], occurrence + 1);
+            }
+        }
+    }
+    labels
 }
 
 /// Add concise workbook and worksheet identifiers to a user-facing message.
@@ -45,7 +101,10 @@ pub fn workbook_sheet_context_message(
     }
 
     let mut context = Vec::with_capacity(2);
-    if let Some(name) = workbook_name.as_deref().filter(|name| !name.trim().is_empty()) {
+    if let Some(name) = workbook_name
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())
+    {
         let label = format!("工作簿「{name}」");
         let plain_label = format!("工作簿 {name}");
         if !message.contains(&label) && !message.contains(&plain_label) {
@@ -277,6 +336,51 @@ pub struct ErrorSummary {
     pub sheet_name: Option<String>,
 }
 
+/// A business finding is independent from whether execution failed.
+#[derive(Clone, Debug, Serialize)]
+pub struct BusinessIssue {
+    pub category: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sheet_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+}
+
+impl BusinessIssue {
+    pub fn new(category: &str, message: &str) -> Self {
+        Self {
+            category: category.to_owned(),
+            message: message.to_owned(),
+            count: None,
+            file_name: None,
+            sheet_name: None,
+            location: None,
+        }
+    }
+
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    pub fn at(
+        mut self,
+        file_name: Option<&str>,
+        sheet_name: Option<&str>,
+        location: Option<&str>,
+    ) -> Self {
+        self.file_name = file_name.map(str::to_owned);
+        self.sheet_name = sheet_name.map(str::to_owned);
+        self.location = location.map(str::to_owned);
+        self
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct InputResult {
     pub index: usize,
@@ -314,6 +418,313 @@ pub struct RunSummary {
     pub output_paths: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostic_log_path: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub business_issues: Vec<BusinessIssue>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub business_metrics: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BatchEventKind {
+    Routine,
+    PhaseChange,
+    BusinessIssue,
+    Failure,
+}
+
+/// Shared policy for reducing normal terminal chatter in large batches.
+/// Attention events and phase changes are never suppressed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BatchLogPolicy {
+    total: usize,
+    checkpoint_interval: usize,
+}
+
+impl BatchLogPolicy {
+    pub fn new(total: usize) -> Self {
+        let checkpoint_interval = if total <= 8 {
+            1
+        } else {
+            total.div_ceil(10).max(1)
+        };
+        Self {
+            total,
+            checkpoint_interval,
+        }
+    }
+
+    pub fn checkpoint_interval(self) -> usize {
+        self.checkpoint_interval
+    }
+
+    pub fn should_emit(self, current: Option<usize>, kind: BatchEventKind) -> bool {
+        match kind {
+            BatchEventKind::Failure
+            | BatchEventKind::BusinessIssue
+            | BatchEventKind::PhaseChange => true,
+            BatchEventKind::Routine if self.total <= 8 => true,
+            BatchEventKind::Routine => current.is_some_and(|index| {
+                index == 1 || index >= self.total || index % self.checkpoint_interval == 0
+            }),
+        }
+    }
+
+    /// Interactive terminals can refresh one progress line for every input;
+    /// redirected output uses the lower-frequency checkpoint policy above.
+    pub fn should_emit_interactive(self, current: Option<usize>, kind: BatchEventKind) -> bool {
+        match kind {
+            BatchEventKind::Failure
+            | BatchEventKind::BusinessIssue
+            | BatchEventKind::PhaseChange => true,
+            BatchEventKind::Routine => current.is_some(),
+        }
+    }
+
+    pub fn format_progress(self, current: usize, message: &str) -> String {
+        let current = current.min(self.total);
+        let percent = if self.total == 0 {
+            100
+        } else {
+            current.saturating_mul(100) / self.total
+        };
+        format!("进度 {current}/{}（{percent}%）：{message}", self.total)
+    }
+}
+
+/// Header rule used to frame the grouped terminal summary.
+const SUMMARY_RULE: &str = "========================================";
+
+/// Common user-facing summary formatter. Features supply only measured
+/// feature-specific metrics; execution status and file counts stay shared.
+pub fn format_terminal_summary(summary: &RunSummary, issue_limit: usize) -> Vec<String> {
+    format_terminal_summary_with_outputs(summary, issue_limit, &[])
+}
+
+/// Grouped, multi-line terminal summary.
+///
+/// Every statistic previously shared one long line ("选择 100，尝试 100，成功
+/// 99，失败 1，…"), which users could not scan. The groups are: status header,
+/// input scale, feature-specific business metrics, items needing attention,
+/// outputs, and elapsed time. Groups with nothing to report are omitted
+/// entirely instead of printing zeroes.
+pub fn format_terminal_summary_with_outputs(
+    summary: &RunSummary,
+    issue_limit: usize,
+    output_paths: &[String],
+) -> Vec<String> {
+    let stats = &summary.input_stats;
+    let status = match summary.overall_status {
+        TaskStatus::Success if !summary.business_issues.is_empty() => "执行完成，发现业务异常",
+        TaskStatus::Success => "执行成功",
+        TaskStatus::PartialSuccess => "部分完成",
+        TaskStatus::Failed => "执行失败",
+        TaskStatus::Cancelled => "已取消",
+        TaskStatus::NoOp => "无需修改",
+    };
+    let mut lines = vec![
+        SUMMARY_RULE.to_owned(),
+        format!("{}：{status}", summary.feature_name),
+        SUMMARY_RULE.to_owned(),
+    ];
+
+    // 1) Input scale. Only counters that apply are shown; a lone "skipped 0"
+    //    tells the user nothing and pushes the useful numbers further away.
+    if summary.input_stats_available {
+        let mut input_lines = Vec::new();
+        if stats.selected > 0 {
+            input_lines.push(format!("输入：{}", stats.selected));
+        }
+        if stats.attempted > 0 && stats.attempted != stats.selected {
+            input_lines.push(format!("尝试：{}", stats.attempted));
+        }
+        if stats.succeeded > 0 {
+            input_lines.push(format!("成功：{}", stats.succeeded));
+        }
+        if stats.failed > 0 {
+            input_lines.push(format!("失败：{}", stats.failed));
+        }
+        if stats.skipped > 0 {
+            input_lines.push(format!("跳过：{}", stats.skipped));
+        }
+        if stats.cancelled > 0 {
+            input_lines.push(format!("取消：{}", stats.cancelled));
+        }
+        if stats.pending > 0 {
+            input_lines.push(format!("未完成：{}", stats.pending));
+        }
+        if !input_lines.is_empty() {
+            lines.push(input_lines.join("，"));
+        }
+    } else if stats.selected > 0 {
+        lines.push(format!("输入：{}（统计不可用）", stats.selected));
+    }
+
+    // 2) Feature-specific business metrics. These are the numbers the user
+    //    actually judges the run by, so they get their own line.
+    let mut business = Vec::new();
+    if let Some(sheets) = &summary.sheet_stats {
+        let mut values = Vec::new();
+        if sheets.succeeded > 0 {
+            values.push(format!("成功 {}", sheets.succeeded));
+        }
+        if sheets.failed > 0 {
+            values.push(format!("失败 {}", sheets.failed));
+        }
+        if sheets.skipped > 0 {
+            values.push(format!("跳过 {}", sheets.skipped));
+        }
+        if !values.is_empty() {
+            business.push(format!("已核对工作表：{}", values.join("，")));
+        }
+    }
+    if let Some(records) = &summary.record_stats {
+        let mut values = Vec::new();
+        if let Some(value) = records.rows_processed {
+            values.push(format!("处理 {value} 行"));
+        }
+        if let Some(value) = records.rows_written {
+            values.push(format!("输出 {value} 行"));
+        }
+        if !values.is_empty() {
+            business.push(format!("记录：{}", values.join("，")));
+        }
+    }
+    if let Some(output) = &summary.output_stats {
+        let mut values = Vec::new();
+        if let Some(value) = output.workbooks_saved {
+            values.push(format!("保存工作簿 {value} 个"));
+        }
+        if let Some(value) = output.sheets_saved {
+            values.push(format!("保存工作表 {value} 个"));
+        }
+        if !values.is_empty() {
+            business.push(format!("输出：{}", values.join("，")));
+        }
+    }
+    for (name, value) in &summary.business_metrics {
+        let value = match value {
+            serde_json::Value::String(text) => text.clone(),
+            other => other.to_string(),
+        };
+        business.push(format!("{name}：{value}"));
+    }
+    if !business.is_empty() {
+        lines.extend(business);
+    }
+
+    // 3) Items needing attention, grouped by category so the user sees what
+    //    kind of problem they have before the individual files.
+    if !summary.business_issues.is_empty() || summary.error_summary.is_some() {
+        lines.push(String::new());
+        lines.push("需要关注：".to_owned());
+    }
+    if !summary.business_issues.is_empty() {
+        let issue_count = summary.business_issues.iter().fold(0usize, |total, issue| {
+            total.saturating_add(issue.count.unwrap_or(1))
+        });
+        lines.push(format!(
+            "  [业务异常] {issue_count} 项（明细 {} 条）",
+            summary.business_issues.len()
+        ));
+        lines.extend(
+            summary
+                .business_issues
+                .iter()
+                .take(issue_limit)
+                .map(|issue| {
+                    let location = [
+                        issue.file_name.as_deref(),
+                        issue.sheet_name.as_deref(),
+                        issue.location.as_deref(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                    let count = issue
+                        .count
+                        .map(|value| format!("（{value} 项）"))
+                        .unwrap_or_default();
+                    format!("    {}：{}{count}", issue.category, location_lead(&location))
+                }),
+        );
+        if summary.business_issues.len() > issue_limit {
+            lines.push(format!(
+                "    另有 {} 条异常明细，详见运行记录",
+                summary.business_issues.len() - issue_limit
+            ));
+        }
+    }
+    if let Some(error) = &summary.error_summary {
+        let location = [error.file_name.as_deref(), error.sheet_name.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" / ");
+        lines.push(format!(
+            "  [{}] {}（阶段 {}）：{}",
+            error.code,
+            location_lead(&location),
+            error.stage,
+            summarize_error_message(&error.message)
+        ));
+    }
+
+    // 4) Outputs and the single diagnostic pointer the user needs.
+    let paths = if output_paths.is_empty() {
+        summary.output_paths.as_slice()
+    } else {
+        output_paths
+    };
+    if !paths.is_empty() {
+        lines.push(String::new());
+        lines.push("输出结果：".to_owned());
+        lines.extend(paths.iter().map(|path| format!("  {path}")));
+    }
+    if let Some(path) = &summary.diagnostic_log_path {
+        lines.push(format!("详细日志：{path}"));
+    }
+    lines.push(format!(
+        "耗时：{:.3} 秒",
+        summary.total_elapsed_ms as f64 / 1000.0
+    ));
+    lines.push(SUMMARY_RULE.to_owned());
+    lines
+}
+
+/// `file / sheet` when present, otherwise a neutral placeholder so a grouped
+/// line never starts with a dangling colon.
+fn location_lead(location: &str) -> String {
+    if location.is_empty() {
+        "未定位".to_owned()
+    } else {
+        location.to_owned()
+    }
+}
+
+/// Shorten a technical error chain for the user-facing summary.
+///
+/// Only the first distinct segment is kept: layered contexts repeat the same
+/// cause several times ("Xlsx error: Zip error: invalid Zip archive: Could not
+/// find EOCD: Zip error: …"), which users cannot read. The full chain stays in
+/// the structured event log. This is a display-layer truncation, not an
+/// attempt to infer a different cause.
+fn summarize_error_message(message: &str) -> String {
+    let mut parts = Vec::new();
+    for part in message.split(": ") {
+        let part = part.trim();
+        if part.is_empty() || parts.iter().any(|existing: &String| existing == part) {
+            continue;
+        }
+        parts.push(part.to_owned());
+    }
+    let joined = parts.join(": ");
+    const LIMIT: usize = 160;
+    if joined.chars().count() <= LIMIT {
+        return joined;
+    }
+    let truncated = joined.chars().take(LIMIT).collect::<String>();
+    format!("{truncated}…")
 }
 
 /// Each selected input is identified by its position, including repeated paths.
@@ -326,6 +737,8 @@ pub struct RunTracker {
     inputs: Vec<InputResult>,
     discovered: Option<usize>,
     sheets: Vec<SheetResult>,
+    business_issues: Vec<BusinessIssue>,
+    business_metrics: BTreeMap<String, serde_json::Value>,
 }
 
 impl RunTracker {
@@ -358,6 +771,8 @@ impl RunTracker {
             started: Instant::now(),
             discovered: None,
             sheets: Vec::new(),
+            business_issues: Vec::new(),
+            business_metrics: BTreeMap::new(),
             inputs: files
                 .iter()
                 .enumerate()
@@ -375,24 +790,40 @@ impl RunTracker {
         self.discovered = Some(count);
     }
 
+    pub fn record_business_issue(&mut self, issue: BusinessIssue) {
+        self.business_issues.push(issue);
+    }
+
+    pub fn set_business_metric(&mut self, name: &str, value: serde_json::Value) {
+        self.business_metrics.insert(name.to_owned(), value);
+    }
+
     /// Adopt an existing task's monotonic elapsed duration while adapting a
     /// legacy report produced by another module.
     pub fn set_existing_timing(&mut self, started_at: String, elapsed_ms: u128) {
         self.started_at = started_at;
         let now = Instant::now();
         let millis = u64::try_from(elapsed_ms).unwrap_or(u64::MAX);
-        self.started = now.checked_sub(std::time::Duration::from_millis(millis)).unwrap_or(now);
+        self.started = now
+            .checked_sub(std::time::Duration::from_millis(millis))
+            .unwrap_or(now);
     }
 
     /// Install a discovered file list once without resetting the task clock.
     pub fn set_inputs(&mut self, files: &[PathBuf]) -> Result<(), &'static str> {
-        if !self.inputs.is_empty() { return Err("inputs already initialized"); }
-        self.inputs = files.iter().enumerate().map(|(index, path)| InputResult {
-            index: index + 1,
-            file_name: portable_file_name(path),
-            status: FileStatus::Pending,
-            attempted: false,
-        }).collect();
+        if !self.inputs.is_empty() {
+            return Err("inputs already initialized");
+        }
+        self.inputs = files
+            .iter()
+            .enumerate()
+            .map(|(index, path)| InputResult {
+                index: index + 1,
+                file_name: portable_file_name(path),
+                status: FileStatus::Pending,
+                attempted: false,
+            })
+            .collect();
         Ok(())
     }
 
@@ -624,6 +1055,8 @@ impl RunTracker {
             error_summary: None,
             output_paths,
             diagnostic_log_path,
+            business_issues: self.business_issues.clone(),
+            business_metrics: self.business_metrics.clone(),
         }
     }
 }
@@ -787,6 +1220,108 @@ mod tests {
     }
 
     #[test]
+    fn batch_log_policy_throttles_redirected_routine_events_only() {
+        let policy = BatchLogPolicy::new(100);
+        assert_eq!(policy.checkpoint_interval(), 10);
+        assert!(policy.should_emit(Some(1), BatchEventKind::Routine));
+        assert!(!policy.should_emit(Some(2), BatchEventKind::Routine));
+        assert!(policy.should_emit(Some(2), BatchEventKind::Failure));
+        assert!(policy.should_emit(Some(2), BatchEventKind::BusinessIssue));
+        assert!(policy.should_emit(Some(2), BatchEventKind::PhaseChange));
+        assert!(policy.should_emit_interactive(Some(2), BatchEventKind::Routine));
+    }
+
+    #[test]
+    fn duplicate_file_names_gain_only_the_directory_context_needed() {
+        let paths = vec![
+            PathBuf::from(r"C:\reports\east\sample.xlsx"),
+            PathBuf::from(r"C:\reports\west\sample.xlsx"),
+            PathBuf::from(r"C:\reports\other.xlsx"),
+        ];
+        assert_eq!(
+            disambiguated_file_names(&paths),
+            vec!["east/sample.xlsx", "west/sample.xlsx", "other.xlsx"]
+        );
+        assert_eq!(
+            disambiguated_file_names(&[paths[2].clone(), paths[2].clone()]),
+            vec!["other.xlsx [1]", "other.xlsx [2]"]
+        );
+    }
+
+    #[test]
+    fn business_findings_and_metrics_are_formatted_without_failing_execution() {
+        let mut tracker = RunTracker::new("PT-6-1", "区域汇总", &inputs()[..1]);
+        tracker.transition(1, FileStatus::InProgress).unwrap();
+        tracker.transition(1, FileStatus::Succeeded).unwrap();
+        tracker.set_business_metric("提取行数", serde_json::json!(42));
+        tracker.record_business_issue(
+            BusinessIssue::new("结构异常", "模板表头不匹配")
+                .count(2)
+                .at(Some("机构甲.xlsx"), Some("资产"), Some("B4")),
+        );
+        let summary = tracker.finish(false, false, false, vec!["result.xlsx".into()], None);
+
+        assert_eq!(summary.overall_status, TaskStatus::Success);
+        let lines = format_terminal_summary(&summary, 8).join("\n");
+        assert!(lines.contains("执行完成，发现业务异常"));
+        assert!(lines.contains("提取行数 42"));
+        assert!(lines.contains("机构甲.xlsx / 资产 / B4"));
+        assert!(lines.contains("输出：result.xlsx"));
+    }
+
+    #[test]
+    fn configuration_task_summary_does_not_invent_file_counts() {
+        let mut tracker = RunTracker::new("PT-2-6", "按配置预校验去重任务", &[]);
+        tracker.set_business_metric("检查任务数", serde_json::json!(3));
+        tracker.set_business_metric("通过配置数", serde_json::json!(2));
+        tracker.record_business_issue(
+            BusinessIssue::new("配置校验", "预校验发现未通过的配置项").count(1),
+        );
+        let mut summary = tracker.finish(false, false, false, vec![], None);
+        summary.input_stats_available = false;
+
+        let lines = format_terminal_summary(&summary, 8).join("\n");
+        assert!(lines.contains("执行完成，发现业务异常"));
+        assert!(lines.contains("检查任务数 3"));
+        assert!(lines.contains("配置校验"));
+        assert!(!lines.contains("选择 0"));
+        assert!(!lines.contains("成功 0，失败 0"));
+    }
+
+    #[test]
+    fn optional_business_fields_are_omitted_when_empty() {
+        let summary = RunTracker::new("PT-6-1", "区域汇总", &inputs()[..1]).finish(
+            false,
+            false,
+            false,
+            vec![],
+            None,
+        );
+        let json = serde_json::to_value(summary).unwrap();
+        assert!(json.get("business_issues").is_none());
+        assert!(json.get("business_metrics").is_none());
+    }
+
+    #[test]
+    fn execution_failure_summary_includes_stage_and_input_location() {
+        let mut tracker = RunTracker::new("PT-6-1", "区域汇总", &inputs()[..1]);
+        tracker.transition(1, FileStatus::InProgress).unwrap();
+        tracker.transition(1, FileStatus::Failed).unwrap();
+        let mut summary = tracker.finish(true, false, false, vec![], None);
+        summary.error_summary = Some(ErrorSummary {
+            stage: "workbook_read".to_owned(),
+            code: "EXCEL_READ_FAILED".to_owned(),
+            message: "工作簿无法打开".to_owned(),
+            file_name: Some("机构甲.xlsx".to_owned()),
+            sheet_name: Some("资产".to_owned()),
+        });
+
+        let lines = format_terminal_summary(&summary, 8).join("\n");
+        assert!(lines.contains("失败阶段 workbook_read [EXCEL_READ_FAILED]"));
+        assert!(lines.contains("机构甲.xlsx / 资产：工作簿无法打开"));
+    }
+
+    #[test]
     fn event_identity_and_dates_are_correlated() {
         let first = RunTracker::new("1-2", "使用区域汇总", &inputs());
         let second = RunTracker::new("1-2", "使用区域汇总", &inputs());
@@ -907,7 +1442,10 @@ mod tests {
         assert_eq!(summary.sheets[1].sheet_index, Some(2));
         assert_eq!(summary.sheets[1].stage.as_deref(), Some("cell_read"));
         assert_eq!(summary.sheets[1].cell_address.as_deref(), Some("E42"));
-        assert_eq!(summary.sheets[1].error_code.as_deref(), Some("SHEET_READ_FAILED"));
+        assert_eq!(
+            summary.sheets[1].error_code.as_deref(),
+            Some("SHEET_READ_FAILED")
+        );
         assert_eq!(summary.overall_status, TaskStatus::Failed);
     }
 
@@ -930,7 +1468,10 @@ mod tests {
                 .join("PT-1-1_example.jsonl")
                 .to_string_lossy()
         );
-        assert_eq!(diagnostic_path_for_log_view(path, true), path.to_string_lossy());
+        assert_eq!(
+            diagnostic_path_for_log_view(path, true),
+            path.to_string_lossy()
+        );
     }
 
     #[test]
@@ -984,7 +1525,10 @@ mod tests {
             serde_json::from_str(content.trim()).map_err(io::Error::other)?;
         assert_eq!(decoded["sheet_name"], "贷款表");
         assert_eq!(decoded["cell_address"], "E42");
-        assert_eq!(decoded["details"]["error_chain"], "reader failed: invalid workbook");
+        assert_eq!(
+            decoded["details"]["error_chain"],
+            "reader failed: invalid workbook"
+        );
         assert!(decoded.get("file_path").is_none());
         fs::remove_file(path)?;
         fs::remove_dir(root)?;

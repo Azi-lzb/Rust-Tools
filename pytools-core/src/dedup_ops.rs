@@ -1312,7 +1312,10 @@ pub fn build_append_by_config_plans(
 /// Build and verify an existing-target candidate for the explicitly requested
 /// direct 2-3 append route. The configured target is never modified here.
 pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
-    anyhow::ensure!(plan.target_existed, "direct append requires an existing target");
+    anyhow::ensure!(
+        plan.target_existed,
+        "direct append requires an existing target"
+    );
     anyhow::ensure!(
         plan.replacement_workbook.is_none(),
         "direct append cannot replace a target worksheet"
@@ -1323,10 +1326,7 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         .context("目标快照缺失，请重新读取配置后再追加")?;
     crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
         .context("目标工作簿在去重期间发生变化，未执行追加")?;
-    let edit_plan = plan
-        .edit_plan
-        .as_ref()
-        .context("已有目标缺少追加操作")?;
+    let edit_plan = plan.edit_plan.as_ref().context("已有目标缺少追加操作")?;
     anyhow::ensure!(
         edit_plan.input == plan.target && edit_plan.output == plan.candidate,
         "追加计划的目标或候选路径不一致"
@@ -1354,7 +1354,11 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     excel_editor::apply_umya_append_operations(&mut workbook, &edit_plan.operations)
         .context("umya 追加目标工作簿失败")?;
 
-    if let Some(parent) = plan.candidate.parent().filter(|path| !path.as_os_str().is_empty()) {
+    if let Some(parent) = plan
+        .candidate
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)
             .with_context(|| format!("创建候选目录失败：{}", parent.display()))?;
     }
@@ -1366,8 +1370,7 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     drop(reserved);
 
     let result = (|| -> Result<()> {
-        excel_editor::save_xlsx(&workbook, &plan.candidate)
-            .context("umya 保存目标候选文件失败")?;
+        excel_editor::save_xlsx(&workbook, &plan.candidate).context("umya 保存目标候选文件失败")?;
         excel_editor::UmyaXlsxValidator
             .validate(edit_plan, &plan.candidate)
             .context("校验目标候选文件结构失败")?;
@@ -1388,7 +1391,10 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         }
         let candidate_profile = inspect_xlsx_profile(&plan.candidate)?;
         anyhow::ensure!(
-            edit_plan.workbook.features_present.is_subset(&candidate_profile.features_present),
+            edit_plan
+                .workbook
+                .features_present
+                .is_subset(&candidate_profile.features_present),
             "目标候选文件丢失了原工作簿结构"
         );
         crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
@@ -1416,7 +1422,8 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             validate_append_candidate(edit_plan, &before, &after)?;
             let actual_names = read_defined_names(&plan.candidate)?;
             anyhow::ensure!(
-                comparable_defined_names(&before_names)? == comparable_defined_names(&actual_names)?,
+                comparable_defined_names(&before_names)?
+                    == comparable_defined_names(&actual_names)?,
                 "目标工作簿名称定义发生变化"
             );
             let after_comments = read_ooxml_comments(&plan.candidate)?;
@@ -1429,7 +1436,10 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             }
             let candidate_profile = inspect_xlsx_profile(&plan.candidate)?;
             anyhow::ensure!(
-                edit_plan.workbook.features_present.is_subset(&candidate_profile.features_present),
+                edit_plan
+                    .workbook
+                    .features_present
+                    .is_subset(&candidate_profile.features_present),
                 "openpyxl 回退候选仍丢失了原工作簿结构"
             );
             Ok(())
@@ -1483,9 +1493,9 @@ fn address_in_merge(cell: &str, merged: &str) -> Result<bool> {
 }
 
 fn probe_value_is_blank(value: &serde_json::Value) -> bool {
-    value.get("value").is_none_or(|value| {
-        value.is_null() || value.as_str().is_some_and(str::is_empty)
-    })
+    value
+        .get("value")
+        .is_none_or(|value| value.is_null() || value.as_str().is_some_and(str::is_empty))
 }
 
 fn same_probe_value(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
@@ -1497,7 +1507,9 @@ fn same_probe_value(expected: &serde_json::Value, actual: &serde_json::Value) ->
             .then(|| value["value"].as_f64())
             .flatten()
     };
-    numeric(expected).zip(numeric(actual)).is_some_and(|(left, right)| left == right)
+    numeric(expected)
+        .zip(numeric(actual))
+        .is_some_and(|(left, right)| left == right)
 }
 
 fn sorted_json_values(values: &[serde_json::Value]) -> Result<Vec<String>> {
@@ -1529,27 +1541,46 @@ fn validate_append_candidate(
     before: &WorkbookDump,
     after: &WorkbookDump,
 ) -> Result<()> {
-    let mut expected_sheets = before.sheets.iter().map(|sheet| sheet.name.clone()).collect::<Vec<_>>();
+    let mut expected_sheets = before
+        .sheets
+        .iter()
+        .map(|sheet| sheet.name.clone())
+        .collect::<Vec<_>>();
     for operation in &plan.operations {
         if let EditOperation::CreateSheet { name } = operation {
             expected_sheets.push(name.clone());
         }
     }
-    let actual_sheets = after.sheets.iter().map(|sheet| sheet.name.clone()).collect::<Vec<_>>();
-    anyhow::ensure!(expected_sheets == actual_sheets, "目标工作表名称或顺序发生变化");
+    let actual_sheets = after
+        .sheets
+        .iter()
+        .map(|sheet| sheet.name.clone())
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        expected_sheets == actual_sheets,
+        "目标工作表名称或顺序发生变化"
+    );
 
-    let touched = plan.operations.iter().filter_map(|operation| match operation {
-        EditOperation::SetCellValue { sheet, cell, .. }
-        | EditOperation::SetFormulaText { sheet, cell, .. } => {
-            Some((sheet.as_str(), cell.as_str()))
-        }
-        _ => None,
-    }).collect::<HashSet<_>>();
+    let touched = plan
+        .operations
+        .iter()
+        .filter_map(|operation| match operation {
+            EditOperation::SetCellValue { sheet, cell, .. }
+            | EditOperation::SetFormulaText { sheet, cell, .. } => {
+                Some((sheet.as_str(), cell.as_str()))
+            }
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
     for original in &before.sheets {
-        let saved = after.sheets.iter().find(|sheet| sheet.name == original.name)
+        let saved = after
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == original.name)
             .with_context(|| format!("目标工作表 {:?} 未保留", original.name))?;
         anyhow::ensure!(
-            original.formula_status == "read_by_calamine" && saved.formula_status == "read_by_calamine",
+            original.formula_status == "read_by_calamine"
+                && saved.formula_status == "read_by_calamine",
             "无法校验工作表 {:?} 的公式",
             original.name
         );
@@ -1559,7 +1590,9 @@ fn validate_append_candidate(
             {
                 continue;
             }
-            let actual = saved.values.get(cell)
+            let actual = saved
+                .values
+                .get(cell)
                 .with_context(|| format!("原有单元格 {:?}!{cell} 未保留", original.name))?;
             anyhow::ensure!(
                 same_probe_value(expected, actual),
@@ -1595,19 +1628,31 @@ fn validate_append_candidate(
     for operation in &plan.operations {
         match operation {
             EditOperation::SetCellValue { sheet, cell, value } => {
-                let saved = after.sheets.iter().find(|item| item.name == *sheet)
+                let saved = after
+                    .sheets
+                    .iter()
+                    .find(|item| item.name == *sheet)
                     .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
                 anyhow::ensure!(
                     appended_value_matches(value, saved.values.get(cell)),
                     "追加单元格 {sheet:?}!{cell} 回读不一致"
                 );
             }
-            EditOperation::SetFormulaText { sheet, cell, formula } => {
-                let saved = after.sheets.iter().find(|item| item.name == *sheet)
+            EditOperation::SetFormulaText {
+                sheet,
+                cell,
+                formula,
+            } => {
+                let saved = after
+                    .sheets
+                    .iter()
+                    .find(|item| item.name == *sheet)
                     .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
                 anyhow::ensure!(
-                    saved.formulas.get(cell).is_some_and(|actual|
-                        actual.trim().trim_start_matches('=')
+                    saved
+                        .formulas
+                        .get(cell)
+                        .is_some_and(|actual| actual.trim().trim_start_matches('=')
                             == formula.trim().trim_start_matches('=')),
                     "追加公式 {sheet:?}!{cell} 回读不一致"
                 );
@@ -1623,17 +1668,25 @@ fn appended_value_matches(expected: &CellValue, actual: Option<&serde_json::Valu
     match expected {
         CellValue::Blank => actual.is_none_or(probe_value_is_blank),
         CellValue::Text(text) if text.is_empty() => actual.is_none_or(probe_value_is_blank),
-        CellValue::Text(text) => actual.is_some_and(|value|
-            value["type"] == "string" && value["value"].as_str() == Some(text.as_str())),
+        CellValue::Text(text) => actual.is_some_and(|value| {
+            value["type"] == "string" && value["value"].as_str() == Some(text.as_str())
+        }),
         CellValue::Decimal(number) | CellValue::DateTime { serial: number, .. } => {
-            number.parse::<f64>().ok().is_some_and(|expected| actual.is_some_and(|value|
-                matches!(value["type"].as_str(), Some("number" | "integer" | "datetime_serial"))
-                    && value["value"].as_f64() == Some(expected)))
+            number.parse::<f64>().ok().is_some_and(|expected| {
+                actual.is_some_and(|value| {
+                    matches!(
+                        value["type"].as_str(),
+                        Some("number" | "integer" | "datetime_serial")
+                    ) && value["value"].as_f64() == Some(expected)
+                })
+            })
         }
-        CellValue::Boolean(expected) => actual.is_some_and(|value|
-            value["type"] == "boolean" && value["value"].as_bool() == Some(*expected)),
-        CellValue::Error(expected) => actual.is_some_and(|value|
-            value["type"] == "error" && value["value"].as_str() == Some(expected.as_str())),
+        CellValue::Boolean(expected) => actual.is_some_and(|value| {
+            value["type"] == "boolean" && value["value"].as_bool() == Some(*expected)
+        }),
+        CellValue::Error(expected) => actual.is_some_and(|value| {
+            value["type"] == "error" && value["value"].as_str() == Some(expected.as_str())
+        }),
     }
 }
 
@@ -2597,7 +2650,8 @@ where
         let Some(source) = task.source_wb.as_ref() else {
             on_task_start(task);
             run.task_skipped += 1;
-            run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
+            run.issues
+                .push(format!("第 {} 行：源工作簿为空", task.row_no));
             continue;
         };
         grouped.entry(source.clone()).or_default().push(task);
@@ -2644,8 +2698,10 @@ where
                     .with_file(path.to_string_lossy().into_owned())
                     .with_message(format!("{error:#}")),
                 );
-                run.issues
-                    .push(format!("{}：umya 读取源工作簿失败：{error:#}", path.display()));
+                run.issues.push(format!(
+                    "{}：umya 读取源工作簿失败：{error:#}",
+                    path.display()
+                ));
                 continue;
             }
         };
@@ -2809,7 +2865,8 @@ where
     anyhow::ensure!(
         !enabled.is_empty(),
         "未找到启用的去重任务，请检查“去重追加数据配置”工作表和“是否启用”列"
-    );    let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
+    );
+    let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&DedupTask>>::new();
     for task in enabled {
         let Some(source) = task.source_wb.as_ref() else {
             on_task_start(task);
@@ -2823,7 +2880,8 @@ where
                 .with_row(task.row_no)
                 .with_message("配置的源工作簿路径为空"),
             );
-            run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
+            run.issues
+                .push(format!("第 {} 行：源工作簿为空", task.row_no));
             continue;
         };
         grouped.entry(source.clone()).or_default().push(task);
@@ -2870,8 +2928,10 @@ where
                     .with_file(path.to_string_lossy().into_owned())
                     .with_message(format!("{error:#}")),
                 );
-                run.issues
-                    .push(format!("{}：umya 读取源工作簿失败：{error:#}", path.display()));
+                run.issues.push(format!(
+                    "{}：umya 读取源工作簿失败：{error:#}",
+                    path.display()
+                ));
                 continue;
             }
         };

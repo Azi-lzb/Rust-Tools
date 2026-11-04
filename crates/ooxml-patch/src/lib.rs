@@ -1830,21 +1830,18 @@ pub fn copy_cell_region(
         let formulas = formulas_by_sheet
             .get(&request.source_sheet)
             .expect("template formulas loaded above");
-        let current = replacements
-            .get(part)
-            .cloned()
-            .map(Ok)
-            .unwrap_or_else(|| {
-                read_zip_part(
-                    &mut ZipArchive::new(fs::File::open(output)?)?,
-                    part,
-                )
-            })?;
+        let current = replacements.get(part).cloned().map(Ok).unwrap_or_else(|| {
+            read_zip_part(&mut ZipArchive::new(fs::File::open(output)?)?, part)
+        })?;
         let (patched, with_formula, cleared) =
             apply_region_formulas(&current, &request.address, formulas)?;
         report.cells_with_formula += with_formula;
         report.cells_cleared += cleared;
-        if !report.worksheet_parts.iter().any(|existing| existing == part) {
+        if !report
+            .worksheet_parts
+            .iter()
+            .any(|existing| existing == part)
+        {
             report.worksheet_parts.push(part.clone());
         }
         replacements.insert(part.clone(), patched);
@@ -2032,7 +2029,10 @@ fn copy_worksheet_with_dependencies(
     let rels_text = std::str::from_utf8(&rels_xml).context("worksheet rels must be UTF-8")?;
     let document = Document::parse(rels_text).context("parse worksheet relationships")?;
 
-    let source_dir = source_part.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+    let source_dir = source_part
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("");
     let mut new_rels = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
     );
@@ -2040,9 +2040,10 @@ fn copy_worksheet_with_dependencies(
     // comments and vml drawings are numbered per sheet in practice; reuse the
     // sheet's own index so a copied sheet keeps a readable, unique name.
     let mut comments_index: Option<u32> = None;
-    for relationship in document.descendants().filter(|node| {
-        node.is_element() && node.tag_name().name() == "Relationship"
-    }) {
+    for relationship in document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == "Relationship")
+    {
         let Some(id) = relationship.attribute("Id") else {
             continue;
         };
@@ -2084,7 +2085,10 @@ fn copy_worksheet_with_dependencies(
         };
         // Keep the source directory (e.g. `xl/drawings`), otherwise the
         // relationship target points at a part that does not exist.
-        let source_dir_of_part = resolved.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("xl");
+        let source_dir_of_part = resolved
+            .rsplit_once('/')
+            .map(|(dir, _)| dir)
+            .unwrap_or("xl");
         let new_resolved = format!("{source_dir_of_part}/{prefix}{new_index}{suffix}");
         used_parts.insert(new_resolved.clone());
         new_rels.push_str(&format!(
@@ -2112,7 +2116,10 @@ fn allocate_indexed_part(
     prefix: &str,
     suffix: &str,
 ) -> u32 {
-    let dir = resolved.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("xl");
+    let dir = resolved
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("xl");
     let mut index = 1u32;
     loop {
         let candidate = format!("{dir}/{prefix}{index}{suffix}");
@@ -2125,10 +2132,7 @@ fn allocate_indexed_part(
 
 /// Relationship target from a part in `from_part`'s directory to `to_part`.
 fn relative_target(from_part: &str, to_part: &str) -> String {
-    let from_dir = from_part
-        .rsplit_once('/')
-        .map(|(dir, _)| dir)
-        .unwrap_or("");
+    let from_dir = from_part.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
     let to_dir = to_part.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
     let file = to_part
         .rsplit_once('/')
@@ -2274,7 +2278,11 @@ fn plan_missing_template_sheets(
     let target_sheets = sheet_parts(output)?;
     let missing = referenced
         .iter()
-        .filter(|name| !target_sheets.keys().any(|existing| existing.eq_ignore_ascii_case(name)))
+        .filter(|name| {
+            !target_sheets
+                .keys()
+                .any(|existing| existing.eq_ignore_ascii_case(name))
+        })
         .cloned()
         .collect::<Vec<_>>();
     let mut changes = BTreeMap::new();
@@ -2381,8 +2389,8 @@ fn next_relationship_id(workbook_rels: &[u8]) -> Result<u32> {
 }
 
 fn next_sheet_id(workbook: &[u8]) -> Result<u32> {
-    let document = Document::parse(std::str::from_utf8(workbook)?)
-        .context("parse target workbook.xml")?;
+    let document =
+        Document::parse(std::str::from_utf8(workbook)?).context("parse target workbook.xml")?;
     Ok(document
         .descendants()
         .filter(|node| node.tag_name().name() == "sheet")
@@ -2444,10 +2452,7 @@ fn append_content_type_override(content_types: &[u8], part: &str) -> Result<Vec<
 }
 
 /// Formula text for every cell the template defines inside `address`.
-fn region_formulas(
-    sheet_xml: &[u8],
-    address: &str,
-) -> Result<BTreeMap<String, String>> {
+fn region_formulas(sheet_xml: &[u8], address: &str) -> Result<BTreeMap<String, String>> {
     let (row1, col1, row2, col2) = parse_a1_range(address)?;
     let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
     let document = Document::parse(xml).context("parse template worksheet XML")?;
@@ -2496,9 +2501,7 @@ fn formula_node<'a>(cell: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a,
 /// Excel stores one master with the formula and `t="shared" ref=… si=N`, and
 /// the remaining cells of the group carry only `t="shared" si=N`. Their formula
 /// is the master's with relative references shifted by the cell offset.
-fn shared_formula_groups(
-    document: &Document<'_>,
-) -> Result<BTreeMap<u32, ((u32, u32), String)>> {
+fn shared_formula_groups(document: &Document<'_>) -> Result<BTreeMap<u32, ((u32, u32), String)>> {
     let mut groups = BTreeMap::new();
     for cell in formula_cells(document) {
         let Some(reference) = cell.attribute("r") else {
@@ -2556,9 +2559,8 @@ fn effective_formula_text(
                      但模板中找不到该组的主公式"
                 )
             })?;
-            translate_shared_formula(master_text, *anchor, position).with_context(|| {
-                format!("展开校验区域共享公式 {reference}（si={si}）失败")
-            })
+            translate_shared_formula(master_text, *anchor, position)
+                .with_context(|| format!("展开校验区域共享公式 {reference}（si={si}）失败"))
         }
         Some(other) => bail!(
             "校验区域公式 {reference} 的类型为 {other:?}（数组公式等），暂不支持复制；\
@@ -2769,10 +2771,7 @@ fn apply_region_formulas(
             open_tag.replace_range(position..end, "");
         }
         let replacement = match formula {
-            Some(text) => format!(
-                "{open_tag}><f>{text}</f></c>",
-                text = escape_xml_text(text)
-            ),
+            Some(text) => format!("{open_tag}><f>{text}</f></c>", text = escape_xml_text(text)),
             None => format!("{open_tag}/>"),
         };
         let _ = (style, self_closing);
@@ -2899,11 +2898,7 @@ fn sheet_data_insert(document: &Document<'_>) -> Result<SheetDataInsert> {
 /// Excel requires `<c>` elements in a row to be sorted by column; appending new
 /// cells at `</row>` produced packages Excel refuses to open. New cells are
 /// placed before the first existing cell whose column is greater.
-fn row_insert_offset(
-    document: &Document<'_>,
-    row: u32,
-    columns: &[u32],
-) -> Result<Option<usize>> {
+fn row_insert_offset(document: &Document<'_>, row: u32, columns: &[u32]) -> Result<Option<usize>> {
     let sheet_data = document.descendants().find(|node| {
         node.is_element()
             && node.tag_name().namespace() == Some(MAIN_NS)
@@ -2917,7 +2912,11 @@ fn row_insert_offset(
             && node.tag_name().namespace() == Some(MAIN_NS)
             && node.tag_name().name() == "row"
     }) {
-        if row_node.attribute("r").and_then(|value| value.parse::<u32>().ok()) == Some(row) {
+        if row_node
+            .attribute("r")
+            .and_then(|value| value.parse::<u32>().ok())
+            == Some(row)
+        {
             let range = row_node.range();
             let fragment = &document.input_text()[range.clone()];
             let close = fragment
@@ -4914,10 +4913,14 @@ mod cell_region_copy_tests {
         let mut xml = String::new();
         {
             use std::io::Read;
-            zip.by_name("xl/worksheets/sheet1.xml")?.read_to_string(&mut xml)?;
+            zip.by_name("xl/worksheets/sheet1.xml")?
+                .read_to_string(&mut xml)?;
         }
         // Formula copied, template cache not carried over, target style kept.
-        assert!(xml.contains("<f>IF(B5=0,&quot;&quot;,&quot;错&quot;)</f>"), "{xml}");
+        assert!(
+            xml.contains("<f>IF(B5=0,&quot;&quot;,&quot;错&quot;)</f>"),
+            "{xml}"
+        );
         assert!(xml.contains(r#"<c r="F5" s="3">"#), "{xml}");
         assert!(!xml.contains("模板缓存"), "{xml}");
         // A cell the template does not define is blanked but retained.
@@ -4941,7 +4944,10 @@ mod cell_region_copy_tests {
             "参照表",
             r#"<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>21</v></c></row></sheetData>"#,
         )?;
-        workbook(&target, r#"<sheetData><row r="5"><c r="A5"><v>0</v></c></row></sheetData>"#)?;
+        workbook(
+            &target,
+            r#"<sheetData><row r="5"><c r="A5"><v>0</v></c></row></sheetData>"#,
+        )?;
 
         let report = copy_cell_region(
             &template,
@@ -4960,15 +4966,23 @@ mod cell_region_copy_tests {
         let mut workbook = String::new();
         {
             use std::io::Read;
-            zip.by_name("xl/workbook.xml")?.read_to_string(&mut workbook)?;
+            zip.by_name("xl/workbook.xml")?
+                .read_to_string(&mut workbook)?;
         }
-        assert!(workbook.contains("参照表"), "referenced sheet must be registered: {workbook}");
+        assert!(
+            workbook.contains("参照表"),
+            "referenced sheet must be registered: {workbook}"
+        );
         let parts = zip
             .file_names()
             .filter(|name| name.starts_with("xl/worksheets/sheet"))
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        assert_eq!(parts.len(), 2, "template sheet part must be added: {parts:?}");
+        assert_eq!(
+            parts.len(),
+            2,
+            "template sheet part must be added: {parts:?}"
+        );
         Ok(())
     }
 
@@ -4996,8 +5010,14 @@ mod cell_region_copy_tests {
             ("xl/workbook.xml", book),
             ("xl/_rels/workbook.xml.rels", book_rels),
             ("[Content_Types].xml", types),
-            ("xl/worksheets/sheet1.xml", format!(r#"<worksheet xmlns="{MAIN_NS}">{first_sheet}</worksheet>"#)),
-            ("xl/worksheets/sheet2.xml", format!(r#"<worksheet xmlns="{MAIN_NS}">{extra_sheet}</worksheet>"#)),
+            (
+                "xl/worksheets/sheet1.xml",
+                format!(r#"<worksheet xmlns="{MAIN_NS}">{first_sheet}</worksheet>"#),
+            ),
+            (
+                "xl/worksheets/sheet2.xml",
+                format!(r#"<worksheet xmlns="{MAIN_NS}">{extra_sheet}</worksheet>"#),
+            ),
         ] {
             zip.start_file(name, SimpleFileOptions::default())?;
             zip.write_all(content.as_bytes())?;
@@ -5031,11 +5051,18 @@ mod cell_region_copy_tests {
         let mut xml = String::new();
         {
             use std::io::Read;
-            zip.by_name("xl/worksheets/sheet1.xml")?.read_to_string(&mut xml)?;
+            zip.by_name("xl/worksheets/sheet1.xml")?
+                .read_to_string(&mut xml)?;
         }
         // Rows must stay siblings inside sheetData, never nested.
-        assert!(xml.contains(r#"<row r="5"><c r="F5"><f>A5*2</f></c></row>"#), "{xml}");
-        assert!(xml.contains(r#"<row r="6"><c r="F6"><f>A6*2</f></c></row>"#), "{xml}");
+        assert!(
+            xml.contains(r#"<row r="5"><c r="F5"><f>A5*2</f></c></row>"#),
+            "{xml}"
+        );
+        assert!(
+            xml.contains(r#"<row r="6"><c r="F6"><f>A6*2</f></c></row>"#),
+            "{xml}"
+        );
         assert!(xml.contains("</sheetData>"), "{xml}");
 
         let _ = fs::remove_file(&template);
@@ -5051,10 +5078,7 @@ mod shared_formula_translation_tests {
     #[test]
     fn shifts_relative_references_and_keeps_absolute_ones() -> anyhow::Result<()> {
         // Real master from a bank template: K6 = "+B6" over K6:K37.
-        assert_eq!(
-            translate_shared_formula("+B6", (6, 11), (7, 11))?,
-            "+B7"
-        );
+        assert_eq!(translate_shared_formula("+B6", (6, 11), (7, 11))?, "+B7");
         // SUM(C6) over L6:L25.
         assert_eq!(
             translate_shared_formula("SUM(C6)", (6, 12), (10, 12))?,
@@ -5127,7 +5151,10 @@ mod sheet_reference_detection_tests {
     fn ignores_string_literals() {
         // The INDIRECT text must not be treated as a live sheet reference for
         // copy planning; the runtime string is resolved by Excel.
-        assert!(sheet_references_in_formula(r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(1,1)))"#).is_empty());
+        assert!(sheet_references_in_formula(
+            r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(1,1)))"#
+        )
+        .is_empty());
     }
 }
 

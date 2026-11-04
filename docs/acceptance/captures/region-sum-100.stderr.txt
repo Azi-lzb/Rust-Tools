@@ -1,0 +1,24 @@
+[2026-11-04 22:29:09] [INFO] 开始地区总分校验，共 100 个工作簿
+[2026-11-04 22:29:09] [INFO] 进度 1/100（1%）：工作簿「north/duplicate.xlsx」：第 1 个工作簿地区核对完成
+[2026-11-04 22:29:09] [WARN] 进度 2/100（2%）：工作簿「south/duplicate.xlsx」，工作表「分地区汇总」：分地区总分核对完成：发现 1 处差异
+[2026-11-04 22:29:09] [ERROR] 进度 3/100（3%）：地区总分校验阶段 workbook_read 失败：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
+[2026-11-04 22:29:09] [INFO] 进度 10/100（10%）：工作簿「institution-010.xlsx」：第 10 个工作簿地区核对完成
+[2026-11-04 22:29:09] [INFO] 进度 20/100（20%）：工作簿「institution-020.xlsx」：第 20 个工作簿地区核对完成
+[2026-11-04 22:29:09] [INFO] 进度 30/100（30%）：工作簿「institution-030.xlsx」：第 30 个工作簿地区核对完成
+[2026-11-04 22:29:09] [INFO] 进度 40/100（40%）：工作簿「institution-040.xlsx」：第 40 个工作簿地区核对完成
+[2026-11-04 22:29:09] [INFO] 进度 50/100（50%）：工作簿「institution-050.xlsx」：第 50 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 进度 60/100（60%）：工作簿「institution-060.xlsx」：第 60 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 进度 70/100（70%）：工作簿「institution-070.xlsx」：第 70 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 进度 80/100（80%）：工作簿「institution-080.xlsx」：第 80 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 进度 90/100（90%）：工作簿「institution-090.xlsx」：第 90 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 进度 100/100（100%）：工作簿「institution-100.xlsx」：第 100 个工作簿地区核对完成
+[2026-11-04 22:29:10] [INFO] 正在生成地区总分核对结果
+[2026-11-04 22:29:10] [INFO] 地区总分核对报表已生成
+[2026-11-04 22:29:10] [INFO] 地区总分校验完成：成功 99 个，失败 1 个，核对 99 张工作表，发现 1 项错误
+[2026-11-04 22:29:10] [WARN] 部分完成：地区总分校验；选择 100，尝试 100，成功 99，失败 1，跳过 0，取消 0，未完成 0；工作表发现 99，尝试 99，成功 99，失败 0，跳过 0；保存工作簿 1 个；发现差异数 1，失败工作簿数 1，核对工作表数 99；耗时 0.795 秒；运行编号 pytools-pt-7-5-26192-1793802549614730800
+[2026-11-04 22:29:10] [WARN] 业务异常：1 项，明细 1 条
+[2026-11-04 22:29:10] [WARN] [地区总分校验] 校验发现不一致项（1 项）
+[2026-11-04 22:29:10] [WARN] 失败阶段 workbook_read [EXCEL_READ_FAILED]：broken.xlsx：工作簿「broken.xlsx」：第 3 个工作簿读取失败：open broken.xlsx: Xlsx error: Zip error: invalid Zip archive: Could not find EOCD: Zip error: invalid Zip archive: Could not find EOCD: invalid Zip archive: Could not find EOCD
+[2026-11-04 22:29:10] [WARN] 输出：C:\Users\AZI\AppData\Local\Temp\pytools-batch-menu-25604-1793802549212074800-0\app\output\地区数值核对结果_20261104_222909.xlsx
+[2026-11-04 22:29:10] [WARN] 详细事件：run-events\PT-7-5_pytools-pt-7-5-26192-1793802549614730800.jsonl
+[2026-11-04 22:29:10] [INFO] 运行编号 pytools-pt-7-5-26192-1793802549614730800；统一记录：PT-7-5_pytools-pt-7-5-26192-1793802549614730800.json

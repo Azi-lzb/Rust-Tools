@@ -17,7 +17,7 @@ impl TestDirectory {
             .expect("clock must be after Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "pytools-batch-rename-{label}-{}-{nonce}-{:?}", 
+            "pytools-batch-rename-{label}-{}-{nonce}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));

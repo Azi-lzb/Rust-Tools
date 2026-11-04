@@ -66,7 +66,10 @@ fn missing_configuration_bootstraps_through_menu_and_can_be_viewed() -> Result<(
     let workbook = read_workbook(&config)?;
     assert_eq!(workbook.sheets.len(), 11);
     assert_eq!(workbook.sheets[0].name, "全局配置");
-    assert_eq!(load_global(&config)?.log_dir, pytools_core::run_logging::default_log_dir());
+    assert_eq!(
+        load_global(&config)?.log_dir,
+        pytools_core::run_logging::default_log_dir()
+    );
     assert!(stdout.contains("源文件扩展名"));
     Ok(())
 }

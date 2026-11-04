@@ -32,7 +32,9 @@ impl std::fmt::Debug for WorkerProcess {
 
 enum PlatformGuard {
     #[cfg(windows)]
-    Job { handle: windows_sys::Win32::Foundation::HANDLE },
+    Job {
+        handle: windows_sys::Win32::Foundation::HANDLE,
+    },
     #[cfg(unix)]
     ProcessGroup,
     /// 仅测试：terminate 恒失败，用于验证清理错误进入诊断消息。
@@ -198,9 +200,7 @@ fn create_kill_on_close_job() -> io::Result<windows_sys::Win32::Foundation::HAND
             return Err(io::Error::last_os_error());
         }
         let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-        limits
-            .BasicLimitInformation
-            .LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         let ok = SetInformationJobObject(
             handle,
             JobObjectExtendedLimitInformation,
@@ -224,9 +224,7 @@ fn resume_child_threads(child_pid: u32) -> io::Result<()> {
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
     };
-    use windows_sys::Win32::System::Threading::{
-        OpenThread, ResumeThread, THREAD_SUSPEND_RESUME,
-    };
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
         if snapshot == INVALID_HANDLE_VALUE || snapshot.is_null() {
@@ -303,7 +301,10 @@ mod tests {
 
     fn hang_command(python: &std::path::Path) -> Command {
         let mut command = Command::new(python);
-        command.arg("-I").arg("-c").arg("import time; time.sleep(120)");
+        command
+            .arg("-I")
+            .arg("-c")
+            .arg("import time; time.sleep(120)");
         command.stdin(Stdio::null());
         command
     }
@@ -319,8 +320,11 @@ mod tests {
             const PROCESS_SYNCHRONIZE: u32 = 0x0010_0000;
             const WAIT_TIMEOUT: u32 = 0x102;
             unsafe {
-                let handle =
-                    OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                let handle = OpenProcess(
+                    PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                    0,
+                    pid,
+                );
                 if handle.is_null() || handle == INVALID_HANDLE_VALUE {
                     // 打不开句柄一般表示进程不存在（ACCESS_DENIED 极罕见，
                     // 测试环境中以不存在处理）。
@@ -349,7 +353,10 @@ mod tests {
         command.arg("-I").arg("-c").arg("import sys; sys.exit(0)");
         command.stdin(Stdio::null());
         let mut worker = WorkerProcess::spawn(command).expect("spawn controlled worker");
-        assert!(process_alive(worker.id()), "worker must be alive right after spawn");
+        assert!(
+            process_alive(worker.id()),
+            "worker must be alive right after spawn"
+        );
         let mut exited = false;
         let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
@@ -412,9 +419,15 @@ mod tests {
         );
 
         let terminate_result = worker.terminate_tree();
-        assert!(terminate_result.is_ok(), "terminate_tree failed: {terminate_result:?}");
+        assert!(
+            terminate_result.is_ok(),
+            "terminate_tree failed: {terminate_result:?}"
+        );
         let status = worker.wait().expect("wait after terminate_tree");
-        assert!(!status.success(), "terminated worker must not report success");
+        assert!(
+            !status.success(),
+            "terminated worker must not report success"
+        );
         let deadline = Instant::now() + Duration::from_secs(10);
         while process_alive(descendant_pid) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));

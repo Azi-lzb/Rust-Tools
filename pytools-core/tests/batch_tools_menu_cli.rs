@@ -86,13 +86,23 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let terminal = format!("{stdout}\n{stderr}");
     assert!(stdout.contains("5  专用报表处理"));
     assert!(stdout.contains("5  地区总分校验"));
     assert!(stdout.contains("已选择文件 6 个"));
     assert!(stdout.contains("先显式转换为 .xlsx"));
-    // user 视图：stdout 只输出人类可读汇总行，不再输出 JSON。
-    assert!(stdout.contains("地区总分校验结束：成功 4 个，失败 1 个，核对 3 张工作表，发现 1 项差异"));
-    assert!(!stdout.contains("\"files\""), "user view must not print JSON: {stdout}");
+    // user 视图：终端输出人类可读统一摘要，不再输出 JSON。
+    assert!(
+        terminal.contains("部分完成：地区总分校验")
+            && terminal.contains("成功 4")
+            && terminal.contains("发现差异数 1"),
+        "{terminal}"
+    );
+    assert!(
+        !terminal.contains("\"files\""),
+        "user view must not print JSON: {terminal}"
+    );
 
     let output_dir = root.path().join("app/output");
     let report_path = fs::read_dir(&output_dir)?
@@ -130,6 +140,79 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
 }
 
 #[test]
+fn interactive_batch_menu_summarizes_large_region_sum_selection() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/region_sum");
+    let north = root.path().join("north/duplicate.xlsx");
+    let south = root.path().join("south/duplicate.xlsx");
+    fs::create_dir_all(north.parent().context("north directory missing")?)?;
+    fs::create_dir_all(south.parent().context("south directory missing")?)?;
+    fs::copy(fixtures.join("balanced.xlsx"), &north)?;
+    fs::copy(fixtures.join("mismatch.xlsx"), &south)?;
+    let broken = root.path().join("broken.xlsx");
+    fs::write(&broken, b"not an xlsx workbook")?;
+
+    let mut inputs = vec![north, south, broken];
+    for index in 4..=100 {
+        let path = root.path().join(format!("institution-{index:03}.xlsx"));
+        fs::copy(fixtures.join("balanced.xlsx"), &path)?;
+        inputs.push(path);
+    }
+    assert_eq!(inputs.len(), 100);
+    let paths = inputs
+        .iter()
+        .map(|path| path.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(";");
+    let output = run_menu(&config, &format!("5\n5\n1\n{paths}\n0\n0\n"))?;
+    assert!(
+        output.status.success(),
+        "batch menu failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let terminal = format!("{stdout}\n{stderr}");
+    if let Some(capture_dir) = std::env::var_os("RUSTTOOLS_CLI_ACCEPTANCE_CAPTURE_DIR") {
+        let capture_dir = PathBuf::from(capture_dir);
+        fs::create_dir_all(&capture_dir)?;
+        fs::write(
+            capture_dir.join("region-sum-100.stdout.txt"),
+            &output.stdout[..],
+        )?;
+        fs::write(
+            capture_dir.join("region-sum-100.stderr.txt"),
+            &output.stderr[..],
+        )?;
+    }
+    let line_count = terminal.lines().count();
+    let progress_lines = stderr.lines().filter(|line| line.contains("进度 ")).count();
+    assert!(stdout.contains("已选择文件 100 个"), "{stdout}");
+    assert!(stdout.contains("north/duplicate.xlsx"), "{stdout}");
+    assert!(stdout.contains("south/duplicate.xlsx"), "{stdout}");
+    assert!(stdout.contains("其余 95 个文件将按批次处理"), "{stdout}");
+    assert!(!stdout.contains("institution-006.xlsx"), "{stdout}");
+    assert!(
+        line_count <= 100,
+        "batch emitted {line_count} terminal lines: {terminal}"
+    );
+    assert!(
+        progress_lines <= 13,
+        "normal file progress was not throttled: {progress_lines} lines\n{stderr}"
+    );
+    assert!(stderr.contains("发现 1 处差异"), "{stderr}");
+    assert!(stderr.contains("broken.xlsx"), "{stderr}");
+    assert!(stderr.contains("Zip error"), "{stderr}");
+    assert!(
+        terminal.contains("成功 99") && terminal.contains("失败 1"),
+        "{terminal}"
+    );
+    Ok(())
+}
+
+#[test]
 fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<()> {
     let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/region_sum");
     let balanced = fixture_dir.join("balanced.xlsx");
@@ -153,10 +236,18 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
+        let terminal = format!("{stdout}\n{stderr}");
         // user 视图输出人类可读汇总；developer/off 视图输出 JSON。
         if view == "user" {
-            assert!(stdout.contains("地区总分校验结束：成功 1 个，失败 1 个"));
-            assert!(!stdout.contains("\"files\""), "user view must not print JSON: {stdout}");
+            assert!(
+                terminal.contains("执行失败：地区总分校验")
+                    || terminal.contains("部分完成：地区总分校验")
+            );
+            assert!(terminal.contains("成功 1，失败 1"));
+            assert!(
+                !terminal.contains("\"files\""),
+                "user view must not print JSON: {terminal}"
+            );
         } else {
             assert!(stdout.contains(r#""files": 1"#));
             assert!(stdout.contains(r#""failed_files": 1"#));
@@ -607,9 +698,22 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
     assert!(stdout.contains("删除分机构表中的外资行"));
     assert!(stdout.contains("PT-7-3 当前只接受 .xlsx"));
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
-    assert!(stdout.contains("外资行删除结束：检查工作簿 2 个，失败 0 个"));
-    assert!(!stdout.contains("\"mode\""), "user view must not print JSON: {stdout}");
-    assert_ne!(fs::read(&source)?, source_bytes, "in-place mode must update matching source");
+    let terminal = format!("{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        terminal.contains("删除分机构表中的外资行")
+            && terminal.contains("成功 2")
+            && terminal.contains("失败 0"),
+        "{terminal}"
+    );
+    assert!(
+        !stdout.contains("\"mode\""),
+        "user view must not print JSON: {stdout}"
+    );
+    assert_ne!(
+        fs::read(&source)?,
+        source_bytes,
+        "in-place mode must update matching source"
+    );
     assert_eq!(
         fs::read(&no_change_source)?,
         no_change_bytes,
@@ -622,7 +726,10 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
     assert!(foreign_copy.exists());
     assert!(!result_dir.exists());
     assert!(no_change_copy.exists());
-    assert!(!root.path().join("app/output").exists() || find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none());
+    assert!(
+        !root.path().join("app/output").exists()
+            || find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none()
+    );
     let copied = read_workbook(&foreign_copy)?;
     let branch = copied
         .sheets
@@ -691,7 +798,10 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // off 视图：stdout 只输出人类可读汇总行，无 JSON、无事件、无运行记录。
-    assert!(stdout.contains("外资行删除结束：检查工作簿 1 个，失败 0 个"), "{stdout}");
+    assert!(
+        stdout.contains("外资行删除结束：检查工作簿 1 个，失败 0 个"),
+        "{stdout}"
+    );
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
@@ -761,7 +871,11 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
 
     let output_path = source.clone();
     assert!(output_path.exists());
-    assert_ne!(fs::read(&source)?, source_bytes, "in-place mode must update the source");
+    assert_ne!(
+        fs::read(&source)?,
+        source_bytes,
+        "in-place mode must update the source"
+    );
     let workbook = read_workbook(&output_path)?;
     let branch = workbook
         .sheets
@@ -975,11 +1089,22 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
         if view == "developer" {
             assert!(stdout.contains(r#""feature_id": "PT-7-2""#));
             assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
-        } else {
-            // user/off 视图：stdout 只输出人类可读汇总行，不输出 JSON。
+        } else if view == "off" {
             assert!(stdout.contains("机构名称规范化结束："), "{stdout}");
             assert!(stdout.contains("已处理 1 个"), "{stdout}");
-            assert!(!stdout.contains("\"feature_id\""), "non-developer view must not print JSON: {stdout}");
+        } else {
+            // user 视图：共享摘要经终端日志流输出，不输出 JSON。
+            let terminal = format!("{stdout}\n{stderr}");
+            assert!(
+                terminal.contains("机构名称规范化")
+                    && terminal.contains("成功 1")
+                    && terminal.contains("失败 0"),
+                "{terminal}"
+            );
+            assert!(
+                !stdout.contains("\"feature_id\""),
+                "non-developer view must not print JSON: {stdout}"
+            );
         }
         if view == "off" {
             assert!(stderr.trim().is_empty(), "off view emitted logs: {stderr}");
@@ -994,7 +1119,10 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
                 assert!(!stdout.contains("calamine"));
             } else {
                 assert!(stderr.contains("\"phase\":\"engine_execution\""));
-                assert!(!stdout.contains("rust_xlsxwriter"), "in-place mode must not use rust_xlsxwriter");
+                assert!(
+                    !stdout.contains("rust_xlsxwriter"),
+                    "in-place mode must not use rust_xlsxwriter"
+                );
             }
         }
         if view == "off" {
@@ -1043,11 +1171,19 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     assert!(stdout.contains("已选择文件 3 个"));
     assert!(stdout.contains("这是机构名称规范化结果目录中的副本，不重复处理"));
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(stdout.contains("机构名称规范化结束："), "{stdout}");
-    assert!(stdout.contains("已处理 2 个"), "{stdout}");
-    assert!(stdout.contains("失败 0 个"), "{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let terminal = format!("{stdout}\n{stderr}");
+    assert!(
+        terminal.contains("机构名称规范化")
+            && terminal.contains("成功 2")
+            && terminal.contains("失败 0"),
+        "{terminal}"
+    );
     assert!(stdout.contains("直接改写源工作簿"), "{stdout}");
-    assert!(!stdout.contains("\"total_inputs\""), "user view must not print JSON: {stdout}");
+    assert!(
+        !stdout.contains("\"total_inputs\""),
+        "user view must not print JSON: {stdout}"
+    );
     assert!(!stdout.contains("unsupported.xlsm"));
     assert!(!stdout.contains("~$locked.xlsx"));
 
@@ -1170,8 +1306,8 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
 }
 
 #[test]
-fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user_history() -> Result<()>
-{
+fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user_history(
+) -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let (current, previous) = make_rural_loan_periods(root.path(), false, false)?;
@@ -1189,9 +1325,15 @@ fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user
     assert!(stdout.contains("7  涉农贷款比上月修正"));
     assert!(stdout.contains("[就地模式]"));
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(stdout.contains("涉农贷款比上月修正结束：匹配机构"), "{stdout}");
+    assert!(
+        stdout.contains("涉农贷款比上月修正结束：匹配机构"),
+        "{stdout}"
+    );
     assert!(stdout.contains("失败地区 0 个"), "{stdout}");
-    assert!(!stdout.contains("\"feature_id\""), "user view must not print JSON: {stdout}");
+    assert!(
+        !stdout.contains("\"feature_id\""),
+        "user view must not print JSON: {stdout}"
+    );
     // 就地模式：本期工作簿被直接改写（不再生成 PyTools_专用报表处理结果 副本）。
     let adjusted = read_workbook(&current)?;
     let adjusted_sheet = adjusted
@@ -1319,8 +1461,14 @@ fn interactive_rural_loan_menu_off_view_does_not_write_run_history() -> Result<(
     assert!(stdout.contains("umya-spreadsheet"), "{stdout}");
     assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
     // off 视图不写任何运行记录文件：JSON 不得引用运行日志路径。
-    assert!(!stdout.contains("run_log_path"), "off view must not reference a run log: {stdout}");
-    assert!(!stdout.contains("run_summary_path"), "off view must not reference a unified log: {stdout}");
+    assert!(
+        !stdout.contains("run_log_path"),
+        "off view must not reference a run log: {stdout}"
+    );
+    assert!(
+        !stdout.contains("run_summary_path"),
+        "off view must not reference a unified log: {stdout}"
+    );
     // 就地模式：本期工作簿被直接改写，不生成结果副本目录。
     assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     assert!(!String::from_utf8_lossy(&output.stderr).contains("phase"));
@@ -1825,9 +1973,16 @@ fn interactive_village_split_updates_target_with_umya_and_preserves_period_input
     let current_before = fs::read(&current)?;
     let previous_before = fs::read(&previous)?;
     let output = run_menu(&config, &village_menu_input(&current, &previous, &target))?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let book = read_workbook(&target)?;
-    let branch = book.sheets.iter().find(|s| s.name == "广东分机构本外币")
+    let branch = book
+        .sheets
+        .iter()
+        .find(|s| s.name == "广东分机构本外币")
         .context("split target sheet missing")?;
     assert_eq!(branch.values["A3"]["value"], "博罗长江村镇银行");
     assert_eq!(branch.values["A4"]["value"], "惠东惠民村镇银行");

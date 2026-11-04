@@ -195,7 +195,10 @@ fn umya_print_preserves_formula_cached_values_and_formats() -> Result<()> {
         ("B8", 1e20),
     ] {
         let actual = numeric_at(sheet, address).with_context(|| {
-            format!("{address} must stay numeric: {:?}", sheet.values.get(address))
+            format!(
+                "{address} must stay numeric: {:?}",
+                sheet.values.get(address)
+            )
         })?;
         assert!(
             (actual - expected).abs() <= 1e-9 * expected.abs().max(1.0),

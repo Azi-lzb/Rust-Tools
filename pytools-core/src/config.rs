@@ -173,8 +173,13 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
         output_dir: resolve("输出目录", "output"),
         log_dir,
         log_dir_override: None,
-        log_retention_days: values.get("日志保留天数").and_then(|value| positive_config_integer(value)),
-        log_max_bytes: values.get("日志最大占用MB").and_then(|value| positive_config_integer(value)).and_then(|mb| mb.checked_mul(1024 * 1024)),
+        log_retention_days: values
+            .get("日志保留天数")
+            .and_then(|value| positive_config_integer(value)),
+        log_max_bytes: values
+            .get("日志最大占用MB")
+            .and_then(|value| positive_config_integer(value))
+            .and_then(|mb| mb.checked_mul(1024 * 1024)),
         log_view: match values.get("日志模式").map(|value| value.trim()) {
             Some("详细" | "developer") => "developer".to_owned(),
             Some("关闭" | "off") => "off".to_owned(),
@@ -1051,7 +1056,9 @@ mod tests {
         // 基线在构建机上生成，日志回退目录是平台相关的用户状态路径；
         // 结构必须一致，取值以当前平台的 default_log_dir() 为准。
         baseline["result"]["global"]["log_dir"] = serde_json::Value::String(
-            crate::run_logging::default_log_dir().to_string_lossy().into_owned(),
+            crate::run_logging::default_log_dir()
+                .to_string_lossy()
+                .into_owned(),
         );
         assert_eq!(actual, baseline["result"]);
     }

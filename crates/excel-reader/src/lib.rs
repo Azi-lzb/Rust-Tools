@@ -2164,8 +2164,7 @@ mod tests {
     }
 
     fn inherited_number_format_fixture(extension: &str, worksheet: &str) -> Result<PathBuf> {
-        let path =
-            unique_test_fixture_path("excel-reader-inherited-number-format", extension);
+        let path = unique_test_fixture_path("excel-reader-inherited-number-format", extension);
         let package_relationships = format!(
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
         );
@@ -2821,8 +2820,8 @@ mod tests {
 
     #[test]
     fn value_column_projection_matches_dump_and_keeps_absolute_coordinates() {
-        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/synthetic_probe.xlsx");
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/synthetic_probe.xlsx");
         let dump = read_workbook(&fixture).expect("read full probe fixture");
         let projected = read_value_columns(&fixture, 3).expect("read first three columns");
 

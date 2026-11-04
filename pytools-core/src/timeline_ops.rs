@@ -1514,7 +1514,12 @@ fn run_wide_summary_inner(
         .enumerate()
         .filter(|(_, path)| is_wide_summary_source(path, global))
         .filter(|(_, path)| {
-            row_suffix_enabled || !pick_rules_for_workbook(rules, &file_name(path), &global.timeline_rule_match_mode)
+            row_suffix_enabled
+                || !pick_rules_for_workbook(
+                    rules,
+                    &file_name(path),
+                    &global.timeline_rule_match_mode,
+                )
                 .is_empty()
         })
         .collect::<Vec<_>>();
@@ -1527,7 +1532,8 @@ fn run_wide_summary_inner(
         .iter()
         .enumerate()
         .filter_map(|(index, path)| {
-            wide_summary_source_skip_reason(path, global).map(|reason| (index + 1, path.as_path(), reason))
+            wide_summary_source_skip_reason(path, global)
+                .map(|reason| (index + 1, path.as_path(), reason))
         })
         .collect::<Vec<_>>();
     let feature_id = if row_suffix_enabled { "PT-1-3" } else { "1-1" };
@@ -1587,11 +1593,25 @@ fn run_wide_summary_inner(
     if !row_suffix_enabled {
         for (index, path) in source_paths.iter().enumerate().filter(|(_, path)| {
             is_wide_summary_source(path, global)
-                && pick_rules_for_workbook(rules, &file_name(path), &global.timeline_rule_match_mode).is_empty()
+                && pick_rules_for_workbook(
+                    rules,
+                    &file_name(path),
+                    &global.timeline_rule_match_mode,
+                )
+                .is_empty()
         }) {
             emitter.source_input_index = Some(index + 1);
             emitter.current_workbook_name = Some(file_name(path));
-            emitter.emit("source_filter", "skipped", "工作簿名称未匹配启用规则", None, None, &["pytools-core", "rule_engine"], None, None);
+            emitter.emit(
+                "source_filter",
+                "skipped",
+                "工作簿名称未匹配启用规则",
+                None,
+                None,
+                &["pytools-core", "rule_engine"],
+                None,
+                None,
+            );
         }
     }
     let mut rule_states = HashMap::<String, WideRuleState>::new();
@@ -1782,7 +1802,7 @@ fn run_wide_summary_inner(
                     "calendar_date_projection",
                     "failed",
                     format!(
-                            "工作簿 {filename}（第 {input_index}/{} 个）日期系统投影失败，跳过该工作簿",
+                        "工作簿 {filename}（第 {input_index}/{} 个）日期系统投影失败，跳过该工作簿",
                         sources.len()
                     ),
                     Some(input_index),
@@ -4192,20 +4212,9 @@ mod keyword_match_tests {
         let template_paths = std::collections::BTreeMap::new();
         let source_paths = std::collections::BTreeMap::new();
 
-        let positional = position_differences(
-            &template,
-            &source,
-            &rule,
-            &template_paths,
-            &source_paths,
-        );
-        let by_path = path_differences(
-            &template,
-            &source,
-            &rule,
-            &template_paths,
-            &source_paths,
-        );
+        let positional =
+            position_differences(&template, &source, &rule, &template_paths, &source_paths);
+        let by_path = path_differences(&template, &source, &rule, &template_paths, &source_paths);
 
         assert!(positional.iter().all(|(kind, _, _)| kind != "行头"));
         assert!(by_path.iter().all(|(kind, _, _)| kind != "行头"));

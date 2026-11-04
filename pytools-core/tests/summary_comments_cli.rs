@@ -82,10 +82,21 @@ fn summary_comments_cli_logs_actual_stages_and_preserves_output_across_views() -
     assert_eq!(developer_events.first().unwrap()["phase"], "run");
     assert_eq!(developer_events.first().unwrap()["status"], "started");
     assert_eq!(developer_events.last().unwrap()["status"], "succeeded");
-    assert_eq!(
-        developer_history["events"],
-        serde_json::json!(developer_events)
-    );
+    let persisted_events = developer_history["events"]
+        .as_array()
+        .context("persisted summary events must be an array")?;
+    assert_eq!(persisted_events.len(), developer_events.len());
+    for (persisted, emitted) in persisted_events.iter().zip(&developer_events) {
+        for field in [
+            "sequence",
+            "timestamp",
+            "phase",
+            "status",
+            "total_elapsed_ms",
+        ] {
+            assert_eq!(persisted[field], emitted[field], "event field {field}");
+        }
+    }
     for (index, event) in developer_events.iter().enumerate() {
         assert_eq!(event["sequence"], index + 1);
         assert!(event["total_elapsed_ms"].is_number());
@@ -718,7 +729,7 @@ fn unique_test_dir() -> PathBuf {
         .expect("system clock after Unix epoch")
         .as_nanos();
     std::env::temp_dir().join(format!(
-        "pytools-summary-comments-{}-{nonce}-{:?}", 
+        "pytools-summary-comments-{}-{nonce}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ))

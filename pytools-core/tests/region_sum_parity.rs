@@ -550,6 +550,83 @@ fn output_directory_failure_does_not_modify_input_or_blocking_file() -> Result<(
     Ok(())
 }
 
+#[test]
+fn region_sum_cli_throttles_large_batches_and_keeps_failures_and_names_visible() -> Result<()> {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/region_sum");
+    for total in [10usize, 50, 100] {
+        let root = unique_test_dir();
+        let north = root.join("north");
+        let south = root.join("south");
+        let output_dir = root.join("output");
+        fs::create_dir_all(&north)?;
+        fs::create_dir_all(&south)?;
+        let mut inputs = Vec::with_capacity(total);
+        let north_named = north.join("重复机构.xlsx");
+        let south_named = south.join("重复机构.xlsx");
+        fs::copy(fixtures.join("balanced.xlsx"), &north_named)?;
+        fs::copy(fixtures.join("mismatch.xlsx"), &south_named)?;
+        inputs.push(north_named);
+        inputs.push(south_named);
+        let broken = root.join("坏工作簿.xlsx");
+        fs::write(&broken, b"not an xlsx workbook")?;
+        inputs.push(broken);
+        for index in 4..=total {
+            let path = root.join(format!("机构{index:03}.xlsx"));
+            fs::copy(fixtures.join("balanced.xlsx"), &path)?;
+            inputs.push(path);
+        }
+
+        let started = std::time::Instant::now();
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+            .arg("region-sum-check")
+            .arg("--output-dir")
+            .arg(&output_dir)
+            .args(&inputs)
+            .output()
+            .context("run batched region-sum CLI")?;
+        let elapsed = started.elapsed();
+        assert!(
+            output.status.success(),
+            "batch {total} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let report: Value = serde_json::from_str(&stdout)?;
+        assert_eq!(report["files"], total - 1);
+        assert_eq!(report["failed_files"], 1);
+        assert_eq!(report["errors"], 1);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let captured_lines = stdout.lines().count() + stderr.lines().count();
+        assert!(
+            captured_lines <= 60,
+            "batch {total} emitted {captured_lines} lines"
+        );
+        assert!(stderr.contains("north/重复机构.xlsx"), "{stderr}");
+        assert!(stderr.contains("south/重复机构.xlsx"), "{stderr}");
+        assert!(stderr.contains("坏工作簿.xlsx"), "{stderr}");
+        assert!(
+            stderr.contains("Zip error"),
+            "read failure must expose the root cause: {stderr}"
+        );
+        assert!(
+            stderr.contains("发现 1 处差异"),
+            "business issue must remain visible: {stderr}"
+        );
+        if total == 100 {
+            assert!(
+                captured_lines < 60,
+                "large-batch output was not throttled: {captured_lines}"
+            );
+            assert!(
+                elapsed.as_secs() < 20,
+                "logging unexpectedly dominated the run: {elapsed:?}"
+            );
+        }
+        fs::remove_dir_all(root)?;
+    }
+    Ok(())
+}
+
 fn unique_test_dir() -> PathBuf {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

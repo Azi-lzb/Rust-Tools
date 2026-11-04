@@ -1135,7 +1135,6 @@ fn write_static_print_cell(
     Ok(())
 }
 
-
 /// 单元格显示文本（用于合并区锚点；数字/日期/错误值都可取到字符串）。
 fn display_text_of_value(value: &serde_json::Value) -> String {
     if let Some(text) = value.as_str() {

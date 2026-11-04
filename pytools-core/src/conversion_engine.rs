@@ -274,8 +274,7 @@ impl ConversionRuntime {
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| {
-                    extension.eq_ignore_ascii_case("xlsx")
-                        || extension.eq_ignore_ascii_case("xlsm")
+                    extension.eq_ignore_ascii_case("xlsx") || extension.eq_ignore_ascii_case("xlsm")
                 }),
             "校验区域重算需要 .xlsx/.xlsm 工作副本（当前 {}）",
             source_copy.display()
@@ -1721,7 +1720,9 @@ fn seed_lo_recalc_profile(profile: &Path) {
             "{}",
             crate::run_logging::terminal_line(
                 crate::run_logging::Level::Warn,
-                &format!("预置 LibreOffice 重算配置失败（不影响转换，按 LO 默认设置执行）：{error:#}"),
+                &format!(
+                    "预置 LibreOffice 重算配置失败（不影响转换，按 LO 默认设置执行）：{error:#}"
+                ),
             )
         );
     }

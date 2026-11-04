@@ -199,9 +199,10 @@ fn lo_batch_performance_batch_session_vs_per_file_process() -> Result<()> {
     // Before-style behaviour: one runtime per file (per-file soffice start).
     let per_file_started = Instant::now();
     for input in &inputs {
-        let output = root
-            .join("per-file")
-            .join(format!("{}.xlsx", input.file_stem().unwrap().to_string_lossy()));
+        let output = root.join("per-file").join(format!(
+            "{}.xlsx",
+            input.file_stem().unwrap().to_string_lossy()
+        ));
         fs::create_dir_all(output.parent().unwrap())?;
         conversion::convert_one(input, &output, "xlsx", "lo")
             .with_context(|| format!("per-file conversion {}", input.display()))?;

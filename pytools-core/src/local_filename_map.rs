@@ -169,7 +169,10 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在按局部文件名映射检查第 {input_index}/{} 个文件。", files.len()),
+            format!(
+                "正在按局部文件名映射检查第 {input_index}/{} 个文件。",
+                files.len()
+            ),
         );
         let row = map_local_filename(source, &mappings);
         if row.new_name.is_empty() {

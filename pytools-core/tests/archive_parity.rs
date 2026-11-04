@@ -148,7 +148,7 @@ impl TempDir {
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "pytools-archive-{label}-{}-{unique}-{:?}", 
+            "pytools-archive-{label}-{}-{unique}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));

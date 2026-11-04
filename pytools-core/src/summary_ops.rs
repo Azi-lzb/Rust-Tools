@@ -1,7 +1,7 @@
 //! Worksheet used-range and comment-template summary workflows.
 
-use anyhow::{Context, Result};
 use crate::conversion_engine::{ConversionRuntime, NamedValidationRegionRequest};
+use anyhow::{Context, Result};
 use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
@@ -516,7 +516,17 @@ fn summarize_used_ranges_inner(
         for ws in &dump.sheets {
             progress.current_sheet = Some(ws.name.clone());
             progress.sheets_attempted += 1;
-            emitter.emit("sheet_process", "started", format!("正在汇总工作表 {} 的使用区域", ws.name), &progress, Some(&path), None, &["pytools-core"], None, None);
+            emitter.emit(
+                "sheet_process",
+                "started",
+                format!("正在汇总工作表 {} 的使用区域", ws.name),
+                &progress,
+                Some(&path),
+                None,
+                &["pytools-core"],
+                None,
+                None,
+            );
             let (min_row, min_col, max_row, max_col) =
                 *bounds_by_sheet.get(&ws.name).with_context(|| {
                     format!("worksheet {:?} is missing from the extent scan", ws.name)
@@ -526,7 +536,17 @@ fn summarize_used_ranges_inner(
             seen_sheets.insert(ws.name.clone());
             if min_row == 0 || max_row < min_row || max_col < min_col {
                 progress.sheets_skipped += 1;
-                emitter.emit("sheet_process", "skipped", "工作表没有可汇总的使用区域", &progress, Some(&path), None, &["pytools-core"], None, None);
+                emitter.emit(
+                    "sheet_process",
+                    "skipped",
+                    "工作表没有可汇总的使用区域",
+                    &progress,
+                    Some(&path),
+                    None,
+                    &["pytools-core"],
+                    None,
+                    None,
+                );
                 continue;
             }
             for row in min_row..=max_row {
@@ -580,7 +600,17 @@ fn summarize_used_ranges_inner(
                 }
             }
             progress.sheets_succeeded += 1;
-            emitter.emit("sheet_process", "succeeded", format!("工作表 {} 的使用区域已汇总", ws.name), &progress, Some(&path), None, &["pytools-core"], None, None);
+            emitter.emit(
+                "sheet_process",
+                "succeeded",
+                format!("工作表 {} 的使用区域已汇总", ws.name),
+                &progress,
+                Some(&path),
+                None,
+                &["pytools-core"],
+                None,
+                None,
+            );
         }
         progress.current_sheet = None;
         anyhow::ensure!(
@@ -847,9 +877,12 @@ impl NamedRegionBounds {
         let (end_row, end_column) =
             parse_a1(end).with_context(|| format!("invalid named-range end {end:?}"))?;
         anyhow::ensure!(
-            start_row >= 1 && start_column >= 1
-                && start_row <= end_row && start_column <= end_column
-                && end_row <= 1_048_576 && end_column <= 16_384,
+            start_row >= 1
+                && start_column >= 1
+                && start_row <= end_row
+                && start_column <= end_column
+                && end_row <= 1_048_576
+                && end_column <= 16_384,
             "命名区域坐标无效或超出 Excel 范围：{reference:?}"
         );
         Ok(Self {
@@ -965,12 +998,7 @@ pub fn extract_named_validation_regions_with_progress<F>(
 where
     F: FnMut(SummaryRunEvent),
 {
-    extract_named_validation_regions_inner(
-        template_path,
-        sources,
-        output_dir,
-        Some(&mut on_event),
-    )
+    extract_named_validation_regions_inner(template_path, sources, output_dir, Some(&mut on_event))
 }
 
 pub fn summarize_by_comments(
@@ -1780,90 +1808,206 @@ fn extract_named_validation_regions_inner(
     callback: Option<&mut dyn FnMut(SummaryRunEvent)>,
 ) -> Result<NamedValidationExtractResult> {
     let started = Instant::now();
-    let mut emitter = SummaryProgressEmitter { started, sequence: 0, callback };
+    let mut emitter = SummaryProgressEmitter {
+        started,
+        sequence: 0,
+        callback,
+    };
     let mut progress = SummaryProgress {
         total_inputs: sources.len(),
-        total_files: sources.iter().filter(|path| named_range_source_supported(path) && path.is_file()).count(),
+        total_files: sources
+            .iter()
+            .filter(|path| named_range_source_supported(path) && path.is_file())
+            .count(),
         ..SummaryProgress::default()
     };
-    emitter.emit("run", "started", format!("开始按模板校验区域提取校验：{} 个输入", sources.len()),
-        &progress, None, None, &["pytools-core"], None, None);
+    emitter.emit(
+        "run",
+        "started",
+        format!("开始按模板校验区域提取校验：{} 个输入", sources.len()),
+        &progress,
+        None,
+        None,
+        &["pytools-core"],
+        None,
+        None,
+    );
 
     let template_started = Instant::now();
-    let template_name = template_path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-    emitter.emit("template_read", "started", format!("正在读取校验区域模板「{template_name}」"),
-        &progress, Some(template_path), None, &["pytools-core", "excel-reader"], None, None);
+    let template_name = template_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    emitter.emit(
+        "template_read",
+        "started",
+        format!("正在读取校验区域模板「{template_name}」"),
+        &progress,
+        Some(template_path),
+        None,
+        &["pytools-core", "excel-reader"],
+        None,
+        None,
+    );
     if !is_xlsx_or_xlsm(template_path) {
         let error = anyhow::anyhow!("校验区域模板必须是 .xlsx 或 .xlsm 文件");
-        emitter.emit("template_validation", "failed", error.to_string(), &progress, Some(template_path),
-            Some(template_started.elapsed()), &["pytools-core"], None, Some("template_format_unsupported"));
+        emitter.emit(
+            "template_validation",
+            "failed",
+            error.to_string(),
+            &progress,
+            Some(template_path),
+            Some(template_started.elapsed()),
+            &["pytools-core"],
+            None,
+            Some("template_format_unsupported"),
+        );
         return Err(error);
     }
     if !template_path.is_file() {
         let error = anyhow::anyhow!("校验区域模板文件不存在或不可访问：{template_name}");
-        emitter.emit("template_read", "failed", error.to_string(), &progress, Some(template_path),
-            Some(template_started.elapsed()), &["pytools-core"], None, Some("template_file_missing"));
+        emitter.emit(
+            "template_read",
+            "failed",
+            error.to_string(),
+            &progress,
+            Some(template_path),
+            Some(template_started.elapsed()),
+            &["pytools-core"],
+            None,
+            Some("template_file_missing"),
+        );
         return Err(error);
     }
     let template = match read_workbook(template_path) {
         Ok(template) => template,
         Err(error) => {
-            let cause = error.root_cause().to_string().replace(&template_path.display().to_string(), &template_name);
-            emitter.emit("template_read", "failed", format!("读取校验区域模板「{template_name}」失败：{cause}"),
-                &progress, Some(template_path), Some(template_started.elapsed()), &["pytools-core", "excel-reader", "calamine"],
-                Some("calamine"), Some("template_read_error"));
+            let cause = error
+                .root_cause()
+                .to_string()
+                .replace(&template_path.display().to_string(), &template_name);
+            emitter.emit(
+                "template_read",
+                "failed",
+                format!("读取校验区域模板「{template_name}」失败：{cause}"),
+                &progress,
+                Some(template_path),
+                Some(template_started.elapsed()),
+                &["pytools-core", "excel-reader", "calamine"],
+                Some("calamine"),
+                Some("template_read_error"),
+            );
             return Err(error).with_context(|| format!("读取校验区域模板「{template_name}」"));
         }
     };
     let definitions = match read_defined_names(template_path) {
         Ok(definitions) => definitions,
         Err(error) => {
-            let cause = error.root_cause().to_string().replace(&template_path.display().to_string(), &template_name);
-            emitter.emit("template_read", "failed", format!("读取校验区域模板「{template_name}」的定义名称失败：{cause}"),
-                &progress, Some(template_path), Some(template_started.elapsed()), &["pytools-core", "namespace-aware OOXML supplement"],
-                Some("namespace-aware OOXML supplement"), Some("template_defined_names_read_error"));
-            return Err(error).with_context(|| format!("读取校验区域模板「{template_name}」的定义名称"));
+            let cause = error
+                .root_cause()
+                .to_string()
+                .replace(&template_path.display().to_string(), &template_name);
+            emitter.emit(
+                "template_read",
+                "failed",
+                format!("读取校验区域模板「{template_name}」的定义名称失败：{cause}"),
+                &progress,
+                Some(template_path),
+                Some(template_started.elapsed()),
+                &["pytools-core", "namespace-aware OOXML supplement"],
+                Some("namespace-aware OOXML supplement"),
+                Some("template_defined_names_read_error"),
+            );
+            return Err(error)
+                .with_context(|| format!("读取校验区域模板「{template_name}」的定义名称"));
         }
     };
-    let validation_specs = match build_named_validation_sheet_specs(&template.sheets, &definitions) {
+    let validation_specs = match build_named_validation_sheet_specs(&template.sheets, &definitions)
+    {
         Ok(specs) => specs,
         Err(error) => {
             let cause = error.root_cause().to_string();
-            emitter.emit("template_validation", "failed", format!("校验区域模板「{template_name}」配置无效：{cause}"),
-                &progress, Some(template_path), Some(template_started.elapsed()), &["pytools-core"], None,
-                Some("template_validation_config_invalid"));
+            emitter.emit(
+                "template_validation",
+                "failed",
+                format!("校验区域模板「{template_name}」配置无效：{cause}"),
+                &progress,
+                Some(template_path),
+                Some(template_started.elapsed()),
+                &["pytools-core"],
+                None,
+                Some("template_validation_config_invalid"),
+            );
             return Err(error).context("解析校验区域模板");
         }
     };
     if validation_specs.is_empty() {
         let error = anyhow::anyhow!("校验区域模板「{template_name}」没有配置任何校验区域");
-        emitter.emit("template_validation", "failed", error.to_string(), &progress, Some(template_path),
-            Some(template_started.elapsed()), &["pytools-core"], None, Some("template_validation_region_missing"));
+        emitter.emit(
+            "template_validation",
+            "failed",
+            error.to_string(),
+            &progress,
+            Some(template_path),
+            Some(template_started.elapsed()),
+            &["pytools-core"],
+            None,
+            Some("template_validation_region_missing"),
+        );
         return Err(error);
     }
-    let template_sheets = template.sheets.iter()
+    let template_sheets = template
+        .sheets
+        .iter()
         .map(|sheet| (sheet.name.clone(), sheet))
         .collect::<BTreeMap<_, _>>();
-    let audit_fallbacks = validation_specs.iter()
+    let audit_fallbacks = validation_specs
+        .iter()
         .filter(|spec| spec.template_sheet == "兜底模板")
         .cloned()
         .collect::<Vec<_>>();
-    let direct_validation_specs = validation_specs.iter()
+    let direct_validation_specs = validation_specs
+        .iter()
         .filter(|spec| spec.template_sheet != "兜底模板")
         .cloned()
         .collect::<Vec<_>>();
-    let template_fallback = direct_validation_specs.iter().any(|spec| spec.template_sheet == "模板");
-    let configured_regions = validation_specs.iter()
-        .flat_map(|spec| spec.validation_regions.iter().map(move |bounds| {
-            (spec.template_sheet.to_lowercase(), named_region_address(*bounds))
-        }))
-        .collect::<BTreeSet<_>>().len();
-    anyhow::ensure!(configured_regions > 0, "模板没有配置校验区域或校验区域未能匹配模板工作表");
-    emitter.emit("template_read", "succeeded",
-        format!("校验区域模板读取完成：配置校验区域 {configured_regions} 个；计算将在临时副本上进行"),
-        &progress, Some(template_path), Some(template_started.elapsed()),
-        &["pytools-core", "excel-reader", "namespace-aware OOXML supplement"],
-        Some("calamine + namespace-aware OOXML supplement"), None);
+    let template_fallback = direct_validation_specs
+        .iter()
+        .any(|spec| spec.template_sheet == "模板");
+    let configured_regions = validation_specs
+        .iter()
+        .flat_map(|spec| {
+            spec.validation_regions.iter().map(move |bounds| {
+                (
+                    spec.template_sheet.to_lowercase(),
+                    named_region_address(*bounds),
+                )
+            })
+        })
+        .collect::<BTreeSet<_>>()
+        .len();
+    anyhow::ensure!(
+        configured_regions > 0,
+        "模板没有配置校验区域或校验区域未能匹配模板工作表"
+    );
+    emitter.emit(
+        "template_read",
+        "succeeded",
+        format!(
+            "校验区域模板读取完成：配置校验区域 {configured_regions} 个；计算将在临时副本上进行"
+        ),
+        &progress,
+        Some(template_path),
+        Some(template_started.elapsed()),
+        &[
+            "pytools-core",
+            "excel-reader",
+            "namespace-aware OOXML supplement",
+        ],
+        Some("calamine + namespace-aware OOXML supplement"),
+        None,
+    );
 
     let mut runtime = ConversionRuntime::default();
     let mut output_rows = Vec::<NamedValidationOutputRow>::new();
@@ -1876,37 +2020,91 @@ fn extract_named_validation_regions_inner(
         progress.current_input_index = Some(input_index + 1);
         progress.current_sheet = None;
         if !named_range_source_supported(source) || !source.is_file() {
-            let file_name = source.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let file_name = source
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             let reason = if named_range_source_supported(source) {
                 "输入文件不存在".to_owned()
             } else {
-                let ext = source.extension().and_then(|ext| ext.to_str())
-                    .map(|ext| format!(".{ext}" )).unwrap_or_else(|| "（无扩展名）".to_owned());
+                let ext = source
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| format!(".{ext}"))
+                    .unwrap_or_else(|| "（无扩展名）".to_owned());
                 format!("输入格式 {ext} 不受支持；本功能支持 .xls、.xlsx、.xlsm")
             };
-            skipped_sources.push(NamedRangeSourceSkip { file_name: file_name.clone(), sheet_name: None, reason: reason.clone() });
-            emitter.emit("input_filter", "skipped", format!("跳过源文件「{file_name}」：{reason}"),
-                &progress, Some(source), None, &["pytools-core"], None, Some("input_unsupported"));
+            skipped_sources.push(NamedRangeSourceSkip {
+                file_name: file_name.clone(),
+                sheet_name: None,
+                reason: reason.clone(),
+            });
+            emitter.emit(
+                "input_filter",
+                "skipped",
+                format!("跳过源文件「{file_name}」：{reason}"),
+                &progress,
+                Some(source),
+                None,
+                &["pytools-core"],
+                None,
+                Some("input_unsupported"),
+            );
             continue;
         }
 
         files_seen += 1;
         progress.current_file = Some(files_seen);
-        let file_name = source.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let legacy_xls = source.extension().and_then(|ext| ext.to_str())
+        let file_name = source
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let legacy_xls = source
+            .extension()
+            .and_then(|ext| ext.to_str())
             .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"));
-        let reader_engine = if legacy_xls { "calamine (.xls)" } else { "calamine + OOXML" };
+        let reader_engine = if legacy_xls {
+            "calamine (.xls)"
+        } else {
+            "calamine + OOXML"
+        };
         let source_started = Instant::now();
-        emitter.emit("source_read", "started", format!("正在读取源工作簿 [{files_seen}/{}]", progress.total_files),
-            &progress, Some(source), None, &["pytools-core", "excel-reader", "calamine"], Some(reader_engine), None);
+        emitter.emit(
+            "source_read",
+            "started",
+            format!("正在读取源工作簿 [{files_seen}/{}]", progress.total_files),
+            &progress,
+            Some(source),
+            None,
+            &["pytools-core", "excel-reader", "calamine"],
+            Some(reader_engine),
+            None,
+        );
         let read_result = match read_workbook_with_unknown_error_tokens_as_text(source) {
             Ok(read) => read,
             Err(error) => {
                 progress.failed_files += 1;
-                let cause = error.root_cause().to_string().replace(&source.display().to_string(), &file_name);
-                emitter.emit("source_read", "failed", format!("读取源工作簿「{file_name}」失败：{cause}"),
-                    &progress, Some(source), Some(source_started.elapsed()), &["pytools-core", "excel-reader", "calamine"],
-                    Some(if legacy_xls { "calamine (.xls)" } else { "calamine" }), Some("source_read_error"));
+                let cause = error
+                    .root_cause()
+                    .to_string()
+                    .replace(&source.display().to_string(), &file_name);
+                emitter.emit(
+                    "source_read",
+                    "failed",
+                    format!("读取源工作簿「{file_name}」失败：{cause}"),
+                    &progress,
+                    Some(source),
+                    Some(source_started.elapsed()),
+                    &["pytools-core", "excel-reader", "calamine"],
+                    Some(if legacy_xls {
+                        "calamine (.xls)"
+                    } else {
+                        "calamine"
+                    }),
+                    Some("source_read_error"),
+                );
                 return Err(error).with_context(|| format!("读取校验源工作簿「{file_name}」"));
             }
         };
@@ -1919,8 +2117,17 @@ fn extract_named_validation_regions_inner(
         }
         read_elapsed += source_started.elapsed();
         progress.processed_files += 1;
-        emitter.emit("source_read", "succeeded", "源工作簿读取完成", &progress, Some(source),
-            Some(source_started.elapsed()), &["pytools-core", "excel-reader", "calamine"], Some(reader_engine), None);
+        emitter.emit(
+            "source_read",
+            "succeeded",
+            "源工作簿读取完成",
+            &progress,
+            Some(source),
+            Some(source_started.elapsed()),
+            &["pytools-core", "excel-reader", "calamine"],
+            Some(reader_engine),
+            None,
+        );
 
         let route_started = Instant::now();
         let mut file_requests = Vec::<NamedValidationRegionRequest>::new();
@@ -1941,12 +2148,17 @@ fn extract_named_validation_regions_inner(
                 routes.push((spec, true));
             }
             if routes.is_empty() && template_fallback {
-                if let Some(spec) = direct_validation_specs.iter().find(|spec| spec.template_sheet == "模板") {
+                if let Some(spec) = direct_validation_specs
+                    .iter()
+                    .find(|spec| spec.template_sheet == "模板")
+                {
                     routes.push((spec, false));
                 }
             }
             if routes.is_empty() {
-                skipped_sheet_reasons.entry(source_sheet.name.clone()).or_default()
+                skipped_sheet_reasons
+                    .entry(source_sheet.name.clone())
+                    .or_default()
                     .insert("未找到同名模板工作表，也未配置可用兜底模板".to_owned());
                 progress.sheets_skipped += 1;
                 continue;
@@ -1960,27 +2172,55 @@ fn extract_named_validation_regions_inner(
                 }
                 let Some(template_sheet) = template_sheets.get(&spec.template_sheet) else {
                     progress.failed_files += 1;
-                    let error = anyhow::anyhow!("校验区域模板缺少工作表「{}」", spec.template_sheet);
-                    emitter.emit("validation_route", "failed", error.to_string(), &progress, Some(source),
-                        Some(route_started.elapsed()), &["pytools-core"], None, Some("template_sheet_missing"));
+                    let error =
+                        anyhow::anyhow!("校验区域模板缺少工作表「{}」", spec.template_sheet);
+                    emitter.emit(
+                        "validation_route",
+                        "failed",
+                        error.to_string(),
+                        &progress,
+                        Some(source),
+                        Some(route_started.elapsed()),
+                        &["pytools-core"],
+                        None,
+                        Some("template_sheet_missing"),
+                    );
                     return Err(error);
                 };
-                let check = match named_validation_structure_check(spec, template_sheet, source_sheet) {
-                    Ok(check) => check,
-                    Err(error) => {
-                        progress.failed_files += 1;
-                        let cause = error.root_cause().to_string();
-                        emitter.emit("validation_route", "failed",
-                            format!("校验「{file_name}」工作表「{}」的表结构区域失败：{cause}", source_sheet.name),
-                            &progress, Some(source), Some(route_started.elapsed()), &["pytools-core", "calamine"],
-                            Some("calamine"), Some("structure_preflight_error"));
-                        return Err(error).with_context(|| format!("校验「{file_name}」工作表「{}」的表结构区域", source_sheet.name));
-                    }
-                };
+                let check =
+                    match named_validation_structure_check(spec, template_sheet, source_sheet) {
+                        Ok(check) => check,
+                        Err(error) => {
+                            progress.failed_files += 1;
+                            let cause = error.root_cause().to_string();
+                            emitter.emit(
+                                "validation_route",
+                                "failed",
+                                format!(
+                                    "校验「{file_name}」工作表「{}」的表结构区域失败：{cause}",
+                                    source_sheet.name
+                                ),
+                                &progress,
+                                Some(source),
+                                Some(route_started.elapsed()),
+                                &["pytools-core", "calamine"],
+                                Some("calamine"),
+                                Some("structure_preflight_error"),
+                            );
+                            return Err(error).with_context(|| {
+                                format!(
+                                    "校验「{file_name}」工作表「{}」的表结构区域",
+                                    source_sheet.name
+                                )
+                            });
+                        }
+                    };
                 route_checks.insert(key, check);
             }
             let direct_passed = direct_spec.is_some_and(|spec| {
-                route_checks.get(&(spec.template_sheet.clone(), false)).is_some_and(Option::is_none)
+                route_checks
+                    .get(&(spec.template_sheet.clone(), false))
+                    .is_some_and(Option::is_none)
             });
             let mut route_failures = BTreeSet::new();
             let mut matched_regions = 0usize;
@@ -1988,7 +2228,9 @@ fn extract_named_validation_regions_inner(
                 if *is_fallback && direct_passed {
                     continue;
                 }
-                if let Some(Some(reason)) = route_checks.get(&(spec.template_sheet.clone(), *is_fallback)) {
+                if let Some(Some(reason)) =
+                    route_checks.get(&(spec.template_sheet.clone(), *is_fallback))
+                {
                     route_failures.insert(format!("模板「{}」：{reason}", spec.template_sheet));
                     continue;
                 }
@@ -1998,8 +2240,11 @@ fn extract_named_validation_regions_inner(
                         source_sheet: source_sheet.name.clone(),
                         address: named_region_address(*bounds),
                     };
-                    if !file_requests.iter().any(|existing| existing.template_sheet == request.template_sheet
-                        && existing.source_sheet == request.source_sheet && existing.address == request.address) {
+                    if !file_requests.iter().any(|existing| {
+                        existing.template_sheet == request.template_sheet
+                            && existing.source_sheet == request.source_sheet
+                            && existing.address == request.address
+                    }) {
                         file_requests.push(request);
                         matched_regions += 1;
                     }
@@ -2008,41 +2253,87 @@ fn extract_named_validation_regions_inner(
             if matched_regions > 0 {
                 progress.sheets_succeeded += 1;
                 progress.processed_sheets += 1;
-                emitter.emit("validation_route", "succeeded",
-                    format!("源工作表「{}」已通过路由和表结构校验，匹配校验区域 {matched_regions} 个", source_sheet.name),
-                    &progress, Some(source), Some(route_started.elapsed()), &["pytools-core", "calamine"], Some("calamine"), None);
+                emitter.emit(
+                    "validation_route",
+                    "succeeded",
+                    format!(
+                        "源工作表「{}」已通过路由和表结构校验，匹配校验区域 {matched_regions} 个",
+                        source_sheet.name
+                    ),
+                    &progress,
+                    Some(source),
+                    Some(route_started.elapsed()),
+                    &["pytools-core", "calamine"],
+                    Some("calamine"),
+                    None,
+                );
             } else {
                 progress.sheets_skipped += 1;
                 let reason = if route_failures.is_empty() {
                     "路由通过，但模板未配置校验区域".to_owned()
-                } else { route_failures.into_iter().collect::<Vec<_>>().join("；") };
-                skipped_sheet_reasons.entry(source_sheet.name.clone()).or_default().insert(reason.clone());
-                emitter.emit("validation_route", "skipped", format!("未提取工作表「{}」：{reason}", source_sheet.name),
-                    &progress, Some(source), Some(route_started.elapsed()), &["pytools-core", "calamine"], Some("calamine"),
-                    Some("validation_route_skipped"));
+                } else {
+                    route_failures.into_iter().collect::<Vec<_>>().join("；")
+                };
+                skipped_sheet_reasons
+                    .entry(source_sheet.name.clone())
+                    .or_default()
+                    .insert(reason.clone());
+                emitter.emit(
+                    "validation_route",
+                    "skipped",
+                    format!("未提取工作表「{}」：{reason}", source_sheet.name),
+                    &progress,
+                    Some(source),
+                    Some(route_started.elapsed()),
+                    &["pytools-core", "calamine"],
+                    Some("calamine"),
+                    Some("validation_route_skipped"),
+                );
             }
         }
         for (sheet_name, reasons) in &skipped_sheet_reasons {
-            skipped_sources.push(NamedRangeSourceSkip { file_name: file_name.clone(), sheet_name: Some(sheet_name.clone()),
-                reason: reasons.iter().cloned().collect::<Vec<_>>().join("；") });
+            skipped_sources.push(NamedRangeSourceSkip {
+                file_name: file_name.clone(),
+                sheet_name: Some(sheet_name.clone()),
+                reason: reasons.iter().cloned().collect::<Vec<_>>().join("；"),
+            });
         }
         if file_requests.is_empty() {
             let reason = if skipped_sheet_reasons.is_empty() {
                 "工作簿中没有匹配模板的工作表".to_owned()
             } else {
-                skipped_sheet_reasons.iter().map(|(sheet, reasons)| {
-                    format!("{sheet}：{}", reasons.iter().cloned().collect::<Vec<_>>().join("；"))
-                }).collect::<Vec<_>>().join("；")
+                skipped_sheet_reasons
+                    .iter()
+                    .map(|(sheet, reasons)| {
+                        format!(
+                            "{sheet}：{}",
+                            reasons.iter().cloned().collect::<Vec<_>>().join("；")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("；")
             };
-            emitter.emit("source_validation", "skipped", format!("跳过源工作簿「{file_name}」：没有可重算的校验区域；{reason}"),
-                &progress, Some(source), Some(route_started.elapsed()), &["pytools-core"], None,
-                Some("validation_regions_not_routed"));
+            emitter.emit(
+                "source_validation",
+                "skipped",
+                format!("跳过源工作簿「{file_name}」：没有可重算的校验区域；{reason}"),
+                &progress,
+                Some(source),
+                Some(route_started.elapsed()),
+                &["pytools-core"],
+                None,
+                Some("validation_regions_not_routed"),
+            );
             continue;
         }
 
         let validation_started = Instant::now();
-        let routed_sheets = file_requests.iter().map(|region| region.source_sheet.clone())
-            .collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+        let routed_sheets = file_requests
+            .iter()
+            .map(|region| region.source_sheet.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
         emitter.emit("validation_copy", "started",
             format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；COM 仅修改副本，原文件不变"),
             &progress, Some(source), None, &["pytools-core"], None, None);
@@ -2060,8 +2351,7 @@ fn extract_named_validation_regions_inner(
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| {
-                    extension.eq_ignore_ascii_case("xlsx")
-                        || extension.eq_ignore_ascii_case("xlsm")
+                    extension.eq_ignore_ascii_case("xlsx") || extension.eq_ignore_ascii_case("xlsm")
                 });
             let copy_name = source.file_name().context("源工作簿路径缺少文件名")?;
             let mut source_copy = if needs_conversion {
@@ -2125,13 +2415,39 @@ fn extract_named_validation_regions_inner(
                     .with_context(|| format!("创建校验副本失败：{file_name}"))?;
             }
             source_copy_created = true;
-            emitter.emit("validation_copy", "succeeded", format!("校验副本已生成并保留：「{}」；原件未修改", source_copy.display()),
-                &progress, Some(source), None, &["pytools-core"], None, None);
-            emitter.emit("validation_calculation", "started",
-                format!("正在通过 Excel/WPS COM 重算「{file_name}」的校验区域（{} 个区域）", file_requests.len()),
-                &progress, Some(source), None, &["pytools-core", "pywin32", "Excel/WPS COM"],
-                Some("pywin32 Excel/WPS COM"), None);
-            runtime.recalculate_named_validation_regions(template_path, &source_copy, &file_requests)
+            emitter.emit(
+                "validation_copy",
+                "succeeded",
+                format!(
+                    "校验副本已生成并保留：「{}」；原件未修改",
+                    source_copy.display()
+                ),
+                &progress,
+                Some(source),
+                None,
+                &["pytools-core"],
+                None,
+                None,
+            );
+            emitter.emit(
+                "validation_calculation",
+                "started",
+                format!(
+                    "正在通过 Excel/WPS COM 重算「{file_name}」的校验区域（{} 个区域）",
+                    file_requests.len()
+                ),
+                &progress,
+                Some(source),
+                None,
+                &["pytools-core", "pywin32", "Excel/WPS COM"],
+                Some("pywin32 Excel/WPS COM"),
+                None,
+            );
+            runtime.recalculate_named_validation_regions(
+                template_path,
+                &source_copy,
+                &file_requests,
+            )
         })(&mut runtime);
         let calculation = match calculation {
             Ok(calculation) => calculation,
@@ -2139,14 +2455,32 @@ fn extract_named_validation_regions_inner(
                 progress.failed_files += 1;
                 let cause = error.root_cause().to_string();
                 if source_copy_created {
-                    emitter.emit("validation_calculation", "failed",
-                        format!("COM 重算校验区域失败：「{file_name}」/「{}」；原因：{cause}", routed_sheets.join("、")),
-                        &progress, Some(source), Some(validation_started.elapsed()), &["pytools-core", "pywin32", "Excel/WPS COM"],
-                        Some("pywin32 Excel/WPS COM"), Some("named_validation_calculation_error"));
+                    emitter.emit(
+                        "validation_calculation",
+                        "failed",
+                        format!(
+                            "COM 重算校验区域失败：「{file_name}」/「{}」；原因：{cause}",
+                            routed_sheets.join("、")
+                        ),
+                        &progress,
+                        Some(source),
+                        Some(validation_started.elapsed()),
+                        &["pytools-core", "pywin32", "Excel/WPS COM"],
+                        Some("pywin32 Excel/WPS COM"),
+                        Some("named_validation_calculation_error"),
+                    );
                 } else {
-                    emitter.emit("validation_copy", "failed", format!("创建校验副本失败：「{file_name}」；原因：{cause}"),
-                        &progress, Some(source), Some(validation_started.elapsed()), &["pytools-core"], None,
-                        Some("validation_copy_error"));
+                    emitter.emit(
+                        "validation_copy",
+                        "failed",
+                        format!("创建校验副本失败：「{file_name}」；原因：{cause}"),
+                        &progress,
+                        Some(source),
+                        Some(validation_started.elapsed()),
+                        &["pytools-core"],
+                        None,
+                        Some("validation_copy_error"),
+                    );
                 }
                 let context = if source_copy_created {
                     format!("重算「{file_name}」的命名校验区域")
@@ -2156,9 +2490,22 @@ fn extract_named_validation_regions_inner(
                 return Err(error).context(context);
             }
         };
-        let workbook_name = source.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-        let matched = calculation.cells.iter()
-            .filter_map(|cell| parse_named_validation_result(&workbook_name, &cell.sheet, &cell.address, &cell.value))
+        let workbook_name = source
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let matched = calculation
+            .cells
+            .iter()
+            .filter_map(|cell| {
+                parse_named_validation_result(
+                    &workbook_name,
+                    &cell.sheet,
+                    &cell.address,
+                    &cell.value,
+                )
+            })
             .collect::<Vec<_>>();
         let hit_count = matched.len();
         output_rows.extend(matched);
@@ -2180,50 +2527,138 @@ fn extract_named_validation_regions_inner(
             Some("pywin32 Excel/WPS COM"), None);
     }
 
-    anyhow::ensure!(files_processed > 0, "没有源工作簿匹配模板校验区域；请检查工作表路由和表结构区域");
+    anyhow::ensure!(
+        files_processed > 0,
+        "没有源工作簿匹配模板校验区域；请检查工作表路由和表结构区域"
+    );
     progress.current_input_index = None;
     progress.current_sheet = None;
     let output_started = Instant::now();
     if let Err(error) = fs::create_dir_all(output_dir) {
-        emitter.emit("output_prepare", "failed", format!("创建校验结果输出目录失败：{error}"),
-            &progress, None, Some(output_started.elapsed()), &["pytools-core"], None, Some("output_directory_error"));
-        return Err(error).with_context(|| format!("创建校验结果输出目录 {}", output_dir.display()));
+        emitter.emit(
+            "output_prepare",
+            "failed",
+            format!("创建校验结果输出目录失败：{error}"),
+            &progress,
+            None,
+            Some(output_started.elapsed()),
+            &["pytools-core"],
+            None,
+            Some("output_directory_error"),
+        );
+        return Err(error)
+            .with_context(|| format!("创建校验结果输出目录 {}", output_dir.display()));
     }
-    let output_path = unique_output(output_dir, &format!("{}_按模板校验区域提取校验", Local::now().format("%Y%m%d_%H%M%S")))?;
-    emitter.emit("output_prepare", "succeeded", "校验结果输出位置已准备", &progress,
-        Some(&output_path), Some(output_started.elapsed()), &["pytools-core"], None, None);
+    let output_path = unique_output(
+        output_dir,
+        &format!(
+            "{}_按模板校验区域提取校验",
+            Local::now().format("%Y%m%d_%H%M%S")
+        ),
+    )?;
+    emitter.emit(
+        "output_prepare",
+        "succeeded",
+        "校验结果输出位置已准备",
+        &progress,
+        Some(&output_path),
+        Some(output_started.elapsed()),
+        &["pytools-core"],
+        None,
+        None,
+    );
     let candidate = unique_output(output_dir, ".named-validation-candidate")?;
     let write_started = Instant::now();
-    emitter.emit("output_workbook", "started", "正在生成校验结果工作簿", &progress,
-        Some(&output_path), None, &["pytools-core", "excel-writer"], Some("rust_xlsxwriter"), None);
+    emitter.emit(
+        "output_workbook",
+        "started",
+        "正在生成校验结果工作簿",
+        &progress,
+        Some(&output_path),
+        None,
+        &["pytools-core", "excel-writer"],
+        Some("rust_xlsxwriter"),
+        None,
+    );
     let header_format = Format::new().set_bold();
     let mut workbook = Workbook::new();
     let sheet = workbook.add_worksheet();
     sheet.set_name("校验结果")?;
     sheet.set_freeze_panes(1, 0)?;
-    let headers = ["工作簿名", "工作表名", "定位单元格", "错误类型", "文本1", "文本2", "文本3", "数字1", "数字2", "数字3"];
+    let headers = [
+        "工作簿名",
+        "工作表名",
+        "定位单元格",
+        "错误类型",
+        "文本1",
+        "文本2",
+        "文本3",
+        "数字1",
+        "数字2",
+        "数字3",
+    ];
     for (column, header) in headers.iter().enumerate() {
         sheet.write_string_with_format(0, column as u16, *header, &header_format)?;
     }
     for (row_index, row) in output_rows.iter().enumerate() {
-        let values = [&row.workbook, &row.worksheet, &row.address, &row.error_type,
-            &row.texts[0], &row.texts[1], &row.texts[2], &row.numbers[0], &row.numbers[1], &row.numbers[2]];
+        let values = [
+            &row.workbook,
+            &row.worksheet,
+            &row.address,
+            &row.error_type,
+            &row.texts[0],
+            &row.texts[1],
+            &row.texts[2],
+            &row.numbers[0],
+            &row.numbers[1],
+            &row.numbers[2],
+        ];
         for (column, value) in values.into_iter().enumerate() {
             sheet.write_string((row_index + 1) as u32, column as u16, value)?;
         }
     }
     sheet.autofilter(0, 0, output_rows.len() as u32, 9)?;
-    emitter.emit("output_workbook", "succeeded", "校验结果工作簿已生成", &progress,
-        Some(&output_path), Some(write_started.elapsed()), &["pytools-core", "excel-writer"], Some("rust_xlsxwriter"), None);
-    emitter.emit("output_save", "started", "正在校验并保存校验结果工作簿", &progress,
-        Some(&output_path), None, &["pytools-core", "excel-writer"], Some("rust_xlsxwriter"), None);
-    let reserved = OpenOptions::new().write(true).create_new(true).open(&candidate)
+    emitter.emit(
+        "output_workbook",
+        "succeeded",
+        "校验结果工作簿已生成",
+        &progress,
+        Some(&output_path),
+        Some(write_started.elapsed()),
+        &["pytools-core", "excel-writer"],
+        Some("rust_xlsxwriter"),
+        None,
+    );
+    emitter.emit(
+        "output_save",
+        "started",
+        "正在校验并保存校验结果工作簿",
+        &progress,
+        Some(&output_path),
+        None,
+        &["pytools-core", "excel-writer"],
+        Some("rust_xlsxwriter"),
+        None,
+    );
+    let reserved = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&candidate)
         .with_context(|| format!("创建校验结果候选文件失败：{}", candidate.display()))?;
     drop(reserved);
     if let Err(error) = workbook.save(&candidate) {
         let _ = fs::remove_file(&candidate);
-        emitter.emit("output_save", "failed", format!("保存校验结果候选文件失败：{error}"), &progress,
-            Some(&output_path), Some(write_started.elapsed()), &["pytools-core", "excel-writer"], Some("rust_xlsxwriter"), Some("output_save_error"));
+        emitter.emit(
+            "output_save",
+            "failed",
+            format!("保存校验结果候选文件失败：{error}"),
+            &progress,
+            Some(&output_path),
+            Some(write_started.elapsed()),
+            &["pytools-core", "excel-writer"],
+            Some("rust_xlsxwriter"),
+            Some("output_save_error"),
+        );
         return Err(error).with_context(|| format!("保存校验结果候选文件 {}", candidate.display()));
     }
     let publish = (|| -> Result<()> {
@@ -2234,14 +2669,31 @@ fn extract_named_validation_regions_inner(
     })();
     if let Err(error) = publish {
         let _ = fs::remove_file(&candidate);
-        emitter.emit("output_save", "failed", format!("校验结果候选校验或发布失败：{}", error.root_cause()),
-            &progress, Some(&output_path), Some(write_started.elapsed()), &["pytools-core", "excel-reader"],
-            Some("calamine"), Some("output_save_error"));
+        emitter.emit(
+            "output_save",
+            "failed",
+            format!("校验结果候选校验或发布失败：{}", error.root_cause()),
+            &progress,
+            Some(&output_path),
+            Some(write_started.elapsed()),
+            &["pytools-core", "excel-reader"],
+            Some("calamine"),
+            Some("output_save_error"),
+        );
         return Err(error);
     }
     let _ = fs::remove_file(&candidate);
-    emitter.emit("output_save", "succeeded", "校验结果工作簿已保存", &progress,
-        Some(&output_path), Some(write_started.elapsed()), &["pytools-core", "excel-writer"], Some("rust_xlsxwriter"), None);
+    emitter.emit(
+        "output_save",
+        "succeeded",
+        "校验结果工作簿已保存",
+        &progress,
+        Some(&output_path),
+        Some(write_started.elapsed()),
+        &["pytools-core", "excel-writer"],
+        Some("rust_xlsxwriter"),
+        None,
+    );
     let result = NamedValidationExtractResult {
         saved: true,
         rows: output_rows.len(),
@@ -2258,32 +2710,84 @@ fn extract_named_validation_regions_inner(
             unknown_error_token_cells_normalized: normalized_cells,
         }),
     };
-    emitter.emit("run", "succeeded",
-        format!("按模板校验区域提取校验完成：{} 个工作簿，命中结果 {} 条，跳过 {} 个工作表项",
-            result.files, result.rows, result.skipped_sources.len()),
-        &progress, Some(&output_path), Some(started.elapsed()),
-        &["pytools-core", "pywin32", "Excel/WPS COM", "rust_xlsxwriter"],
-        Some("pywin32 Excel/WPS COM + rust_xlsxwriter"), None);
+    emitter.emit(
+        "run",
+        "succeeded",
+        format!(
+            "按模板校验区域提取校验完成：{} 个工作簿，命中结果 {} 条，跳过 {} 个工作表项",
+            result.files,
+            result.rows,
+            result.skipped_sources.len()
+        ),
+        &progress,
+        Some(&output_path),
+        Some(started.elapsed()),
+        &[
+            "pytools-core",
+            "pywin32",
+            "Excel/WPS COM",
+            "rust_xlsxwriter",
+        ],
+        Some("pywin32 Excel/WPS COM + rust_xlsxwriter"),
+        None,
+    );
     Ok(result)
 }
 
-fn validate_named_validation_output(candidate: &Path, rows: &[NamedValidationOutputRow]) -> Result<()> {
+fn validate_named_validation_output(
+    candidate: &Path,
+    rows: &[NamedValidationOutputRow],
+) -> Result<()> {
     let saved = read_workbook(candidate).context("重新读取校验结果候选工作簿失败")?;
-    anyhow::ensure!(saved.sheets.len() == 1 && saved.sheets[0].name == "校验结果", "校验结果候选工作表结构不一致");
+    anyhow::ensure!(
+        saved.sheets.len() == 1 && saved.sheets[0].name == "校验结果",
+        "校验结果候选工作表结构不一致"
+    );
     let sheet = &saved.sheets[0];
-    let headers = ["工作簿名", "工作表名", "定位单元格", "错误类型", "文本1", "文本2", "文本3", "数字1", "数字2", "数字3"];
+    let headers = [
+        "工作簿名",
+        "工作表名",
+        "定位单元格",
+        "错误类型",
+        "文本1",
+        "文本2",
+        "文本3",
+        "数字1",
+        "数字2",
+        "数字3",
+    ];
     for (column, header) in headers.iter().enumerate() {
         let address = format!("{}1", column_letters(column + 1));
-        anyhow::ensure!(named_summary_value_matches(&serde_json::Value::String((*header).to_owned()), sheet.values.get(&address)),
-            "校验结果候选表头 {address} 回读不一致");
+        anyhow::ensure!(
+            named_summary_value_matches(
+                &serde_json::Value::String((*header).to_owned()),
+                sheet.values.get(&address)
+            ),
+            "校验结果候选表头 {address} 回读不一致"
+        );
     }
     for (row_index, row) in rows.iter().enumerate() {
-        let values = [&row.workbook, &row.worksheet, &row.address, &row.error_type,
-            &row.texts[0], &row.texts[1], &row.texts[2], &row.numbers[0], &row.numbers[1], &row.numbers[2]];
+        let values = [
+            &row.workbook,
+            &row.worksheet,
+            &row.address,
+            &row.error_type,
+            &row.texts[0],
+            &row.texts[1],
+            &row.texts[2],
+            &row.numbers[0],
+            &row.numbers[1],
+            &row.numbers[2],
+        ];
         for (column, expected) in values.into_iter().enumerate() {
             let address = format!("{}{}", column_letters(column + 1), row_index + 2);
-            anyhow::ensure!(named_summary_value_matches(&serde_json::Value::String(expected.clone()), sheet.values.get(&address)),
-                "校验结果候选单元格 {address} 回读不一致");
+            anyhow::ensure!(
+                named_summary_value_matches(
+                    &serde_json::Value::String(expected.clone()),
+                    sheet.values.get(&address)
+                ),
+                "校验结果候选单元格 {address} 回读不一致"
+            );
         }
     }
     Ok(())
@@ -2365,9 +2869,8 @@ fn summarize_by_named_ranges_inner(
             None,
             Some("template_file_missing"),
         );
-        return Err(error).with_context(|| {
-            format!("read named-range template {}", template_path.display())
-        });
+        return Err(error)
+            .with_context(|| format!("read named-range template {}", template_path.display()));
     }
     let template = match read_workbook(template_path) {
         Ok(template) => template,
@@ -2384,9 +2887,8 @@ fn summarize_by_named_ranges_inner(
                 Some("calamine"),
                 Some("template_workbook_read_error"),
             );
-            return Err(error).with_context(|| {
-                format!("read named-range template {}", template_path.display())
-            });
+            return Err(error)
+                .with_context(|| format!("read named-range template {}", template_path.display()));
         }
     };
     let definitions = match read_defined_names(template_path) {
@@ -2400,13 +2902,16 @@ fn summarize_by_named_ranges_inner(
                 &progress,
                 Some(template_path),
                 Some(template_started.elapsed()),
-                &["pytools-core", "excel-reader", "namespace-aware OOXML supplement"],
+                &[
+                    "pytools-core",
+                    "excel-reader",
+                    "namespace-aware OOXML supplement",
+                ],
                 Some("namespace-aware OOXML supplement"),
                 Some("template_defined_names_read_error"),
             );
-            return Err(error).with_context(|| {
-                format!("read defined names from {}", template_path.display())
-            });
+            return Err(error)
+                .with_context(|| format!("read defined names from {}", template_path.display()));
         }
     };
     let (mut sheet_specs, skipped_template_sheets) =
@@ -2429,9 +2934,8 @@ fn summarize_by_named_ranges_inner(
             }
         };
     if sheet_specs.is_empty() {
-        let error = anyhow::anyhow!(
-            "模板中没有可用命名区域；请配置表头区域和固定行或任意行汇总区域"
-        );
+        let error =
+            anyhow::anyhow!("模板中没有可用命名区域；请配置表头区域和固定行或任意行汇总区域");
         emitter.emit(
             "template_validation",
             "failed",
@@ -2454,21 +2958,35 @@ fn summarize_by_named_ranges_inner(
         .filter_map(|name| template.sheets.iter().find(|sheet| &sheet.name == name))
         .map(|sheet| (sheet.name.clone(), sheet))
         .collect::<BTreeMap<_, _>>();
-    let audit_fallbacks = sheet_specs.iter()
+    let audit_fallbacks = sheet_specs
+        .iter()
         .filter(|spec| spec.template_sheet == "兜底模板")
-        .cloned().collect::<Vec<_>>();
+        .cloned()
+        .collect::<Vec<_>>();
     if !audit_fallbacks.is_empty() {
-        let header_count = definitions.iter()
-            .filter(|definition| matches!(parse_named_region_name(&definition.name), Ok(Some((NamedRegionKind::Header, _)))))
+        let header_count = definitions
+            .iter()
+            .filter(|definition| {
+                matches!(
+                    parse_named_region_name(&definition.name),
+                    Ok(Some((NamedRegionKind::Header, _)))
+                )
+            })
             .flat_map(|definition| &definition.areas)
             .filter(|area| area.sheet_name == "兜底模板")
             .map(|area| area.reference.replace('$', "").to_ascii_uppercase())
-            .collect::<BTreeSet<_>>().len();
-        anyhow::ensure!(header_count == 1 && audit_fallbacks.iter().all(|spec| spec.groups.len() == 1),
-            "兜底模板须配置一个表头区域，每种汇总方式最多配置一个汇总区域");
+            .collect::<BTreeSet<_>>()
+            .len();
+        anyhow::ensure!(
+            header_count == 1 && audit_fallbacks.iter().all(|spec| spec.groups.len() == 1),
+            "兜底模板须配置一个表头区域，每种汇总方式最多配置一个汇总区域"
+        );
         sheet_specs.retain(|spec| spec.template_sheet != "兜底模板");
     }
-    let spec_names = sheet_specs.iter().map(|spec| spec.template_sheet.clone()).collect::<BTreeSet<_>>();
+    let spec_names = sheet_specs
+        .iter()
+        .map(|spec| spec.template_sheet.clone())
+        .collect::<BTreeSet<_>>();
     let template_fallback = spec_names.contains("模板");
     let skipped_template_message = if skipped_template_sheets.is_empty() {
         String::new()
@@ -2643,25 +3161,40 @@ fn summarize_by_named_ranges_inner(
         let mut skipped_sheet_reasons = BTreeMap::<String, BTreeSet<String>>::new();
         let mut validation_group_count = 0usize;
         let mut validation_group_passed = 0usize;
-        let mut rows_for_file: BTreeMap<(NamedSummaryMode, String), Vec<NamedSummaryRow>> = BTreeMap::new();
-        let mut pending_fallback_specs = BTreeMap::<(NamedSummaryMode, String), NamedSheetSpec>::new();
+        let mut rows_for_file: BTreeMap<(NamedSummaryMode, String), Vec<NamedSummaryRow>> =
+            BTreeMap::new();
+        let mut pending_fallback_specs =
+            BTreeMap::<(NamedSummaryMode, String), NamedSheetSpec>::new();
         for source_sheet in &dump.sheets {
             progress.current_sheet = Some(source_sheet.name.clone());
             progress.sheets_discovered += 1;
             progress.sheets_attempted += 1;
-            let direct_specs = sheet_specs.iter()
-                .filter(|spec| !spec.fallback_output && spec.template_sheet.eq_ignore_ascii_case(&source_sheet.name))
-                .cloned().collect::<Vec<_>>();
-            let mut specs = direct_specs.iter().cloned().map(|spec| (spec, false)).collect::<Vec<_>>();
+            let direct_specs = sheet_specs
+                .iter()
+                .filter(|spec| {
+                    !spec.fallback_output
+                        && spec.template_sheet.eq_ignore_ascii_case(&source_sheet.name)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut specs = direct_specs
+                .iter()
+                .cloned()
+                .map(|spec| (spec, false))
+                .collect::<Vec<_>>();
             for fallback in &audit_fallbacks {
                 // Check the explicit fallback after a direct route fails too.
                 // Selection happens after both routes have been preflighted.
                 specs.push((fallback.clone(), true));
             }
             if specs.is_empty() && template_fallback {
-                specs.extend(sheet_specs.iter()
-                    .filter(|spec| !spec.fallback_output && spec.template_sheet == "模板")
-                    .cloned().map(|spec| (spec, false)));
+                specs.extend(
+                    sheet_specs
+                        .iter()
+                        .filter(|spec| !spec.fallback_output && spec.template_sheet == "模板")
+                        .cloned()
+                        .map(|spec| (spec, false)),
+                );
             }
             if specs.is_empty() {
                 let reason = "未找到同名模板工作表，也未配置可用兜底模板".to_owned();
@@ -2717,50 +3250,62 @@ fn summarize_by_named_ranges_inner(
                     return Err(error).with_context(|| {
                         format!(
                             "工作簿 {} 的工作表 {} 无法匹配模板工作表 {}",
-                            source.display(), source_sheet.name, spec.template_sheet
+                            source.display(),
+                            source_sheet.name,
+                            spec.template_sheet
                         )
                     });
                 };
-                let reason = match named_summary_structure_check(
-                    &route_specs,
-                    template_sheet,
-                    source_sheet,
-                ) {
-                    Ok(reason) => reason,
-                    Err(error) => {
-                        progress.failed_files += 1;
-                        let cause = error.root_cause().to_string();
-                        emitter.emit(
-                            "sheet_validation",
-                            "failed",
-                            format!(
-                                "模板「{}」的表结构校验执行失败：{cause}",
-                                spec.template_sheet
-                            ),
-                            &progress,
-                            Some(source),
-                            Some(extract_started.elapsed()),
-                            &["pytools-core", "excel-reader", "calamine"],
-                            Some("calamine"),
-                            Some("structure_preflight_error"),
-                        );
-                        return Err(error).with_context(|| {
-                            format!(
-                                "检查工作簿 {} 的工作表 {} 与模板 {} 的表结构区域",
-                                source.display(), source_sheet.name, spec.template_sheet
-                            )
-                        });
-                    }
-                };
+                let reason =
+                    match named_summary_structure_check(&route_specs, template_sheet, source_sheet)
+                    {
+                        Ok(reason) => reason,
+                        Err(error) => {
+                            progress.failed_files += 1;
+                            let cause = error.root_cause().to_string();
+                            emitter.emit(
+                                "sheet_validation",
+                                "failed",
+                                format!(
+                                    "模板「{}」的表结构校验执行失败：{cause}",
+                                    spec.template_sheet
+                                ),
+                                &progress,
+                                Some(source),
+                                Some(extract_started.elapsed()),
+                                &["pytools-core", "excel-reader", "calamine"],
+                                Some("calamine"),
+                                Some("structure_preflight_error"),
+                            );
+                            return Err(error).with_context(|| {
+                                format!(
+                                    "检查工作簿 {} 的工作表 {} 与模板 {} 的表结构区域",
+                                    source.display(),
+                                    source_sheet.name,
+                                    spec.template_sheet
+                                )
+                            });
+                        }
+                    };
                 route_checks.insert(key, reason);
             }
-            let direct_passed_modes = direct_specs.iter()
-                .filter(|spec| route_checks.get(&(spec.template_sheet.clone(), false)).is_some_and(Option::is_none))
+            let direct_passed_modes = direct_specs
+                .iter()
+                .filter(|spec| {
+                    route_checks
+                        .get(&(spec.template_sheet.clone(), false))
+                        .is_some_and(Option::is_none)
+                })
                 .map(|spec| spec.mode)
                 .collect::<BTreeSet<_>>();
-            let fallback_passed_modes = audit_fallbacks.iter()
-                .filter(|spec| !direct_passed_modes.contains(&spec.mode)
-                    && route_checks.get(&(spec.template_sheet.clone(), true)).is_some_and(Option::is_none))
+            let fallback_passed_modes = audit_fallbacks
+                .iter()
+                .filter(|spec| {
+                    !direct_passed_modes.contains(&spec.mode)
+                        && route_checks
+                            .get(&(spec.template_sheet.clone(), true))
+                            .is_some_and(Option::is_none)
+                })
                 .map(|spec| spec.mode)
                 .collect::<BTreeSet<_>>();
             let source_sheet_has_valid_route =
@@ -2775,18 +3320,26 @@ fn summarize_by_named_ranges_inner(
                 let Some(reason) = route_checks.get(&(template_name.clone(), is_fallback)) else {
                     continue;
                 };
-                let route_specs = specs.iter()
+                let route_specs = specs
+                    .iter()
                     .filter(|(spec, candidate_fallback)| {
                         spec.template_sheet == template_name && *candidate_fallback == is_fallback
                     })
                     .map(|(spec, _)| spec)
                     .collect::<Vec<_>>();
-                let route_modes = route_specs.iter().map(|spec| spec.mode).collect::<BTreeSet<_>>();
-                let is_direct_route = !is_fallback && direct_specs.iter()
-                    .any(|spec| spec.template_sheet == template_name);
-                let active_modes = route_modes.iter()
+                let route_modes = route_specs
+                    .iter()
+                    .map(|spec| spec.mode)
+                    .collect::<BTreeSet<_>>();
+                let is_direct_route = !is_fallback
+                    && direct_specs
+                        .iter()
+                        .any(|spec| spec.template_sheet == template_name);
+                let active_modes = route_modes
+                    .iter()
                     .filter(|mode| !is_fallback || !direct_passed_modes.contains(mode))
-                    .copied().collect::<Vec<_>>();
+                    .copied()
+                    .collect::<Vec<_>>();
                 if active_modes.is_empty() {
                     continue;
                 }
@@ -2925,38 +3478,39 @@ fn summarize_by_named_ranges_inner(
                     Some("calamine"),
                     None,
                 );
-                let mut rows = match extract_named_sheet_rows(
-                    &spec,
-                    source_sheet,
-                    &workbook_name,
-                    &placeholder_fields,
-                ) {
-                    Ok(rows) => rows,
-                    Err(error) => {
-                        progress.failed_files += 1;
-                        let cause = error.root_cause().to_string();
-                        emitter.emit(
-                            "summary_region_read",
-                            "failed",
-                            format!(
-                                "读取模板「{}」的{mode_name}汇总区域失败：{cause}",
-                                spec.template_sheet
-                            ),
-                            &progress,
-                            Some(source),
-                            Some(summary_read_started.elapsed()),
-                            &["pytools-core", "calamine"],
-                            Some("calamine"),
-                            Some("named_summary_region_read_error"),
-                        );
-                        return Err(error).with_context(|| {
-                            format!(
+                let mut rows =
+                    match extract_named_sheet_rows(
+                        &spec,
+                        source_sheet,
+                        &workbook_name,
+                        &placeholder_fields,
+                    ) {
+                        Ok(rows) => rows,
+                        Err(error) => {
+                            progress.failed_files += 1;
+                            let cause = error.root_cause().to_string();
+                            emitter.emit(
+                                "summary_region_read",
+                                "failed",
+                                format!(
+                                    "读取模板「{}」的{mode_name}汇总区域失败：{cause}",
+                                    spec.template_sheet
+                                ),
+                                &progress,
+                                Some(source),
+                                Some(summary_read_started.elapsed()),
+                                &["pytools-core", "calamine"],
+                                Some("calamine"),
+                                Some("named_summary_region_read_error"),
+                            );
+                            return Err(error).with_context(|| {
+                                format!(
                                 "读取工作簿 {} 的工作表 {} 对应模板 {} 的{mode_name}汇总区域失败",
                                 source.display(), source_sheet.name, spec.template_sheet
                             )
-                        });
-                    }
-                };
+                            });
+                        }
+                    };
                 if rows.is_empty() {
                     emitter.emit(
                         "summary_region_read",
@@ -3011,7 +3565,8 @@ fn summarize_by_named_ranges_inner(
                         return Err(error).with_context(|| {
                             format!(
                                 "读取工作簿 {} 的工作表 {} 的单元格汇总字段失败",
-                                source.display(), source_sheet.name
+                                source.display(),
+                                source_sheet.name
                             )
                         });
                     }
@@ -3033,7 +3588,11 @@ fn summarize_by_named_ranges_inner(
                     emitter.emit(
                         "metadata",
                         "warning",
-                        format!("源文件 {} 的附加字段所在工作表缺失，已留空：{}", source.file_name().unwrap_or_default().to_string_lossy(), missing_fields.join("、")),
+                        format!(
+                            "源文件 {} 的附加字段所在工作表缺失，已留空：{}",
+                            source.file_name().unwrap_or_default().to_string_lossy(),
+                            missing_fields.join("、")
+                        ),
                         &progress,
                         Some(source),
                         None,
@@ -3047,13 +3606,19 @@ fn summarize_by_named_ranges_inner(
                 }
                 // All fallback-routed source sheets belong to one output tab.
                 // The source sheet name remains in the data rows for traceability.
-                let output_name = if is_audit_fallback { "兜底模板".to_owned() } else { spec.output_key.clone() };
+                let output_name = if is_audit_fallback {
+                    "兜底模板".to_owned()
+                } else {
+                    spec.output_key.clone()
+                };
                 let key = (spec.mode, output_name.to_lowercase());
                 if is_audit_fallback {
                     let mut output_spec = spec.clone();
                     output_spec.output_key = output_name;
                     output_spec.fallback_output = true;
-                    pending_fallback_specs.entry(key.clone()).or_insert(output_spec);
+                    pending_fallback_specs
+                        .entry(key.clone())
+                        .or_insert(output_spec);
                 }
                 let extracted_row_count = rows.len();
                 progress.total_rows += extracted_row_count;
@@ -3106,7 +3671,11 @@ fn summarize_by_named_ranges_inner(
             }
         }
         progress.current_sheet = None;
-        let file_name = source.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let file_name = source
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         for (sheet_name, reasons) in &skipped_sheet_reasons {
             skipped_sources.push(NamedRangeSourceSkip {
                 file_name: file_name.clone(),
@@ -3126,7 +3695,9 @@ fn summarize_by_named_ranges_inner(
                 .collect::<Vec<_>>()
                 .join("；");
             let skip_message = if validation_group_count == 0 {
-                format!("源工作簿 {file_name} 没有工作表匹配模板或兜底路由；跳过该工作簿：{details}")
+                format!(
+                    "源工作簿 {file_name} 没有工作表匹配模板或兜底路由；跳过该工作簿：{details}"
+                )
             } else {
                 format!("源工作簿 {file_name} 的所有候选模板表结构校验均未通过；跳过该工作簿：{details}")
             };
@@ -3145,7 +3716,10 @@ fn summarize_by_named_ranges_inner(
         }
         let file_row_count = rows_for_file.values().map(Vec::len).sum::<usize>();
         for ((mode, name), spec) in pending_fallback_specs {
-            if !sheet_specs.iter().any(|existing| existing.mode == mode && existing.output_key.to_lowercase() == name) {
+            if !sheet_specs
+                .iter()
+                .any(|existing| existing.mode == mode && existing.output_key.to_lowercase() == name)
+            {
                 sheet_specs.push(spec);
             }
         }
@@ -3226,13 +3800,16 @@ fn summarize_by_named_ranges_inner(
     let header_format = Format::new().set_bold();
     let mut error_cells = Vec::new();
     let mut workbook = Workbook::new();
-    if sheet_specs.is_empty() { workbook.add_worksheet().set_name("汇总")?; }
+    if sheet_specs.is_empty() {
+        workbook.add_worksheet().set_name("汇总")?;
+    }
     sheet_specs.sort_by_key(|spec| (spec.mode, spec.fallback_output, spec.groups[0].order));
     for spec in &mut sheet_specs {
         spec.rows.sort_by_key(|row| row.group_order);
     }
     let mut used_sheet_names = BTreeSet::new();
-    let output_names = sheet_specs.iter()
+    let output_names = sheet_specs
+        .iter()
         .map(|spec| named_summary_output_sheet_name(&spec.output_key, &mut used_sheet_names))
         .collect::<Vec<_>>();
     for (spec, output_name) in sheet_specs.iter().zip(&output_names).rev() {
@@ -3283,7 +3860,10 @@ fn summarize_by_named_ranges_inner(
     );
     let save_started = Instant::now();
     let raw_candidate = unique_output(output_dir, ".named-summary-candidate")?;
-    let reserved = OpenOptions::new().write(true).create_new(true).open(&raw_candidate)
+    let reserved = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&raw_candidate)
         .with_context(|| format!("创建汇总候选文件失败：{}", raw_candidate.display()))?;
     drop(reserved);
     if let Err(error) = workbook.save(&raw_candidate) {
@@ -3299,8 +3879,12 @@ fn summarize_by_named_ranges_inner(
             Some("rust_xlsxwriter"),
             Some("output_save_error"),
         );
-        return Err(error)
-            .with_context(|| format!("save named-range summary candidate {}", raw_candidate.display()));
+        return Err(error).with_context(|| {
+            format!(
+                "save named-range summary candidate {}",
+                raw_candidate.display()
+            )
+        });
     }
     let candidate = if !error_cells.is_empty() {
         let patch_started = Instant::now();
@@ -3346,20 +3930,24 @@ fn summarize_by_named_ranges_inner(
         raw_candidate
     };
     let publication = (|| -> Result<()> {
-        validate_named_summary_output(
-            &candidate,
-            &sheet_specs,
-            &output_names,
-        )?;
+        validate_named_summary_output(&candidate, &sheet_specs, &output_names)?;
         crate::file_commit::create_target_from_candidate(&candidate, &path)
             .context("发布命名区域汇总工作簿失败")?;
         Ok(())
     })();
     if let Err(error) = publication {
         let _ = fs::remove_file(&candidate);
-        emitter.emit("output_save", "failed", "命名区域汇总候选校验或保存失败", &progress,
-            Some(&path), Some(save_started.elapsed()), &["pytools-core", "excel-reader"],
-            Some("calamine"), Some("output_save_error"));
+        emitter.emit(
+            "output_save",
+            "failed",
+            "命名区域汇总候选校验或保存失败",
+            &progress,
+            Some(&path),
+            Some(save_started.elapsed()),
+            &["pytools-core", "excel-reader"],
+            Some("calamine"),
+            Some("output_save_error"),
+        );
         return Err(error);
     }
     let _ = fs::remove_file(&candidate);
@@ -3458,7 +4046,8 @@ fn parse_named_region_name(name: &str) -> Result<Option<(NamedRegionKind, String
         let Some(suffix) = name.strip_prefix(&format!("{prefix}_")) else {
             continue;
         };
-        let id = suffix.parse::<usize>()
+        let id = suffix
+            .parse::<usize>()
             .map(|value| value.to_string())
             .unwrap_or_else(|_| suffix.to_lowercase());
         return Ok(Some((kind, id)));
@@ -3489,22 +4078,34 @@ fn build_named_validation_sheet_specs(
             definition.parse_status == DefinedNameParseStatus::Areas
                 && !definition.areas.is_empty(),
             "{} {:?} 必须引用工作表单元格区域",
-            if is_validation { "校验区域" } else { "表结构区域" },
+            if is_validation {
+                "校验区域"
+            } else {
+                "表结构区域"
+            },
             definition.name
         );
         for area in &definition.areas {
             anyhow::ensure!(
                 area.sheet_kind == "worksheet",
                 "{} {:?} 必须引用工作表",
-                if is_validation { "校验区域" } else { "表结构区域" },
+                if is_validation {
+                    "校验区域"
+                } else {
+                    "表结构区域"
+                },
                 definition.name
             );
             let bounds = NamedRegionBounds::from_reference(&area.reference)
                 .with_context(|| format!("解析命名区域 {:?} 失败", definition.name))?;
             let target = if is_validation {
-                validation_regions.entry(area.sheet_name.clone()).or_default()
+                validation_regions
+                    .entry(area.sheet_name.clone())
+                    .or_default()
             } else {
-                structure_regions.entry(area.sheet_name.clone()).or_default()
+                structure_regions
+                    .entry(area.sheet_name.clone())
+                    .or_default()
             };
             if !target.contains(&bounds) {
                 target.push(bounds);
@@ -3583,19 +4184,20 @@ fn parse_named_validation_result(
     // 用户要求：错误类型列写具体根因。首个标记是笼统的“错”而第二个
     // token 是更具体的关键字（如“校验失败”）时，提升具体关键字为
     // 错误类型，文本字段从具体标记之后开始。
-    let promoted = first_marker
-        .filter(|marker| *marker == "错")
-        .and_then(|_| {
-            tokens.get(1).and_then(|second| {
-                specific
-                    .iter()
-                    .find(|keyword| second.starts_with(**keyword))
-                    .copied()
-            })
-        });
-    let error_type = promoted
-        .or(first_marker)
-        .or_else(|| marker.iter().find(|keyword| raw.contains(*keyword)).copied())?;
+    let promoted = first_marker.filter(|marker| *marker == "错").and_then(|_| {
+        tokens.get(1).and_then(|second| {
+            specific
+                .iter()
+                .find(|keyword| second.starts_with(**keyword))
+                .copied()
+        })
+    });
+    let error_type = promoted.or(first_marker).or_else(|| {
+        marker
+            .iter()
+            .find(|keyword| raw.contains(*keyword))
+            .copied()
+    })?;
     // 文本字段起点：有具体提升时跳到具体标记之后；仅有首标记时跳过一个
     // token；无任何标记（raw 里含关键字但首 token 不匹配）时从头开始。
     let payload = if let Some(promoted) = promoted {
@@ -3610,13 +4212,7 @@ fn parse_named_validation_result(
     } else {
         &tokens[..]
     };
-    let field = |index: usize| {
-        payload
-            .get(index)
-            .copied()
-            .unwrap_or_default()
-            .to_owned()
-    };
+    let field = |index: usize| payload.get(index).copied().unwrap_or_default().to_owned();
     Some(NamedValidationOutputRow {
         workbook: workbook.to_owned(),
         worksheet: worksheet.to_owned(),
@@ -3636,27 +4232,36 @@ fn is_named_structure_region_name(name: &str) -> bool {
 
 fn parse_named_summary_fields(
     definitions: &[DefinedNameRecord],
-) -> Result<(Vec<NamedSummaryField>, BTreeMap<String, Vec<NamedSummaryField>>)> {
+) -> Result<(
+    Vec<NamedSummaryField>,
+    BTreeMap<String, Vec<NamedSummaryField>>,
+)> {
     let mut global = Vec::new();
     let mut local = BTreeMap::<String, Vec<NamedSummaryField>>::new();
     for definition in definitions {
-        let (field_name, is_global) = if let Some(name) = definition.name.strip_prefix("全局单元格区域.") {
-            (name.trim(), true)
-        } else if let Some(name) = definition.name.strip_prefix("单元格区域.") {
-            (name.trim(), false)
-        } else {
-            continue;
-        };
+        let (field_name, is_global) =
+            if let Some(name) = definition.name.strip_prefix("全局单元格区域.") {
+                (name.trim(), true)
+            } else if let Some(name) = definition.name.strip_prefix("单元格区域.") {
+                (name.trim(), false)
+            } else {
+                continue;
+            };
         if field_name.is_empty() {
             continue;
         }
         anyhow::ensure!(
-            definition.parse_status == DefinedNameParseStatus::Areas && !definition.areas.is_empty(),
+            definition.parse_status == DefinedNameParseStatus::Areas
+                && !definition.areas.is_empty(),
             "附加字段名称 {:?} 无法解析为工作表单元格",
             definition.name
         );
         for area in &definition.areas {
-            anyhow::ensure!(area.sheet_kind == "worksheet", "附加字段 {:?} 必须指向工作表", definition.name);
+            anyhow::ensure!(
+                area.sheet_kind == "worksheet",
+                "附加字段 {:?} 必须指向工作表",
+                definition.name
+            );
             let bounds = NamedRegionBounds::from_reference(&area.reference)
                 .with_context(|| format!("解析附加字段 {:?} 失败", definition.name))?;
             anyhow::ensure!(
@@ -3673,14 +4278,20 @@ fn parse_named_summary_fields(
             if is_global {
                 global.push(field);
             } else {
-                local.entry(area.sheet_name.to_lowercase()).or_default().push(field);
+                local
+                    .entry(area.sheet_name.to_lowercase())
+                    .or_default()
+                    .push(field);
             }
         }
     }
     let sort_fields = |fields: &mut Vec<NamedSummaryField>| {
         fields.sort_by(|left, right| {
-            (left.bounds.start_row, left.bounds.start_column, &left.name)
-                .cmp(&(right.bounds.start_row, right.bounds.start_column, &right.name))
+            (left.bounds.start_row, left.bounds.start_column, &left.name).cmp(&(
+                right.bounds.start_row,
+                right.bounds.start_column,
+                &right.name,
+            ))
         });
     };
     sort_fields(&mut global);
@@ -3715,7 +4326,9 @@ fn build_named_sheet_specs(
                 );
                 let bounds = NamedRegionBounds::from_reference(&area.reference)
                     .with_context(|| format!("解析表结构区域 {:?} 失败", definition.name))?;
-                let regions = structure_regions.entry(area.sheet_name.clone()).or_default();
+                let regions = structure_regions
+                    .entry(area.sheet_name.clone())
+                    .or_default();
                 if !regions.contains(&bounds) {
                     regions.push(bounds);
                 }
@@ -3744,8 +4357,14 @@ fn build_named_sheet_specs(
             );
             let bounds = NamedRegionBounds::from_reference(&area.reference)
                 .with_context(|| format!("parse named region {:?}", definition.name))?;
-            let identity = (kind, area.sheet_name.to_lowercase(), bounds.start_row,
-                bounds.start_column, bounds.end_row, bounds.end_column);
+            let identity = (
+                kind,
+                area.sheet_name.to_lowercase(),
+                bounds.start_row,
+                bounds.start_column,
+                bounds.end_row,
+                bounds.end_column,
+            );
             if !seen_regions.insert(identity.clone()) {
                 continue;
             }
@@ -3792,14 +4411,19 @@ fn build_named_sheet_specs(
         };
         if !groups.values().any(|builder| builder.header.is_some()) {
             anyhow::ensure!(
-                !groups.values().any(|builder| builder.fixed_rows.is_some() || builder.any_rows.is_some()),
+                !groups
+                    .values()
+                    .any(|builder| builder.fixed_rows.is_some() || builder.any_rows.is_some()),
                 "工作表 {:?} 配置了汇总区域，但缺少表头区域",
                 template_sheet.name
             );
             skipped_sheets_without_headers.push(template_sheet.name.clone());
             continue;
         }
-        let available_headers = groups.values().filter_map(|group| group.header).collect::<Vec<_>>();
+        let available_headers = groups
+            .values()
+            .filter_map(|group| group.header)
+            .collect::<Vec<_>>();
         let mut parsed_groups = Vec::new();
         for (id, builder) in groups {
             for (mode, bounds) in [
@@ -3807,37 +4431,63 @@ fn build_named_sheet_specs(
                 (NamedSummaryMode::FixedRows, builder.fixed_rows),
             ] {
                 let Some(bounds) = bounds else { continue };
-                let (header, intersected) = available_headers.iter().copied()
-                    .filter_map(|header| header.intersect_columns(bounds).map(|range| (header, range)))
+                let (header, intersected) = available_headers
+                    .iter()
+                    .copied()
+                    .filter_map(|header| {
+                        header
+                            .intersect_columns(bounds)
+                            .map(|range| (header, range))
+                    })
                     .reduce(|best, candidate| {
                         let best_width = best.1.end_column - best.1.start_column;
                         let candidate_width = candidate.1.end_column - candidate.1.start_column;
-                        if candidate_width > best_width { candidate } else { best }
+                        if candidate_width > best_width {
+                            candidate
+                        } else {
+                            best
+                        }
                     })
-                    .with_context(|| format!("工作表 {:?} 的汇总区域 {id:?} 没有相交的表头区域", template_sheet.name))?;
+                    .with_context(|| {
+                        format!(
+                            "工作表 {:?} 的汇总区域 {id:?} 没有相交的表头区域",
+                            template_sheet.name
+                        )
+                    })?;
                 let selected_header = NamedRegionBounds {
                     start_column: intersected.start_column,
                     end_column: intersected.end_column,
                     ..header
                 };
                 let labels = named_summary_header_labels(template_sheet, selected_header)?;
-                let headers_by_column = labels.into_iter().enumerate()
+                let headers_by_column = labels
+                    .into_iter()
+                    .enumerate()
                     .map(|(offset, label)| (selected_header.start_column + offset, label))
                     .collect::<BTreeMap<_, _>>();
                 let kind = match mode {
                     NamedSummaryMode::AnyRows => NamedRegionKind::AnyRows,
                     NamedSummaryMode::FixedRows => NamedRegionKind::FixedRows,
                 };
-                let order = region_orders[&(kind, template_sheet.name.to_lowercase(), bounds.start_row,
-                    bounds.start_column, bounds.end_row, bounds.end_column)];
-                parsed_groups.push((mode, NamedRegionGroup {
-                    id: id.clone(),
-                    order,
-                    header,
-                    headers_by_column,
-                    fixed_rows: (mode == NamedSummaryMode::FixedRows).then_some(intersected),
-                    any_rows: (mode == NamedSummaryMode::AnyRows).then_some(intersected),
-                }));
+                let order = region_orders[&(
+                    kind,
+                    template_sheet.name.to_lowercase(),
+                    bounds.start_row,
+                    bounds.start_column,
+                    bounds.end_row,
+                    bounds.end_column,
+                )];
+                parsed_groups.push((
+                    mode,
+                    NamedRegionGroup {
+                        id: id.clone(),
+                        order,
+                        header,
+                        headers_by_column,
+                        fixed_rows: (mode == NamedSummaryMode::FixedRows).then_some(intersected),
+                        any_rows: (mode == NamedSummaryMode::AnyRows).then_some(intersected),
+                    },
+                ));
             }
         }
         parsed_groups.sort_by_key(|(_, group)| group.order);
@@ -3855,19 +4505,27 @@ fn build_named_sheet_specs(
             );
         }
         for mode in [NamedSummaryMode::AnyRows, NamedSummaryMode::FixedRows] {
-            let groups = parsed_groups.iter()
+            let groups = parsed_groups
+                .iter()
                 .filter(|(group_mode, _)| *group_mode == mode)
                 .map(|(_, group)| group.clone())
                 .collect::<Vec<_>>();
-            if groups.is_empty() { continue; }
+            if groups.is_empty() {
+                continue;
+            }
             let mut output_headers = Vec::new();
             let mut field_positions = BTreeMap::new();
             for (group_index, group) in groups.iter().enumerate() {
-                let bounds = group.any_rows.or(group.fixed_rows).expect("summary group has data bounds");
+                let bounds = group
+                    .any_rows
+                    .or(group.fixed_rows)
+                    .expect("summary group has data bounds");
                 let width = bounds.end_column - bounds.start_column + 1;
                 if group_index == 0 {
-                    output_headers.extend((bounds.start_column..=bounds.end_column)
-                        .map(|column| group.headers_by_column[&column].clone()));
+                    output_headers.extend(
+                        (bounds.start_column..=bounds.end_column)
+                            .map(|column| group.headers_by_column[&column].clone()),
+                    );
                 } else {
                     anyhow::ensure!(
                         width == output_headers.len(),
@@ -3962,11 +4620,18 @@ fn validate_named_summary_output(
         output_names.iter().rev().cloned().collect::<Vec<_>>()
     };
     anyhow::ensure!(
-        saved.sheets.iter().map(|sheet| &sheet.name).eq(expected_names.iter()),
+        saved
+            .sheets
+            .iter()
+            .map(|sheet| &sheet.name)
+            .eq(expected_names.iter()),
         "汇总候选工作簿的工作表名称或顺序不一致"
     );
     for (spec, name) in specs.iter().zip(output_names) {
-        let sheet = saved.sheets.iter().find(|sheet| sheet.name == *name)
+        let sheet = saved
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == *name)
             .with_context(|| format!("汇总候选缺少工作表 {name:?}"))?;
         let mut headers = vec!["来源文件".to_owned(), "来源工作表".to_owned()];
         headers.extend(spec.extra_fields.iter().map(|field| field.name.clone()));
@@ -3974,12 +4639,18 @@ fn validate_named_summary_output(
         for (column, header) in headers.iter().enumerate() {
             let address = format!("{}1", column_letters(column + 1));
             anyhow::ensure!(
-                named_summary_value_matches(&serde_json::Value::String(header.clone()), sheet.values.get(&address)),
+                named_summary_value_matches(
+                    &serde_json::Value::String(header.clone()),
+                    sheet.values.get(&address)
+                ),
                 "汇总候选表头 {name:?}!{address} 回读不一致"
             );
         }
         for (row_index, row) in spec.rows.iter().enumerate() {
-            anyhow::ensure!(row.values.len() == headers.len(), "汇总候选工作表 {name:?} 的行宽不一致");
+            anyhow::ensure!(
+                row.values.len() == headers.len(),
+                "汇总候选工作表 {name:?} 的行宽不一致"
+            );
             for (column, value) in row.values.iter().enumerate() {
                 let address = format!("{}{}", column_letters(column + 1), row_index + 2);
                 anyhow::ensure!(
@@ -3992,33 +4663,54 @@ fn validate_named_summary_output(
     Ok(())
 }
 
-fn named_summary_value_matches(expected: &serde_json::Value, actual: Option<&serde_json::Value>) -> bool {
+fn named_summary_value_matches(
+    expected: &serde_json::Value,
+    actual: Option<&serde_json::Value>,
+) -> bool {
     let actual_value = actual.and_then(|value| value.get("value"));
-    let actual_type = actual.and_then(|value| value.get("type")).and_then(serde_json::Value::as_str);
+    let actual_type = actual
+        .and_then(|value| value.get("type"))
+        .and_then(serde_json::Value::as_str);
     let kind = expected.get("type").and_then(serde_json::Value::as_str);
     let value = expected.get("value").unwrap_or(expected);
     if expected.is_null() || value.is_null() || value.as_str().is_some_and(str::is_empty) {
-        return actual.is_none() || actual_value.is_none_or(|value| value.is_null() || value.as_str().is_some_and(str::is_empty));
+        return actual.is_none()
+            || actual_value
+                .is_none_or(|value| value.is_null() || value.as_str().is_some_and(str::is_empty));
     }
     match kind {
         Some("string" | "error") => actual_type == kind && actual_value == Some(value),
         Some("boolean") => actual_type == Some("boolean") && actual_value == Some(value),
         Some("number" | "integer" | "datetime_serial") => {
             matches!(actual_type, Some("number" | "integer" | "datetime_serial"))
-                && value.as_f64().zip(actual_value.and_then(serde_json::Value::as_f64))
+                && value
+                    .as_f64()
+                    .zip(actual_value.and_then(serde_json::Value::as_f64))
                     .is_some_and(|(expected, actual)| expected == actual)
         }
         Some("datetime_iso" | "duration_iso") => {
             let text = value.as_str().unwrap_or_default();
-            let serial = if kind == Some("datetime_iso") { iso_datetime_serial(text) } else { iso_duration_serial(text) };
+            let serial = if kind == Some("datetime_iso") {
+                iso_datetime_serial(text)
+            } else {
+                iso_duration_serial(text)
+            };
             match serial {
-                Some(expected) => actual_value.and_then(serde_json::Value::as_f64).is_some_and(|actual| actual == expected),
+                Some(expected) => actual_value
+                    .and_then(serde_json::Value::as_f64)
+                    .is_some_and(|actual| actual == expected),
                 None => actual_type == Some("string") && actual_value == Some(value),
             }
         }
-        None if expected.is_string() => actual_type == Some("string") && actual_value == Some(expected),
-        None if expected.is_boolean() => actual_type == Some("boolean") && actual_value == Some(expected),
-        None if expected.is_number() => expected.as_f64().zip(actual_value.and_then(serde_json::Value::as_f64))
+        None if expected.is_string() => {
+            actual_type == Some("string") && actual_value == Some(expected)
+        }
+        None if expected.is_boolean() => {
+            actual_type == Some("boolean") && actual_value == Some(expected)
+        }
+        None if expected.is_number() => expected
+            .as_f64()
+            .zip(actual_value.and_then(serde_json::Value::as_f64))
             .is_some_and(|(expected, actual)| expected == actual),
         _ => false,
     }
@@ -4056,10 +4748,7 @@ fn named_summary_structure_check(
 }
 
 /// Top-left cell of the merged region containing `address`, if any.
-fn merged_region_anchor(
-    merges: &[(usize, usize, usize, usize)],
-    address: &str,
-) -> Option<String> {
+fn merged_region_anchor(merges: &[(usize, usize, usize, usize)], address: &str) -> Option<String> {
     let (row, column) = parse_a1(address)?;
     merges.iter().find_map(|(top, left, bottom, right)| {
         (row >= *top && row <= *bottom && column >= *left && column <= *right)
@@ -4081,7 +4770,9 @@ fn named_summary_structure_preflight(
         .chain(source.values.keys())
         .chain(source.formulas.keys())
     {
-        let Some((row, column)) = parse_a1(address) else { continue };
+        let Some((row, column)) = parse_a1(address) else {
+            continue;
+        };
         if row >= bounds.start_row
             && row <= bounds.end_row
             && column >= bounds.start_column
@@ -4186,7 +4877,11 @@ fn named_summary_structure_preflight(
     Ok(Some(format!(
         "表结构区域 {}!{}:{} 不匹配，共 {total_differences} 处差异：{}{}",
         source.name,
-        format!("{}{}", column_letters(bounds.start_column), bounds.start_row),
+        format!(
+            "{}{}",
+            column_letters(bounds.start_column),
+            bounds.start_row
+        ),
         format!("{}{}", column_letters(bounds.end_column), bounds.end_row),
         examples.join("、"),
         if remaining > 0 {
@@ -4198,10 +4893,23 @@ fn named_summary_structure_preflight(
 }
 
 fn named_summary_output_sheet_name(base: &str, used: &mut BTreeSet<String>) -> String {
-    let mut candidate = base.chars()
-        .map(|character| if "[]:*?/\\".contains(character) { '_' } else { character })
-        .collect::<String>().trim().chars().take(31).collect::<String>();
-    if candidate.is_empty() { candidate = "汇总".to_owned(); }
+    let mut candidate = base
+        .chars()
+        .map(|character| {
+            if "[]:*?/\\".contains(character) {
+                '_'
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .chars()
+        .take(31)
+        .collect::<String>();
+    if candidate.is_empty() {
+        candidate = "汇总".to_owned();
+    }
     let root = candidate.clone();
     let mut suffix = 2usize;
     while !used.insert(candidate.to_lowercase()) {
@@ -4224,8 +4932,16 @@ fn merge_named_fallback_outputs(sheet_specs: &mut Vec<NamedSheetSpec>) -> Result
         if let Some(merged) = fallback.as_mut() {
             anyhow::ensure!(
                 merged.output_headers == spec.output_headers
-                    && merged.extra_fields.iter().map(|field| &field.name).collect::<Vec<_>>()
-                        == spec.extra_fields.iter().map(|field| &field.name).collect::<Vec<_>>(),
+                    && merged
+                        .extra_fields
+                        .iter()
+                        .map(|field| &field.name)
+                        .collect::<Vec<_>>()
+                        == spec
+                            .extra_fields
+                            .iter()
+                            .map(|field| &field.name)
+                            .collect::<Vec<_>>(),
                 "兜底模板的汇总列不一致，无法合并到同一工作表"
             );
             merged.rows.append(&mut spec.rows);
@@ -4257,13 +4973,25 @@ fn read_named_summary_fields(
         } else {
             &field.sheet
         };
-        let address = format!("{}{}", column_letters(field.bounds.start_column), field.bounds.start_row);
-        let Some(sheet) = workbook.sheets.iter().find(|sheet| sheet.name.eq_ignore_ascii_case(sheet_name)) else {
+        let address = format!(
+            "{}{}",
+            column_letters(field.bounds.start_column),
+            field.bounds.start_row
+        );
+        let Some(sheet) = workbook
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name.eq_ignore_ascii_case(sheet_name))
+        else {
             values.push(serde_json::Value::Null);
             missing.push(format!("{}（{}!{}）", field.name, sheet_name, address));
             continue;
         };
-        let value = sheet.values.get(&address).cloned().unwrap_or(serde_json::Value::Null);
+        let value = sheet
+            .values
+            .get(&address)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         if sheet.formulas.contains_key(&address) {
             anyhow::ensure!(
                 !value.is_null(),
@@ -4293,11 +5021,21 @@ fn ensure_named_summary_formula_cache(
     bounds: NamedRegionBounds,
     scope: &str,
 ) -> Result<()> {
-    anyhow::ensure!(sheet.formula_status == "read_by_calamine", "无法确认{scope}的公式：{}", sheet.name);
+    anyhow::ensure!(
+        sheet.formula_status == "read_by_calamine",
+        "无法确认{scope}的公式：{}",
+        sheet.name
+    );
     for address in sheet.formulas.keys() {
-        let (row, column) = parse_a1(address).with_context(|| format!("公式坐标无效：{address}"))?;
-        if row < bounds.start_row || row > bounds.end_row
-            || column < bounds.start_column || column > bounds.end_column { continue; }
+        let (row, column) =
+            parse_a1(address).with_context(|| format!("公式坐标无效：{address}"))?;
+        if row < bounds.start_row
+            || row > bounds.end_row
+            || column < bounds.start_column
+            || column > bounds.end_column
+        {
+            continue;
+        }
         let value = sheet.values.get(address);
         anyhow::ensure!(
             value.is_some_and(|value| !value.is_null()),
@@ -4309,8 +5047,15 @@ fn ensure_named_summary_formula_cache(
     Ok(())
 }
 
-fn named_summary_header_labels(sheet: &SheetDump, bounds: NamedRegionBounds) -> Result<Vec<String>> {
-    anyhow::ensure!(sheet.merge_status == "read_by_calamine", "无法确认模板工作表 {:?} 的合并单元格", sheet.name);
+fn named_summary_header_labels(
+    sheet: &SheetDump,
+    bounds: NamedRegionBounds,
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        sheet.merge_status == "read_by_calamine",
+        "无法确认模板工作表 {:?} 的合并单元格",
+        sheet.name
+    );
     ensure_named_summary_formula_cache(sheet, bounds, "模板表头")?;
     let mut labels = Vec::new();
     for column in bounds.start_column..=bounds.end_column {
@@ -4319,16 +5064,24 @@ fn named_summary_header_labels(sheet: &SheetDump, bounds: NamedRegionBounds) -> 
             let address = format!("{}{}", column_letters(column), row);
             let value = cell_at_or_merged(sheet, &address);
             let text = match value.get("type").and_then(serde_json::Value::as_str) {
-                Some("number" | "integer" | "datetime_serial") => value["value"].as_f64()
+                Some("number" | "integer" | "datetime_serial") => value["value"]
+                    .as_f64()
                     .map(|number| {
                         let mut text = number.to_string();
-                        if !text.contains('.') && !text.contains('e') && !text.contains('E') { text.push_str(".0"); }
+                        if !text.contains('.') && !text.contains('e') && !text.contains('E') {
+                            text.push_str(".0");
+                        }
                         text
-                    }).unwrap_or_default(),
-                Some("error" | "datetime_iso" | "duration_iso") => anyhow::bail!("模板表头 {}!{} 含不支持的值类型", sheet.name, address),
+                    })
+                    .unwrap_or_default(),
+                Some("error" | "datetime_iso" | "duration_iso") => {
+                    anyhow::bail!("模板表头 {}!{} 含不支持的值类型", sheet.name, address)
+                }
                 _ => probe_text(&value),
             };
-            if !text.is_empty() { parts.push(text); }
+            if !text.is_empty() {
+                parts.push(text);
+            }
         }
         labels.push(parts.join("_"));
     }
@@ -4341,7 +5094,10 @@ fn extract_named_sheet_rows(
     workbook_name: &str,
     extra_values: &[serde_json::Value],
 ) -> Result<Vec<NamedSummaryRow>> {
-    anyhow::ensure!(extra_values.len() == spec.extra_fields.len(), "附加字段值与表头数量不一致");
+    anyhow::ensure!(
+        extra_values.len() == spec.extra_fields.len(),
+        "附加字段值与表头数量不一致"
+    );
     let mut result = Vec::new();
     for group in &spec.groups {
         for (bounds, dynamic) in [(group.fixed_rows, false), (group.any_rows, true)] {
@@ -4357,19 +5113,27 @@ fn extract_named_sheet_rows(
             if end_row < bounds.start_row {
                 continue;
             }
-            ensure_named_summary_formula_cache(source_sheet, NamedRegionBounds {
-                end_row,
-                ..bounds
-            }, "汇总区域")?;
+            ensure_named_summary_formula_cache(
+                source_sheet,
+                NamedRegionBounds { end_row, ..bounds },
+                "汇总区域",
+            )?;
             for row in bounds.start_row..=end_row {
-                let mut values = vec![serde_json::Value::Null; spec.output_headers.len() + extra_values.len() + 2];
+                let mut values = vec![
+                    serde_json::Value::Null;
+                    spec.output_headers.len() + extra_values.len() + 2
+                ];
                 values[0] = serde_json::Value::String(workbook_name.to_owned());
                 values[1] = serde_json::Value::String(source_sheet.name.clone());
                 values[2..2 + extra_values.len()].clone_from_slice(extra_values);
                 let mut has_data = false;
                 for column in bounds.start_column..=bounds.end_column {
                     let address = format!("{}{}", column_letters(column), row);
-                    let value = source_sheet.values.get(&address).cloned().unwrap_or(serde_json::Value::Null);
+                    let value = source_sheet
+                        .values
+                        .get(&address)
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
                     has_data |= named_region_cell_has_data(&value);
                     let position = spec.field_positions[&(group.id.clone(), column)];
                     values[position + 2 + extra_values.len()] = value;
@@ -4377,7 +5141,10 @@ fn extract_named_sheet_rows(
                 if !has_data {
                     continue;
                 }
-                result.push(NamedSummaryRow { group_order: group.order, values });
+                result.push(NamedSummaryRow {
+                    group_order: group.order,
+                    values,
+                });
             }
         }
     }
@@ -4398,7 +5165,9 @@ fn last_named_region_value_row(sheet: &SheetDump, bounds: NamedRegionBounds) -> 
         })
         .chain(sheet.formulas.keys().filter_map(|address| {
             let (row, column) = parse_a1(address)?;
-            (column >= bounds.start_column && column <= bounds.end_column && row >= bounds.start_row)
+            (column >= bounds.start_column
+                && column <= bounds.end_column
+                && row >= bounds.start_row)
                 .then_some(row)
         }))
         .max()
@@ -6034,7 +6803,10 @@ mod merged_cell_tests {
         let sheet = |a6: Option<&str>| SheetDump {
             name: "存量单位贷款信息".to_owned(),
             values: [
-                ("A5".to_owned(), serde_json::json!({"type":"string","value":"借款人证件类型"})),
+                (
+                    "A5".to_owned(),
+                    serde_json::json!({"type":"string","value":"借款人证件类型"}),
+                ),
                 (
                     "A6".to_owned(),
                     match a6 {
@@ -6163,10 +6935,7 @@ mod named_range_spec_tests {
             summary,
             "跳过 2 个源文件/工作表项：「报告.xls」/「Sheet1」、「另一个.xlsx」"
         );
-        assert_eq!(
-            named_range_skip_summary(&[]),
-            "跳过 0 个源文件/工作表项"
-        );
+        assert_eq!(named_range_skip_summary(&[]), "跳过 0 个源文件/工作表项");
     }
 
     #[test]
@@ -6258,8 +7027,9 @@ mod named_range_spec_tests {
         assert_eq!(validation_failed.numbers, ["007", "008", "009"]);
 
         // “错|校验失败”连写（无分隔）也已由 starts_with 覆盖为“校验失败”优先。
-        assert!(parse_named_validation_result("source.xlsx", "1人民币", "K13", "通过|无差异")
-            .is_none());
+        assert!(
+            parse_named_validation_result("source.xlsx", "1人民币", "K13", "通过|无差异").is_none()
+        );
     }
 
     #[test]

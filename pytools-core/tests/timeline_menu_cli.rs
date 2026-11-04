@@ -126,7 +126,9 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
         .iter()
         .filter_map(|(address, cell)| {
             let row: u32 = address[1..].parse().ok()?;
-            cell.get("value").and_then(Value::as_str).map(|value| (row, value.to_owned()))
+            cell.get("value")
+                .and_then(Value::as_str)
+                .map(|value| (row, value.to_owned()))
         })
         .collect::<Vec<_>>();
     assert!(wide_rows.iter().any(|(_, value)| value == "宽表甲"));
@@ -157,7 +159,11 @@ fn interactive_v2_data_menu_routes_compare_wide_summary_and_precheck() -> Result
     {
         event_text.push_str(&fs::read_to_string(&path)?);
     }
-    let first_position = |needle: &str| event_text.find(needle).with_context(|| format!("{needle} missing from events"));
+    let first_position = |needle: &str| {
+        event_text
+            .find(needle)
+            .with_context(|| format!("{needle} missing from events"))
+    };
     let earlier_event = first_position("earliest")?;
     let nested_event = first_position("nested")?;
     let top_level_event = first_position("sample wide source.xlsx")?;
@@ -1301,7 +1307,11 @@ fn interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup()
     let source_before = fs::read(&source)?;
 
     // 报告断言依赖 JSON 输出，显式使用 developer 视图。
-    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    let completed = run_menu_with_view(
+        &config,
+        "developer",
+        &format!("1\n1\n1\n{}\n0\n", source.display()),
+    )?;
     assert!(
         completed.status.success(),
         "intermediate wide summary failed: {}",
@@ -1358,17 +1368,14 @@ fn interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup()
     let history = read_single_run_history(&root.path().join("app").join("logs"), "1-1")?;
     assert_eq!(history["feature_id"], "1-1");
     assert_eq!(history["target_write_status"], "succeeded");
-    assert!(history["events"].as_array().is_some_and(|events| {
-        events
-            .iter()
-            .any(|event| event["phase"] == "target_write")
-    }));
+    assert!(history["events"]
+        .as_array()
+        .is_some_and(|events| { events.iter().any(|event| event["phase"] == "target_write") }));
     Ok(())
 }
 
 #[test]
-fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<()>
-{
+fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<()> {
     // 2026-10-28 起目标写入改为直接写：已存在的中间工作簿按“清空同名工作表后
     // 重写”处理，不再要求 ExcelModifier 能力。
     let root = TestDirectory::new()?;
@@ -1381,12 +1388,15 @@ fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<
 
     let first = run_menu(
         &config,
-        &format!("1
+        &format!(
+            "1
 1
 1
 {}
 0
-", first_source.display()),
+",
+            first_source.display()
+        ),
     )?;
     assert!(
         first.status.success(),
@@ -1395,12 +1405,19 @@ fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<
     assert!(target.is_file());
     let target_before = fs::read(&target)?;
 
-    let second = run_menu_with_view(&config, "developer", &format!("1
+    let second = run_menu_with_view(
+        &config,
+        "developer",
+        &format!(
+            "1
 1
 1
 {}
 0
-", next_source.display()))?;
+",
+            next_source.display()
+        ),
+    )?;
     assert!(
         second.status.success(),
         "direct target rewrite failed: {}",
@@ -1411,7 +1428,11 @@ fn interactive_wide_summary_rewrites_existing_intermediate_directly() -> Result<
     assert_eq!(report["target_writes"][0]["status"], "succeeded");
     // 表头一致 → 追加（不清空既有数据）。
     assert_eq!(report["target_writes"][0]["mode"], "表头一致追加");
-    assert_ne!(fs::read(&target)?, target_before, "target must be appended to");
+    assert_ne!(
+        fs::read(&target)?,
+        target_before,
+        "target must be appended to"
+    );
     Ok(())
 }
 
@@ -1447,7 +1468,9 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
     assert_eq!(first_write["target_duplicate_rows"], 0);
     assert_eq!(
         first_write["written_rows"].as_u64(),
-        first_write["written_data_rows"].as_u64().map(|rows| rows + 1),
+        first_write["written_data_rows"]
+            .as_u64()
+            .map(|rows| rows + 1),
         "new target's legacy written_rows includes the header"
     );
     let first_rows = read_workbook(&target)?
@@ -1457,7 +1480,14 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
             sheet
                 .values
                 .keys()
-                .filter_map(|address| address.chars().skip_while(|c| c.is_ascii_alphabetic()).collect::<String>().parse::<usize>().ok())
+                .filter_map(|address| {
+                    address
+                        .chars()
+                        .skip_while(|c| c.is_ascii_alphabetic())
+                        .collect::<String>()
+                        .parse::<usize>()
+                        .ok()
+                })
                 .max()
                 .unwrap_or(0)
         })
@@ -1498,7 +1528,14 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
             sheet
                 .values
                 .keys()
-                .filter_map(|address| address.chars().skip_while(|c| c.is_ascii_alphabetic()).collect::<String>().parse::<usize>().ok())
+                .filter_map(|address| {
+                    address
+                        .chars()
+                        .skip_while(|c| c.is_ascii_alphabetic())
+                        .collect::<String>()
+                        .parse::<usize>()
+                        .ok()
+                })
                 .max()
                 .unwrap_or(0)
         })
@@ -1519,12 +1556,18 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
 
     // 目标去重：同一份源重跑不得重复追加；目标文件保持不变。
     let target_before = fs::read(&target)?;
-    let rerun = run_menu(&config, &format!("1
+    let rerun = run_menu(
+        &config,
+        &format!(
+            "1
 1
 1
 {}
 0
-", first_source.display()))?;
+",
+            first_source.display()
+        ),
+    )?;
     assert!(rerun.status.success());
     let rerun_report = latest_menu_json_report(&rerun)?;
     assert_eq!(rerun_report["target_writes"][0]["status"], "skipped");
@@ -1534,7 +1577,9 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
         rerun_report["target_writes"][0]
     );
     let rerun_write = &rerun_report["target_writes"][0];
-    let input_rows = rerun_write["input_rows"].as_u64().context("input row count missing")?;
+    let input_rows = rerun_write["input_rows"]
+        .as_u64()
+        .context("input row count missing")?;
     let batch_duplicates = rerun_write["batch_dedup_rows"]
         .as_u64()
         .context("batch duplicate count missing")?;
@@ -1543,7 +1588,10 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
         .context("target duplicate count missing")?;
     assert!(target_duplicates > 0);
     assert_eq!(target_duplicates + batch_duplicates, input_rows);
-    assert_eq!(rerun_write["target_duplicate_rows"], rerun_write["existing_filtered_rows"]);
+    assert_eq!(
+        rerun_write["target_duplicate_rows"],
+        rerun_write["existing_filtered_rows"]
+    );
     assert_eq!(rerun_write["written_data_rows"], 0);
     let stderr = String::from_utf8_lossy(&rerun.stderr);
     assert!(
@@ -1580,12 +1628,15 @@ fn wide_summary_fills_preexisting_blank_target_sheet() -> Result<()> {
     let output = run_menu_with_view(
         &config,
         "developer",
-        &format!("1
+        &format!(
+            "1
 1
 1
 {}
 0
-", source.display()),
+",
+            source.display()
+        ),
     )?;
     assert!(
         output.status.success(),
@@ -1656,7 +1707,11 @@ fn wide_summary_refuses_header_mismatch_without_clearing_target() -> Result<()> 
     }
     let target_before = fs::read(&target)?;
 
-    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    let completed = run_menu_with_view(
+        &config,
+        "developer",
+        &format!("1\n1\n1\n{}\n0\n", source.display()),
+    )?;
     assert!(completed.status.success(), "menu must stay usable");
     let report = latest_menu_json_report(&completed)?;
     assert_eq!(report["target_write_status"], "failed");
@@ -1686,7 +1741,11 @@ fn interactive_wide_summary_intermediate_preserves_negative_date_serial() -> Res
     create_wide_source_with_negative_date(&source, "负序列分行")?;
     let source_before = fs::read(&source)?;
 
-    let completed = run_menu_with_view(&config, "developer", &format!("1\n1\n1\n{}\n0\n", source.display()))?;
+    let completed = run_menu_with_view(
+        &config,
+        "developer",
+        &format!("1\n1\n1\n{}\n0\n", source.display()),
+    )?;
     assert!(
         completed.status.success(),
         "wide-summary intermediate failed: {}",
@@ -1744,7 +1803,11 @@ fn wide_summary_matches_filenames_before_reading_and_reports_counts() -> Result<
     let output = run_menu_with_view(
         &config,
         "user",
-        &format!("1\n1\n1\n{};{}\n0\n", matched.display(), unmatched.display()),
+        &format!(
+            "1\n1\n1\n{};{}\n0\n",
+            matched.display(),
+            unmatched.display()
+        ),
     )?;
     assert!(output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1763,12 +1826,32 @@ fn wide_summary_matches_filenames_before_reading_and_reports_counts() -> Result<
     assert_eq!(history["input_stats"]["succeeded"], 1);
     assert_eq!(history["input_stats"]["skipped"], 1);
     assert_eq!(history["overall_status"], "SUCCESS");
-    assert!(history["diagnostic_log_path"].as_str().unwrap_or_default().replace('\\', "/").starts_with("run-events/"));
-    assert!(!history["diagnostic_log_path"].as_str().unwrap_or_default().contains(root.path().to_string_lossy().as_ref()));
-    let diagnostics = fs::read_to_string(root.path().join("app/logs").join(history["diagnostic_log_path"].as_str().context("diagnostic path missing")?))?;
-    let diagnostics = diagnostics.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
-    assert!(diagnostics.iter().all(|event| event["run_id"] == history["run_id"]));
-    assert!(diagnostics.iter().any(|event| event["file_name"] == "unrelated.xlsx" && event["status"] == "skipped"));
+    assert!(history["diagnostic_log_path"]
+        .as_str()
+        .unwrap_or_default()
+        .replace('\\', "/")
+        .starts_with("run-events/"));
+    assert!(!history["diagnostic_log_path"]
+        .as_str()
+        .unwrap_or_default()
+        .contains(root.path().to_string_lossy().as_ref()));
+    let diagnostics = fs::read_to_string(
+        root.path().join("app/logs").join(
+            history["diagnostic_log_path"]
+                .as_str()
+                .context("diagnostic path missing")?,
+        ),
+    )?;
+    let diagnostics = diagnostics
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(diagnostics
+        .iter()
+        .all(|event| event["run_id"] == history["run_id"]));
+    assert!(diagnostics
+        .iter()
+        .any(|event| event["file_name"] == "unrelated.xlsx" && event["status"] == "skipped"));
     Ok(())
 }
 
@@ -1973,9 +2056,11 @@ fn wide_summary_continue_policy_explains_read_failure_without_leaking_input() ->
                 .and_then(|entry| fs::read_to_string(entry.path()).ok())
         })
         .unwrap_or_default();
-    assert!(user_output.contains("请确认文件存在、可读取且为受支持的工作簿格式")
-        || history_text.contains("请确认文件存在、可读取且为受支持的工作簿格式")
-        || diagnostic_text.contains("请确认文件存在、可读取且为受支持的工作簿格式"));
+    assert!(
+        user_output.contains("请确认文件存在、可读取且为受支持的工作簿格式")
+            || history_text.contains("请确认文件存在、可读取且为受支持的工作簿格式")
+            || diagnostic_text.contains("请确认文件存在、可读取且为受支持的工作簿格式")
+    );
     assert!(!history_text.contains("not an xlsx workbook"));
     Ok(())
 }
@@ -2319,7 +2404,11 @@ fn latest_menu_json_report(output: &Output) -> Result<Value> {
             .join("pytools-run-records")
             .join(record_path)
     };
-    let bytes = fs::read(&record_path).unwrap_or_else(|_| fs::read(&path).with_context(|| format!("read run record {path}")).expect("read run record"));
+    let bytes = fs::read(&record_path).unwrap_or_else(|_| {
+        fs::read(&path)
+            .with_context(|| format!("read run record {path}"))
+            .expect("read run record")
+    });
     serde_json::from_slice(&bytes).with_context(|| format!("decode run record {path}"))
 }
 

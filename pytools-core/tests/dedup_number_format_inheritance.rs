@@ -77,7 +77,7 @@ fn configured_delete_preserves_numeric_zero_padding_format() -> Result<()> {
     assert_eq!(read_format(&input, "A4")?.as_deref(), Some("000000"));
 
     let task = DedupTask {
-            config_sheet_name: "去重追加数据配置".to_owned(),
+        config_sheet_name: "去重追加数据配置".to_owned(),
         row_no: 2,
         enabled: true,
         task_name: "synthetic".into(),

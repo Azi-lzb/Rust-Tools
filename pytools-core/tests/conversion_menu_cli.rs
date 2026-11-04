@@ -426,12 +426,16 @@ fn conversion_menu_batch_uses_pywin32_and_preserves_sources() -> Result<()> {
     let report = output_json(&output)?;
     assert_eq!(report["converted"], 2, "{report}");
     assert_eq!(report["failed"], 0, "{report}");
-    let items = report["items"].as_array().context("conversion items missing")?;
+    let items = report["items"]
+        .as_array()
+        .context("conversion items missing")?;
     assert_eq!(items.len(), 2);
     for (index, item) in items.iter().enumerate() {
         assert_eq!(item["status"], "converted");
         let detail: Value = serde_json::from_str(
-            item["detail"].as_str().context("conversion detail missing")?,
+            item["detail"]
+                .as_str()
+                .context("conversion detail missing")?,
         )?;
         assert_eq!(detail["com_bridge"], "pywin32");
         assert_eq!(detail["com_application"], "Excel.Application");
@@ -569,17 +573,32 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
         "user view must not expose the absolute source path: {user_stderr}"
     );
     let user_report = output_json(&user)?;
-    let unified_path = PathBuf::from(user_report["run_summary_path"].as_str().context("unified summary path missing")?);
+    let unified_path = PathBuf::from(
+        user_report["run_summary_path"]
+            .as_str()
+            .context("unified summary path missing")?,
+    );
     let unified: Value = serde_json::from_slice(&fs::read(unified_path)?)?;
     assert_eq!(unified["run_id"], user_report["run_id"]);
     assert_eq!(unified["overall_status"], "SUCCESS");
     assert_eq!(unified["input_stats"]["selected"], 1);
     assert_eq!(unified["input_stats"]["succeeded"], 1);
-    let events_path = log_dir.join(unified["diagnostic_log_path"].as_str().context("diagnostic path missing")?);
+    let events_path = log_dir.join(
+        unified["diagnostic_log_path"]
+            .as_str()
+            .context("diagnostic path missing")?,
+    );
     let structured = fs::read_to_string(events_path)?;
-    let lines = structured.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
-    assert!(lines.iter().all(|event| event["run_id"] == unified["run_id"]));
-    assert!(lines.iter().any(|event| event["file_name"] == "user-private-report.csv"));
+    let lines = structured
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(lines
+        .iter()
+        .all(|event| event["run_id"] == unified["run_id"]));
+    assert!(lines
+        .iter()
+        .any(|event| event["file_name"] == "user-private-report.csv"));
 
     let native_source = sources.join("native-private.csv");
     fs::write(&native_source, "Region,Value\nNorth,17\n")?;
@@ -651,13 +670,8 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     let failed_source = sources.join("private-needs-engine.xls");
     fs::write(&failed_source, b"synthetic legacy workbook")?;
     let before = fs::read(&failed_source)?;
-    let failed = run_action_with_engines_disabled_and_log_view(
-        &config,
-        2,
-        1,
-        &failed_source,
-        "developer",
-    )?;
+    let failed =
+        run_action_with_engines_disabled_and_log_view(&config, 2, 1, &failed_source, "developer")?;
     assert!(
         failed.status.success(),
         "interactive conversion failure should not close the menu: {}",
@@ -897,9 +911,18 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     assert_eq!(fs::read(&user_target)?, user_source_bytes);
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(user_stdout.contains("按工作簿内容添加文件名前缀结束：成功 1 个，跳过 0 个，失败 0 个"), "{user_stdout}");
-    assert!(!user_stdout.contains("\"ok\""), "user view must not print JSON: {user_stdout}");
-    assert!(!user_stdout.contains("run_history_path"), "user view must not reference a run history path: {user_stdout}");
+    assert!(
+        user_stdout.contains("按工作簿内容添加文件名前缀结束：成功 1 个，跳过 0 个，失败 0 个"),
+        "{user_stdout}"
+    );
+    assert!(
+        !user_stdout.contains("\"ok\""),
+        "user view must not print JSON: {user_stdout}"
+    );
+    assert!(
+        !user_stdout.contains("run_history_path"),
+        "user view must not reference a run history path: {user_stdout}"
+    );
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取内容前缀配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
@@ -1014,7 +1037,10 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
     assert!(user_stderr.contains("阶段用时"));
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("Bank-user-report"));
-    let user_history_name = user_stderr.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("unified rename summary missing")?;
+    let user_history_name = user_stderr
+        .lines()
+        .find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim()))
+        .context("unified rename summary missing")?;
     // user 视图仅显示可移植文件名；读取时需按配置的日志目录解析。
     let user_history_path = PathBuf::from(user_history_name);
     let user_history_path = if user_history_path.is_absolute() {
@@ -1082,7 +1108,10 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
         .join("2026-10-24 B01 Example Bank Monthly.txt")
         .is_file());
     assert!(stderr(&off).is_empty());
-    assert_eq!(find_files_with_extension(&log_dir, "json")?.len(), json_count_before_off);
+    assert_eq!(
+        find_files_with_extension(&log_dir, "json")?.len(),
+        json_count_before_off
+    );
 
     Ok(())
 }
@@ -1538,7 +1567,13 @@ try {{\n\
     let script_path = path.with_extension("make-xls.ps1");
     fs::write(&script_path, script)?;
     let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
         .arg(&script_path)
         .output()?;
     let _ = fs::remove_file(&script_path);

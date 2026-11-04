@@ -72,7 +72,10 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
         config_check_stdout.contains("标记重复行 1 行"),
         "{config_check_stdout}"
     );
-    assert!(config_check_stdout.contains("已就地标记"), "{config_check_stdout}");
+    assert!(
+        config_check_stdout.contains("已就地标记"),
+        "{config_check_stdout}"
+    );
     assert!(
         !config_check_stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -88,8 +91,14 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
             "duplicate row cell {address} should have red fill in the source"
         );
     }
-    assert_eq!(cell_number_format(&source, "B2")?.as_deref(), Some("000000"));
-    assert_eq!(cell_number_format(&source, "B3")?.as_deref(), Some("000000"));
+    assert_eq!(
+        cell_number_format(&source, "B2")?.as_deref(),
+        Some("000000")
+    );
+    assert_eq!(
+        cell_number_format(&source, "B3")?.as_deref(),
+        Some("000000")
+    );
     assert!(cell_fill(&source, "A2")?.is_none());
     assert!(cell_fill(&source, "D3")?.is_none());
     assert_ne!(
@@ -140,12 +149,14 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     assert!(!deleted.sheets[0].values.contains_key("A4"));
     // 不再产生副本目录或临时文件。
     let parent = source.parent().context("source parent missing")?;
-    assert!(!fs::read_dir(parent)?.filter_map(|entry| entry.ok()).any(|entry| {
-        entry
-            .file_name()
-            .to_string_lossy()
-            .contains(".pytools-dedup-")
-    }));
+    assert!(!fs::read_dir(parent)?
+        .filter_map(|entry| entry.ok())
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .contains(".pytools-dedup-")
+        }));
 
     // 菜单不再打印 JSON；追加/预校验的机器可读结果通过 CLI 子命令验证。
     let append_output_dir = root.path().join("append-out");
@@ -223,7 +234,10 @@ fn configured_duplicate_check_marks_formula_workbook_in_place() -> Result<()> {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
-    assert!(!stdout.contains("\"execution\""), "menu must not print JSON");
+    assert!(
+        !stdout.contains("\"execution\""),
+        "menu must not print JSON"
+    );
     assert_ne!(
         fs::read(&source)?,
         source_before,
@@ -263,7 +277,10 @@ fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("处理完成：任务成功"), "{stdout}");
     assert!(stdout.contains("已就地删除"), "{stdout}");
-    assert!(!stdout.contains("\"execution\""), "menu must not print JSON");
+    assert!(
+        !stdout.contains("\"execution\""),
+        "menu must not print JSON"
+    );
     assert_ne!(
         fs::read(&source)?,
         source_before,
@@ -271,7 +288,6 @@ fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
     );
     Ok(())
 }
-
 
 fn cell_fill(path: &Path, address: &str) -> Result<Option<String>> {
     let workbook = excel_editor::open_xlsx(path)?;
@@ -447,11 +463,17 @@ fn interactive_dedup_append_directly_updates_existing_target_without_capability(
     assert_eq!(report[0]["duplicate_rows_filtered"], 2);
     assert_eq!(report[0]["execution_result"]["route"], "direct_append");
     assert_eq!(report[0]["execution_result"]["engine"], "umya_spreadsheet");
-    assert_eq!(report[0]["execution_result"]["target_commit"]["operation"], "replaced");
+    assert_eq!(
+        report[0]["execution_result"]["target_commit"]["operation"],
+        "replaced"
+    );
     assert_ne!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&source)?, source_before);
     let appended = read_workbook(&target)?;
-    let sheet = appended.sheets.iter().find(|sheet| sheet.name == "Append")
+    let sheet = appended
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Append")
         .context("append target worksheet missing")?;
     assert_eq!(sheet.values["B2"]["value"], "A");
     assert_eq!(sheet.values["C2"]["value"], 99.0);
@@ -498,9 +520,15 @@ fn interactive_dedup_append_direct_preserves_existing_formula_comments_and_merge
     assert_eq!(report[0]["status"], "succeeded", "{report}");
     assert_eq!(report[0]["execution_result"]["route"], "direct_append");
     let after = read_workbook(&target)?;
-    let before_sheet = before.sheets.iter().find(|sheet| sheet.name == "Untouched")
+    let before_sheet = before
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Untouched")
         .context("original untouched worksheet missing")?;
-    let after_sheet = after.sheets.iter().find(|sheet| sheet.name == "Untouched")
+    let after_sheet = after
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Untouched")
         .context("saved untouched worksheet missing")?;
     assert_eq!(before_sheet.values, after_sheet.values);
     assert_eq!(before_sheet.formulas, after_sheet.formulas);
@@ -538,7 +566,10 @@ fn interactive_dedup_append_direct_copies_source_formula_and_summarizes() -> Res
         "{stdout}"
     );
     let saved = read_workbook(&target)?;
-    let sheet = saved.sheets.iter().find(|sheet| sheet.name == "Append")
+    let sheet = saved
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Append")
         .context("append target worksheet missing")?;
     assert_eq!(sheet.values["B2"]["value"], "A");
     assert_eq!(sheet.values["C2"]["value"], 99.0);
@@ -569,7 +600,14 @@ fn interactive_dedup_append_creates_missing_sheet_in_existing_target() -> Result
     assert_eq!(report[0]["appended_rows"], 2);
     assert_eq!(report[0]["duplicate_rows_filtered"], 1);
     let saved = read_workbook(&target)?;
-    assert_eq!(saved.sheets.iter().map(|sheet| sheet.name.as_str()).collect::<Vec<_>>(), ["Existing", "Append"]);
+    assert_eq!(
+        saved
+            .sheets
+            .iter()
+            .map(|sheet| sheet.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Existing", "Append"]
+    );
     assert_eq!(saved.sheets[0].values["A1"]["value"], "保留原表");
     assert_eq!(saved.sheets[1].values["B2"]["value"], "A");
     assert_eq!(saved.sheets[1].values["B3"]["value"], "B");
@@ -587,7 +625,10 @@ fn interactive_dedup_append_rejects_unknown_package_parts() -> Result<()> {
     let target = root.path().join("target.xlsx");
     create_duplicate_source(&source)?;
     create_initial_target(&target)?;
-    let file = fs::OpenOptions::new().read(true).write(true).open(&target)?;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&target)?;
     let mut archive = zip::ZipWriter::new_append(file)?;
     archive.start_file(
         "xl/totally-unknown-feature/thing.xml",
@@ -598,10 +639,14 @@ fn interactive_dedup_append_rejects_unknown_package_parts() -> Result<()> {
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
 
-    let output = run_menu_with_view(&config, "2
+    let output = run_menu_with_view(
+        &config,
+        "2
 3
 0
-", "developer")?;
+",
+        "developer",
+    )?;
     assert!(output.status.success());
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "failed", "{report}");
@@ -802,7 +847,6 @@ fn interactive_dedup_menu_reports_in_place_marking_without_json() -> Result<()> 
     assert!(off.status.success());
     Ok(())
 }
-
 
 fn create_duplicate_source(path: &Path) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();

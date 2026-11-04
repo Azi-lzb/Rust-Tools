@@ -7,8 +7,7 @@
 
 use anyhow::{Context, Result};
 use excel_editor::{
-    BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId,
-    ExcelEditPlan,
+    BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId, ExcelEditPlan,
 };
 use excel_reader::{read_workbook, SheetDump};
 use pytools_core::dedup_ops::AppendTargetPlan;

@@ -9,14 +9,18 @@ impl Scratch {
         let dir = std::env::temp_dir().join(format!(
             "rust-tools-current-workflows-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
         ));
         fs::create_dir_all(&dir)?;
         Ok(Self(dir))
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 #[test]
@@ -26,21 +30,40 @@ fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Res
     let target = temp.0.join("configured.xlsx");
     let config = temp.0.join("config.xlsx");
     let mut book = Workbook::new();
-    book.add_worksheet().set_name("One")?.write_string(0, 0, "first")?;
-    book.add_worksheet().set_name("Two")?.write_string(0, 0, "second")?;
+    book.add_worksheet()
+        .set_name("One")?
+        .write_string(0, 0, "first")?;
+    book.add_worksheet()
+        .set_name("Two")?
+        .write_string(0, 0, "second")?;
     book.save(&source)?;
     let source_before = fs::read(&source)?;
     let mut settings = Workbook::new();
     let sheet = settings.add_worksheet().set_name("打印配置")?;
-    for (column, header) in ["是否启用", "打印模式", "源工作簿", "源工作表",
-        "源工作表打印区域", "目标工作簿", "目标工作表"].iter().enumerate() {
+    for (column, header) in [
+        "是否启用",
+        "打印模式",
+        "源工作簿",
+        "源工作表",
+        "源工作表打印区域",
+        "目标工作簿",
+        "目标工作表",
+    ]
+    .iter()
+    .enumerate()
+    {
         sheet.write_string(0, column as u16, *header)?;
     }
     for (row, name) in [(1, "One"), (2, "Two")] {
-        for (col, value) in [(0, "Y".to_owned()), (1, "1".to_owned()),
-            (2, source.to_string_lossy().into_owned()), (3, name.to_owned()),
-            (4, "A1:A1".to_owned()), (5, target.to_string_lossy().into_owned()),
-            (6, name.to_owned())] {
+        for (col, value) in [
+            (0, "Y".to_owned()),
+            (1, "1".to_owned()),
+            (2, source.to_string_lossy().into_owned()),
+            (3, name.to_owned()),
+            (4, "A1:A1".to_owned()),
+            (5, target.to_string_lossy().into_owned()),
+            (6, name.to_owned()),
+        ] {
             sheet.write_string(row, col, value)?;
         }
     }
@@ -77,7 +100,9 @@ fn foreign_bank_in_place_deletes_only_matching_rows_without_copy_or_plan() -> Re
     sheet.write_number(1, 1, 10.0)?;
     sheet.write_string(2, 0, "普通乙")?;
     sheet.write_number(2, 1, 20.0)?;
-    book.add_worksheet().set_name("其他")?.write_string(0, 0, "外资甲")?;
+    book.add_worksheet()
+        .set_name("其他")?
+        .write_string(0, 0, "外资甲")?;
     book.save(&source)?;
     let mut settings = Workbook::new();
     let sheet = settings.add_worksheet().set_name("机构映射表")?;
@@ -90,17 +115,31 @@ fn foreign_bank_in_place_deletes_only_matching_rows_without_copy_or_plan() -> Re
     settings.save(&config)?;
     let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .args(["remove-foreign-bank", "--in-place", "umya", "--config"])
-        .arg(&config).arg(&source).output()?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        .arg(&config)
+        .arg(&source)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let report: serde_json::Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(report["mode"], "in_place");
     assert_eq!(report["failed_files"], 0);
     assert_eq!(report["deleted_rows"], 1);
     let book = excel_reader::read_workbook(&source)?;
-    let branch = book.sheets.iter().find(|s| s.name == "分机构").context("branch missing")?;
+    let branch = book
+        .sheets
+        .iter()
+        .find(|s| s.name == "分机构")
+        .context("branch missing")?;
     assert_eq!(branch.values["A2"]["value"], "普通乙");
     assert_eq!(branch.values["B2"]["value"], 20.0);
-    let other = book.sheets.iter().find(|s| s.name == "其他").context("other missing")?;
+    let other = book
+        .sheets
+        .iter()
+        .find(|s| s.name == "其他")
+        .context("other missing")?;
     assert_eq!(other.values["A1"]["value"], "外资甲");
     assert!(!temp.0.join("source(金融局).xlsx").exists());
     assert!(!temp.0.join("PyTools_专用报表处理结果").exists());

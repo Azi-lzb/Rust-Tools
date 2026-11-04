@@ -1706,7 +1706,10 @@ pub fn apply_umya_append_operations(
     workbook: &mut crate::Workbook,
     operations: &[EditOperation],
 ) -> Result<()> {
-    anyhow::ensure!(!operations.is_empty(), "append operations must not be empty");
+    anyhow::ensure!(
+        !operations.is_empty(),
+        "append operations must not be empty"
+    );
     for operation in operations {
         anyhow::ensure!(
             matches!(

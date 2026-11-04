@@ -134,11 +134,14 @@ fn capability_for_plain_xlsx(binary: &Path) -> excel_editor::BackendCapability {
         format: WorkbookFormat::Xlsx,
         operations: {
             let mut set = std::collections::BTreeSet::new();
-            set.insert(EditOperation::SetCellValue {
-                sheet: String::new(),
-                cell: String::new(),
-                value: excel_editor::CellValue::Text(String::new()),
-            }.kind());
+            set.insert(
+                EditOperation::SetCellValue {
+                    sheet: String::new(),
+                    cell: String::new(),
+                    value: excel_editor::CellValue::Text(String::new()),
+                }
+                .kind(),
+            );
             set
         },
         supported_features: Default::default(),
@@ -161,9 +164,7 @@ fn capability_for_plain_xlsx(binary: &Path) -> excel_editor::BackendCapability {
 fn openpyxl_runtime_error(binary: &Path) -> Option<String> {
     let capability = capability_for_plain_xlsx(binary);
     let backend = match excel_editor::OpenpyxlXlsxBackend::from_environment_or_product_layout(
-        capability,
-        binary,
-        "pytools",
+        capability, binary, "pytools",
     ) {
         Ok(backend) => backend,
         Err(error) => return Some(format!("{error:#}")),
@@ -180,8 +181,15 @@ pub struct InPlaceOutcome {
 }
 
 /// 修改并验证独立候选文件，发布由调用方负责；不替换源工作簿。
-pub fn execute_candidate(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<EditExecutionReport> {
-    anyhow::ensure!(engine.accepts(&plan.input), "{}", engine.unsupported_hint(&plan.input));
+pub fn execute_candidate(
+    plan: &ExcelEditPlan,
+    engine: InPlaceEngine,
+) -> Result<EditExecutionReport> {
+    anyhow::ensure!(
+        engine.accepts(&plan.input),
+        "{}",
+        engine.unsupported_hint(&plan.input)
+    );
     let capability = capability_for(plan, engine);
     crate::edit_plan::apply_plan(plan, &[capability], &platform_id())
 }

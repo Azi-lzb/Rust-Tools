@@ -13,7 +13,11 @@ struct TempDirectory(PathBuf);
 impl TempDirectory {
     fn new(name: &str) -> Result<Self> {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = std::env::temp_dir().join(format!("{name}-{}-{nonce}-{:?}",  std::process::id(), std::thread::current().id()));
+        let path = std::env::temp_dir().join(format!(
+            "{name}-{}-{nonce}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         fs::create_dir_all(&path)?;
         Ok(Self(path))
     }

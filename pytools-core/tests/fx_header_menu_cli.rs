@@ -96,8 +96,7 @@ fn fx_header_cli_command_defaults_to_plan_only() -> Result<()> {
 }
 
 #[test]
-fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls() -> Result<()>
-{
+fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let fixture =
@@ -322,12 +321,18 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // off 视图：stdout 只输出人类可读汇总行，不输出 JSON、不写运行记录。
-    assert!(stdout.contains("外汇页眉处理结束：输入 1 个，已完成 1 个，失败 0 个"), "{stdout}");
+    assert!(
+        stdout.contains("外汇页眉处理结束：输入 1 个，已完成 1 个，失败 0 个"),
+        "{stdout}"
+    );
     assert!(!stdout.contains("history_report"));
     assert!(!stdout.contains("\"events\""));
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
     assert_ne!(fs::read(&target)?, original);
-    let copy = root.path().join("PyTools_专用报表处理结果").join("target.xlsx");
+    let copy = root
+        .path()
+        .join("PyTools_专用报表处理结果")
+        .join("target.xlsx");
     assert!(!copy.exists());
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());

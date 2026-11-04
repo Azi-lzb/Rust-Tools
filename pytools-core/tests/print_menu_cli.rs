@@ -68,7 +68,10 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     );
     assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
     assert!(!menu_text.contains("PDF"), "PDF entry must stay removed");
-    assert!(!menu_text.contains("按批注"), "comment print entries are removed");
+    assert!(
+        !menu_text.contains("按批注"),
+        "comment print entries are removed"
+    );
 
     // 3-1：直接执行，无 y 确认。
     let umya = run_menu(&config, "3\n1\n0\n0\n")?;
@@ -79,7 +82,10 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     );
     let umya_stdout = String::from_utf8_lossy(&umya.stdout);
     assert!(!umya_stdout.contains("输入 y/yes/是"), "{umya_stdout}");
-    assert!(umya_stdout.contains("静态打印文件生成完成：成功 1 项"), "{umya_stdout}");
+    assert!(
+        umya_stdout.contains("静态打印文件生成完成：成功 1 项"),
+        "{umya_stdout}"
+    );
     // 统一日志要求：开始与完成行都带本机时间戳。
     let start_line = umya_stdout
         .lines()
@@ -91,26 +97,47 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
         .find(|line| line.contains("静态打印文件生成完成：成功"))
         .context("done line missing")?;
     assert!(starts_with_timestamp(done_line), "{done_line}");
-    let history_path = umya_stdout.lines().find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim())).context("print run summary missing")?;
+    let history_path = umya_stdout
+        .lines()
+        .find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim()))
+        .context("print run summary missing")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["overall_status"], "SUCCESS");
     assert_eq!(history["task_stats"]["succeeded"], 1);
     assert_eq!(history["task_stats"]["failed"], 0);
     assert_eq!(history["input_stats_available"], false);
-    let events_path = root.path().join("logs").join(history["diagnostic_log_path"].as_str().context("print diagnostic log missing")?);
+    let events_path = root.path().join("logs").join(
+        history["diagnostic_log_path"]
+            .as_str()
+            .context("print diagnostic log missing")?,
+    );
     let events = fs::read_to_string(events_path)?;
-    let events = events.lines().map(serde_json::from_str::<Value>).collect::<std::result::Result<Vec<_>, _>>()?;
-    assert!(events.iter().all(|event| event["run_id"] == history["run_id"]));
-    assert!(events.iter().any(|event| event["event_name"] == "run_finished"));
+    let events = events
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    assert!(events
+        .iter()
+        .all(|event| event["run_id"] == history["run_id"]));
+    assert!(events
+        .iter()
+        .any(|event| event["event_name"] == "run_finished"));
     let printed = target.clone();
     assert!(printed.is_file(), "umya print output missing");
-    assert_eq!(fs::read(&source)?, source_before, "source must stay unchanged");
+    assert_eq!(
+        fs::read(&source)?,
+        source_before,
+        "source must stay unchanged"
+    );
 
     // 3-3：配置预校验（机器可读 JSON 仅 developer 视图输出）。
     let precheck = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
     assert!(precheck.status.success());
     let precheck_response = output_json(&precheck)?;
-    assert_eq!(precheck_response["failed"], 1, "existing print target must fail precheck");
+    assert_eq!(
+        precheck_response["failed"], 1,
+        "existing print target must fail precheck"
+    );
     assert_eq!(precheck_response["ok"], 0);
     Ok(())
 }
@@ -126,7 +153,10 @@ fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<
     let source_before = fs::read(&source)?;
 
     let output = run_menu(&config, "3\n1\n0\n0\n")?;
-    assert!(output.status.success(), "menu must stay usable after a failure");
+    assert!(
+        output.status.success(),
+        "menu must stay usable after a failure"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let failure_line = stdout
         .lines()
@@ -141,7 +171,10 @@ fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<
         "failure line must carry a timestamp: {failure_line}"
     );
     assert!(stdout.contains(".xlsx"), "{stdout}");
-    assert!(stdout.contains("======== PyTools 菜单 ========"), "{stdout}");
+    assert!(
+        stdout.contains("======== PyTools 菜单 ========"),
+        "{stdout}"
+    );
     assert_eq!(fs::read(&source)?, source_before);
     assert!(!target.exists(), "failed print must not create a target");
     Ok(())
@@ -168,14 +201,17 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         .lines()
         .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
-    assert!(
-        start_line.contains("（umya-spreadsheet）"),
-        "{start_line}"
-    );
+    assert!(start_line.contains("（umya-spreadsheet）"), "{start_line}");
     assert!(starts_with_timestamp(start_line), "{start_line}");
-    assert!(!stdout.contains("输入 y/yes/是"), "no confirmation expected");
+    assert!(
+        !stdout.contains("输入 y/yes/是"),
+        "no confirmation expected"
+    );
     // 同一输出文件只显示一次。
-    let output_line_count = stdout.lines().filter(|line| line.contains("输出：")).count();
+    let output_line_count = stdout
+        .lines()
+        .filter(|line| line.contains("输出："))
+        .count();
     assert_eq!(output_line_count, 1, "{stdout}");
 
     let printed_path = target.clone();
@@ -191,19 +227,29 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         sheet.values.get("A1")
     );
     assert_eq!(sheet.values["A2"]["value"], 2.0);
-    assert_eq!(sheet.values["A3"]["value"], 3.0, "formula must become its cached value");
+    assert_eq!(
+        sheet.values["A3"]["value"], 3.0,
+        "formula must become its cached value"
+    );
     assert_eq!(sheet.values["B3"]["type"], "number");
     assert_eq!(sheet.values["B3"]["value"], 0.0001);
     assert_eq!(sheet.values["C3"]["type"], "string");
     assert_eq!(sheet.values["C3"]["value"], "0");
-    assert!(sheet.formulas.is_empty(), "print output must be static values");
+    assert!(
+        sheet.formulas.is_empty(),
+        "print output must be static values"
+    );
     assert!(sheet.comments.is_empty(), "print output must drop comments");
     assert_eq!(
         sheet.merges,
         vec!["B2:C2".to_owned()],
         "merged range must be preserved and shifted"
     );
-    assert_eq!(fs::read(&source)?, source_before, "source must stay unchanged");
+    assert_eq!(
+        fs::read(&source)?,
+        source_before,
+        "source must stay unchanged"
+    );
     Ok(())
 }
 

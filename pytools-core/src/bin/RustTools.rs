@@ -58,7 +58,7 @@ use pytools_core::submission_check::{
     SubmissionCheckReport,
 };
 use pytools_core::summary_ops::{
-    summarize_by_comments, summarize_by_comments_with_progress, summarize_by_named_ranges_with_progress,
+    summarize_by_comments_with_progress, summarize_by_named_ranges_with_progress,
     summarize_used_ranges_with_progress, SummaryProgress, SummaryRunEvent,
 };
 use pytools_core::timeline_extract::{
@@ -66,15 +66,194 @@ use pytools_core::timeline_extract::{
     TimelineExtractResult, TimelineExtractRunEvent,
 };
 use pytools_core::timeline_ops::{
-    prepare_wide_target_replacement_source,
-    run_header_path_compare_with_progress, run_timeline_precheck,
-    run_wide_summary_with_progress, validate_wide_target_replacement_candidate,
-    HeaderPathCompareProgress, HeaderPathCompareRunEvent, WideSummaryProgress, WideSummaryRunEvent,
+    prepare_wide_target_replacement_source, run_header_path_compare_with_progress,
+    run_timeline_precheck, run_wide_summary_with_progress,
+    validate_wide_target_replacement_candidate, HeaderPathCompareProgress,
+    HeaderPathCompareRunEvent, WideSummaryProgress, WideSummaryRunEvent,
 };
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+thread_local! {
+    static TERMINAL_BATCH_LINE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn finish_terminal_batch_line() {
+    if TERMINAL_BATCH_LINE.with(|width| width.replace(0) > 0) {
+        eprintln!();
+    }
+}
+
+fn emit_batch_event_view(
+    log_view: &str,
+    total: usize,
+    current: Option<usize>,
+    status: &str,
+    phase_change: bool,
+    message: &str,
+    event_value: Option<&serde_json::Value>,
+) {
+    use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy, Level};
+
+    if log_view == "developer" {
+        finish_terminal_batch_line();
+        if let Some(value) = event_value {
+            if let Ok(line) = serde_json::to_string(value) {
+                eprintln!("{line}");
+            }
+        }
+        return;
+    }
+    if log_view == "off" {
+        finish_terminal_batch_line();
+        return;
+    }
+
+    let kind = if matches!(status, "failed" | "error" | "partial_failure") {
+        BatchEventKind::Failure
+    } else if matches!(
+        status,
+        "warning" | "business_issue" | "mismatch" | "partial"
+    ) {
+        BatchEventKind::BusinessIssue
+    } else if phase_change {
+        BatchEventKind::PhaseChange
+    } else {
+        BatchEventKind::Routine
+    };
+    let policy = BatchLogPolicy::new(total);
+    let interactive_terminal = io::stderr().is_terminal();
+    let should_emit = if interactive_terminal {
+        policy.should_emit_interactive(current, kind)
+    } else {
+        policy.should_emit(current, kind)
+    };
+    if !should_emit {
+        return;
+    }
+    let level = match kind {
+        BatchEventKind::Failure => Level::Error,
+        BatchEventKind::BusinessIssue => Level::Warn,
+        BatchEventKind::Routine | BatchEventKind::PhaseChange => Level::Info,
+    };
+    let inline =
+        total > 8 && interactive_terminal && kind == BatchEventKind::Routine && current.is_some();
+    if inline {
+        let line = pytools_core::run_logging::terminal_line(
+            level,
+            &policy.format_progress(current.unwrap_or_default(), message),
+        );
+        let previous = TERMINAL_BATCH_LINE.with(|width| width.get());
+        let width = line.chars().count();
+        eprint!("\r{line}{}", " ".repeat(previous.saturating_sub(width)));
+        let _ = io::stderr().flush();
+        TERMINAL_BATCH_LINE.with(|last| last.set(width));
+        if current.is_some_and(|index| index >= total) {
+            finish_terminal_batch_line();
+        }
+        return;
+    }
+    finish_terminal_batch_line();
+    let text = if total > 8 {
+        current.map_or_else(
+            || message.to_owned(),
+            |index| policy.format_progress(index, message),
+        )
+    } else {
+        message.to_owned()
+    };
+    eprintln!("{}", pytools_core::run_logging::terminal_line(level, &text));
+}
+
+fn emit_unified_terminal_summary_with_outputs(
+    summary: &pytools_core::run_logging::RunSummary,
+    output_paths: &[PathBuf],
+) {
+    use pytools_core::run_logging::{
+        format_terminal_summary, format_terminal_summary_with_outputs, terminal_line, Level,
+        TaskStatus,
+    };
+    finish_terminal_batch_line();
+    let level = match summary.overall_status {
+        TaskStatus::Failed => Level::Error,
+        TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
+        TaskStatus::Success if !summary.business_issues.is_empty() => Level::Warn,
+        TaskStatus::Success | TaskStatus::NoOp => Level::Info,
+    };
+    let paths = output_paths
+        .iter()
+        .map(|path| display_path_for_user(path))
+        .collect::<Vec<_>>();
+    let lines = if paths.is_empty() {
+        format_terminal_summary(summary, 8)
+    } else {
+        format_terminal_summary_with_outputs(summary, 8, &paths)
+    };
+    for line in lines {
+        eprintln!("{}", terminal_line(level, &line));
+    }
+}
+
+fn write_unified_terminal_summary<W: Write>(
+    output: &mut W,
+    summary: &pytools_core::run_logging::RunSummary,
+    output_paths: &[PathBuf],
+) -> io::Result<()> {
+    use pytools_core::run_logging::{
+        format_terminal_summary, format_terminal_summary_with_outputs, terminal_line, Level,
+        TaskStatus,
+    };
+    finish_terminal_batch_line();
+    let level = match summary.overall_status {
+        TaskStatus::Failed => Level::Error,
+        TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
+        TaskStatus::Success if !summary.business_issues.is_empty() => Level::Warn,
+        TaskStatus::Success | TaskStatus::NoOp => Level::Info,
+    };
+    let paths = output_paths
+        .iter()
+        .map(|path| display_path_for_user(path))
+        .collect::<Vec<_>>();
+    let lines = if paths.is_empty() {
+        format_terminal_summary(summary, 8)
+    } else {
+        format_terminal_summary_with_outputs(summary, 8, &paths)
+    };
+    for line in lines {
+        writeln!(output, "{}", terminal_line(level, &line))?;
+    }
+    Ok(())
+}
+
+fn emit_summary_batch_event_view(log_view: &str, event: &SummaryRunEvent) {
+    let current = event.progress.current_input_index;
+    let phase_change = current.is_none()
+        || matches!(
+            event.phase.as_str(),
+            "run" | "row_extract" | "output_save" | "output_write"
+        );
+    let level = match event.status.as_str() {
+        "failed" => pytools_core::run_logging::Level::Error,
+        "warning" | "partial" | "business_issue" => pytools_core::run_logging::Level::Warn,
+        _ => pytools_core::run_logging::Level::Info,
+    };
+    let mut value = serde_json::to_value(event).ok();
+    if let Some(value) = value.as_mut() {
+        value["level"] = serde_json::json!(level);
+        value["event_name"] = serde_json::json!(event.phase);
+    }
+    emit_batch_event_view(
+        log_view,
+        event.progress.total_inputs,
+        current,
+        &event.status,
+        phase_change,
+        &event.user_message,
+        value.as_ref(),
+    );
+}
 
 fn main() {
     if let Err(error) = run() {
@@ -211,12 +390,27 @@ fn run_interactive_menu(arguments: Vec<String>) -> Result<()> {
         global.log_dir = log_dir.clone();
         global.log_dir_override = Some(log_dir);
     }
-    let log_view = options.values.get("log-view").cloned().unwrap_or_else(|| global.log_view.clone());
-    anyhow::ensure!(matches!(log_view.as_str(), "user" | "developer" | "off"), "--log-view must be user, developer, or off");
+    let log_view = options
+        .values
+        .get("log-view")
+        .cloned()
+        .unwrap_or_else(|| global.log_view.clone());
+    anyhow::ensure!(
+        matches!(log_view.as_str(), "user" | "developer" | "off"),
+        "--log-view must be user, developer, or off"
+    );
     if let Err(error) = pytools_core::run_logging::retain_completed_events(
-        &global.log_dir.join("run-events"), global.log_retention_days, global.log_max_bytes,
+        &global.log_dir.join("run-events"),
+        global.log_retention_days,
+        global.log_max_bytes,
     ) {
-        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("日志保留策略执行失败：{error}")));
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Warn,
+                &format!("日志保留策略执行失败：{error}")
+            )
+        );
     }
 
     let stdin = io::stdin();
@@ -479,12 +673,24 @@ where
 {
     loop {
         writeln!(output, "------ 数据提取与汇总 ------")?;
-        writeln!(output, "  1  时序宽表汇总  【时序提取规则；路径标准化映射】")?;
+        writeln!(
+            output,
+            "  1  时序宽表汇总  【时序提取规则；路径标准化映射】"
+        )?;
         writeln!(output, "  2  按使用区域快速汇总")?;
-        writeln!(output, "  3  按模板命名区域汇总  【表头区域生成列名；表结构区域校验；汇总区域提取数据】")?;
+        writeln!(
+            output,
+            "  3  按模板命名区域汇总  【表头区域生成列名；表结构区域校验；汇总区域提取数据】"
+        )?;
         writeln!(output, "  4  按模板校验区域提取校验  【临时复制源文件并调用 Excel/WPS COM 重算；原文件不修改】")?;
-        writeln!(output, "  5  表头路径比对与映射  【时序提取规则；路径标准化映射】")?;
-        writeln!(output, "  6  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】")?;
+        writeln!(
+            output,
+            "  5  表头路径比对与映射  【时序提取规则；路径标准化映射】"
+        )?;
+        writeln!(
+            output,
+            "  6  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】"
+        )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "--------------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -588,12 +794,20 @@ where
                 };
                 let selected_count = sources.len();
                 sources.retain(|path| {
-                    !path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("~$"))
-                        && !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+                    !path
+                        .file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with("~$"))
+                        && !path
+                            .file_stem()
+                            .is_some_and(|name| name.to_string_lossy().contains("_审核版"))
                         && !path.components().any(|part| part.as_os_str() == "执行结果")
                 });
                 if sources.len() != selected_count {
-                    writeln!(output, "→ 按汇总规则排除 {} 个临时文件、审核副本或执行结果", selected_count - sources.len())?;
+                    writeln!(
+                        output,
+                        "→ 按汇总规则排除 {} 个临时文件、审核副本或执行结果",
+                        selected_count - sources.len()
+                    )?;
                 }
                 if sources.is_empty() {
                     writeln!(output, "没有可汇总的源工作簿。")?;
@@ -644,20 +858,35 @@ where
                 };
                 let selected_count = sources.len();
                 sources.retain(|path| {
-                    !path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("~$"))
-                        && !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+                    !path
+                        .file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with("~$"))
+                        && !path
+                            .file_stem()
+                            .is_some_and(|name| name.to_string_lossy().contains("_审核版"))
                         && !path.components().any(|part| part.as_os_str() == "执行结果")
                 });
                 if sources.len() != selected_count {
-                    writeln!(output, "→ 按校验规则排除 {} 个临时文件、审核副本或执行结果", selected_count - sources.len())?;
+                    writeln!(
+                        output,
+                        "→ 按校验规则排除 {} 个临时文件、审核副本或执行结果",
+                        selected_count - sources.len()
+                    )?;
                 }
                 if sources.is_empty() {
                     writeln!(output, "没有可校验的源工作簿。")?;
                     return Ok(());
                 }
-                let mut arguments = vec!["--template".to_owned(), template.to_string_lossy().into_owned()];
+                let mut arguments = vec![
+                    "--template".to_owned(),
+                    template.to_string_lossy().into_owned(),
+                ];
                 arguments.extend(summary_cli_arguments(global, log_view));
-                arguments.extend(sources.into_iter().map(|path| path.to_string_lossy().into_owned()));
+                arguments.extend(
+                    sources
+                        .into_iter()
+                        .map(|path| path.to_string_lossy().into_owned()),
+                );
                 match run_named_validation_extract_cli(arguments, true) {
                     Ok(()) => return Ok(()),
                     Err(error) => {
@@ -745,13 +974,19 @@ where
         };
         match choice.as_str() {
             "1" => match open_config(config_path) {
-                Ok(()) => writeln!(output, "[完成] 已打开配置文件: {}", display_path_for_user(&config_path))?,
+                Ok(()) => writeln!(
+                    output,
+                    "[完成] 已打开配置文件: {}",
+                    display_path_for_user(&config_path)
+                )?,
                 Err(error) => writeln!(output, "[失败] 打开配置文件失败: {error:#}")?,
             },
             "2" => match open_latest_output(&global.output_dir) {
-                Ok(Some(path)) => {
-                    writeln!(output, "[完成] 已打开最新输出文件: {}", display_path_for_user(&path))?
-                }
+                Ok(Some(path)) => writeln!(
+                    output,
+                    "[完成] 已打开最新输出文件: {}",
+                    display_path_for_user(&path)
+                )?,
                 Ok(None) => writeln!(
                     output,
                     "[提示] 未找到输出文件: {}",
@@ -846,17 +1081,25 @@ fn finish_config_menu_action<W: Write>(
 ) -> Result<()> {
     if log_view == "user" {
         if facts.status == "failed" {
-            writeln!(output, "{label}失败，耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+            writeln!(
+                output,
+                "{label}失败，耗时 {elapsed_ms_display_seconds:.3} 秒。",
+                elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0
+            )?;
         } else if facts.status == "partial" {
             writeln!(
-                output, "{label}完成，但部分配置未能解析：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-                config_menu_summary(feature_id, &facts.metrics)
-            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+                output,
+                "{label}完成，但部分配置未能解析：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
+                config_menu_summary(feature_id, &facts.metrics),
+                elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0
+            )?;
         } else {
             writeln!(
-                output, "{label}完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-                config_menu_summary(feature_id, &facts.metrics)
-            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+                output,
+                "{label}完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
+                config_menu_summary(feature_id, &facts.metrics),
+                elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0
+            )?;
         }
     } else if log_view == "developer" {
         let history_result = write_config_menu_run_history(
@@ -920,8 +1163,12 @@ fn write_config_menu_run_history(
     elapsed_ms: u128,
     facts: &ConfigMenuRunFacts,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create config log directory {}", display_path_for_user(&global.log_dir)))?;
+    fs::create_dir_all(&global.log_dir).with_context(|| {
+        format!(
+            "create config log directory {}",
+            display_path_for_user(&global.log_dir)
+        )
+    })?;
     let mut stages = facts.stages.clone();
     if stages.is_empty() {
         stages.push(serde_json::json!({
@@ -1004,7 +1251,8 @@ where
         };
         match action_id {
             "config.initialize_or_repair" => {
-                let mut diagnostic = ConfiguredRunLog::new(global, "7-1", "初始化或修复配置", log_view);
+                let mut diagnostic =
+                    ConfiguredRunLog::new(global, "7-1", "初始化或修复配置", log_view);
                 writeln!(
                     output,
                     "[二次确认] 7-1 将新建配置表或生成配置修复候选；如后续确认替换，当前配置文件会被更新。"
@@ -1014,11 +1262,23 @@ where
                 writeln!(output, "  0  取消，不修改配置")?;
                 let Some(confirmation) = read_menu_choice(input, output, "确认执行 7-1> ")?
                 else {
-                    diagnostic.finish_as(false, None, &[], &[], Some(pytools_core::run_logging::TaskStatus::Cancelled));
+                    diagnostic.finish_as(
+                        false,
+                        None,
+                        &[],
+                        &[],
+                        Some(pytools_core::run_logging::TaskStatus::Cancelled),
+                    );
                     return Ok(());
                 };
                 if confirmation != "1" {
-                    diagnostic.finish_as(false, None, &[], &[], Some(pytools_core::run_logging::TaskStatus::Cancelled));
+                    diagnostic.finish_as(
+                        false,
+                        None,
+                        &[],
+                        &[],
+                        Some(pytools_core::run_logging::TaskStatus::Cancelled),
+                    );
                     writeln!(output, "[已取消] 配置文件未修改。")?;
                     continue;
                 }
@@ -1145,13 +1405,21 @@ where
                                 Ok(config) => {
                                     facts.metrics["global_config_loaded"] = serde_json::json!(true);
                                     writeln!(output, "全局配置解析:")?;
-                                    writeln!(output, "  输入目录: {}", display_path_for_user(&config.input_dir))?;
+                                    writeln!(
+                                        output,
+                                        "  输入目录: {}",
+                                        display_path_for_user(&config.input_dir)
+                                    )?;
                                     writeln!(
                                         output,
                                         "  输出目录: {}",
                                         display_path_for_user(&config.output_dir)
                                     )?;
-                                    writeln!(output, "  日志目录: {}", display_path_for_user(&config.log_dir))?;
+                                    writeln!(
+                                        output,
+                                        "  日志目录: {}",
+                                        display_path_for_user(&config.log_dir)
+                                    )?;
                                     writeln!(output, "  源文件扩展名: {:?}", config.source_exts)?;
                                 }
                                 Err(error) => {
@@ -1208,7 +1476,11 @@ where
                             }
                         }
                         if log_view != "off" {
-                            writeln!(output, "用时={:.3} 秒", (view_started.elapsed().as_millis()) as f64 / 1000.0)?;
+                            writeln!(
+                                output,
+                                "用时={:.3} 秒",
+                                (view_started.elapsed().as_millis()) as f64 / 1000.0
+                            )?;
                         }
                         facts.add_component("pytools_core::config::load_global");
                         match refreshed_global {
@@ -1353,7 +1625,10 @@ where
                 "QUICK-OPEN-LATEST",
                 "打开最近输出文件",
                 open_latest_output(&global.output_dir),
-                format!("输出目录中没有可打开的文件：{}", display_path_for_user(&global.output_dir)),
+                format!(
+                    "输出目录中没有可打开的文件：{}",
+                    display_path_for_user(&global.output_dir)
+                ),
             )?,
             "quick.open_output_folder" => log_quick_menu_action(
                 output,
@@ -1416,9 +1691,12 @@ where
             )?;
         } else {
             writeln!(
-                output, "[完成] 已新建配置表：{}（{} 张工作表，用时={:.3} 秒）",
+                output,
+                "[完成] 已新建配置表：{}（{} 张工作表，用时={:.3} 秒）",
                 display_path_for_user(&result.path),
-                result.sheets, (initialize_started.elapsed().as_millis()) as f64 / 1000.0)?;
+                result.sheets,
+                (initialize_started.elapsed().as_millis()) as f64 / 1000.0
+            )?;
         }
         if log_view == "developer" {
             writeln!(output, "实际写入引擎: rust_xlsxwriter")?;
@@ -1484,8 +1762,10 @@ where
             )?;
         } else {
             writeln!(
-                output, "[计划已生成] 共 {} 项操作，用时={:.3} 秒：{}",
-                plan.operations.len(), (plan_started.elapsed().as_millis()) as f64 / 1000.0,
+                output,
+                "[计划已生成] 共 {} 项操作，用时={:.3} 秒：{}",
+                plan.operations.len(),
+                (plan_started.elapsed().as_millis()) as f64 / 1000.0,
                 display_path_for_user(&plan_path)
             )?;
         }
@@ -1540,8 +1820,11 @@ where
         )?;
     } else {
         writeln!(
-            output, "[候选已验证] {}；源配置仍未替换；执行用时={:.3} 秒。",
-            display_path_for_user(&candidate_path), (execution_started.elapsed().as_millis()) as f64 / 1000.0)?;
+            output,
+            "[候选已验证] {}；源配置仍未替换；执行用时={:.3} 秒。",
+            display_path_for_user(&candidate_path),
+            (execution_started.elapsed().as_millis()) as f64 / 1000.0
+        )?;
     }
     if log_view == "developer" {
         writeln!(
@@ -1580,13 +1863,16 @@ where
             )?;
         } else {
             writeln!(
-                output, "[完成] 配置已安全更新：{}；原文件备份：{}；提交用时={:.3} 秒",
+                output,
+                "[完成] 配置已安全更新：{}；原文件备份：{}；提交用时={:.3} 秒",
                 display_path_for_user(&committed.target),
                 committed
                     .backup_path
                     .as_deref()
                     .map(|path| display_path_for_user(&path).to_string())
-                    .unwrap_or_else(|| "无".to_owned()), (commit_started.elapsed().as_millis()) as f64 / 1000.0)?;
+                    .unwrap_or_else(|| "无".to_owned()),
+                (commit_started.elapsed().as_millis()) as f64 / 1000.0
+            )?;
         }
         refresh_interactive_global(config_path, global, config_error);
         if let Some(error) = config_error.as_deref() {
@@ -1635,10 +1921,16 @@ where
     loop {
         writeln!(output, "------ 归档整理 ------")?;
         writeln!(output, "  1  按日期归档（预览）")?;
-        writeln!(output, "  2  按类型归档（预览，使用归档类型配置）  【归档类型配置】")?;
+        writeln!(
+            output,
+            "  2  按类型归档（预览，使用归档类型配置）  【归档类型配置】"
+        )?;
         writeln!(output, "  3  执行归档计划")?;
         writeln!(output, "  4  按日期归档（直接复制）")?;
-        writeln!(output, "  5  按类型归档（直接复制，使用归档类型配置）  【归档类型配置】")?;
+        writeln!(
+            output,
+            "  5  按类型归档（直接复制，使用归档类型配置）  【归档类型配置】"
+        )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -1985,7 +2277,12 @@ where
         writeln!(output, "{}", serde_json::to_string(&report)?)?;
         return Ok(());
     }
-    let (status, level) = match report["overall_status"].as_str().unwrap_or_default().to_ascii_uppercase().as_str() {
+    let (status, level) = match report["overall_status"]
+        .as_str()
+        .unwrap_or_default()
+        .to_ascii_uppercase()
+        .as_str()
+    {
         "SUCCESS" => ("完成", pytools_core::run_logging::Level::Info),
         "PARTIAL_SUCCESS" => ("部分完成", pytools_core::run_logging::Level::Warn),
         "NO_OP" => ("未生成汇总", pytools_core::run_logging::Level::Info),
@@ -1994,8 +2291,11 @@ where
         _ => ("状态记录缺失", pytools_core::run_logging::Level::Warn),
     };
     let count = |name: &str| {
-        report["input_stats"].get(name).and_then(serde_json::Value::as_u64)
-            .map(|value| value.to_string()).unwrap_or_else(|| "未采集".to_owned())
+        report["input_stats"]
+            .get(name)
+            .and_then(serde_json::Value::as_u64)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "未采集".to_owned())
     };
     writeln!(
         output,
@@ -2006,11 +2306,25 @@ where
         ))
     )?;
     if let Some(output_path) = report["output"].as_str() {
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("汇总文件：{output_path}")))?;
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                &format!("汇总文件：{output_path}")
+            )
+        )?;
     }
     match report["target_write_status"].as_str() {
         Some("not_configured") => {
-            writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, "目标未写入：请检查规则的目标写入开关、目标路径和工作表"))?;
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Warn,
+                    "目标未写入：请检查规则的目标写入开关、目标路径和工作表"
+                )
+            )?;
         }
         Some(other) if other != "not_run" && other != "not_applicable" => {
             if let Some(items) = report["target_writes"].as_array() {
@@ -2029,7 +2343,14 @@ where
                                 Some("skipped") => pytools_core::run_logging::Level::Warn,
                                 _ => pytools_core::run_logging::Level::Info,
                             };
-                            writeln!(output, "{}", pytools_core::run_logging::terminal_line(result_level, &format!("目标写入：{target}（{state}）")))?;
+                            writeln!(
+                                output,
+                                "{}",
+                                pytools_core::run_logging::terminal_line(
+                                    result_level,
+                                    &format!("目标写入：{target}（{state}）")
+                                )
+                            )?;
                             if item["status"] == "failed" {
                                 writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, "写入失败；请检查目标工作簿、工作表、文件占用状态和写入权限"))?;
                             }
@@ -2043,10 +2364,27 @@ where
     if let Some(failure) = report["failure"].as_object() {
         let stage = failure["stage"].as_str().unwrap_or("wide_summary");
         let code = summary_event_error_code(failure["error_type"].as_str(), stage);
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, &format!("失败阶段：{stage}，错误代码：{code}")))?;
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Error,
+                &format!("失败阶段：{stage}，错误代码：{code}")
+            )
+        )?;
     }
     if let Some(elapsed) = report["total_elapsed_ms"].as_u64() {
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!( "总耗时 {elapsed_display_seconds:.3} 秒", elapsed_display_seconds = elapsed as f64 / 1000.0)))?;
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                &format!(
+                    "总耗时 {elapsed_display_seconds:.3} 秒",
+                    elapsed_display_seconds = elapsed as f64 / 1000.0
+                )
+            )
+        )?;
     }
     Ok(())
 }
@@ -2066,8 +2404,14 @@ where
 {
     loop {
         writeln!(output, "------ 数据去重与追加 ------")?;
-        writeln!(output, "  1  按配置检查重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】")?;
-        writeln!(output, "  2  按配置删除重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】")?;
+        writeln!(
+            output,
+            "  1  按配置检查重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】"
+        )?;
+        writeln!(
+            output,
+            "  2  按配置删除重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】"
+        )?;
         writeln!(output, "  3  按配置去重追加到目标工作簿  【去重追加数据配置：源数据/标识列/目标工作簿/目标工作表】")?;
         writeln!(output, "  4  去重/追加配置预校验  【去重追加数据配置】")?;
         writeln!(output, "  0  返回")?;
@@ -2165,8 +2509,7 @@ where
                         "{} [INFO] 开始处理：{label}",
                         pytools_core::engine_diag::now_prefix()
                     )?;
-                    let started = Instant::now();
-                    let log = ConfiguredRunLog::new(global, "2-1", label, log_view);
+                    let mut log = ConfiguredRunLog::new(global, "2-1", label, log_view);
                     let mut report_tasks = Vec::new();
                     let mut progress_write_error = None;
                     let result = match load_dedup_tasks(config_path) {
@@ -2177,23 +2520,58 @@ where
                                 "{} [INFO] 已启用配置：{enabled_count} 项",
                                 pytools_core::engine_diag::now_prefix()
                             )?;
-                            let result = pytools_core::dedup_ops::mark_duplicates_in_place_with_progress(
-                                &tasks,
-                                |task| {
-                                    if progress_write_error.is_none() {
-                                        progress_write_error = write_dedup_task_start(output, task, false).err();
-                                    }
-                                },
-                            );
+                            let result =
+                                pytools_core::dedup_ops::mark_duplicates_in_place_with_progress(
+                                    &tasks,
+                                    |task| {
+                                        if progress_write_error.is_none() {
+                                            progress_write_error =
+                                                write_dedup_task_start(output, task, false).err();
+                                        }
+                                    },
+                                );
                             report_tasks = tasks;
                             result
                         }
                         Err(error) => Err(error),
                     };
-                    match &result {
-                        Ok(run) => log.finish(false, Some((run.task_ok, run.task_skipped, run.task_failed)), &run.events, &run.saved_books),
-                        Err(_) => log.finish(true, None, &[], &[]),
-                    }
+                    let summary = match &result {
+                        Ok(run) => {
+                            log.set_business_metric(
+                                "标记重复行数",
+                                serde_json::json!(run.marked_rows),
+                            );
+                            log.set_business_metric(
+                                "保存工作簿数",
+                                serde_json::json!(run.saved_books.len()),
+                            );
+                            if run.marked_rows > 0 {
+                                log.record_business_issue(
+                                    pytools_core::run_logging::BusinessIssue::new(
+                                        "重复数据",
+                                        "配置检查发现重复行并已标记",
+                                    )
+                                    .count(run.marked_rows),
+                                );
+                            }
+                            log.finish(
+                                false,
+                                Some((run.task_ok, run.task_skipped, run.task_failed)),
+                                &run.events,
+                                &run.saved_books,
+                            )
+                        }
+                        Err(error) => {
+                            log.set_error_summary(pytools_core::run_logging::ErrorSummary {
+                                stage: "duplicate_mark".to_owned(),
+                                code: "DEDUP_OPERATION_FAILED".to_owned(),
+                                message: format!("{label}失败：{error:#}"),
+                                file_name: None,
+                                sheet_name: None,
+                            });
+                            log.finish(true, None, &[], &[])
+                        }
+                    };
                     if let Some(error) = progress_write_error {
                         return Err(error.into());
                     }
@@ -2206,51 +2584,23 @@ where
                                 &run.saved_books,
                                 "标记重复行",
                             )?;
-                            writeln!(
-                                output,
-                                "{} [{}] 处理完成：任务成功 {} 项，跳过 {} 项，失败 {} 项；标记重复行 {} 行；保存工作簿 {} 个；用时 {:.1} 秒",
-                                pytools_core::engine_diag::now_prefix(),
-                                if run.task_failed > 0 { "WARN" } else { "INFO" },
-                                run.task_ok,
-                                run.task_skipped,
-                                run.task_failed,
-                                run.marked_rows,
-                                run.saved_books.len(),
-                                started.elapsed().as_secs_f64()
-                            )?;
-                            for path in &run.saved_books {
-                                writeln!(
-                                    output,
-                                    "{} 已就地标记：{}",
-                                    pytools_core::engine_diag::now_prefix(),
-                                    display_path_for_user(&path)
-                                )?;
-                            }
-                            for event in run
-                                .events
-                                .iter()
-                                .filter(|event| {
-                                    matches!(
-                                        event.outcome,
-                                        pytools_core::engine_diag::DiagOutcome::Skipped
-                                            | pytools_core::engine_diag::DiagOutcome::Failed
-                                    )
-                                })
-                            {
+                            for event in run.events.iter().filter(|event| {
+                                matches!(
+                                    event.outcome,
+                                    pytools_core::engine_diag::DiagOutcome::Skipped
+                                        | pytools_core::engine_diag::DiagOutcome::Failed
+                                )
+                            }) {
                                 writeln!(output, "{}", event.user_line())?;
                             }
+                            write_unified_terminal_summary(output, &summary, &run.saved_books)?;
                         }
-                        Err(error) => {
-                            writeln!(
-                                output,
-                                "{} 处理失败：{label}；错误：{error:#}",
-                                pytools_core::engine_diag::now_prefix()
-                            )?;
+                        Err(_error) => {
+                            write_unified_terminal_summary(output, &summary, &[])?;
                         }
                     }
                     return Ok(());
                 }
-                let action_name = "config-delete";
                 if choice == "4" {
                     // 2-2 改为在源工作簿上就地删除重复行（保留首次出现），
                     // 不再生成删除结果副本工作簿。
@@ -2260,8 +2610,7 @@ where
                         "{} [INFO] 开始处理：{label}",
                         pytools_core::engine_diag::now_prefix()
                     )?;
-                    let started = Instant::now();
-                    let log = ConfiguredRunLog::new(global, "2-2", label, log_view);
+                    let mut log = ConfiguredRunLog::new(global, "2-2", label, log_view);
                     let mut report_tasks = Vec::new();
                     let mut progress_write_error = None;
                     let result = match load_dedup_tasks(config_path) {
@@ -2272,23 +2621,49 @@ where
                                 "{} [INFO] 已启用配置：{enabled_count} 项",
                                 pytools_core::engine_diag::now_prefix()
                             )?;
-                            let result = pytools_core::dedup_ops::delete_duplicates_in_place_with_progress(
-                                &tasks,
-                                |task| {
-                                    if progress_write_error.is_none() {
-                                        progress_write_error = write_dedup_task_start(output, task, false).err();
-                                    }
-                                },
-                            );
+                            let result =
+                                pytools_core::dedup_ops::delete_duplicates_in_place_with_progress(
+                                    &tasks,
+                                    |task| {
+                                        if progress_write_error.is_none() {
+                                            progress_write_error =
+                                                write_dedup_task_start(output, task, false).err();
+                                        }
+                                    },
+                                );
                             report_tasks = tasks;
                             result
                         }
                         Err(error) => Err(error),
                     };
-                    match &result {
-                        Ok(run) => log.finish(false, Some((run.task_ok, run.task_skipped, run.task_failed)), &run.events, &run.saved_books),
-                        Err(_) => log.finish(true, None, &[], &[]),
-                    }
+                    let summary = match &result {
+                        Ok(run) => {
+                            log.set_business_metric(
+                                "删除重复行数",
+                                serde_json::json!(run.deleted_rows),
+                            );
+                            log.set_business_metric(
+                                "保存工作簿数",
+                                serde_json::json!(run.saved_books.len()),
+                            );
+                            log.finish(
+                                false,
+                                Some((run.task_ok, run.task_skipped, run.task_failed)),
+                                &run.events,
+                                &run.saved_books,
+                            )
+                        }
+                        Err(error) => {
+                            log.set_error_summary(pytools_core::run_logging::ErrorSummary {
+                                stage: "duplicate_delete".to_owned(),
+                                code: "DEDUP_OPERATION_FAILED".to_owned(),
+                                message: format!("{label}失败：{error:#}"),
+                                file_name: None,
+                                sheet_name: None,
+                            });
+                            log.finish(true, None, &[], &[])
+                        }
+                    };
                     if let Some(error) = progress_write_error {
                         return Err(error.into());
                     }
@@ -2301,46 +2676,19 @@ where
                                 &run.saved_books,
                                 "删除重复行",
                             )?;
-                            writeln!(
-                                output,
-                                "{} [{}] 处理完成：任务成功 {} 项，跳过 {} 项，失败 {} 项；删除重复行 {} 行；保存工作簿 {} 个；用时 {:.1} 秒",
-                                pytools_core::engine_diag::now_prefix(),
-                                if run.task_failed > 0 { "WARN" } else { "INFO" },
-                                run.task_ok,
-                                run.task_skipped,
-                                run.task_failed,
-                                run.deleted_rows,
-                                run.saved_books.len(),
-                                started.elapsed().as_secs_f64()
-                            )?;
-                            for path in &run.saved_books {
-                                writeln!(
-                                    output,
-                                    "{} 已就地删除：{}",
-                                    pytools_core::engine_diag::now_prefix(),
-                                    display_path_for_user(&path)
-                                )?;
-                            }
-                            for event in run
-                                .events
-                                .iter()
-                                .filter(|event| {
-                                    matches!(
-                                        event.outcome,
-                                        pytools_core::engine_diag::DiagOutcome::Skipped
-                                            | pytools_core::engine_diag::DiagOutcome::Failed
-                                    )
-                                })
-                            {
+                            for event in run.events.iter().filter(|event| {
+                                matches!(
+                                    event.outcome,
+                                    pytools_core::engine_diag::DiagOutcome::Skipped
+                                        | pytools_core::engine_diag::DiagOutcome::Failed
+                                )
+                            }) {
                                 writeln!(output, "{}", event.user_line())?;
                             }
+                            write_unified_terminal_summary(output, &summary, &run.saved_books)?;
                         }
-                        Err(error) => {
-                            writeln!(
-                                output,
-                                "{} 处理失败：{label}；错误：{error:#}",
-                                pytools_core::engine_diag::now_prefix()
-                            )?;
+                        Err(_error) => {
+                            write_unified_terminal_summary(output, &summary, &[])?;
                         }
                     }
                     return Ok(());
@@ -2395,7 +2743,7 @@ where
         capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
     );
-    let diagnostic = ConfiguredRunLog::new(global, "2-3", "按配置去重追加", log_view);
+    let mut diagnostic = ConfiguredRunLog::new(global, "2-3", "按配置去重追加", log_view);
     let started_at = Local::now();
     let started = Instant::now();
     match log_view {
@@ -2443,7 +2791,14 @@ where
     let (mut report, plans) = match planning_result {
         Ok(result) => result,
         Err(error) => {
-            diagnostic.finish(true, None, &[], &[]);
+            diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+                stage: "workbook_read_and_plan".to_owned(),
+                code: "DEDUP_APPEND_PLAN_FAILED".to_owned(),
+                message: format!("读取启用配置或生成追加计划失败：{error:#}"),
+                file_name: None,
+                sheet_name: None,
+            });
+            let summary = diagnostic.finish(true, None, &[], &[]);
             let elapsed_ms = started.elapsed().as_millis();
             let stages = vec![serde_json::json!({
                 "name": "workbook_read_and_plan",
@@ -2468,14 +2823,7 @@ where
                     Err(log_error) => writeln!(output, "PT-2 失败：PT-2-5，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
             } else {
-                writeln!(
-                    output,
-                    "{}",
-                    pytools_core::run_logging::terminal_line(
-                        pytools_core::run_logging::Level::Error,
-                        &format!("处理失败：按启用配置追加到目标；错误：{error:#}")
-                    )
-                )?;
+                write_unified_terminal_summary(output, &summary, &[])?;
             }
             return Ok(());
         }
@@ -2611,7 +2959,11 @@ where
                 diagnostic_events.push(
                     pytools_core::engine_diag::DiagEvent::new(
                         if plan.target_existed {
-                            if direct_existing { "umya-spreadsheet" } else { "ExcelModifier" }
+                            if direct_existing {
+                                "umya-spreadsheet"
+                            } else {
+                                "ExcelModifier"
+                            }
                         } else {
                             "rust_xlsxwriter"
                         },
@@ -2654,14 +3006,22 @@ where
                 output,
                 "{}",
                 pytools_core::run_logging::terminal_line(
-                    if status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info },
+                    if status == "failed" {
+                        pytools_core::run_logging::Level::Error
+                    } else {
+                        pytools_core::run_logging::Level::Info
+                    },
                     &format!(
                         "目标汇总结果：目标 {}；关联配置 {}；过滤重复 {} 行，追加 {} 行{}",
                         display_path_for_user(&plan.target),
                         config_rows_label,
                         plan.duplicate_rows_filtered,
                         plan.appended_rows,
-                        if committed { "，目标工作簿已保存" } else { "；目标工作簿未修改" }
+                        if committed {
+                            "，目标工作簿已保存"
+                        } else {
+                            "；目标工作簿未修改"
+                        }
                     )
                 )
             )?;
@@ -2725,8 +3085,7 @@ where
         .iter()
         .enumerate()
         .filter(|(index, _)| {
-            report[*index]["status"] == "succeeded"
-                || report[*index]["status"] == "no_changes"
+            report[*index]["status"] == "succeeded" || report[*index]["status"] == "no_changes"
         })
         .map(|(_, plan)| plan.duplicate_rows_filtered)
         .sum();
@@ -2784,11 +3143,62 @@ where
         _ if committed_targets == 0 => pytools_core::run_logging::TaskStatus::NoOp,
         _ => pytools_core::run_logging::TaskStatus::Success,
     };
-    let committed = report.as_array().into_iter().flatten().enumerate()
+    let committed = report
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
         .filter(|(_, item)| item["status"] == "succeeded")
         .filter_map(|(index, _)| plans.get(index).map(|plan| plan.target.clone()))
         .collect::<Vec<_>>();
-    diagnostic.finish_as(
+    for (name, value) in [
+        ("写入目标数", serde_json::json!(committed_targets)),
+        ("追加行数", serde_json::json!(committed_rows)),
+        ("过滤重复行数", serde_json::json!(filtered_rows)),
+        ("跳过配置数", serde_json::json!(skipped_tasks)),
+        ("受阻目标数", serde_json::json!(blocked_targets)),
+        ("失败目标数", serde_json::json!(failed_targets)),
+        ("未处理目标数", serde_json::json!(unprocessed_targets)),
+    ] {
+        diagnostic.set_business_metric(name, value);
+    }
+    if blocked_targets > 0 {
+        diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+            stage: "target_commit".to_owned(),
+            code: "EXCEL_MODIFIER_CAPABILITY_REQUIRED".to_owned(),
+            message: "目标工作簿需要可用的 Excel 编辑能力；本次未修改受阻目标".to_owned(),
+            file_name: report
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|item| item["status"] == "planned_only")
+                .and_then(|item| item["target"].as_str())
+                .map(|path| pytools_core::run_logging::portable_file_name(Path::new(path))),
+            sheet_name: None,
+        });
+    } else if failed_targets > 0 {
+        diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+            stage: "target_commit".to_owned(),
+            code: "DEDUP_APPEND_TARGET_FAILED".to_owned(),
+            message: report
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|item| item["status"] == "failed")
+                .and_then(|item| item["error"].as_str())
+                .unwrap_or("目标写入失败")
+                .to_owned(),
+            file_name: report
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|item| item["status"] == "failed")
+                .and_then(|item| item["target"].as_str())
+                .map(|path| pytools_core::run_logging::portable_file_name(Path::new(path))),
+            sheet_name: None,
+        });
+    }
+    let summary = diagnostic.finish_as(
         failed || blocked_targets > 0,
         None,
         &diagnostic_events,
@@ -2798,12 +3208,6 @@ where
 
     match log_view {
         "user" => {
-            let outcome = match run_status {
-                "failed" => "处理失败",
-                "partial" => "部分完成",
-                "blocked" => "处理受阻",
-                _ => "处理完成",
-            };
             if plans.is_empty() {
                 writeln!(
                     output,
@@ -2818,18 +3222,7 @@ where
                     )
                 )?;
             }
-            writeln!(
-                output,
-                "{}",
-                pytools_core::run_logging::terminal_line(
-                    match run_status {
-                        "failed" | "blocked" => pytools_core::run_logging::Level::Error,
-                        "partial" => pytools_core::run_logging::Level::Warn,
-                        _ => pytools_core::run_logging::Level::Info,
-                    },
-                    &format!( "{outcome}：已写入 {committed_targets} 个目标，追加 {committed_rows} 行，过滤重复 {filtered_rows} 行；跳过 {skipped_tasks} 项配置，受阻 {blocked_targets} 个目标，失败 {failed_targets} 个目标，未处理 {unprocessed_targets} 个目标；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)
-                )
-            )?;
+            write_unified_terminal_summary(output, &summary, &committed)?;
             for item in report.as_array().into_iter().flatten() {
                 if let Some(error) = item["error"].as_str() {
                     writeln!(
@@ -2906,8 +3299,12 @@ fn write_dedup_append_menu_run_history(
     plan_only: bool,
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create dedup log directory {}", display_path_for_user(&global.log_dir)))?;
+    fs::create_dir_all(&global.log_dir).with_context(|| {
+        format!(
+            "create dedup log directory {}",
+            display_path_for_user(&global.log_dir)
+        )
+    })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let history = serde_json::json!({
         "schema_version": 1,
@@ -2942,7 +3339,10 @@ fn write_dedup_append_menu_run_history(
                 return Ok(path);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error).with_context(|| format!("create {}", display_path_for_user(&path))),
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("create {}", display_path_for_user(&path)))
+            }
         }
     }
     bail!("unable to allocate a unique dedup append run history path")
@@ -2968,8 +3368,9 @@ fn write_temporary_dedup_append_plan(plan: &AppendTargetPlan) -> Result<Temporar
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("create temporary plan {}", display_path_for_user(&path)))
+                return Err(error).with_context(|| {
+                    format!("create temporary plan {}", display_path_for_user(&path))
+                })
             }
         }
     }
@@ -2991,7 +3392,11 @@ fn dedup_task_label(task: &pytools_core::config::DedupTask) -> String {
     let target_file = task
         .target_wb
         .as_ref()
-        .and_then(|target| target.file_stem().map(|stem| stem.to_string_lossy().into_owned()))
+        .and_then(|target| {
+            target
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+        })
         .unwrap_or_else(|| "（未配置目标文件）".to_owned());
     let target_sheet = if task.target_ws.trim().is_empty() {
         "（未指定目标工作表）"
@@ -3032,10 +3437,16 @@ fn write_dedup_task_start<W: Write>(
         source, source_sheet, key_columns
     );
     if include_target {
-        let target = task.target_wb.as_deref()
+        let target = task
+            .target_wb
+            .as_deref()
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_else(|| "（未配置）".to_owned());
-        let target_sheet = if task.target_ws.trim().is_empty() { "（未指定）" } else { task.target_ws.trim() };
+        let target_sheet = if task.target_ws.trim().is_empty() {
+            "（未指定）"
+        } else {
+            task.target_ws.trim()
+        };
         line.push_str(&format!("；目标文件：{target}；目标工作表：{target_sheet}"));
     }
     writeln!(output, "{line}")?;
@@ -3073,9 +3484,9 @@ fn write_dedup_task_results<W: Write>(
         });
         let event = task_event.or(workbook_event);
         let prefix = pytools_core::engine_diag::now_prefix();
-        if let Some(event) = event.filter(|event| {
-            matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
-        }) {
+        if let Some(event) = event
+            .filter(|event| matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed))
+        {
             let level = if event.outcome == DiagOutcome::Failed {
                 "ERROR"
             } else {
@@ -3087,7 +3498,11 @@ fn write_dedup_task_results<W: Write>(
                 "{prefix} [{level}] 配置结果：第 {} 行「{}」；{}：{event_message}；源工作簿未修改",
                 task.row_no,
                 dedup_task_label(task),
-                if event.outcome == DiagOutcome::Failed { "失败" } else { "已跳过" },
+                if event.outcome == DiagOutcome::Failed {
+                    "失败"
+                } else {
+                    "已跳过"
+                },
             )?;
             continue;
         }
@@ -3108,15 +3523,21 @@ fn write_dedup_task_results<W: Write>(
             )?;
             continue;
         };
-        let saved = task.source_wb.as_ref().is_some_and(|source| {
-            saved_books.iter().any(|saved_path| saved_path == source)
-        });
-        let modified = duplicate_count > 0;
+        let saved = task
+            .source_wb
+            .as_ref()
+            .is_some_and(|source| saved_books.iter().any(|saved_path| saved_path == source));
         // 有结果的行按功能语义给结论；无变化的行明确说明源工作簿未修改。
         let (level, outcome_text) = if duplicate_count > 0 && saved {
-            ("INFO", format!("{duplicate_label} {duplicate_count} 行，已更新并保存源工作簿"))
+            (
+                "INFO",
+                format!("{duplicate_label} {duplicate_count} 行，已更新并保存源工作簿"),
+            )
         } else if duplicate_count > 0 {
-            ("WARN", format!("{duplicate_label} {duplicate_count} 行；源工作簿未保存"))
+            (
+                "WARN",
+                format!("{duplicate_label} {duplicate_count} 行；源工作簿未保存"),
+            )
         } else {
             ("INFO", format!("未发现{duplicate_label}，源工作簿未修改"))
         };
@@ -3138,6 +3559,7 @@ struct ConfiguredRunLog {
     log_dir: PathBuf,
     log_view: String,
     enabled: bool,
+    error_summary: Option<pytools_core::run_logging::ErrorSummary>,
 }
 
 fn path_for_log_view(path: &Path, log_view: &str) -> String {
@@ -3148,96 +3570,275 @@ fn diagnostic_path_for_log_view(
     writer: Option<&pytools_core::run_logging::EventWriter>,
     log_view: &str,
 ) -> Option<String> {
-    writer.map(|writer| pytools_core::run_logging::diagnostic_path_for_log_view(writer.path(), log_view == "developer"))
+    writer.map(|writer| {
+        pytools_core::run_logging::diagnostic_path_for_log_view(
+            writer.path(),
+            log_view == "developer",
+        )
+    })
 }
 
 impl ConfiguredRunLog {
     fn new(global: &GlobalConfig, feature: &str, label: &str, log_view: &str) -> Self {
         use pytools_core::run_logging::{EventWriter, Level, RunTracker};
         let tracker = RunTracker::new(feature, label, &[]);
-        let writer = if log_view == "off" { None } else {
-            match EventWriter::create(&global.log_dir.join("run-events"), feature, &tracker.run_id) {
+        let writer = if log_view == "off" {
+            None
+        } else {
+            match EventWriter::create(&global.log_dir.join("run-events"), feature, &tracker.run_id)
+            {
                 Ok(mut writer) => {
-                    if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "configuration", "started", format!("开始：{}", tracker.feature_name))) {
-                        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+                    if let Err(error) = writer.write(&tracker.event(
+                        Level::Info,
+                        "run_started",
+                        "configuration",
+                        "started",
+                        format!("开始：{}", tracker.feature_name),
+                    )) {
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("诊断日志写入失败：{error}")
+                            )
+                        );
                     }
                     Some(writer)
                 }
-                Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续"))); None }
+                Err(error) => {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("无法创建诊断日志：{error}；业务处理继续")
+                        )
+                    );
+                    None
+                }
             }
         };
-        Self { tracker, writer, log_dir: global.log_dir.clone(), log_view: log_view.to_owned(), enabled: log_view != "off" }
+        Self {
+            tracker,
+            writer,
+            log_dir: global.log_dir.clone(),
+            log_view: log_view.to_owned(),
+            enabled: log_view != "off",
+            error_summary: None,
+        }
+    }
+
+    fn set_business_metric(&mut self, name: &str, value: serde_json::Value) {
+        self.tracker.set_business_metric(name, value);
+    }
+
+    fn record_business_issue(&mut self, issue: pytools_core::run_logging::BusinessIssue) {
+        self.tracker.record_business_issue(issue);
+    }
+
+    fn set_error_summary(&mut self, error: pytools_core::run_logging::ErrorSummary) {
+        if self.error_summary.is_none() {
+            self.error_summary = Some(error);
+        }
     }
 
     fn record_stages(&mut self, stages: &[serde_json::Value]) {
         if let Some(writer) = self.writer.as_mut() {
             for stage in stages {
                 let name = stage["name"].as_str().unwrap_or("configuration");
-                let mut event = self.tracker.event(pytools_core::run_logging::Level::Debug, "configuration_stage", name, "completed", format!("{}：配置阶段「{name}」完成", self.tracker.feature_name));
+                let mut event = self.tracker.event(
+                    pytools_core::run_logging::Level::Debug,
+                    "configuration_stage",
+                    name,
+                    "completed",
+                    format!("{}：配置阶段「{name}」完成", self.tracker.feature_name),
+                );
                 event.elapsed_ms = stage["elapsed_ms"].as_u64().map(u128::from);
                 if let Err(error) = writer.write(&event) {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("诊断日志写入失败：{error}")));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
                     break;
                 }
             }
         }
     }
 
-    fn finish(self, failed: bool, task_counts: Option<(usize, usize, usize)>, events: &[pytools_core::engine_diag::DiagEvent], outputs: &[PathBuf]) {
-        self.finish_as(failed, task_counts, events, outputs, None);
+    fn finish(
+        self,
+        failed: bool,
+        task_counts: Option<(usize, usize, usize)>,
+        events: &[pytools_core::engine_diag::DiagEvent],
+        outputs: &[PathBuf],
+    ) -> pytools_core::run_logging::RunSummary {
+        self.finish_as(failed, task_counts, events, outputs, None)
     }
 
-    fn finish_as(mut self, failed: bool, task_counts: Option<(usize, usize, usize)>, events: &[pytools_core::engine_diag::DiagEvent], outputs: &[PathBuf], override_status: Option<pytools_core::run_logging::TaskStatus>) {
+    fn finish_as(
+        mut self,
+        failed: bool,
+        task_counts: Option<(usize, usize, usize)>,
+        events: &[pytools_core::engine_diag::DiagEvent],
+        outputs: &[PathBuf],
+        override_status: Option<pytools_core::run_logging::TaskStatus>,
+    ) -> pytools_core::run_logging::RunSummary {
         use pytools_core::engine_diag::DiagOutcome;
         use pytools_core::run_logging::{Level, TaskStatus};
         let developer_view = self.log_view == "developer";
-        let path = self.writer.as_ref().map(|writer| pytools_core::run_logging::diagnostic_path_for_log_view(writer.path(), developer_view));
-        let mut summary = self.tracker.finish(failed, false, false, outputs.iter().map(|path| pytools_core::run_logging::path_for_log_view(path, developer_view)).collect(), path);
+        let path = self.writer.as_ref().map(|writer| {
+            pytools_core::run_logging::diagnostic_path_for_log_view(writer.path(), developer_view)
+        });
+        let mut summary = self.tracker.finish(
+            failed,
+            false,
+            false,
+            outputs
+                .iter()
+                .map(|path| pytools_core::run_logging::path_for_log_view(path, developer_view))
+                .collect(),
+            path,
+        );
+        summary.error_summary = self.error_summary.clone();
         summary.input_stats_available = false;
         if let Some((ok, skipped, failures)) = task_counts {
-            summary.overall_status = if failed || (failures > 0 && ok == 0) { TaskStatus::Failed }
-                else if failures > 0 { TaskStatus::PartialSuccess }
-                else if ok == 0 && skipped > 0 { TaskStatus::NoOp }
-                else { TaskStatus::Success };
+            summary.overall_status = if failed || (failures > 0 && ok == 0) {
+                TaskStatus::Failed
+            } else if failures > 0 {
+                TaskStatus::PartialSuccess
+            } else if ok == 0 && skipped > 0 {
+                TaskStatus::NoOp
+            } else {
+                TaskStatus::Success
+            };
+            summary
+                .business_metrics
+                .insert("成功配置任务".to_owned(), serde_json::json!(ok));
+            summary
+                .business_metrics
+                .insert("跳过配置任务".to_owned(), serde_json::json!(skipped));
+            summary
+                .business_metrics
+                .insert("失败配置任务".to_owned(), serde_json::json!(failures));
         }
-        if let Some(status) = override_status { summary.overall_status = status; }
+        if let Some(status) = override_status {
+            summary.overall_status = status;
+        }
         if let Some(writer) = self.writer.as_mut() {
             for source in events {
-                let level = match source.outcome { DiagOutcome::Failed => Level::Error, DiagOutcome::Skipped => Level::Warn, DiagOutcome::Started => Level::Info, DiagOutcome::Ok => Level::Debug };
-                let mut event = self.tracker.event(level, "engine_operation", &source.stage.to_string(), &source.outcome.to_string(), format!("{}：{}", source.stage, source.outcome));
+                let level = match source.outcome {
+                    DiagOutcome::Failed => Level::Error,
+                    DiagOutcome::Skipped => Level::Warn,
+                    DiagOutcome::Started => Level::Info,
+                    DiagOutcome::Ok => Level::Debug,
+                };
+                let mut event = self.tracker.event(
+                    level,
+                    "engine_operation",
+                    &source.stage.to_string(),
+                    &source.outcome.to_string(),
+                    format!("{}：{}", source.stage, source.outcome),
+                );
                 event.timestamp = source.timestamp_rfc3339.clone();
                 event.engine = Some(source.engine.clone());
                 event.config_row = source.row_no;
-                event.file_name = source.file.as_deref().map(|value| pytools_core::run_logging::portable_file_name(Path::new(value)));
+                event.file_name = source
+                    .file
+                    .as_deref()
+                    .map(|value| pytools_core::run_logging::portable_file_name(Path::new(value)));
                 event.sheet_name = source.sheet.clone();
                 event.elapsed_ms = source.elapsed_ms;
                 if source.outcome == DiagOutcome::Failed {
-                    event.error_code = Some(match source.stage {
-                        pytools_core::engine_diag::DiagStage::ReadConfig => "CONFIG_READ_FAILED",
-                        pytools_core::engine_diag::DiagStage::ReadSource => "EXCEL_READ_FAILED",
-                        pytools_core::engine_diag::DiagStage::CopySheet => "SHEET_COPY_FAILED",
-                        pytools_core::engine_diag::DiagStage::ModifyWorkbook => "EXCEL_MODIFY_FAILED",
-                        pytools_core::engine_diag::DiagStage::SaveOutput => "OUTPUT_WRITE_FAILED",
-                    }.to_owned());
+                    event.error_code = Some(
+                        match source.stage {
+                            pytools_core::engine_diag::DiagStage::ReadConfig => {
+                                "CONFIG_READ_FAILED"
+                            }
+                            pytools_core::engine_diag::DiagStage::ReadSource => "EXCEL_READ_FAILED",
+                            pytools_core::engine_diag::DiagStage::CopySheet => "SHEET_COPY_FAILED",
+                            pytools_core::engine_diag::DiagStage::ModifyWorkbook => {
+                                "EXCEL_MODIFY_FAILED"
+                            }
+                            pytools_core::engine_diag::DiagStage::SaveOutput => {
+                                "OUTPUT_WRITE_FAILED"
+                            }
+                        }
+                        .to_owned(),
+                    );
                     if self.log_view == "developer" {
                         event.details = Some(serde_json::json!({"diagnostic": source.message}));
                     }
                 }
-                if let Err(error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); break; }
+                if let Err(error) = writer.write(&event) {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
+                    break;
+                }
             }
-            if let Err(error) = writer.write(&self.tracker.event(if failed { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", summary.overall_status), format!("{}结束", self.tracker.feature_name))) {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+            if let Err(error) = writer.write(&self.tracker.event(
+                if failed { Level::Error } else { Level::Info },
+                "run_finished",
+                "run",
+                &format!("{:?}", summary.overall_status),
+                format!("{}结束", self.tracker.feature_name),
+            )) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
             }
         }
         if self.enabled {
-            let mut value = match serde_json::to_value(&summary) { Ok(value) => value, Err(error) => { eprintln!("运行记录序列化失败：{error}"); return; } };
-            if let Some((ok, skipped, failures)) = task_counts { value["task_stats"] = serde_json::json!({"succeeded": ok, "skipped": skipped, "failed": failures}); }
-            let path = self.log_dir.join(format!("{}_{}.run.json", self.tracker.feature_id, self.tracker.run_id));
-            match write_json_report_create_new(&path, &value) {
-                Ok(()) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", self.tracker.run_id, display_path_for_user(&path)))),
-                Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留"))),
+            match serde_json::to_value(&summary) {
+                Ok(mut value) => {
+                    if let Some((ok, skipped, failures)) = task_counts {
+                        value["task_stats"] = serde_json::json!({"succeeded": ok, "skipped": skipped, "failed": failures});
+                    }
+                    let path = self.log_dir.join(format!(
+                        "{}_{}.run.json",
+                        self.tracker.feature_id, self.tracker.run_id
+                    ));
+                    match write_json_report_create_new(&path, &value) {
+                        Ok(()) => eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Info,
+                                &format!(
+                                    "运行编号 {}；运行记录：{}",
+                                    self.tracker.run_id,
+                                    display_path_for_user(&path)
+                                )
+                            )
+                        ),
+                        Err(error) => eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("运行记录写入失败：{error}；业务结果仍保留")
+                            )
+                        ),
+                    }
+                }
+                Err(error) => eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("运行记录序列化失败：{error}；业务结果仍保留")
+                    )
+                ),
             }
         }
+        summary
     }
 }
 
@@ -3277,7 +3878,11 @@ impl UnifiedRunSession {
             warned_log_failure: false,
         };
         if log_view != "off" {
-            match EventWriter::create(&log_dir.join("run-events"), feature_id, &session.tracker.run_id) {
+            match EventWriter::create(
+                &log_dir.join("run-events"),
+                feature_id,
+                &session.tracker.run_id,
+            ) {
                 Ok(writer) => session.writer = Some(writer),
                 Err(error) => session.warn_log_failure("无法创建诊断日志", &error),
             }
@@ -3308,6 +3913,14 @@ impl UnifiedRunSession {
         self.tracker.set_discovered(discovered);
     }
 
+    fn set_business_metric(&mut self, name: &str, value: serde_json::Value) {
+        self.tracker.set_business_metric(name, value);
+    }
+
+    fn record_business_issue(&mut self, issue: pytools_core::run_logging::BusinessIssue) {
+        self.tracker.record_business_issue(issue);
+    }
+
     fn mark_inputs_unavailable(&mut self) {
         self.input_stats_available = false;
     }
@@ -3327,7 +3940,9 @@ impl UnifiedRunSession {
         engine: Option<&str>,
         details: Option<serde_json::Value>,
     ) {
-        self.progress_at(level, event_name, stage, status, message, elapsed_ms, engine, details, None);
+        self.progress_at(
+            level, event_name, stage, status, message, elapsed_ms, engine, details, None,
+        );
     }
 
     fn progress_at(
@@ -3342,8 +3957,12 @@ impl UnifiedRunSession {
         details: Option<serde_json::Value>,
         timestamp: Option<&str>,
     ) {
-        let mut event = self.tracker.event(level, event_name, stage, status, message);
-        if let Some(timestamp) = timestamp { event.timestamp = timestamp.to_owned(); }
+        let mut event = self
+            .tracker
+            .event(level, event_name, stage, status, message);
+        if let Some(timestamp) = timestamp {
+            event.timestamp = timestamp.to_owned();
+        }
         event.elapsed_ms = elapsed_ms;
         event.engine = engine.map(str::to_owned);
         if self.log_view == "developer" {
@@ -3393,7 +4012,8 @@ impl UnifiedRunSession {
         event.file_name = input.map(|item| item.file_name.clone());
         event.error_code = error_code.map(str::to_owned);
         if self.log_view == "developer" {
-            event.details = details.map(|error_chain| serde_json::json!({"error_chain": error_chain}));
+            event.details =
+                details.map(|error_chain| serde_json::json!({"error_chain": error_chain}));
         }
         if status == FileStatus::Failed && self.first_error.is_none() {
             self.first_error = Some(pytools_core::run_logging::ErrorSummary {
@@ -3440,7 +4060,8 @@ impl UnifiedRunSession {
         event.file_name = Some(pytools_core::run_logging::portable_file_name(path));
         event.error_code = error_code.map(str::to_owned);
         if self.log_view == "developer" {
-            event.details = details.map(|error_chain| serde_json::json!({"diagnostic": error_chain}));
+            event.details =
+                details.map(|error_chain| serde_json::json!({"diagnostic": error_chain}));
         }
         if status == FileStatus::Failed && self.first_error.is_none() {
             self.first_error = Some(pytools_core::run_logging::ErrorSummary {
@@ -3462,13 +4083,14 @@ impl UnifiedRunSession {
         error_chain: &anyhow::Error,
     ) {
         use pytools_core::run_logging::Level;
-        self.first_error.get_or_insert_with(|| pytools_core::run_logging::ErrorSummary {
-            stage: stage.to_owned(),
-            code: code.to_owned(),
-            message: message.to_owned(),
-            file_name: None,
-            sheet_name: None,
-        });
+        self.first_error
+            .get_or_insert_with(|| pytools_core::run_logging::ErrorSummary {
+                stage: stage.to_owned(),
+                code: code.to_owned(),
+                message: message.to_owned(),
+                file_name: None,
+                sheet_name: None,
+            });
         self.progress(
             Level::Error,
             "operation_failed",
@@ -3491,7 +4113,16 @@ impl UnifiedRunSession {
         record_stats: Option<pytools_core::run_logging::RecordStats>,
         sheet_stats: Option<pytools_core::run_logging::SheetStats>,
     ) -> (pytools_core::run_logging::RunSummary, Option<PathBuf>) {
-        self.finish_with_status(critical_failure, cancelled, no_op, outputs, output_stats, record_stats, sheet_stats, None)
+        self.finish_with_status(
+            critical_failure,
+            cancelled,
+            no_op,
+            outputs,
+            output_stats,
+            record_stats,
+            sheet_stats,
+            None,
+        )
     }
 
     fn finish_with_status(
@@ -3506,12 +4137,22 @@ impl UnifiedRunSession {
         status_override: Option<pytools_core::run_logging::TaskStatus>,
     ) -> (pytools_core::run_logging::RunSummary, Option<PathBuf>) {
         use pytools_core::run_logging::{Level, TaskStatus};
-        let diagnostic_path = self.writer.as_ref().map(|writer| pytools_core::run_logging::diagnostic_path_for_log_view(writer.path(), self.log_view == "developer"));
+        let diagnostic_path = self.writer.as_ref().map(|writer| {
+            pytools_core::run_logging::diagnostic_path_for_log_view(
+                writer.path(),
+                self.log_view == "developer",
+            )
+        });
         let mut summary = self.tracker.finish(
             critical_failure,
             cancelled,
             no_op,
-            outputs.iter().map(|path| pytools_core::run_logging::path_for_log_view(path, self.log_view == "developer")).collect(),
+            outputs
+                .iter()
+                .map(|path| {
+                    pytools_core::run_logging::path_for_log_view(path, self.log_view == "developer")
+                })
+                .collect(),
             diagnostic_path,
         );
         summary.input_stats_available = self.input_stats_available;
@@ -3519,12 +4160,22 @@ impl UnifiedRunSession {
         summary.record_stats = record_stats;
         summary.sheet_stats = sheet_stats;
         summary.error_summary = self.first_error.clone();
-        if let Some(status) = status_override { summary.overall_status = status; }
-        if !critical_failure && summary.input_stats.failed == 0 && summary.input_stats.pending == 0 && no_op {
+        if let Some(status) = status_override {
+            summary.overall_status = status;
+        }
+        if !critical_failure
+            && summary.input_stats.failed == 0
+            && summary.input_stats.pending == 0
+            && no_op
+        {
             summary.overall_status = TaskStatus::NoOp;
         }
         self.progress(
-            if matches!(summary.overall_status, TaskStatus::Failed) { Level::Error } else { Level::Info },
+            if matches!(summary.overall_status, TaskStatus::Failed) {
+                Level::Error
+            } else {
+                Level::Info
+            },
             "run_finished",
             "run",
             &format!("{:?}", summary.overall_status),
@@ -3536,7 +4187,10 @@ impl UnifiedRunSession {
         if self.log_view == "off" {
             return (summary, None);
         }
-        let path = self.log_dir.join(format!("{}_{}.run.json", self.tracker.feature_id, self.tracker.run_id));
+        let path = self.log_dir.join(format!(
+            "{}_{}.run.json",
+            self.tracker.feature_id, self.tracker.run_id
+        ));
         match write_json_report_create_new(&path, &summary) {
             Ok(()) => (summary, Some(path)),
             Err(error) => {
@@ -3547,7 +4201,10 @@ impl UnifiedRunSession {
     }
 
     fn write_event(&mut self, event: &pytools_core::run_logging::LogEvent) {
-        let error = self.writer.as_mut().and_then(|writer| writer.write(event).err());
+        let error = self
+            .writer
+            .as_mut()
+            .and_then(|writer| writer.write(event).err());
         if let Some(error) = error {
             self.warn_log_failure("诊断日志写入失败；业务处理继续", &error);
         }
@@ -3560,7 +4217,10 @@ impl UnifiedRunSession {
         self.warned_log_failure = true;
         eprintln!(
             "{}：{}",
-            pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, action),
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Warn,
+                action
+            ),
             error
         );
     }
@@ -3576,11 +4236,24 @@ fn log_quick_menu_action<W: Write>(
     no_result_message: String,
 ) -> Result<()> {
     use pytools_core::run_logging::{terminal_line, Level, TaskStatus};
-    let diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
+    let mut diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
     match result {
         Ok(Some(path)) => {
-            diagnostic.finish_as(false, Some((1, 0, 0)), &[], std::slice::from_ref(&path), Some(TaskStatus::Success));
-            writeln!(output, "{}", terminal_line(Level::Info, &format!("已执行：{label}；位置：{}", display_path_for_user(&path))))?;
+            diagnostic.finish_as(
+                false,
+                Some((1, 0, 0)),
+                &[],
+                std::slice::from_ref(&path),
+                Some(TaskStatus::Success),
+            );
+            writeln!(
+                output,
+                "{}",
+                terminal_line(
+                    Level::Info,
+                    &format!("已执行：{label}；位置：{}", display_path_for_user(&path))
+                )
+            )?;
         }
         Ok(None) => {
             diagnostic.finish_as(false, Some((0, 1, 0)), &[], &[], Some(TaskStatus::NoOp));
@@ -3610,7 +4283,7 @@ fn run_dedup_menu_action<W: Write>(
     arguments: Vec<String>,
     run: fn(Vec<String>) -> Result<serde_json::Value>,
 ) -> Result<()> {
-    let diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
+    let mut diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
     let started_at = Local::now();
     let started = Instant::now();
     match log_view {
@@ -3622,7 +4295,17 @@ fn run_dedup_menu_action<W: Write>(
     let report = match run(arguments) {
         Ok(report) => report,
         Err(error) => {
-            diagnostic.finish(true, None, &[], &[]);
+            diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+                stage: action.to_owned(),
+                code: "DEDUP_OPERATION_FAILED".to_owned(),
+                message: format!("{label}失败：{error:#}"),
+                file_name: None,
+                sheet_name: None,
+            });
+            let summary = diagnostic.finish(true, None, &[], &[]);
+            if log_view == "user" {
+                write_unified_terminal_summary(output, &summary, &[])?;
+            }
             let elapsed_ms = started.elapsed().as_millis();
             if log_view == "developer" {
                 match write_dedup_menu_run_history(
@@ -3639,8 +4322,6 @@ fn run_dedup_menu_action<W: Write>(
                     Ok(path) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}；错误：{error:#}", display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                     Err(log_error) => writeln!(output, "PT-2 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
-            } else {
-                writeln!(output, "{label}失败；错误：{error:#}")?;
             }
             return Ok(());
         }
@@ -3648,15 +4329,15 @@ fn run_dedup_menu_action<W: Write>(
 
     let elapsed_ms = started.elapsed().as_millis();
     let metrics = dedup_menu_metrics(&report);
-    let failed_precheck =
+    let precheck_issues =
         action == "config_precheck" && metrics["failed_tasks"].as_u64().unwrap_or_default() > 0;
     let writes_duplicate_output = matches!(action, "config_check" | "config_delete");
     let failed_outputs =
         writes_duplicate_output && metrics["failed_targets"].as_u64().unwrap_or_default() > 0;
-    let status = if failed_precheck {
-        "failed"
-    } else if failed_outputs {
+    let status = if failed_outputs && metrics["written_outputs"].as_u64().unwrap_or_default() > 0 {
         "partial"
+    } else if failed_outputs {
+        "failed"
     } else {
         "succeeded"
     };
@@ -3667,21 +4348,106 @@ fn run_dedup_menu_action<W: Write>(
     {
         components.push("rust_xlsxwriter");
     }
-    let error_type = if failed_precheck {
-        Some("dedup_precheck_failures")
-    } else if failed_outputs {
+    let error_type = if failed_outputs {
         Some("dedup_result_output_failures")
     } else {
         None
     };
-    diagnostic.finish(failed_precheck || failed_outputs, None, &[], &[]);
+    let mut summary_metrics = Vec::<(&str, &str)>::new();
+    match action {
+        "config_precheck" => summary_metrics.extend([
+            ("检查任务数", "processed_groups"),
+            ("通过配置数", "passed_tasks"),
+            ("警告配置数", "warning_tasks"),
+            ("失败配置数", "failed_tasks"),
+        ]),
+        "config_check" => summary_metrics.extend([
+            ("重复行数", "duplicate_rows"),
+            ("命中工作表数", "hit_sheets"),
+            ("保存工作簿数", "written_outputs"),
+            ("失败目标数", "failed_targets"),
+            ("跳过配置数", "skipped_tasks"),
+        ]),
+        "config_delete" => summary_metrics.extend([
+            ("删除重复行数", "duplicate_rows"),
+            ("命中工作表数", "hit_sheets"),
+            ("保存工作簿数", "written_outputs"),
+            ("失败目标数", "failed_targets"),
+            ("跳过配置数", "skipped_tasks"),
+        ]),
+        "config_append" => summary_metrics.extend([
+            ("追加行数", "appended_rows"),
+            ("过滤重复行数", "duplicate_rows_filtered"),
+            ("写入目标数", "committed_targets"),
+            ("失败目标数", "failed_targets"),
+            ("跳过配置数", "skipped_tasks"),
+        ]),
+        _ => summary_metrics.push(("处理组数", "processed_groups")),
+    }
+    for (label, key) in summary_metrics {
+        if let Some(value) = metrics.get(key) {
+            diagnostic.set_business_metric(label, value.clone());
+        }
+    }
+    if precheck_issues {
+        diagnostic.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new(
+                "配置校验",
+                "预校验发现未通过的配置项；处理流程已正常完成",
+            )
+            .count(metrics["failed_tasks"].as_u64().unwrap_or_default() as usize),
+        );
+    }
+    let precheck_warnings =
+        action == "config_precheck" && metrics["warning_tasks"].as_u64().unwrap_or_default() > 0;
+    if precheck_warnings {
+        diagnostic.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new(
+                "配置警告",
+                "预校验发现需要关注的配置项；处理流程已正常完成",
+            )
+            .count(metrics["warning_tasks"].as_u64().unwrap_or_default() as usize),
+        );
+    }
+    if action == "config_check" && metrics["duplicate_rows"].as_u64().unwrap_or_default() > 0 {
+        diagnostic.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new("重复数据", "检查发现重复行")
+                .count(metrics["duplicate_rows"].as_u64().unwrap_or_default() as usize),
+        );
+    }
+    let summary_status = if failed_outputs {
+        if metrics["written_outputs"].as_u64().unwrap_or_default() > 0 {
+            pytools_core::run_logging::TaskStatus::PartialSuccess
+        } else {
+            pytools_core::run_logging::TaskStatus::Failed
+        }
+    } else {
+        pytools_core::run_logging::TaskStatus::Success
+    };
+    if failed_outputs {
+        let first_failure = report
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|item| item["status"] == "failed");
+        diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+            stage: action.to_owned(),
+            code: "DEDUP_RESULT_OUTPUT_FAILED".to_owned(),
+            message: first_failure
+                .and_then(|item| item["error"].as_str())
+                .unwrap_or("重复检查结果写入失败")
+                .to_owned(),
+            file_name: first_failure
+                .and_then(|item| item["report"]["workbook"].as_str())
+                .map(|path| pytools_core::run_logging::portable_file_name(Path::new(path))),
+            sheet_name: None,
+        });
+    }
+    let summary = diagnostic.finish_as(failed_outputs, None, &[], &[], Some(summary_status));
 
     match log_view {
-        "user" if failed_precheck || failed_outputs => {
-            writeln!(
-                output, "{label}未完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-                dedup_menu_summary(action, &metrics)
-            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+        "user" => {
+            write_unified_terminal_summary(output, &summary, &[])?;
             if let Some(issues) = report["issues"].as_array() {
                 for issue in issues.iter().filter_map(serde_json::Value::as_str) {
                     writeln!(output, "  {issue}")?;
@@ -3695,10 +4461,6 @@ fn run_dedup_menu_action<W: Write>(
                 }
             }
         }
-        "user" => writeln!(
-            output, "{label}完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-            dedup_menu_summary(action, &metrics)
-        , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
         "developer" => {
             let outcome = match status {
                 "failed" => "失败",
@@ -3719,9 +4481,6 @@ fn run_dedup_menu_action<W: Write>(
                 Ok(path) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}", dedup_menu_summary(action, &metrics), components.join(", "), display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 Err(error) => writeln!(output, "PT-2 {outcome}：{feature_id}，{}，实际组件：{}，ExcelModifier 未调用，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{error:#}", dedup_menu_summary(action, &metrics), components.join(", "), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             }
-        }
-        _ if failed_precheck || failed_outputs => {
-            writeln!(output, "处理失败：{label}；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
         }
         _ => {}
     }
@@ -3842,8 +4601,12 @@ fn write_dedup_menu_run_history(
     actual_components: &[&str],
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create dedup log directory {}", display_path_for_user(&global.log_dir)))?;
+    fs::create_dir_all(&global.log_dir).with_context(|| {
+        format!(
+            "create dedup log directory {}",
+            display_path_for_user(&global.log_dir)
+        )
+    })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let writer_invoked = actual_components.contains(&"rust_xlsxwriter");
     let stage = if action == "config_precheck" {
@@ -3885,7 +4648,10 @@ fn write_dedup_menu_run_history(
                 return Ok(path);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error).with_context(|| format!("create {}", display_path_for_user(&path))),
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("create {}", display_path_for_user(&path)))
+            }
         }
     }
     bail!("unable to allocate a unique dedup run history path")
@@ -3935,16 +4701,45 @@ where
         _ => "PT-3",
     };
     let tracker = RunTracker::new(feature_id, "按配置生成静态打印文件", &[]);
-    let mut diagnostic = if log_view == "off" { None } else {
-        match EventWriter::create(&global.log_dir.join("run-events"), feature_id, &tracker.run_id) {
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
+        match EventWriter::create(
+            &global.log_dir.join("run-events"),
+            feature_id,
+            &tracker.run_id,
+        ) {
             Ok(writer) => Some(writer),
-            Err(error) => { writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续")))?; None }
+            Err(error) => {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                )?;
+                None
+            }
         }
     };
     let mut log_failed = false;
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "configuration", "started", "开始按配置生成打印文件")) {
-            writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")))?;
+        if let Err(error) = writer.write(&tracker.event(
+            Level::Info,
+            "run_started",
+            "configuration",
+            "started",
+            "开始按配置生成打印文件",
+        )) {
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            )?;
             log_failed = true;
         }
     }
@@ -3963,10 +4758,14 @@ where
             pytools_core::engine_diag::now_prefix()
         )?;
         for task in tasks.iter().filter(|task| task.enabled) {
-            let source = task.source_wb.as_deref()
+            let source = task
+                .source_wb
+                .as_deref()
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "（未配置）".to_owned());
-            let target = task.target_wb.as_deref()
+            let target = task
+                .target_wb
+                .as_deref()
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "（未配置）".to_owned());
             writeln!(
@@ -3983,10 +4782,8 @@ where
         }
     }
     output.flush()?;
-    let started = Instant::now();
-    let run_print = || {
-        pytools_core::static_print_engines::run_configured_static_print(config_path, engine)
-    };
+    let run_print =
+        || pytools_core::static_print_engines::run_configured_static_print(config_path, engine);
     // 打印仍在当前线程执行；动画使用 stderr，避免争用菜单持有的 stdout 锁。
     let result = if io::stdout().is_terminal() && io::stderr().is_terminal() {
         std::thread::scope(|scope| {
@@ -4024,23 +4821,34 @@ where
     };
     if let (Some(tasks), Ok(run)) = (print_tasks_for_display.as_ref(), result.as_ref()) {
         for task in tasks.iter().filter(|task| task.enabled) {
-            let task_event = run.events.iter().find(|event| {
-                event.row_no == Some(task.row_no)
-                    && matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
-            }).or_else(|| run.events.iter().find(|event| {
-                event.row_no == Some(task.row_no) && event.outcome == DiagOutcome::Ok
-            }));
-            let target_saved = task.target_wb.as_ref().is_some_and(|target| {
-                run.outputs.iter().any(|output_path| output_path == target)
-            });
-            if let Some(event) = task_event.filter(|event| {
-                matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
-            }) {
+            let task_event = run
+                .events
+                .iter()
+                .find(|event| {
+                    event.row_no == Some(task.row_no)
+                        && matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed)
+                })
+                .or_else(|| {
+                    run.events.iter().find(|event| {
+                        event.row_no == Some(task.row_no) && event.outcome == DiagOutcome::Ok
+                    })
+                });
+            let target_saved = task
+                .target_wb
+                .as_ref()
+                .is_some_and(|target| run.outputs.iter().any(|output_path| output_path == target));
+            if let Some(event) = task_event
+                .filter(|event| matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed))
+            {
                 writeln!(
                     output,
                     "{} [{}] 打印配置执行结果：第 {} 行；状态：{}；原因：{}；保存：否",
                     pytools_core::engine_diag::now_prefix(),
-                    if event.outcome == DiagOutcome::Failed { "ERROR" } else { "WARN" },
+                    if event.outcome == DiagOutcome::Failed {
+                        "ERROR"
+                    } else {
+                        "WARN"
+                    },
                     task.row_no,
                     event.outcome,
                     event.message
@@ -4057,21 +4865,54 @@ where
             }
         }
     }
-    let outputs = result.as_ref().ok().map(|run| run.outputs.iter().map(|path| path_for_log_view(path, log_view)).collect()).unwrap_or_default();
+    let outputs = result
+        .as_ref()
+        .ok()
+        .map(|run| {
+            run.outputs
+                .iter()
+                .map(|path| path_for_log_view(path, log_view))
+                .collect()
+        })
+        .unwrap_or_default();
     let diagnostic_path = diagnostic_path_for_log_view(diagnostic.as_ref(), log_view);
-    let mut summary = tracker.finish(result.is_err(), false, false, outputs, diagnostic_path.clone());
+    let mut summary = tracker.finish(
+        result.is_err(),
+        false,
+        false,
+        outputs,
+        diagnostic_path.clone(),
+    );
     summary.input_stats_available = false; // 配置任务数不等于源文件数。
     if let Ok(run) = &result {
-        summary.overall_status = if run.task_failed > 0 && run.task_ok > 0 { TaskStatus::PartialSuccess }
-            else if run.task_failed > 0 { TaskStatus::Failed }
-            else if run.task_ok == 0 { TaskStatus::NoOp }
-            else { TaskStatus::Success };
+        summary.overall_status = if run.task_failed > 0 && run.task_ok > 0 {
+            TaskStatus::PartialSuccess
+        } else if run.task_failed > 0 {
+            TaskStatus::Failed
+        } else if run.task_ok == 0 {
+            TaskStatus::NoOp
+        } else {
+            TaskStatus::Success
+        };
+        summary
+            .business_metrics
+            .insert("成功配置项".to_owned(), serde_json::json!(run.task_ok));
+        summary
+            .business_metrics
+            .insert("跳过配置项".to_owned(), serde_json::json!(run.task_skipped));
+        summary
+            .business_metrics
+            .insert("失败配置项".to_owned(), serde_json::json!(run.task_failed));
         summary.output_stats = Some(pytools_core::run_logging::OutputStats {
             workbooks_saved: Some(run.outputs.len()),
             sheets_saved: None,
             saved: Some(run.task_failed == 0 && !run.outputs.is_empty()),
         });
-        if let Some(source) = run.events.iter().find(|event| event.outcome == DiagOutcome::Failed) {
+        if let Some(source) = run
+            .events
+            .iter()
+            .find(|event| event.outcome == DiagOutcome::Failed)
+        {
             summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
                 stage: source.stage.to_string(),
                 code: match source.stage {
@@ -4080,107 +4921,193 @@ where
                     DiagStage::CopySheet => "SHEET_COPY_FAILED",
                     DiagStage::ModifyWorkbook => "EXCEL_MODIFY_FAILED",
                     DiagStage::SaveOutput => "OUTPUT_WRITE_FAILED",
-                }.to_owned(),
+                }
+                .to_owned(),
                 message: format!("{}失败；请检查对应配置、工作簿和写入权限", source.stage),
-                file_name: source.file.as_deref().map(|file| pytools_core::run_logging::portable_file_name(Path::new(file))),
+                file_name: source
+                    .file
+                    .as_deref()
+                    .map(|file| pytools_core::run_logging::portable_file_name(Path::new(file))),
                 sheet_name: source.sheet.clone(),
             });
         }
         if let Some(writer) = diagnostic.as_mut() {
             for source in &run.events {
-                let level = match source.outcome { DiagOutcome::Failed => Level::Error, DiagOutcome::Skipped => Level::Warn, DiagOutcome::Started => Level::Info, DiagOutcome::Ok => Level::Debug };
-                let mut event = tracker.event(level, "engine_operation", &source.stage.to_string(), &source.outcome.to_string(), format!("{}：{}", source.stage, source.outcome));
+                let level = match source.outcome {
+                    DiagOutcome::Failed => Level::Error,
+                    DiagOutcome::Skipped => Level::Warn,
+                    DiagOutcome::Started => Level::Info,
+                    DiagOutcome::Ok => Level::Debug,
+                };
+                let mut event = tracker.event(
+                    level,
+                    "engine_operation",
+                    &source.stage.to_string(),
+                    &source.outcome.to_string(),
+                    format!("{}：{}", source.stage, source.outcome),
+                );
                 event.timestamp = source.timestamp_rfc3339.clone();
                 event.engine = Some(source.engine.clone());
                 event.config_row = source.row_no;
-                event.file_name = source.file.as_deref().map(|file| pytools_core::run_logging::portable_file_name(Path::new(file)));
+                event.file_name = source
+                    .file
+                    .as_deref()
+                    .map(|file| pytools_core::run_logging::portable_file_name(Path::new(file)));
                 event.sheet_name = source.sheet.clone();
                 event.elapsed_ms = source.elapsed_ms;
                 if source.outcome == DiagOutcome::Failed {
-                    event.error_code = Some(match source.stage { DiagStage::ReadConfig => "CONFIG_READ_FAILED", DiagStage::ReadSource => "EXCEL_READ_FAILED", DiagStage::CopySheet => "SHEET_COPY_FAILED", DiagStage::ModifyWorkbook => "EXCEL_MODIFY_FAILED", DiagStage::SaveOutput => "OUTPUT_WRITE_FAILED" }.to_owned());
-                    if log_view == "developer" { event.details = Some(serde_json::json!({"diagnostic": source.message})); }
+                    event.error_code = Some(
+                        match source.stage {
+                            DiagStage::ReadConfig => "CONFIG_READ_FAILED",
+                            DiagStage::ReadSource => "EXCEL_READ_FAILED",
+                            DiagStage::CopySheet => "SHEET_COPY_FAILED",
+                            DiagStage::ModifyWorkbook => "EXCEL_MODIFY_FAILED",
+                            DiagStage::SaveOutput => "OUTPUT_WRITE_FAILED",
+                        }
+                        .to_owned(),
+                    );
+                    if log_view == "developer" {
+                        event.details = Some(serde_json::json!({"diagnostic": source.message}));
+                    }
                 }
                 if let Err(error) = writer.write(&event) {
-                    if !log_failed { writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")))?; log_failed = true; }
+                    if !log_failed {
+                        writeln!(
+                            output,
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("诊断日志写入失败：{error}")
+                            )
+                        )?;
+                        log_failed = true;
+                    }
                     break;
                 }
             }
         }
     } else {
         summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
-            stage: "static_print".to_owned(), code: "EXCEL_OPERATION_FAILED".to_owned(),
-            message: "打印任务中断，请检查配置、文件格式和读写权限".to_owned(), file_name: None, sheet_name: None,
+            stage: "static_print".to_owned(),
+            code: "EXCEL_OPERATION_FAILED".to_owned(),
+            message: result
+                .as_ref()
+                .err()
+                .map(|error| format!("打印任务中断：{error:#}"))
+                .unwrap_or_else(|| "打印任务中断".to_owned()),
+            file_name: None,
+            sheet_name: None,
         });
     }
     if let (Err(error), Some(writer)) = (&result, diagnostic.as_mut()) {
-        let mut failure = tracker.event(Level::Error, "operation_failed", "static_print", "failed", "打印任务中断；请检查配置、文件格式和读写权限");
+        let mut failure = tracker.event(
+            Level::Error,
+            "operation_failed",
+            "static_print",
+            "failed",
+            "打印任务中断；请检查配置、文件格式和读写权限",
+        );
         failure.error_code = Some("EXCEL_OPERATION_FAILED".to_owned());
-        if log_view == "developer" { failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")})); }
+        if log_view == "developer" {
+            failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
+        }
         if let Err(write_error) = writer.write(&failure) {
-            if !log_failed { writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}")))?; log_failed = true; }
+            if !log_failed {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{write_error}")
+                    )
+                )?;
+                log_failed = true;
+            }
         }
     }
     if let Some(writer) = diagnostic.as_mut() {
-        let event = tracker.event(if result.is_err() || matches!(summary.overall_status, TaskStatus::Failed | TaskStatus::PartialSuccess) { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", summary.overall_status), "静态打印文件生成结束");
-        if let Err(error) = writer.write(&event) { if !log_failed { writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")))?; } }
+        let event = tracker.event(
+            if result.is_err()
+                || matches!(
+                    summary.overall_status,
+                    TaskStatus::Failed | TaskStatus::PartialSuccess
+                )
+            {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", summary.overall_status),
+            "静态打印文件生成结束",
+        );
+        if let Err(error) = writer.write(&event) {
+            if !log_failed {
+                writeln!(
+                    output,
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                )?;
+            }
+        }
     }
     if log_view != "off" {
         let mut report = serde_json::to_value(&summary)?;
         if let Ok(run) = &result {
             report["task_stats"] = serde_json::json!({"succeeded": run.task_ok, "failed": run.task_failed, "skipped": run.task_skipped});
         }
-        let path = global.log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
+        let path = global
+            .log_dir
+            .join(format!("{feature_id}_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &report) {
-            Ok(()) => writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, display_path_for_user(&path))))?,
-            Err(error) => writeln!(output, "{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留")))?,
+            Ok(()) => writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!(
+                        "运行编号 {}；运行记录：{}",
+                        tracker.run_id,
+                        display_path_for_user(&path)
+                    )
+                )
+            )?,
+            Err(error) => writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("运行记录写入失败：{error}；业务结果仍保留")
+                )
+            )?,
+        }
+    }
+    if log_view == "user" {
+        let level = match summary.overall_status {
+            TaskStatus::Failed => Level::Error,
+            TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
+            TaskStatus::Success if !summary.business_issues.is_empty() => Level::Warn,
+            TaskStatus::Success | TaskStatus::NoOp => Level::Info,
+        };
+        for line in pytools_core::run_logging::format_terminal_summary(&summary, 8) {
+            writeln!(
+                output,
+                "{}",
+                pytools_core::run_logging::terminal_line(level, &line)
+            )?;
         }
     }
     match result {
         Ok(run) => {
-            writeln!(
-                output,
-                "{} [{}] 静态打印文件生成完成：成功 {} 项，跳过 {} 项，失败 {} 项；输出 {} 个文件，用时 {:.1} 秒",
-                pytools_core::engine_diag::now_prefix(),
-                if run.task_failed > 0 { "WARN" } else { "INFO" },
-                run.task_ok,
-                run.task_skipped,
-                run.task_failed,
-                run.outputs.len(),
-                started.elapsed().as_secs_f64()
-            )?;
-            // 同一输出文件只显示一次；优先使用保存事件记录的时刻。
-            let mut shown = std::collections::BTreeSet::<String>::new();
-            for event in run
-                .events
-                .iter()
-                .filter(|event| event.stage == DiagStage::SaveOutput && event.outcome == DiagOutcome::Ok)
-            {
-                if let Some(file) = &event.file {
-                    if shown.insert(file.clone()) {
-                        writeln!(output, "{} 输出：{}", event.timestamp, file)?;
-                    }
-                }
-            }
-            for path in &run.outputs {
-                if shown.insert(path.to_string_lossy().into_owned()) {
-                    writeln!(
-                        output,
-                        "{} 输出：{}",
-                        pytools_core::engine_diag::now_prefix(),
-                        display_path_for_user(&path)
-                    )?;
-                }
-            }
             // 跳过原因与错误详情：带各自发生时刻、引擎、阶段和原始错误。
             let detail_events = run
                 .events
                 .iter()
-                .filter(|event| {
-                    matches!(
-                        event.outcome,
-                        DiagOutcome::Skipped | DiagOutcome::Failed
-                    )
-                })
+                .filter(|event| matches!(event.outcome, DiagOutcome::Skipped | DiagOutcome::Failed))
                 .collect::<Vec<_>>();
             if !detail_events.is_empty() {
                 for event in detail_events {
@@ -4188,19 +5115,16 @@ where
                 }
             } else {
                 if !run.issues.is_empty() {
-                    writeln!(output, "{} [WARN] 有 {} 项打印问题，请检查配置及源文件。", pytools_core::engine_diag::now_prefix(), run.issues.len())?;
+                    writeln!(
+                        output,
+                        "{} [WARN] 有 {} 项打印问题，请检查配置及源文件。",
+                        pytools_core::engine_diag::now_prefix(),
+                        run.issues.len()
+                    )?;
                 }
             }
         }
-        Err(error) => {
-            let suggestion = if error.to_string().contains(".xlsx") { "请检查目标是否为受支持的 .xlsx 格式" } else { "请检查配置、文件格式及读写权限" };
-            writeln!(
-                output,
-                "{} [ERROR] 处理失败：打印任务中断，无法统计完整的成功、跳过和失败数量；用时 {:.1} 秒；{suggestion}；运行编号 {}",
-                pytools_core::engine_diag::now_prefix(),
-                started.elapsed().as_secs_f64(), tracker.run_id
-            )?;
-        }
+        Err(_) => {}
     }
     output.flush()?;
     Ok(())
@@ -4226,7 +5150,10 @@ where
     loop {
         writeln!(output, "------ 报表打印 ------")?;
         writeln!(output, "  1  按打印配置生成：umya-spreadsheet  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
-        writeln!(output, "  2  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
+        writeln!(
+            output,
+            "  2  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
+        )?;
         writeln!(output, "  3  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
@@ -4288,7 +5215,7 @@ where
     W: Write,
     F: FnOnce() -> Result<serde_json::Value>,
 {
-    let diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
+    let mut diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
     let started_at = Local::now();
     let started = Instant::now();
     match log_view {
@@ -4300,7 +5227,17 @@ where
     let report = match run() {
         Ok(report) => report,
         Err(error) => {
-            diagnostic.finish(true, None, &[], &[]);
+            diagnostic.set_error_summary(pytools_core::run_logging::ErrorSummary {
+                stage: action.to_owned(),
+                code: "PRINT_OPERATION_FAILED".to_owned(),
+                message: format!("{label}失败：{error:#}"),
+                file_name: None,
+                sheet_name: None,
+            });
+            let summary = diagnostic.finish(true, None, &[], &[]);
+            if log_view == "user" {
+                write_unified_terminal_summary(output, &summary, &[])?;
+            }
             let elapsed_ms = started.elapsed().as_millis();
             if log_view == "developer" {
                 match write_print_menu_run_history(
@@ -4320,7 +5257,7 @@ where
                     Ok(path) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}；错误：{error:#}", display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                     Err(log_error) => writeln!(output, "PT-3 失败：{feature_id}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{log_error:#}；错误：{error:#}", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 }
-            } else {
+            } else if log_view != "user" {
                 writeln!(output, "{label}失败；错误：{error:#}")?;
             }
             return Ok(());
@@ -4329,14 +5266,65 @@ where
 
     let elapsed_ms = started.elapsed().as_millis();
     let metrics = print_menu_metrics(action, &report);
-    let failed_precheck =
+    let precheck_issues =
         action == "config_precheck" && metrics["failed_tasks"].as_u64().unwrap_or_default() > 0;
-    let status = if failed_precheck {
-        "failed"
-    } else {
-        "succeeded"
-    };
-    diagnostic.finish(failed_precheck, None, &[], &[]);
+    let precheck_warnings =
+        action == "config_precheck" && metrics["warning_tasks"].as_u64().unwrap_or_default() > 0;
+    for (label, key) in match action {
+        "config_precheck" => vec![
+            ("通过配置数", "passed_tasks"),
+            ("警告配置数", "warning_tasks"),
+            ("失败配置数", "failed_tasks"),
+        ],
+        "config_plan" => vec![
+            ("计划组数", "planned_groups"),
+            ("执行组数", "executed_groups"),
+            ("匹配工作表数", "matching_sheets"),
+            ("标记区域数", "marked_ranges"),
+            ("计划操作数", "planned_operations"),
+            ("计划文件数", "plan_files"),
+        ],
+        _ => vec![
+            ("匹配工作表数", "matching_sheets"),
+            ("标记区域数", "marked_ranges"),
+        ],
+    } {
+        if let Some(value) = metrics.get(key) {
+            diagnostic.set_business_metric(label, value.clone());
+        }
+    }
+    if precheck_issues {
+        diagnostic.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new("配置校验", "打印配置预校验发现未通过项")
+                .count(metrics["failed_tasks"].as_u64().unwrap_or_default() as usize),
+        );
+    }
+    if precheck_warnings {
+        diagnostic.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new("配置警告", "打印配置预校验发现警告项")
+                .count(metrics["warning_tasks"].as_u64().unwrap_or_default() as usize),
+        );
+    }
+    let status = "succeeded";
+    let summary_outputs = report
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            item["plan_file"]
+                .as_str()
+                .or_else(|| item["output_file"].as_str())
+        })
+        .map(PathBuf::from)
+        .chain(report["plan_file"].as_str().map(PathBuf::from))
+        .collect::<Vec<_>>();
+    let summary = diagnostic.finish_as(
+        false,
+        None,
+        &[],
+        &summary_outputs,
+        Some(pytools_core::run_logging::TaskStatus::Success),
+    );
     let actual_engines = print_menu_actual_engines(&report);
     let writer_invoked = actual_engines
         .iter()
@@ -4353,27 +5341,16 @@ where
     }
 
     match log_view {
-        "user" if failed_precheck => {
-            writeln!(
-                output, "预校验发现问题：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-                print_menu_summary(action, &metrics)
-            , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+        "user" => {
+            write_unified_terminal_summary(output, &summary, &summary_outputs)?;
             if let Some(issues) = report["issues"].as_array() {
                 for issue in issues.iter().filter_map(serde_json::Value::as_str) {
                     writeln!(output, "  {issue}")?;
                 }
             }
         }
-        "user" => writeln!(
-            output, "{label}完成：{}，耗时 {elapsed_ms_display_seconds:.3} 秒。",
-            print_menu_summary(action, &metrics)
-        , elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
         "developer" => {
-            let outcome = if failed_precheck {
-                "发现问题"
-            } else {
-                "完成"
-            };
+            let outcome = "完成";
             match write_print_menu_run_history(
                 global,
                 feature_id,
@@ -4386,14 +5363,18 @@ where
                 &actual_components,
                 modifier_invoked,
                 writer_invoked,
-                failed_precheck.then_some("print_precheck_failures"),
+                None,
             ) {
                 Ok(path) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录：{}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, display_path_for_user(&path), elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
                 Err(error) => writeln!(output, "PT-3 {outcome}：{feature_id}，{}，实际引擎：{}，实际组件：{}，ExcelModifier {}，Excel writer {}，耗时 {elapsed_ms_display_seconds:.3} 秒；运行记录写入失败：{error:#}", print_menu_summary(action, &metrics), actual_engines.join(", "), actual_components.join(", "), if modifier_invoked { "已调用" } else { "未调用" }, if writer_invoked { "已调用" } else { "未调用" }, elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?,
             }
         }
-        _ if failed_precheck => {
-            writeln!(output, "预校验发现问题：{label}；耗时 {elapsed_ms_display_seconds:.3} 秒。", elapsed_ms_display_seconds = elapsed_ms as f64 / 1000.0)?;
+        _ if log_view == "off" && precheck_issues => {
+            writeln!(
+                output,
+                "预校验发现问题：{label}；{}。",
+                print_menu_summary(action, &metrics)
+            )?;
         }
         _ => {}
     }
@@ -4553,8 +5534,12 @@ fn write_print_menu_run_history(
     excel_writer_invoked: bool,
     error_type: Option<&str>,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(&global.log_dir)
-        .with_context(|| format!("create print log directory {}", display_path_for_user(&global.log_dir)))?;
+    fs::create_dir_all(&global.log_dir).with_context(|| {
+        format!(
+            "create print log directory {}",
+            display_path_for_user(&global.log_dir)
+        )
+    })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f");
     let history = serde_json::json!({
         "schema_version": 1,
@@ -4592,8 +5577,9 @@ fn write_print_menu_run_history(
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("create print run history {}", display_path_for_user(&path)))
+                return Err(error).with_context(|| {
+                    format!("create print run history {}", display_path_for_user(&path))
+                })
             }
         }
     }
@@ -4616,14 +5602,23 @@ where
 {
     loop {
         writeln!(output, "------ 文件处理 ------")?;
-        writeln!(output, "  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】")?;
-        writeln!(output, "  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】")?;
+        writeln!(
+            output,
+            "  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】"
+        )?;
+        writeln!(
+            output,
+            "  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】"
+        )?;
         writeln!(output, "  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】")?;
         writeln!(
             output,
             "  4  Office 格式转换（XLS/ET/ETT → XLSX，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】"
         )?;
-        writeln!(output, "  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】")?;
+        writeln!(
+            output,
+            "  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】"
+        )?;
         writeln!(output, "  6  机构提交完整性检查  【提交检查配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
@@ -4992,8 +5987,14 @@ fn choose_special_report_engine<R: BufRead, W: Write>(
     output: &mut W,
 ) -> Result<Option<SpecialReportEngine>> {
     writeln!(output, "选择就地修改引擎：")?;
-    writeln!(output, "  1  openpyxl（本机 Python；可处理 xlsm/xltm 并保留宏）")?;
-    writeln!(output, "  2  umya-spreadsheet（纯 Rust；仅 xlsx/xltx，速度更快）")?;
+    writeln!(
+        output,
+        "  1  openpyxl（本机 Python；可处理 xlsm/xltm 并保留宏）"
+    )?;
+    writeln!(
+        output,
+        "  2  umya-spreadsheet（纯 Rust；仅 xlsx/xltx，速度更快）"
+    )?;
     writeln!(output, "  0  返回")?;
     loop {
         let Some(choice) = read_menu_choice(input, output, "引擎选择> ")? else {
@@ -5026,10 +6027,16 @@ where
         writeln!(output, "------ 专用报表处理 ------")?;
         writeln!(output, "  1  拆分村镇银行数据（生成独立副本）")?;
         writeln!(output, "  2  机构名称规范化（Rust 新建规范化副本）  【机构映射表：原始机构名称/映射后机构名称】")?;
-        writeln!(output, "  3  删除分机构表中的外资行（直接修改原工作簿）  【机构映射表：是否为外资行】")?;
+        writeln!(
+            output,
+            "  3  删除分机构表中的外资行（直接修改原工作簿）  【机构映射表：是否为外资行】"
+        )?;
         writeln!(output, "  4  修改外汇工作表页眉单位（直接修改原工作簿）")?;
         writeln!(output, "  5  地区总分校验（读取并生成核对结果）")?;
-        writeln!(output, "  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】")?;
+        writeln!(
+            output,
+            "  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】"
+        )?;
         writeln!(output, "  7  涉农贷款比上月修正（生成独立副本）")?;
         writeln!(output, "  8  季度涉农贷款修正及分地区核对（生成独立副本）")?;
         writeln!(output, "  0  返回")?;
@@ -5199,12 +6206,10 @@ where
                             let e = e.to_string_lossy().to_ascii_lowercase();
                             matches!(e.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm")
                         }),
-                        _ => path
-                            .extension()
-                            .is_some_and(|e| {
-                                let e = e.to_string_lossy().to_ascii_lowercase();
-                                matches!(e.as_str(), "xlsx" | "xltx")
-                            }),
+                        _ => path.extension().is_some_and(|e| {
+                            let e = e.to_string_lossy().to_ascii_lowercase();
+                            matches!(e.as_str(), "xlsx" | "xltx")
+                        }),
                     };
                     if accepted {
                         targets.push(path);
@@ -5408,7 +6413,10 @@ where
                     writeln!(output, "[提示] 没有可处理的 .xlsx 工作簿。")?;
                     return Ok(());
                 }
-                writeln!(output, "[就地模式] 将校验 OOXML 页眉补丁，备份后安全替换选中的原工作簿。")?;
+                writeln!(
+                    output,
+                    "[就地模式] 将校验 OOXML 页眉补丁，备份后安全替换选中的原工作簿。"
+                )?;
                 let mut arguments = vec![
                     "--output-dir".to_owned(),
                     global.output_dir.to_string_lossy().into_owned(),
@@ -5837,7 +6845,15 @@ where
     R: BufRead,
     W: Write,
 {
-    choose_input_paths_impl(title, allow_multiple, filter, input, output, allow_native_dialog, false)
+    choose_input_paths_impl(
+        title,
+        allow_multiple,
+        filter,
+        input,
+        output,
+        allow_native_dialog,
+        false,
+    )
 }
 
 fn choose_input_paths_impl<R, W>(
@@ -5857,8 +6873,11 @@ where
     if allow_native_dialog {
         if let Some(paths) = native_file_dialog(title, allow_multiple, filter) {
             if !paths.is_empty() {
-                if count_only { writeln!(output, "→ 已选择文件 {} 个", paths.len())?; }
-                else { print_selected_paths(output, &paths)?; }
+                if count_only {
+                    writeln!(output, "→ 已选择文件 {} 个", paths.len())?;
+                } else {
+                    print_selected_paths(output, &paths)?;
+                }
                 return Ok(Some(paths));
             }
         }
@@ -5871,8 +6890,11 @@ where
     let Some(paths) = parse_manual_path_list(&raw) else {
         return Ok(None);
     };
-    if count_only { writeln!(output, "→ 已选择文件 {} 个", paths.len())?; }
-    else { print_selected_paths(output, &paths)?; }
+    if count_only {
+        writeln!(output, "→ 已选择文件 {} 个", paths.len())?;
+    } else {
+        print_selected_paths(output, &paths)?;
+    }
     Ok(Some(paths))
 }
 
@@ -5887,7 +6909,15 @@ where
     R: BufRead,
     W: Write,
 {
-    choose_source_files_or_folders_impl(title, filter, input, output, allow_native_dialog, false, false)
+    choose_source_files_or_folders_impl(
+        title,
+        filter,
+        input,
+        output,
+        allow_native_dialog,
+        false,
+        false,
+    )
 }
 
 fn choose_source_files_or_folders_impl<R, W>(
@@ -5915,7 +6945,15 @@ where
         return Ok(None);
     }
     if mode == "1" {
-        return choose_input_paths_impl(title, true, filter, input, output, allow_native_dialog, count_only);
+        return choose_input_paths_impl(
+            title,
+            true,
+            filter,
+            input,
+            output,
+            allow_native_dialog,
+            count_only,
+        );
     }
     anyhow::ensure!(matches!(mode.as_str(), "2" | "3"), "仅接受 1、2、3 或 0");
 
@@ -5947,19 +6985,36 @@ where
     let paths = if summary_folder_rules {
         let mut unique = std::collections::BTreeMap::new();
         for folder in &folders {
-            let root = fs::canonicalize(folder)
-                .with_context(|| format!("读取汇总源文件夹失败：{}", display_path_for_user(&folder)))?;
-            let mut candidates = collect_menu_source_files_impl(std::slice::from_ref(folder), mode == "3", filter, true)?;
+            let root = fs::canonicalize(folder).with_context(|| {
+                format!("读取汇总源文件夹失败：{}", display_path_for_user(&folder))
+            })?;
+            let mut candidates = collect_menu_source_files_impl(
+                std::slice::from_ref(folder),
+                mode == "3",
+                filter,
+                true,
+            )?;
             candidates.retain(|path| {
-                !path.file_stem().is_some_and(|name| name.to_string_lossy().contains("_审核版"))
-                    && !path.strip_prefix(&root).unwrap_or(path).components()
+                !path
+                    .file_stem()
+                    .is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+                    && !path
+                        .strip_prefix(&root)
+                        .unwrap_or(path)
+                        .components()
                         .any(|part| part.as_os_str() == "执行结果")
             });
-            if mode == "3" && candidates.iter().any(|path| path.parent() != Some(root.as_path())) {
+            if mode == "3"
+                && candidates
+                    .iter()
+                    .any(|path| path.parent() != Some(root.as_path()))
+            {
                 candidates.retain(|path| path.parent() != Some(root.as_path()));
             }
             for path in candidates {
-                unique.entry(path.to_string_lossy().to_lowercase()).or_insert(path);
+                unique
+                    .entry(path.to_string_lossy().to_lowercase())
+                    .or_insert(path);
             }
         }
         unique.into_values().collect::<Vec<_>>()
@@ -5973,7 +7028,9 @@ where
         if mode == "3" { "递归" } else { "当前层" },
         paths.len()
     )?;
-    if !count_only { print_selected_paths(output, &paths)?; }
+    if !count_only {
+        print_selected_paths(output, &paths)?;
+    }
     Ok(Some(paths))
 }
 
@@ -5998,7 +7055,14 @@ fn collect_menu_source_files_impl(
             "selected folder does not exist or is not a directory: {}",
             display_path_for_user(&folder)
         );
-        collect_menu_source_files_from_folder(folder, folder, recursive, filter, skip_summary_results, &mut files)?;
+        collect_menu_source_files_from_folder(
+            folder,
+            folder,
+            recursive,
+            filter,
+            skip_summary_results,
+            &mut files,
+        )?;
     }
     let mut unique = std::collections::BTreeMap::new();
     for path in files {
@@ -6041,10 +7105,18 @@ fn collect_menu_source_files_from_folder(
             {
                 files.push(path);
             }
-        } else if recursive && metadata.is_dir()
+        } else if recursive
+            && metadata.is_dir()
             && !(skip_summary_results && path.file_name().is_some_and(|name| name == "执行结果"))
         {
-            collect_menu_source_files_from_folder(root, &path, true, filter, skip_summary_results, files)?;
+            collect_menu_source_files_from_folder(
+                root,
+                &path,
+                true,
+                filter,
+                skip_summary_results,
+                files,
+            )?;
         }
     }
     Ok(())
@@ -6069,8 +7141,17 @@ fn parse_manual_path_list(raw: &str) -> Option<Vec<PathBuf>> {
 
 fn print_selected_paths<W: Write>(output: &mut W, paths: &[PathBuf]) -> Result<()> {
     writeln!(output, "→ 已选择文件 {} 个：", paths.len())?;
-    for (index, path) in paths.iter().enumerate() {
-        writeln!(output, "  {}. {}", index + 1, display_path_for_user(&path))?;
+    let labels = pytools_core::run_logging::disambiguated_file_names(paths);
+    let shown = if paths.len() > 12 { 5 } else { paths.len() };
+    for (index, label) in labels.iter().take(shown).enumerate() {
+        writeln!(output, "  {}. {}", index + 1, label)?;
+    }
+    if shown < paths.len() {
+        writeln!(
+            output,
+            "  …… 其余 {} 个文件将按批次处理",
+            paths.len() - shown
+        )?;
     }
     Ok(())
 }
@@ -6151,8 +7232,8 @@ fn native_folder_dialog(title: &str) -> Option<PathBuf> {
     use windows::core::HSTRING;
     use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
     use windows::Win32::UI::Shell::{
-        FileOpenDialog, IFileOpenDialog, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST,
-        FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
+        FileOpenDialog, IFileOpenDialog, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
+        SIGDN_FILESYSPATH,
     };
     use windows_sys::Win32::System::Ole::{OleInitialize, OleUninitialize};
 
@@ -6161,8 +7242,11 @@ fn native_folder_dialog(title: &str) -> Option<PathBuf> {
     }
     let selected = (|| -> windows::core::Result<PathBuf> {
         unsafe {
-            let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
-            dialog.SetOptions(dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)?;
+            let dialog: IFileOpenDialog =
+                CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+            dialog.SetOptions(
+                dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST,
+            )?;
             dialog.SetTitle(&HSTRING::from(title))?;
             dialog.Show(None)?;
             let item = dialog.GetResult()?;
@@ -6171,7 +7255,8 @@ fn native_folder_dialog(title: &str) -> Option<PathBuf> {
             CoTaskMemFree(Some(path.0.cast()));
             Ok(PathBuf::from(text?))
         }
-    })().ok();
+    })()
+    .ok();
     unsafe { OleUninitialize() };
     selected
 }
@@ -6565,11 +7650,13 @@ fn run_dedup_append_execute(arguments: Vec<String>) -> Result<()> {
 
 fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_json::Value> {
     let started = Instant::now();
-    let expected_hash = plan.target_sha256.as_deref()
+    let expected_hash = plan
+        .target_sha256
+        .as_deref()
         .context("目标快照缺失，请重新读取配置后再追加")?;
     let candidate_started = Instant::now();
-    let candidate = write_existing_append_candidate(plan)
-        .context("stage=direct_append_candidate")?;
+    let candidate =
+        write_existing_append_candidate(plan).context("stage=direct_append_candidate")?;
     let candidate_elapsed_ms = candidate_started.elapsed().as_millis();
     let commit = replace_target_from_candidate(&candidate, &plan.target, expected_hash)
         .context("stage=target_commit")?;
@@ -6931,7 +8018,10 @@ fn build_print_config_report(
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .unwrap_or_else(|| std::path::Path::new("."));
             fs::create_dir_all(output_parent).with_context(|| {
-                format!("create print target directory {}", display_path_for_user(&output_parent))
+                format!(
+                    "create print target directory {}",
+                    display_path_for_user(&output_parent)
+                )
             })?;
             serde_json::json!(apply_plan_with_capability_file(
                 plan,
@@ -6978,20 +8068,61 @@ fn attach_legacy_batch_diagnostics(
     report: &mut serde_json::Value,
     log_dir: &Path,
     log_view: &str,
-) {
+) -> Option<pytools_core::run_logging::RunSummary> {
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, TaskStatus};
-    if log_view == "off" { return; }
-    let Some(items) = report["items"].as_array() else { return; };
-    let files = items.iter().map(|item| item["input"].as_str().map(PathBuf::from).unwrap_or_default()).collect::<Vec<_>>();
-    if tracker.set_inputs(&files).is_err() { return; }
-    let mut diagnostic = match EventWriter::create(&log_dir.join("run-events"), &tracker.feature_id, &tracker.run_id) {
+    if log_view == "off" {
+        return None;
+    }
+    let Some(items) = report["items"].as_array() else {
+        return None;
+    };
+    let files = items
+        .iter()
+        .map(|item| {
+            item["input"]
+                .as_str()
+                .map(PathBuf::from)
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    if tracker.set_inputs(&files).is_err() {
+        return None;
+    }
+    let mut diagnostic = match EventWriter::create(
+        &log_dir.join("run-events"),
+        &tracker.feature_id,
+        &tracker.run_id,
+    ) {
         Ok(writer) => Some(writer),
-        Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}"))); None }
+        Err(error) => {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("无法创建诊断日志：{error}")
+                )
+            );
+            None
+        }
     };
     if let Some(writer) = diagnostic.as_mut() {
-        let mut event = tracker.event(Level::Info, "run_started", "run", "started", format!("开始：{}", tracker.feature_name));
+        let mut event = tracker.event(
+            Level::Info,
+            "run_started",
+            "run",
+            "started",
+            format!("开始：{}", tracker.feature_name),
+        );
         event.timestamp = tracker.started_at.clone();
-        if let Err(error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+        if let Err(error) = writer.write(&event) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
+        }
     }
     let mut outputs = Vec::new();
     let mut incomplete = false;
@@ -7000,28 +8131,52 @@ fn attach_legacy_batch_diagnostics(
         let status = item["status"].as_str().unwrap_or("");
         let state = match status {
             "failed" => FileStatus::Failed,
-            "committed" | "copy_created" | "candidate_created" | "no_changes" | "succeeded" | "created" | "written" => FileStatus::Succeeded,
+            "committed" | "copy_created" | "candidate_created" | "no_changes" | "succeeded"
+            | "created" | "written" => FileStatus::Succeeded,
             "planned" | "plan_only" | "plan_only_no_changes" | "skipped" => FileStatus::Skipped,
-            _ => { incomplete = true; continue; }
+            _ => {
+                incomplete = true;
+                continue;
+            }
         };
-        if status != "skipped" { let _ = tracker.transition(position, FileStatus::InProgress); }
+        if status != "skipped" {
+            let _ = tracker.transition(position, FileStatus::InProgress);
+        }
         let _ = tracker.transition(position, state);
         if matches!(status, "copy_created" | "created" | "written") {
-            if let Some(path) = item["output_copy"].as_str().or_else(|| item["output"].as_str()) { outputs.push(path.to_owned()); }
+            if let Some(path) = item["output_copy"]
+                .as_str()
+                .or_else(|| item["output"].as_str())
+                .or_else(|| item["output_path"].as_str())
+            {
+                outputs.push(path.to_owned());
+            }
         } else if status == "committed" {
-            if let Some(path) = item["input"].as_str() { outputs.push(path.to_owned()); }
+            if let Some(path) = item["input"].as_str() {
+                outputs.push(path.to_owned());
+            }
         }
         if let Some(writer) = diagnostic.as_mut() {
-            let level = if state == FileStatus::Failed { Level::Error } else if state == FileStatus::Skipped { Level::Warn } else { Level::Info };
+            let level = if state == FileStatus::Failed {
+                Level::Error
+            } else if state == FileStatus::Skipped {
+                Level::Warn
+            } else {
+                Level::Info
+            };
             let stage = item["error_stage"].as_str().unwrap_or("file_summary");
             let status_message = match status {
                 "committed" => format!("{}已写入源工作簿", tracker.feature_name),
-                "copy_created" | "created" | "written" => format!("{}已生成输出工作簿", tracker.feature_name),
+                "copy_created" | "created" | "written" => {
+                    format!("{}已生成输出工作簿", tracker.feature_name)
+                }
                 "candidate_created" => format!("{}候选工作簿已生成", tracker.feature_name),
                 "no_changes" => format!("{}未发现需要修改的内容", tracker.feature_name),
                 "planned" => format!("{}已生成计划，尚未写入工作簿", tracker.feature_name),
                 "plan_only" => format!("{}仅生成计划，未写入工作簿", tracker.feature_name),
-                "plan_only_no_changes" => format!("{}未发现需要修改的内容，未写入工作簿", tracker.feature_name),
+                "plan_only_no_changes" => {
+                    format!("{}未发现需要修改的内容，未写入工作簿", tracker.feature_name)
+                }
                 "skipped" => format!("{}跳过当前工作簿", tracker.feature_name),
                 "failed" => format!("{}处理失败", tracker.feature_name),
                 _ => format!("{}处理结果：{status}", tracker.feature_name),
@@ -7030,27 +8185,138 @@ fn attach_legacy_batch_diagnostics(
             event.file_index = Some(position);
             event.file_name = Some(pytools_core::run_logging::portable_file_name(&files[index]));
             event.elapsed_ms = item["elapsed_ms"].as_u64().map(u128::from);
-            if state == FileStatus::Failed { event.error_code = Some("EXCEL_OPERATION_FAILED".to_owned()); }
-            if let Err(error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); break; }
+            if state == FileStatus::Failed {
+                event.error_code = Some("EXCEL_OPERATION_FAILED".to_owned());
+            }
+            if let Err(error) = writer.write(&event) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+                break;
+            }
         }
     }
-    let failed = report["status"] == "failed" || (report["failed_files"].as_u64().unwrap_or(0) > 0 && tracker.input_stats().succeeded == 0);
-    let mut summary = tracker.finish(failed, false, items.is_empty(), outputs, diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+    let failed = report["status"] == "failed"
+        || (report["failed_files"].as_u64().unwrap_or(0) > 0
+            && tracker.input_stats().succeeded == 0);
+    let output_paths = outputs
+        .iter()
+        .map(|path| path_for_log_view(Path::new(path), log_view))
+        .collect();
+    let mut summary = tracker.finish(
+        failed,
+        false,
+        items.is_empty(),
+        output_paths,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
     summary.input_stats_available = !incomplete;
-    if report["status"] == "partial" { summary.overall_status = TaskStatus::PartialSuccess; }
-    if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if failed { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", summary.overall_status), format!("{}结束", tracker.feature_name))) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+    if report["status"] == "partial" {
+        summary.overall_status = TaskStatus::PartialSuccess;
+    }
+    for (field, label) in [
+        ("planned_files", "计划文件数"),
+        ("committed_files", "已写入文件数"),
+        ("created_copies", "生成副本数"),
+        ("matched_sheets", "匹配工作表数"),
+        ("changed_cells", "修改单元格数"),
+        ("fx_sheets", "命中目标工作表数"),
+        ("modified_sheets", "修改工作表数"),
+        ("saved_files", "保存文件数"),
+    ] {
+        if !report[field].is_null() {
+            summary
+                .business_metrics
+                .insert(label.to_owned(), report[field].clone());
         }
     }
-    let path = log_dir.join("run-unified").join(format!("{}_{}.json", tracker.feature_id, tracker.run_id));
+    if let Some(item) = items.iter().find(|item| item["status"] == "failed") {
+        summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
+            stage: item["error_stage"]
+                .as_str()
+                .unwrap_or("workbook_operation")
+                .to_owned(),
+            code: "EXCEL_OPERATION_FAILED".to_owned(),
+            message: item["error"]
+                .as_str()
+                .unwrap_or("工作簿处理失败")
+                .to_owned(),
+            file_name: item["input"]
+                .as_str()
+                .map(|path| pytools_core::run_logging::portable_file_name(Path::new(path))),
+            sheet_name: None,
+        });
+    }
+    if let Some(writer) = diagnostic.as_mut() {
+        if let Err(error) = writer.write(&tracker.event(
+            if failed { Level::Error } else { Level::Info },
+            "run_finished",
+            "run",
+            &format!("{:?}", summary.overall_status),
+            format!("{}结束", tracker.feature_name),
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
+        }
+    }
+    let path = log_dir
+        .join("run-unified")
+        .join(format!("{}_{}.json", tracker.feature_id, tracker.run_id));
     match write_json_report_create_new(&path, &summary) {
         Ok(()) => {
             report["run_summary_path"] = serde_json::json!(path.to_string_lossy());
-            if log_view == "user" { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, false)))); }
+            if log_view == "user" {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Info,
+                        &format!(
+                            "运行编号 {}；运行记录：{}",
+                            tracker.run_id,
+                            pytools_core::run_logging::path_for_log_view(&path, false)
+                        )
+                    )
+                );
+            }
         }
-        Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))),
+        Err(error) => eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                Level::Warn,
+                &format!("统一运行记录写入失败：{error}")
+            )
+        ),
     }
+    Some(summary)
+}
+
+fn legacy_report_output_paths(report: &serde_json::Value) -> Vec<PathBuf> {
+    report["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            item["output_copy"]
+                .as_str()
+                .or_else(|| item["output"].as_str())
+                .or_else(|| item["output_path"].as_str())
+                .or_else(|| {
+                    (item["status"] == "committed")
+                        .then(|| item["input"].as_str())
+                        .flatten()
+                })
+                .map(PathBuf::from)
+        })
+        .collect()
 }
 
 fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<()> {
@@ -7120,11 +8386,16 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         .map(|global| global.emit_plan_files)
         .unwrap_or(true);
     let plan_dir = unique_menu_action_dir(&output_dir, "village-split");
-    fs::create_dir_all(&output_dir)
-        .with_context(|| format!("create output directory {}", display_path_for_user(&output_dir)))?;
+    fs::create_dir_all(&output_dir).with_context(|| {
+        format!(
+            "create output directory {}",
+            display_path_for_user(&output_dir)
+        )
+    })?;
     if emit_plan_files && !create_copy {
-        fs::create_dir_all(&plan_dir)
-            .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
+        fs::create_dir_all(&plan_dir).with_context(|| {
+            format!("create plan directory {}", display_path_for_user(&plan_dir))
+        })?;
     }
 
     let started = Instant::now();
@@ -7134,7 +8405,12 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-1-{}-{nonce}", std::process::id());
-    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id("PT-7-1", "拆分村镇银行数据", &[], run_id.clone());
+    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
+        "PT-7-1",
+        "拆分村镇银行数据",
+        &[],
+        run_id.clone(),
+    );
     let mut planned_files = 0usize;
     let mut committed_files = 0usize;
     let mut completed_files = 0usize;
@@ -7172,7 +8448,11 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
             started,
             "planning",
             "started",
-            format!("开始拆分第 {}/{} 个工作簿中的村镇银行数据", index + 1, total),
+            format!(
+                "开始拆分第 {}/{} 个工作簿中的村镇银行数据",
+                index + 1,
+                total
+            ),
             &progress,
             None,
             &["pytools-core"],
@@ -7228,8 +8508,9 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 current_stage = "plan_persistence";
                 let persistence_started = Instant::now();
                 if emit_plan_files && !create_copy {
-                    fs::write(&plan_path, serde_json::to_vec_pretty(plan)?)
-                        .with_context(|| format!("write edit plan {}", display_path_for_user(&plan_path)))?;
+                    fs::write(&plan_path, serde_json::to_vec_pretty(plan)?).with_context(|| {
+                        format!("write edit plan {}", display_path_for_user(&plan_path))
+                    })?;
                     emit_village_split_event(
                         &mut events,
                         log_view,
@@ -7443,7 +8724,8 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         "elapsed_ms": started.elapsed().as_millis(),
         "items": items,
     });
-    attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &log_dir, log_view);
+    let unified_summary =
+        attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &log_dir, log_view);
     let run_log_path = if log_view == "off" {
         None
     } else {
@@ -7489,7 +8771,8 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         match write_json_report_create_new(&path, &history) {
             Ok(()) => {
                 result["run_id"] = serde_json::Value::String(run_id.clone());
-                result["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                result["run_log_path"] =
+                    serde_json::Value::String(display_path_for_user(&path).to_string());
                 Some(path)
             }
             Err(error) => {
@@ -7513,7 +8796,16 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         }
     }
     if interactive && log_view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "村镇银行数据拆分结束：输入 {total} 个，已拆分 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
+        if log_view == "user" {
+            if let Some(summary) = unified_summary.as_ref() {
+                let output_paths = legacy_report_output_paths(&result);
+                emit_unified_terminal_summary_with_outputs(summary, &output_paths);
+            } else {
+                println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "村镇银行数据拆分结束：输入 {total} 个，已拆分 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
+            }
+        } else {
+            println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "村镇银行数据拆分结束：输入 {total} 个，已拆分 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (started.elapsed().as_millis()) as f64 / 1000.0)));
+        }
     } else {
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
@@ -7560,7 +8852,17 @@ fn emit_village_split_event(
             eprintln!("{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}");
         }
     } else {
-        eprintln!("{}", pytools_core::run_logging::terminal_line(if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, &event.user_message));
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                if event.status == "failed" {
+                    pytools_core::run_logging::Level::Error
+                } else {
+                    pytools_core::run_logging::Level::Info
+                },
+                &event.user_message
+            )
+        );
     }
     events.push(event);
 }
@@ -7675,7 +8977,12 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-3-{}-{nonce}", std::process::id());
-    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id("PT-7-3", "删除分机构表中的外资行", &[], run_id.clone());
+    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
+        "PT-7-3",
+        "删除分机构表中的外资行",
+        &[],
+        run_id.clone(),
+    );
     let configuration_started = Instant::now();
     let foreign = pytools_core::config::load_foreign_banks(&config)?;
     let configuration_elapsed_ms = configuration_started.elapsed().as_millis();
@@ -7986,7 +9293,10 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                 let execution: Result<serde_json::Value> = if let Some(plan) = report.plan.as_ref()
                 {
                     fs::create_dir_all(&output_dir).with_context(|| {
-                        format!("create temporary report directory {}", display_path_for_user(&output_dir))
+                        format!(
+                            "create temporary report directory {}",
+                            display_path_for_user(&output_dir)
+                        )
                     })?;
                     let candidate = unique_workbook_candidate(&input, &output_dir, "foreign_bank");
                     let expected_source_hash = sha256_file(&input)?;
@@ -8076,7 +9386,10 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "failed",
-                                &format!("外发副本生成失败：{}；原因：{error:#}；未发布结果文件。", display_path_for_user(&input)),
+                                &format!(
+                                    "外发副本生成失败：{}；原因：{error:#}；未发布结果文件。",
+                                    display_path_for_user(&input)
+                                ),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
                                 &["pytools-core", "excel-editor", "umya-spreadsheet"],
@@ -8096,14 +9409,16 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                     let plan: excel_editor::ExcelEditPlan = serde_json::from_value(plan)?;
                     if in_place.is_some() {
                         execute_optional_plan(&options, Some(&plan))
-                    } else { apply_plan_with_capability_file(
-                        &plan,
-                        capabilities.expect("validated capability path"),
-                        platform.expect("validated platform"),
-                    )
-                    .and_then(|report| {
-                        serde_json::to_value(report).context("serialize edit result")
-                    }) }
+                    } else {
+                        apply_plan_with_capability_file(
+                            &plan,
+                            capabilities.expect("validated capability path"),
+                            platform.expect("validated platform"),
+                        )
+                        .and_then(|report| {
+                            serde_json::to_value(report).context("serialize edit result")
+                        })
+                    }
                 } else if in_place.is_some() {
                     Ok(serde_json::json!({"engine": "umya-spreadsheet", "execution": "no_changes"}))
                 } else {
@@ -8136,7 +9451,11 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "completed",
-                                if in_place.is_some() { "已校验并安全更新原工作簿中的外资行。" } else { "外发副本已生成，原工作簿保持不变。" },
+                                if in_place.is_some() {
+                                    "已校验并安全更新原工作簿中的外资行。"
+                                } else {
+                                    "外发副本已生成，原工作簿保持不变。"
+                                },
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
                                 &["ExcelModifier"],
@@ -8160,7 +9479,10 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 run_started,
                                 "engine_execution",
                                 "failed",
-                                &format!("外资行删除失败：{}；原因：{error:#}", display_path_for_user(&input)),
+                                &format!(
+                                    "外资行删除失败：{}；原因：{error:#}",
+                                    display_path_for_user(&input)
+                                ),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
                                 &["ExcelModifier"],
@@ -8177,10 +9499,22 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
     }
 
     let total_elapsed_ms = run_started.elapsed().as_millis();
-    if let Some(current_view) = view {
-        let diagnostic_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
-        attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &diagnostic_dir, current_view);
-    }
+    let unified_summary = if let Some(current_view) = view {
+        let diagnostic_dir = options
+            .values
+            .get("log-dir")
+            .map(PathBuf::from)
+            .unwrap_or_else(pytools_core::run_logging::default_log_dir);
+        attach_legacy_batch_diagnostics(
+            &mut unified_tracker,
+            &mut result,
+            &diagnostic_dir,
+            current_view,
+        )
+    } else {
+        None
+    };
+    let terminal_output_paths = legacy_report_output_paths(&result);
     if let Some(view) = view {
         let human_summary = format!( "外资行删除结束：检查工作簿 {} 个，失败 {} 个；耗时 {total_elapsed_ms_display_seconds:.3} 秒", result["files"], result["failed_files"], total_elapsed_ms_display_seconds = total_elapsed_ms as f64 / 1000.0);
         let user_view = foreign_bank_user_view(&result, total_elapsed_ms, Some(&events));
@@ -8197,7 +9531,13 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                 "events": &events,
             });
             if let Err(error) = write_json_report_create_new(path, &history) {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Warn,
+                        &format!("运行记录写入失败：{error}；业务结果仍保留")
+                    )
+                );
             }
         }
         let output = match view {
@@ -8223,8 +9563,37 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
             "off" => foreign_bank_user_view(&result, total_elapsed_ms, None),
             _ => unreachable!("view was validated"),
         };
-        if interactive && view != "developer" { println!("{}", pytools_core::run_logging::terminal_line(if output["status"] == "completed_with_errors" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &human_summary)); }
-        else { println!("{}", serde_json::to_string_pretty(&output)?); }
+        if interactive && view == "user" {
+            if let Some(summary) = unified_summary.as_ref() {
+                emit_unified_terminal_summary_with_outputs(summary, &terminal_output_paths);
+            } else {
+                println!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        if output["status"] == "completed_with_errors" {
+                            pytools_core::run_logging::Level::Warn
+                        } else {
+                            pytools_core::run_logging::Level::Info
+                        },
+                        &human_summary
+                    )
+                );
+            }
+        } else if interactive && view == "off" {
+            println!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    if output["status"] == "completed_with_errors" {
+                        pytools_core::run_logging::Level::Warn
+                    } else {
+                        pytools_core::run_logging::Level::Info
+                    },
+                    &human_summary
+                )
+            );
+        } else {
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
     } else {
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
@@ -8266,8 +9635,25 @@ fn emit_foreign_bank_event(
             eprintln!("{encoded}");
         }
     } else {
-        let message = format!("{}（进度 {}/{}, 已完成 {}，失败 {}）", event.user_message, event.progress.processed_files, event.progress.total_files, event.progress.completed_files, event.progress.failed_files);
-        eprintln!("{}", pytools_core::run_logging::terminal_line(if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, &message));
+        let message = format!(
+            "{}（进度 {}/{}, 已完成 {}，失败 {}）",
+            event.user_message,
+            event.progress.processed_files,
+            event.progress.total_files,
+            event.progress.completed_files,
+            event.progress.failed_files
+        );
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                if event.status == "failed" {
+                    pytools_core::run_logging::Level::Error
+                } else {
+                    pytools_core::run_logging::Level::Info
+                },
+                &message
+            )
+        );
     }
     events.push(event);
 }
@@ -8420,12 +9806,18 @@ fn foreign_bank_user_status(status: &str) -> &str {
 }
 
 fn foreign_bank_copy_path(input: &Path) -> Result<PathBuf> {
-    let stem = input
-        .file_stem()
-        .with_context(|| format!("source workbook has no file stem: {}", display_path_for_user(&input)))?;
-    let extension = input
-        .extension()
-        .with_context(|| format!("source workbook has no extension: {}", display_path_for_user(&input)))?;
+    let stem = input.file_stem().with_context(|| {
+        format!(
+            "source workbook has no file stem: {}",
+            display_path_for_user(&input)
+        )
+    })?;
+    let extension = input.extension().with_context(|| {
+        format!(
+            "source workbook has no extension: {}",
+            display_path_for_user(&input)
+        )
+    })?;
     let mut file_name = stem.to_os_string();
     file_name.push("(金融局).");
     file_name.push(extension);
@@ -8501,7 +9893,13 @@ fn emit_rural_loan_menu_event(
     }
     event.sequence = events.len() + 1;
     match log_view {
-        "user" => eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &event.user_message)),
+        "user" => eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                &event.user_message
+            )
+        ),
         "developer" => match serde_json::to_string(&event) {
             Ok(encoded) => eprintln!("{encoded}"),
             Err(_) => {
@@ -8551,11 +9949,19 @@ fn rural_loan_output_metrics(summary: &serde_json::Value, quarterly: bool) -> (u
 }
 
 fn rural_loan_paths_equal(left: &Path, right: &Path) -> Result<bool> {
-    let left = fs::canonicalize(left)
-        .with_context(|| format!("resolve current workbook path {}", display_path_for_user(&left)))?;
+    let left = fs::canonicalize(left).with_context(|| {
+        format!(
+            "resolve current workbook path {}",
+            display_path_for_user(&left)
+        )
+    })?;
     let right_parent = right.parent().unwrap_or_else(|| Path::new("."));
-    let right_parent = fs::canonicalize(right_parent)
-        .with_context(|| format!("resolve output directory {}", display_path_for_user(&right_parent)))?;
+    let right_parent = fs::canonicalize(right_parent).with_context(|| {
+        format!(
+            "resolve output directory {}",
+            display_path_for_user(&right_parent)
+        )
+    })?;
     let right_name = right
         .file_name()
         .context("candidate workbook path has no file name")?;
@@ -8670,8 +10076,12 @@ fn run_rural_loan_menu(
     let mut candidate_cleanup_path = None::<PathBuf>;
     let mut target_commit = None::<serde_json::Value>;
     let result = (|| -> Result<serde_json::Value> {
-        fs::create_dir_all(&global.output_dir)
-            .with_context(|| format!("create output directory {}", display_path_for_user(&global.output_dir)))?;
+        fs::create_dir_all(&global.output_dir).with_context(|| {
+            format!(
+                "create output directory {}",
+                display_path_for_user(&global.output_dir)
+            )
+        })?;
         let candidate = unique_workbook_candidate(current, &global.output_dir, suffix);
         candidate_cleanup_path = Some(candidate.clone());
         anyhow::ensure!(
@@ -8681,8 +10091,9 @@ fn run_rural_loan_menu(
         let plan_dir =
             unique_menu_action_dir(&global.output_dir.join("plans").join(feature_id), "run");
         if capabilities.is_some() {
-            fs::create_dir_all(&plan_dir)
-                .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
+            fs::create_dir_all(&plan_dir).with_context(|| {
+                format!("create plan directory {}", display_path_for_user(&plan_dir))
+            })?;
         }
         let plan_path = plan_dir.join("rural-loan-adjustment.plan.json");
         let expected_target_hash = Some(sha256_file(current)?);
@@ -8710,8 +10121,24 @@ fn run_rural_loan_menu(
         progress.completed_inputs = 2;
         progress.matched_entities = matched_entities;
         progress.failed_regions = failed_regions;
-        unified.file_result(1, pytools_core::run_logging::FileStatus::Succeeded, true, "planning", "本期工作簿已完成读取和计算", None, None);
-        unified.file_result(2, pytools_core::run_logging::FileStatus::Succeeded, true, "planning", "上期工作簿已完成读取和计算", None, None);
+        unified.file_result(
+            1,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "planning",
+            "本期工作簿已完成读取和计算",
+            None,
+            None,
+        );
+        unified.file_result(
+            2,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "planning",
+            "上期工作簿已完成读取和计算",
+            None,
+            None,
+        );
         let plan_elapsed_ms = phase_started.elapsed().as_millis();
         let plan_file = if capabilities.is_some() {
             if let Some(plan) = report.plan.as_ref() {
@@ -8771,9 +10198,7 @@ fn run_rural_loan_menu(
                     SpecialReportEngine::Openpyxl => {
                         pytools_core::inplace_edit::InPlaceEngine::Openpyxl
                     }
-                    SpecialReportEngine::Umya => {
-                        pytools_core::inplace_edit::InPlaceEngine::Umya
-                    }
+                    SpecialReportEngine::Umya => pytools_core::inplace_edit::InPlaceEngine::Umya,
                 };
                 emit_rural_loan_menu_event(
                     log_view,
@@ -8816,145 +10241,150 @@ fn run_rural_loan_menu(
                     ),
                 );
             } else {
-            match (capabilities, platform) {
-                (Some(capabilities), Some(platform)) => {
-                    phase = "engine_execution";
-                    phase_started = Instant::now();
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "engine_execution",
-                            "started",
-                            "正在通过 ExcelModifier 生成并校验候选工作簿",
-                            &progress,
-                            None,
-                            &["Rust", "pytools-core", "excel-editor", "ExcelModifier"],
-                            None,
-                            None,
-                        ),
-                    );
-                    let edit_result = apply_plan_with_capability_file(plan, capabilities, platform)
-                        .context("stage=excel_modifier")?;
-                    execution = serde_json::to_value(&edit_result)?;
-                    let actual_engine = edit_result.engine.to_string();
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "engine_execution",
-                            "completed",
-                            "候选工作簿已生成并通过 ExcelModifier 校验",
-                            &progress,
-                            Some(phase_started.elapsed().as_millis()),
-                            &["Rust", "pytools-core", "excel-editor", "ExcelModifier"],
-                            Some(&actual_engine),
-                            None,
-                        ),
-                    );
+                match (capabilities, platform) {
+                    (Some(capabilities), Some(platform)) => {
+                        phase = "engine_execution";
+                        phase_started = Instant::now();
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "engine_execution",
+                                "started",
+                                "正在通过 ExcelModifier 生成并校验候选工作簿",
+                                &progress,
+                                None,
+                                &["Rust", "pytools-core", "excel-editor", "ExcelModifier"],
+                                None,
+                                None,
+                            ),
+                        );
+                        let edit_result =
+                            apply_plan_with_capability_file(plan, capabilities, platform)
+                                .context("stage=excel_modifier")?;
+                        execution = serde_json::to_value(&edit_result)?;
+                        let actual_engine = edit_result.engine.to_string();
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "engine_execution",
+                                "completed",
+                                "候选工作簿已生成并通过 ExcelModifier 校验",
+                                &progress,
+                                Some(phase_started.elapsed().as_millis()),
+                                &["Rust", "pytools-core", "excel-editor", "ExcelModifier"],
+                                Some(&actual_engine),
+                                None,
+                            ),
+                        );
 
-                    phase = "safe_commit";
-                    phase_started = Instant::now();
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "safe_commit",
-                            "started",
-                            "正在按计划快照安全更新本期工作簿",
-                            &progress,
-                            None,
-                            &["Rust", "pytools-core"],
-                            None,
-                            None,
-                        ),
-                    );
-                    let expected_hash = expected_target_hash
-                        .as_deref()
-                        .context("missing current-period planning snapshot")?;
-                    let commit = replace_target_from_candidate(&candidate, current, expected_hash)
-                        .context("stage=target_commit")?;
-                    target_commit = Some(serde_json::to_value(commit)?);
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "safe_commit",
-                            "completed",
-                            "本期工作簿已安全更新，目标快照校验通过",
-                            &progress,
-                            Some(phase_started.elapsed().as_millis()),
-                            &["Rust", "pytools-core"],
-                            None,
-                            None,
-                        ),
-                    );
-                }
-                _ => {
-                    phase = "engine_execution";
-                    phase_started = Instant::now();
-                    let copy_path =
-                        specialized_report_copy_path(current, "PyTools_专用报表处理结果")?;
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "engine_execution",
-                            "started",
-                            "正在使用 Rust 新建并校验专用报表结果工作簿",
-                            &progress,
-                            None,
-                            &["Rust", "pytools-core", "excel-writer", "rust_xlsxwriter"],
-                            None,
-                            None,
-                        ),
-                    );
-                    pytools_core::institution_normalize::create_rust_new_workbook_from_cell_plan(
+                        phase = "safe_commit";
+                        phase_started = Instant::now();
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "safe_commit",
+                                "started",
+                                "正在按计划快照安全更新本期工作簿",
+                                &progress,
+                                None,
+                                &["Rust", "pytools-core"],
+                                None,
+                                None,
+                            ),
+                        );
+                        let expected_hash = expected_target_hash
+                            .as_deref()
+                            .context("missing current-period planning snapshot")?;
+                        let commit =
+                            replace_target_from_candidate(&candidate, current, expected_hash)
+                                .context("stage=target_commit")?;
+                        target_commit = Some(serde_json::to_value(commit)?);
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "safe_commit",
+                                "completed",
+                                "本期工作簿已安全更新，目标快照校验通过",
+                                &progress,
+                                Some(phase_started.elapsed().as_millis()),
+                                &["Rust", "pytools-core"],
+                                None,
+                                None,
+                            ),
+                        );
+                    }
+                    _ => {
+                        phase = "engine_execution";
+                        phase_started = Instant::now();
+                        let copy_path =
+                            specialized_report_copy_path(current, "PyTools_专用报表处理结果")?;
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "engine_execution",
+                                "started",
+                                "正在使用 Rust 新建并校验专用报表结果工作簿",
+                                &progress,
+                                None,
+                                &["Rust", "pytools-core", "excel-writer", "rust_xlsxwriter"],
+                                None,
+                                None,
+                            ),
+                        );
+                        pytools_core::institution_normalize::create_rust_new_workbook_from_cell_plan(
                         current, &candidate, plan,
                     )
                     .context("stage=rust_new_workbook")?;
-                    verify_planning_snapshot(current, expected_target_hash.as_deref())
-                        .context("stage=source_stability_check")?;
-                    create_target_from_candidate(&candidate, &copy_path).with_context(|| {
-                        format!("publish result copy to {}", display_path_for_user(&copy_path))
-                    })?;
-                    output_copy = Some(copy_path.clone());
-                    execution = serde_json::json!({
-                        "engine": "rust_xlsxwriter",
-                        "execution": "created_and_validated_workbook_copy",
-                        "output": copy_path,
-                        "operation_count": plan.operations.len()
-                    });
-                    emit_rural_loan_menu_event(
-                        log_view,
-                        &mut events,
-                        new_rural_loan_menu_event(
-                            &run_started,
-                            feature_id,
-                            "engine_execution",
-                            "completed",
-                            format!(
-                                "结果工作簿已保存，本期源文件未修改"
+                        verify_planning_snapshot(current, expected_target_hash.as_deref())
+                            .context("stage=source_stability_check")?;
+                        create_target_from_candidate(&candidate, &copy_path).with_context(
+                            || {
+                                format!(
+                                    "publish result copy to {}",
+                                    display_path_for_user(&copy_path)
+                                )
+                            },
+                        )?;
+                        output_copy = Some(copy_path.clone());
+                        execution = serde_json::json!({
+                            "engine": "rust_xlsxwriter",
+                            "execution": "created_and_validated_workbook_copy",
+                            "output": copy_path,
+                            "operation_count": plan.operations.len()
+                        });
+                        emit_rural_loan_menu_event(
+                            log_view,
+                            &mut events,
+                            new_rural_loan_menu_event(
+                                &run_started,
+                                feature_id,
+                                "engine_execution",
+                                "completed",
+                                format!("结果工作簿已保存，本期源文件未修改"),
+                                &progress,
+                                Some(phase_started.elapsed().as_millis()),
+                                &["Rust", "pytools-core", "excel-writer", "rust_xlsxwriter"],
+                                Some("rust_xlsxwriter"),
+                                None,
                             ),
-                            &progress,
-                            Some(phase_started.elapsed().as_millis()),
-                            &["Rust", "pytools-core", "excel-writer", "rust_xlsxwriter"],
-                            Some("rust_xlsxwriter"),
-                            None,
-                        ),
-                    );
+                        );
+                    }
                 }
-            }
             }
         } else {
             emit_rural_loan_menu_event(
@@ -8983,7 +10413,10 @@ fn run_rural_loan_menu(
                 feature_id,
                 "completed",
                 "succeeded",
-                format!( "{operation_name}完成，总耗时 {:.3} 秒", (run_started.elapsed().as_millis()) as f64 / 1000.0),
+                format!(
+                    "{operation_name}完成，总耗时 {:.3} 秒",
+                    (run_started.elapsed().as_millis()) as f64 / 1000.0
+                ),
                 &progress,
                 Some(run_started.elapsed().as_millis()),
                 &["Rust", "pytools-core"],
@@ -9039,10 +10472,17 @@ fn run_rural_loan_menu(
     }
 
     for event in &events {
-        let level = if event.status == "failed" { pytools_core::run_logging::Level::Error }
-            else if event.status == "skipped" { pytools_core::run_logging::Level::Warn }
-            else { pytools_core::run_logging::Level::Info };
-        let details = event.error_type.as_ref().map(|error_type| serde_json::json!({"error_type": error_type}));
+        let level = if event.status == "failed" {
+            pytools_core::run_logging::Level::Error
+        } else if event.status == "skipped" {
+            pytools_core::run_logging::Level::Warn
+        } else {
+            pytools_core::run_logging::Level::Info
+        };
+        let details = event
+            .error_type
+            .as_ref()
+            .map(|error_type| serde_json::json!({"error_type": error_type}));
         unified.progress_at(
             level,
             &event.phase,
@@ -9058,7 +10498,11 @@ fn run_rural_loan_menu(
     if let Err(error) = result.as_ref() {
         unified.operation_failure(
             phase,
-            match phase { "safe_commit" => "OUTPUT_COMMIT_FAILED", "engine_execution" => "EXCEL_EDIT_FAILED", _ => "RURAL_LOAN_FAILED" },
+            match phase {
+                "safe_commit" => "OUTPUT_COMMIT_FAILED",
+                "engine_execution" => "EXCEL_EDIT_FAILED",
+                _ => "RURAL_LOAN_FAILED",
+            },
             "涉农贷款处理失败；请检查运行记录中的失败阶段",
             error,
         );
@@ -9068,15 +10512,20 @@ fn run_rural_loan_menu(
     }
     unified.set_existing_timing(started_at.clone(), run_started.elapsed().as_millis());
     let mut unified_outputs = output_copy.iter().cloned().collect::<Vec<_>>();
-    if target_commit.is_some() { unified_outputs.push(current.to_path_buf()); }
-    let unified_output_stats = (!unified_outputs.is_empty()).then_some(pytools_core::run_logging::OutputStats {
-        workbooks_saved: Some(unified_outputs.len()),
-        sheets_saved: None,
-        saved: Some(true),
-    });
+    if target_commit.is_some() {
+        unified_outputs.push(current.to_path_buf());
+    }
+    let unified_output_stats =
+        (!unified_outputs.is_empty()).then_some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(unified_outputs.len()),
+            sheets_saved: None,
+            saved: Some(true),
+        });
     let status_override = if result.is_ok() && progress.failed_regions > 0 {
         Some(pytools_core::run_logging::TaskStatus::PartialSuccess)
-    } else { None };
+    } else {
+        None
+    };
     let (unified_summary, unified_summary_path) = unified.finish_with_status(
         result.is_err(),
         false,
@@ -9140,16 +10589,14 @@ fn run_rural_loan_menu(
             if log_view != "off" {
                 result["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    result["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    result["run_log_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
                             pytools_core::run_logging::terminal_line(
                                 pytools_core::run_logging::Level::Info,
-                                &format!(
-                                    "运行记录已保存：{}",
-                                    path_for_log_view(&path, log_view)
-                                )
+                                &format!("运行记录已保存：{}", path_for_log_view(&path, log_view))
                             )
                         );
                     }
@@ -9163,7 +10610,9 @@ fn run_rural_loan_menu(
             } else {
                 let mut result = result;
                 result["run_id"] = serde_json::json!(unified_summary.run_id.clone());
-                if let Some(path) = unified_summary_path.as_ref() { result["run_summary_path"] = serde_json::json!(path); }
+                if let Some(path) = unified_summary_path.as_ref() {
+                    result["run_summary_path"] = serde_json::json!(path);
+                }
                 println!("{}", serde_json::to_string_pretty(&result)?);
             }
             Ok(())
@@ -9171,10 +10620,28 @@ fn run_rural_loan_menu(
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Info,
+                            &format!(
+                                "运行记录已保存：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
                 }
                 if let Some(path) = unified_summary_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("结构化日志已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Info,
+                            &format!(
+                                "结构化日志已保存：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
                 }
                 Err(anyhow::anyhow!(
                     "涉农贷款处理失败；请查看运行记录中的错误阶段。"
@@ -9302,8 +10769,12 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create history directory {}", display_path_for_user(&parent)))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "create history directory {}",
+                    display_path_for_user(&parent)
+                )
+            })?;
         }
         Some(path)
     };
@@ -9335,7 +10806,9 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
             if view == "developer" {
                 if let Ok(mut value) = serde_json::to_value(event) {
                     redact_diagnostic_fields(&mut value);
-                    if let Ok(encoded) = serde_json::to_string(&value) { eprintln!("{encoded}"); }
+                    if let Ok(encoded) = serde_json::to_string(&value) {
+                        eprintln!("{encoded}");
+                    }
                 }
             } else if view == "user" {
                 let current = event
@@ -9363,15 +10836,23 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
         .and_then(Path::parent)
         .map(Path::to_path_buf)
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let unified_path = if view != "off" {
+    let (unified_path, unified_summary) = if view != "off" {
         write_normalize_unified_log(&report, &options.positional, &diagnostic_dir, view)
-    } else { None };
+    } else {
+        (None, None)
+    };
 
     if let Some(report_output) = report_output.as_deref() {
         let mut safe_report = serde_json::to_value(&report)?;
         redact_diagnostic_fields(&mut safe_report);
         if let Err(error) = write_json_report_create_new(report_output, &safe_report) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("运行记录写入失败：{error}；业务结果仍保留")));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Warn,
+                    &format!("运行记录写入失败：{error}；业务结果仍保留")
+                )
+            );
         }
     }
     let output = if view == "developer" {
@@ -9388,12 +10869,28 @@ fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) ->
         }
     }
     if let Some(report_output) = report_output {
-        output["history_report"] = serde_json::Value::String(display_path_for_user(&report_output).to_string());
+        output["history_report"] =
+            serde_json::Value::String(display_path_for_user(&report_output).to_string());
     }
-    if let Some(path) = unified_path { output["run_summary_path"] = serde_json::json!(path.to_string_lossy()); }
-    if interactive && view != "developer" {
+    if let Some(path) = unified_path {
+        output["run_summary_path"] = serde_json::json!(path.to_string_lossy());
+    }
+    if interactive && view == "user" {
+        if let Some(summary) = unified_summary.as_ref() {
+            let outputs = report
+                .files
+                .iter()
+                .filter_map(|file| file.output_path.clone())
+                .collect::<Vec<_>>();
+            emit_unified_terminal_summary_with_outputs(summary, &outputs);
+        } else {
+            println!("{}", pytools_core::run_logging::terminal_line(if report.failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "机构名称规范化结束：选择 {} 个，已处理 {} 个，失败 {} 个；耗时 {:.3} 秒；运行编号 {}", report.total_inputs, report.completed_files, report.failed_files, (report.elapsed_ms) as f64 / 1000.0, report.run_id)));
+        }
+    } else if interactive && view == "off" {
         println!("{}", pytools_core::run_logging::terminal_line(if report.failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "机构名称规范化结束：选择 {} 个，已处理 {} 个，失败 {} 个；耗时 {:.3} 秒；运行编号 {}", report.total_inputs, report.completed_files, report.failed_files, (report.elapsed_ms) as f64 / 1000.0, report.run_id)));
-    } else { println!("{}", serde_json::to_string_pretty(&output)?); }
+    } else {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    }
     Ok(())
 }
 
@@ -9403,8 +10900,13 @@ fn redact_diagnostic_fields(value: &mut serde_json::Value) {
             for (name, field) in fields {
                 let key = name.to_ascii_lowercase();
                 if key == "route_diagnostic" {
-                    let kind = field.get("kind").and_then(serde_json::Value::as_str).map(str::to_owned);
-                    *field = kind.map(|kind| serde_json::json!({"kind": kind})).unwrap_or(serde_json::Value::Null);
+                    let kind = field
+                        .get("kind")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned);
+                    *field = kind
+                        .map(|kind| serde_json::json!({"kind": kind}))
+                        .unwrap_or(serde_json::Value::Null);
                 } else if matches!(key.as_str(), "diagnostic" | "password" | "token" | "secret") {
                     *field = serde_json::Value::Null;
                 } else {
@@ -9422,18 +10924,46 @@ fn write_normalize_unified_log(
     inputs: &[PathBuf],
     log_dir: &Path,
     log_view: &str,
-) -> Option<PathBuf> {
+) -> (
+    Option<PathBuf>,
+    Option<pytools_core::run_logging::RunSummary>,
+) {
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
-    let mut tracker = RunTracker::with_id("PT-7-2", "机构名称规范化", inputs, report.run_id.clone());
+    let mut tracker =
+        RunTracker::with_id("PT-7-2", "机构名称规范化", inputs, report.run_id.clone());
     tracker.set_existing_timing(report.started_at.clone(), report.elapsed_ms);
-    let mut writer = match EventWriter::create(&log_dir.join("run-events"), "PT-7-2", &report.run_id) {
-        Ok(writer) => Some(writer),
-        Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}"))); None }
-    };
+    let mut writer =
+        match EventWriter::create(&log_dir.join("run-events"), "PT-7-2", &report.run_id) {
+            Ok(writer) => Some(writer),
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}")
+                    )
+                );
+                None
+            }
+        };
     if let Some(writer) = writer.as_mut() {
-        let mut start = tracker.event(Level::Info, "run_started", "configuration", "started", "开始机构名称规范化");
+        let mut start = tracker.event(
+            Level::Info,
+            "run_started",
+            "configuration",
+            "started",
+            "开始机构名称规范化",
+        );
         start.timestamp = report.started_at.clone();
-        if let Err(error) = writer.write(&start) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+        if let Err(error) = writer.write(&start) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
+        }
     }
     if report.mapping_empty {
         tracker.skip_unfinished();
@@ -9441,34 +10971,126 @@ fn write_normalize_unified_log(
     let mut outputs = Vec::new();
     for (index, file) in report.files.iter().enumerate() {
         let position = index + 1;
-        if tracker.state(position) != Some(FileStatus::Pending) { continue; }
+        if tracker.state(position) != Some(FileStatus::Pending) {
+            continue;
+        }
         let _ = tracker.transition(position, FileStatus::InProgress);
-        let state = match file.status.as_str() { "failed" => FileStatus::Failed, "planned" => FileStatus::Skipped, "applied" | "no_changes" => FileStatus::Succeeded, _ => continue };
+        let state = match file.status.as_str() {
+            "failed" => FileStatus::Failed,
+            "planned" => FileStatus::Skipped,
+            "applied" | "no_changes" => FileStatus::Succeeded,
+            _ => continue,
+        };
         let _ = tracker.transition(position, state);
-        if let Some(path) = &file.output_path { outputs.push(path_for_log_view(path, log_view)); }
-        if report.mode == "in_place" && file.status == "applied" { outputs.push(path_for_log_view(&inputs[index], log_view)); }
+        if let Some(path) = &file.output_path {
+            outputs.push(path_for_log_view(path, log_view));
+        }
+        if report.mode == "in_place" && file.status == "applied" {
+            outputs.push(path_for_log_view(&inputs[index], log_view));
+        }
         if let Some(writer) = writer.as_mut() {
-            let level = if state == FileStatus::Failed { Level::Error } else if state == FileStatus::Skipped { Level::Warn } else { Level::Info };
-            let mut event = tracker.event(level, "file_result", file.error_stage.as_deref().unwrap_or("normalization"), &file.status, &file.user_message);
+            let level = if state == FileStatus::Failed {
+                Level::Error
+            } else if state == FileStatus::Skipped {
+                Level::Warn
+            } else {
+                Level::Info
+            };
+            let mut event = tracker.event(
+                level,
+                "file_result",
+                file.error_stage.as_deref().unwrap_or("normalization"),
+                &file.status,
+                &file.user_message,
+            );
             event.file_index = Some(position);
             event.file_name = Some(file.file_name.clone());
             event.engine = file.actual_engine.clone();
             event.elapsed_ms = Some(file.timings.total_ms);
-            if state == FileStatus::Failed { event.error_code = Some("EXCEL_OPERATION_FAILED".to_owned()); }
-            if let Err(error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); break; }
+            if state == FileStatus::Failed {
+                event.error_code = Some("EXCEL_OPERATION_FAILED".to_owned());
+            }
+            if let Err(error) = writer.write(&event) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+                break;
+            }
         }
     }
-    let summary = tracker.finish(report.status == "failed", false, report.mapping_empty, outputs, diagnostic_path_for_log_view(writer.as_ref(), log_view));
+    let mut summary = tracker.finish(
+        report.status == "failed",
+        false,
+        report.mapping_empty,
+        outputs,
+        diagnostic_path_for_log_view(writer.as_ref(), log_view),
+    );
+    summary.business_metrics.insert(
+        "映射工作表数".to_owned(),
+        serde_json::json!(report.mapped_sheets),
+    );
+    summary
+        .business_metrics
+        .insert("映射行数".to_owned(), serde_json::json!(report.mapped_rows));
+    summary.business_metrics.insert(
+        "修改文件数".to_owned(),
+        serde_json::json!(report.modified_files),
+    );
+    if let Some(failure) = &report.failure {
+        summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
+            stage: user_friendly_normalize_error_stage(&failure.stage).to_owned(),
+            code: "INSTITUTION_NORMALIZE_FAILED".to_owned(),
+            message: failure.user_message.clone(),
+            file_name: report
+                .files
+                .iter()
+                .find(|file| file.status == "failed")
+                .map(|file| file.file_name.clone()),
+            sheet_name: None,
+        });
+    }
     if let Some(writer) = writer.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if report.failed_files > 0 { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", summary.overall_status), "机构名称规范化结束")) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+        if let Err(error) = writer.write(&tracker.event(
+            if report.failed_files > 0 {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", summary.overall_status),
+            "机构名称规范化结束",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
-    let path = log_dir.join("run-unified").join(format!("PT-7-2_{}.json", report.run_id));
-    match write_json_report_create_new(&path, &summary) {
+    let path = log_dir
+        .join("run-unified")
+        .join(format!("PT-7-2_{}.json", report.run_id));
+    let summary_path = match write_json_report_create_new(&path, &summary) {
         Ok(()) => Some(path),
-        Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))); None }
-    }
+        Err(error) => {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("统一运行记录写入失败：{error}")
+                )
+            );
+            None
+        }
+    };
+    (summary_path, Some(summary))
 }
 
 fn institution_normalize_user_view(
@@ -9606,14 +11228,20 @@ fn write_json_report_create_new<T: serde::Serialize>(path: &Path, report: &T) ->
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create report directory {}", display_path_for_user(&parent)))?;
+        fs::create_dir_all(parent).with_context(|| {
+            format!("create report directory {}", display_path_for_user(&parent))
+        })?;
     }
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
-        .with_context(|| format!("create run report {} without overwriting", display_path_for_user(&path)))?;
+        .with_context(|| {
+            format!(
+                "create run report {} without overwriting",
+                display_path_for_user(&path)
+            )
+        })?;
     output
         .write_all(&serde_json::to_vec_pretty(report)?)
         .with_context(|| format!("write run report {}", display_path_for_user(&path)))?;
@@ -9685,11 +11313,16 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                 }),
         )
     };
-    fs::create_dir_all(&output_dir)
-        .with_context(|| format!("create output directory {}", display_path_for_user(&output_dir)))?;
+    fs::create_dir_all(&output_dir).with_context(|| {
+        format!(
+            "create output directory {}",
+            display_path_for_user(&output_dir)
+        )
+    })?;
     if let Some(plan_dir) = plan_dir.as_deref() {
-        fs::create_dir_all(plan_dir)
-            .with_context(|| format!("create plan directory {}", display_path_for_user(&plan_dir)))?;
+        fs::create_dir_all(plan_dir).with_context(|| {
+            format!("create plan directory {}", display_path_for_user(&plan_dir))
+        })?;
     }
 
     let run_started = Instant::now();
@@ -9699,7 +11332,12 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-4-{}-{nonce}", std::process::id());
-    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id("PT-7-4", "修改外汇工作表页眉", &[], run_id.clone());
+    let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
+        "PT-7-4",
+        "修改外汇工作表页眉",
+        &[],
+        run_id.clone(),
+    );
     let report_output = if view == "off" {
         None
     } else {
@@ -9786,8 +11424,9 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                     "PT-7-4 currently accepts .xlsx only"
                 );
             }
-            let metadata = fs::symlink_metadata(input)
-                .with_context(|| format!("inspect input workbook {}", display_path_for_user(&input)))?;
+            let metadata = fs::symlink_metadata(input).with_context(|| {
+                format!("inspect input workbook {}", display_path_for_user(&input))
+            })?;
             anyhow::ensure!(
                 metadata.is_file() && !metadata.file_type().is_symlink(),
                 "input workbook must be a regular, non-symlink file: {}",
@@ -10106,7 +11745,9 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         "plan_dir": plan_dir,
         "items": items,
     });
-    attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &log_dir, view);
+    let unified_summary =
+        attach_legacy_batch_diagnostics(&mut unified_tracker, &mut result, &log_dir, view);
+    let terminal_output_paths = legacy_report_output_paths(&result);
 
     let mut history_warning = None::<String>;
     if let Some(path) = report_output.as_deref() {
@@ -10184,9 +11825,17 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         }
         _ => unreachable!("view was validated"),
     };
-    if interactive && view != "developer" {
+    if interactive && view == "user" {
+        if let Some(summary) = unified_summary.as_ref() {
+            emit_unified_terminal_summary_with_outputs(summary, &terminal_output_paths);
+        } else {
+            println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "外汇页眉处理结束：输入 {total_files} 个，已完成 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (run_started.elapsed().as_millis()) as f64 / 1000.0)));
+        }
+    } else if interactive && view == "off" {
         println!("{}", pytools_core::run_logging::terminal_line(if failed_files > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "外汇页眉处理结束：输入 {total_files} 个，已完成 {completed_files} 个，失败 {failed_files} 个；耗时 {:.3} 秒", (run_started.elapsed().as_millis()) as f64 / 1000.0)));
-    } else { println!("{}", serde_json::to_string_pretty(&output)?); }
+    } else {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    }
     Ok(())
 }
 
@@ -10241,8 +11890,12 @@ fn create_fx_header_copy(
         }));
     }
     let output = specialized_report_copy_path(input, "PyTools_专用报表处理结果")?;
-    let publication = create_target_from_candidate(candidate, &output)
-        .with_context(|| format!("publish FX header copy to {}", display_path_for_user(&output)))?;
+    let publication = create_target_from_candidate(candidate, &output).with_context(|| {
+        format!(
+            "publish FX header copy to {}",
+            display_path_for_user(&output)
+        )
+    })?;
     Ok(serde_json::json!({
         "engine": "ooxml_patch",
         "execution": "created_and_validated_workbook_copy",
@@ -10289,8 +11942,26 @@ fn emit_fx_header_event(
             eprintln!("{encoded}");
         }
     } else {
-        let message = format!( "{}（进度 {}/{}, 已完成 {}，失败 {}，已耗时 {:.3} 秒）", event.user_message, event.progress.processed_files, event.progress.total_files, event.progress.completed_files, event.progress.failed_files, (event.total_elapsed_ms) as f64 / 1000.0);
-        eprintln!("{}", pytools_core::run_logging::terminal_line(if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, &message));
+        let message = format!(
+            "{}（进度 {}/{}, 已完成 {}，失败 {}，已耗时 {:.3} 秒）",
+            event.user_message,
+            event.progress.processed_files,
+            event.progress.total_files,
+            event.progress.completed_files,
+            event.progress.failed_files,
+            (event.total_elapsed_ms) as f64 / 1000.0
+        );
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                if event.status == "failed" {
+                    pytools_core::run_logging::Level::Error
+                } else {
+                    pytools_core::run_logging::Level::Info
+                },
+                &message
+            )
+        );
     }
     events.push(event);
 }
@@ -10455,15 +12126,27 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let (recursive, arguments) = extract_boolean_flag(arguments, "recursive")?;
     let options = parse_cli_arguments(arguments)?;
     let config = required_path(&options, "config")?;
-    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let log_view = options.values.get("log-view").map(String::as_str).unwrap_or("user");
-    anyhow::ensure!(matches!(log_view, "user" | "developer" | "off"), "--log-view must be user, developer, or off");
+    let log_dir = options
+        .values
+        .get("log-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
+    let log_view = options
+        .values
+        .get("log-view")
+        .map(String::as_str)
+        .unwrap_or("user");
+    anyhow::ensure!(
+        matches!(log_view, "user" | "developer" | "off"),
+        "--log-view must be user, developer, or off"
+    );
     let capabilities = required_path(&options, "capabilities")?;
     let platform = options
         .values
         .get("platform")
         .context("--platform is required when executing sheet renames")?;
-    let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-5", "按配置修改 Sheet 名", log_view, None);
+    let mut unified =
+        UnifiedRunSession::new(&log_dir, "PT-4-5", "按配置修改 Sheet 名", log_view, None);
     unified.set_inputs(&options.positional, None);
     let report = match run_batch_sheet_rename_candidate(
         &config,
@@ -10475,7 +12158,12 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         Ok(report) => report,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            unified.operation_failure("sheet_rename", "SHEET_RENAME_FAILED", "工作表重命名失败", &error);
+            unified.operation_failure(
+                "sheet_rename",
+                "SHEET_RENAME_FAILED",
+                "工作表重命名失败",
+                &error,
+            );
             let _ = unified.finish(true, false, false, &[], None, None, None);
             return Err(error);
         }
@@ -10485,26 +12173,60 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     for (index, item) in report.files.iter().enumerate() {
         let status = match item.status.as_str() {
             "renamed" => {
-                if let Some(path) = item.output.as_ref() { output_paths.push(path.clone()); }
+                if let Some(path) = item.output.as_ref() {
+                    output_paths.push(path.clone());
+                }
                 pytools_core::run_logging::FileStatus::Succeeded
             }
             "unchanged" | "skipped" => pytools_core::run_logging::FileStatus::Skipped,
             _ => pytools_core::run_logging::FileStatus::Failed,
         };
-        let code = (status == pytools_core::run_logging::FileStatus::Failed).then_some("SHEET_RENAME_FAILED");
-        unified.discovered_file_event(index + 1, &item.input, status, "sheet_rename", item.reason.as_deref().unwrap_or(&item.status), code, None);
+        let code = (status == pytools_core::run_logging::FileStatus::Failed)
+            .then_some("SHEET_RENAME_FAILED");
+        unified.discovered_file_event(
+            index + 1,
+            &item.input,
+            status,
+            "sheet_rename",
+            item.reason.as_deref().unwrap_or(&item.status),
+            code,
+            None,
+        );
     }
     for index in 1..=options.positional.len() {
-        unified.file_result(index, pytools_core::run_logging::FileStatus::Succeeded, true, "input_scan", "已完成所选文件范围的工作表重命名扫描", None, None);
+        unified.file_result(
+            index,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "input_scan",
+            "已完成所选文件范围的工作表重命名扫描",
+            None,
+            None,
+        );
     }
-    let output_stats = (!output_paths.is_empty()).then_some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(output_paths.len()), sheets_saved: None, saved: Some(true) });
-    let (summary, summary_path) = unified.finish(false, false, report.rename_ok == 0, &output_paths, output_stats, None, None);
+    let output_stats =
+        (!output_paths.is_empty()).then_some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(output_paths.len()),
+            sheets_saved: None,
+            saved: Some(true),
+        });
+    let (summary, summary_path) = unified.finish(
+        false,
+        false,
+        report.rename_ok == 0,
+        &output_paths,
+        output_stats,
+        None,
+        None,
+    );
     if interactive && log_view == "user" {
         println!("{}", pytools_core::run_logging::terminal_line(if report.skip > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "Sheet 改名结束：扫描 {} 个文件，处理 {} 个工作簿，成功改名 {} 个工作表，跳过 {} 项；耗时 {:.3} 秒；运行编号 {}{}", report.files_scanned, report.workbooks, report.rename_ok, report.skip, (report.elapsed_ms) as f64 / 1000.0, summary.run_id, summary_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
     } else {
         let mut value = serde_json::to_value(&report)?;
         value["run_id"] = serde_json::json!(summary.run_id.clone());
-        if let Some(path) = summary_path { value["run_summary_path"] = serde_json::json!(path); }
+        if let Some(path) = summary_path {
+            value["run_summary_path"] = serde_json::json!(path);
+        }
         println!("{}", serde_json::to_string_pretty(&value)?);
     }
     Ok(())
@@ -10536,7 +12258,8 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
         .map(PathBuf::from)
         .or_else(|| load_global(&config).ok().map(|global| global.log_dir))
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-8", "机构提交完整性检查", log_view, None);
+    let mut unified =
+        UnifiedRunSession::new(&log_dir, "PT-4-8", "机构提交完整性检查", log_view, None);
     unified.set_inputs(&options.positional, None);
     let mut events = Vec::<serde_json::Value>::new();
     let report_result = if log_view == "off" {
@@ -10544,8 +12267,26 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
     } else {
         run_submission_check_with_progress(&config, &options.positional, &output_dir, |event| {
             let value = serde_json::to_value(&event).unwrap_or(serde_json::Value::Null);
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if event.status == "skipped" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
-            unified.progress(level, &event.phase, &event.phase, &event.status, &event.user_message, event.stage_elapsed_ms, event.actual_engine.as_deref(), event.error_type.as_ref().map(|error| serde_json::json!({"error_type": error})));
+            let level = if event.status == "failed" {
+                pytools_core::run_logging::Level::Error
+            } else if event.status == "skipped" {
+                pytools_core::run_logging::Level::Warn
+            } else {
+                pytools_core::run_logging::Level::Info
+            };
+            unified.progress(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+                event.stage_elapsed_ms,
+                event.actual_engine.as_deref(),
+                event
+                    .error_type
+                    .as_ref()
+                    .map(|error| serde_json::json!({"error_type": error})),
+            );
             emit_submission_check_event_view(log_view, &event, &value);
             if log_view == "developer" {
                 events.push(value);
@@ -10568,8 +12309,13 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
         Ok(report) => report,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            let failed_event = events.iter().rev().find(|event| event["status"] == "failed");
-            let stage = failed_event.and_then(|event| event["phase"].as_str()).unwrap_or("submission_check");
+            let failed_event = events
+                .iter()
+                .rev()
+                .find(|event| event["status"] == "failed");
+            let stage = failed_event
+                .and_then(|event| event["phase"].as_str())
+                .unwrap_or("submission_check");
             let error_code = match stage {
                 "configuration_load" => "CONFIG_READ_FAILED",
                 "source_discovery" => "FILE_DISCOVERY_FAILED",
@@ -10579,27 +12325,66 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
             unified.operation_failure(stage, error_code, "提交完整性检查失败", &error);
             let _ = unified.finish(true, false, false, &[], None, None, None);
             if let Some(Ok(path)) = &history_result {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("pytools: developer run history: {}", display_path_for_user(&path))));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Info,
+                        &format!(
+                            "pytools: developer run history: {}",
+                            display_path_for_user(&path)
+                        )
+                    )
+                );
             }
             return Err(error);
         }
     };
     unified.set_discovered(report.files);
     for index in 1..=options.positional.len() {
-        unified.file_result(index, pytools_core::run_logging::FileStatus::Succeeded, true, "submission_check", "所选输入位置已纳入提交完整性报告", None, None);
+        unified.file_result(
+            index,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "submission_check",
+            "所选输入位置已纳入提交完整性报告",
+            None,
+            None,
+        );
+    }
+    unified.set_business_metric("已提交配置项", serde_json::json!(report.submitted));
+    unified.set_business_metric("缺失配置项", serde_json::json!(report.missing));
+    unified.set_business_metric("未匹配文件", serde_json::json!(report.unmatched));
+    unified.set_business_metric("多重匹配文件", serde_json::json!(report.multi));
+    for (category, count) in [
+        ("缺失提交", report.missing),
+        ("未匹配文件", report.unmatched),
+        ("多重匹配文件", report.multi),
+    ] {
+        if count > 0 {
+            unified.record_business_issue(
+                pytools_core::run_logging::BusinessIssue::new(category, "完整性检查发现待处理项")
+                    .count(count),
+            );
+        }
     }
     let (unified_summary, unified_path) = unified.finish(
         false,
         false,
         false,
         std::slice::from_ref(&report.output),
-        Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(1), sheets_saved: None, saved: Some(true) }),
+        Some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(1),
+            sheets_saved: None,
+            saved: Some(true),
+        }),
         None,
         None,
     );
     let mut output = serde_json::to_value(&report)?;
     output["run_id"] = serde_json::json!(unified_summary.run_id.clone());
-    if let Some(path) = unified_path.as_ref() { output["run_summary_path"] = serde_json::json!(path); }
+    if let Some(path) = unified_path.as_ref() {
+        output["run_summary_path"] = serde_json::json!(path);
+    }
     if let Some(Ok(path)) = &history_result {
         output["run_history_path"] = serde_json::json!(path);
     }
@@ -10608,7 +12393,10 @@ fn run_submission_check_cli(arguments: Vec<String>, interactive: bool) -> Result
             serde_json::json!(format!("could not write structured run history: {error:#}"));
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("提交检查完成：发现 {} 个文件，提交 {} 项，缺失 {} 项，未匹配 {} 个，多重匹配 {} 个；报告 {}；运行编号 {}{}", report.files, report.submitted, report.missing, report.unmatched, report.multi, display_path_for_user(&report.output), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
+        emit_unified_terminal_summary_with_outputs(
+            &unified_summary,
+            std::slice::from_ref(&report.output),
+        );
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -10620,27 +12408,21 @@ fn emit_submission_check_event_view(
     event: &SubmissionCheckProgressEvent,
     event_value: &serde_json::Value,
 ) {
-    match log_view {
-        "user" => {
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if event.status == "skipped" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
-            if event.phase == "complete" {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 总用时 {:.3} 秒。", event.user_message, (event.total_elapsed_ms) as f64 / 1000.0)));
-            } else if matches!(event.status.as_str(), "started" | "progress") {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
-            } else if let Some(stage_elapsed_ms) = event.stage_elapsed_ms {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)));
-            } else {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
-            }
-        }
-        "developer" => {
-            if let Ok(line) = serde_json::to_string(event_value) {
-                eprintln!("{line}");
-            }
-        }
-        "off" => {}
-        _ => unreachable!("submission-check log view is validated before execution"),
-    }
+    let current = (event.progress.processed_files > 0).then_some(
+        event
+            .progress
+            .processed_files
+            .min(event.progress.total_files),
+    );
+    emit_batch_event_view(
+        log_view,
+        event.progress.total_files,
+        current,
+        &event.status,
+        current.is_none() || event.phase == "complete",
+        &event.user_message,
+        Some(event_value),
+    );
 }
 
 fn write_submission_check_run_history(
@@ -10705,7 +12487,12 @@ fn write_submission_check_run_history(
         .write(true)
         .create_new(true)
         .open(&path)
-        .with_context(|| format!("create submission-check run history {}", display_path_for_user(&path)))?;
+        .with_context(|| {
+            format!(
+                "create submission-check run history {}",
+                display_path_for_user(&path)
+            )
+        })?;
     serde_json::to_writer_pretty(&mut file, &history)?;
     file.write_all(b"\n")?;
     Ok(path)
@@ -10757,136 +12544,352 @@ fn run_convert_batch_cli(arguments: Vec<String>, excel: bool, interactive: bool)
         "convert-word"
     };
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
-    let mut tracker = RunTracker::new(feature_id, if excel { "Excel 格式转换" } else { "Word 格式转换" }, &[]);
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut tracker = RunTracker::new(
+        feature_id,
+        if excel {
+            "Excel 格式转换"
+        } else {
+            "Word 格式转换"
+        },
+        &[],
+    );
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), feature_id, &tracker.run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
+                None
+            }
         }
     };
     let mut diagnostic_failed = false;
     let mut events = Vec::<serde_json::Value>::new();
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "input_expansion", "started", "开始转换文件")) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true;
+        if let Err(error) = writer.write(&tracker.event(
+            Level::Info,
+            "run_started",
+            "input_expansion",
+            "started",
+            "开始转换文件",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
+            diagnostic_failed = true;
         }
     }
     let mut on_event = |event: &ConversionProgressEvent| {
-                let value = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
-                emit_conversion_event_view(log_view, event, &value);
-                if log_view == "developer" {
-                    events.push(value);
+        let value = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
+        emit_conversion_event_view(log_view, event, &value);
+        if log_view == "developer" {
+            events.push(value);
+        }
+        if let Some(writer) = diagnostic.as_mut() {
+            let level = if event.status == "failed" {
+                Level::Error
+            } else if event.status == "skipped" {
+                Level::Warn
+            } else {
+                Level::Info
+            };
+            let mut record = tracker.event(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+            );
+            record.timestamp = event.timestamp.clone();
+            record.file_index = event.input_index;
+            record.engine = event.actual_engine.clone();
+            record.elapsed_ms = event.stage_elapsed_ms;
+            if event.status == "failed" {
+                record.error_code = Some("FILE_CONVERT_FAILED".to_owned());
+            }
+            if let Err(error) = writer.write(&record) {
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
+                    diagnostic_failed = true;
                 }
-                if let Some(writer) = diagnostic.as_mut() {
-                    let level = if event.status == "failed" { Level::Error } else if event.status == "skipped" { Level::Warn } else { Level::Info };
-                    let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, &event.user_message);
-                    record.timestamp = event.timestamp.clone();
-                    record.file_index = event.input_index;
-                    record.engine = event.actual_engine.clone();
-                    record.elapsed_ms = event.stage_elapsed_ms;
-                    if event.status == "failed" { record.error_code = Some("FILE_CONVERT_FAILED".to_owned()); }
-                    if let Err(error) = writer.write(&record) {
-                        if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; }
-                    }
-                }
+            }
+        }
     };
     let result = if excel {
-        convert_excel_files_with_progress(&options.positional, output_dir, &target, engine, &mut on_event)
+        convert_excel_files_with_progress(
+            &options.positional,
+            output_dir,
+            &target,
+            engine,
+            &mut on_event,
+        )
     } else {
-        convert_word_files_with_progress(&options.positional, output_dir, &target, engine, &mut on_event)
+        convert_word_files_with_progress(
+            &options.positional,
+            output_dir,
+            &target,
+            engine,
+            &mut on_event,
+        )
     };
     drop(on_event);
     if let Err(error) = result {
-        let mut summary = tracker.finish(true, false, false, vec![], diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+        let mut summary = tracker.finish(
+            true,
+            false,
+            false,
+            vec![],
+            diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+        );
         summary.input_stats_available = false;
         if let Some(writer) = diagnostic.as_mut() {
-            let _ = writer.write(&tracker.event(Level::Error, "run_finished", "conversion", "failed", "转换任务中断"));
+            let _ = writer.write(&tracker.event(
+                Level::Error,
+                "run_finished",
+                "conversion",
+                "failed",
+                "转换任务中断",
+            ));
         }
         if log_view != "off" {
             let path = log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
-            if let Err(log_error) = write_json_report_create_new(&path, &summary) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{log_error}"))); }
+            if let Err(log_error) = write_json_report_create_new(&path, &summary) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("运行记录写入失败：{log_error}")
+                    )
+                );
+            }
         }
         return Err(error);
     }
     let result = result.expect("error was returned above");
-    let discovered_files = result.items.iter().map(|item| item.input.clone()).collect::<Vec<_>>();
+    let discovered_files = result
+        .items
+        .iter()
+        .map(|item| item.input.clone())
+        .collect::<Vec<_>>();
     let _ = tracker.set_inputs(&discovered_files);
     tracker.set_discovered(discovered_files.len());
     for (index, item) in result.items.iter().enumerate() {
         let position = index + 1;
         let _ = tracker.transition(position, FileStatus::InProgress);
-        let state = match item.status.as_str() { "converted" | "copied" => FileStatus::Succeeded, "failed" => FileStatus::Failed, _ => FileStatus::Skipped };
+        let state = match item.status.as_str() {
+            "converted" | "copied" => FileStatus::Succeeded,
+            "failed" => FileStatus::Failed,
+            _ => FileStatus::Skipped,
+        };
         let _ = tracker.transition(position, state);
         if let Some(writer) = diagnostic.as_mut() {
-            let level = if state == FileStatus::Failed { Level::Error } else if state == FileStatus::Skipped { Level::Warn } else { Level::Info };
+            let level = if state == FileStatus::Failed {
+                Level::Error
+            } else if state == FileStatus::Skipped {
+                Level::Warn
+            } else {
+                Level::Info
+            };
             let conversion_message = match item.status.as_str() {
                 "converted" => format!("{}：文件格式转换完成", tracker.feature_name),
                 "copied" => format!("{}：格式无需转换，文件已复制", tracker.feature_name),
                 "failed" => format!("{}：文件转换失败", tracker.feature_name),
                 _ => format!("{}：文件转换已跳过", tracker.feature_name),
             };
-            let mut event = tracker.event(level, "file_result", "conversion", &item.status, conversion_message);
+            let mut event = tracker.event(
+                level,
+                "file_result",
+                "conversion",
+                &item.status,
+                conversion_message,
+            );
             event.file_index = Some(position);
             event.file_name = Some(pytools_core::run_logging::portable_file_name(&item.input));
             if state == FileStatus::Failed {
                 event.error_code = Some("FILE_CONVERT_FAILED".to_owned());
                 event.message = format!("转换失败：{}", item.detail);
             }
-            if let Err(error) = writer.write(&event) { if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; } }
+            if let Err(error) = writer.write(&event) {
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
+                    diagnostic_failed = true;
+                }
+            }
         }
     }
-    let output_paths = result.items.iter().filter_map(|item| item.output.as_ref()).map(|path| path_for_log_view(path, log_view)).collect();
-    let mut unified = tracker.finish(false, false, result.converted == 0 && result.failed == 0, output_paths, diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
-    if excel { unified.output_stats = Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(result.converted), sheets_saved: None, saved: Some(result.converted > 0) }); }
+    tracker.set_business_metric("成功转换数", serde_json::json!(result.converted));
+    tracker.set_business_metric("失败转换数", serde_json::json!(result.failed));
+    tracker.set_business_metric("跳过文件数", serde_json::json!(result.skipped));
+    let output_paths = result
+        .items
+        .iter()
+        .filter_map(|item| item.output.as_ref())
+        .map(|path| path_for_log_view(path, log_view))
+        .collect();
+    let mut unified = tracker.finish(
+        false,
+        false,
+        result.converted == 0 && result.failed == 0,
+        output_paths,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
+    if excel {
+        unified.output_stats = Some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(result.converted),
+            sheets_saved: None,
+            saved: Some(result.converted > 0),
+        });
+    }
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if result.failed > 0 { Level::Error } else { Level::Info }, "run_finished", "conversion", &format!("{:?}", unified.overall_status), format!("{}结束", tracker.feature_name))) {
-            if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+        if let Err(error) = writer.write(&tracker.event(
+            if result.failed > 0 {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "conversion",
+            &format!("{:?}", unified.overall_status),
+            format!("{}结束", tracker.feature_name),
+        )) {
+            if !diagnostic_failed {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+            }
         }
     }
     let mut unified_report_path = None;
     if log_view != "off" {
         let mut report = serde_json::to_value(&unified)?;
         report["selected_path_count"] = serde_json::json!(options.positional.len());
-        report["conversion_errors"] = serde_json::json!(result.items.iter()
+        report["conversion_errors"] = serde_json::json!(result
+            .items
+            .iter()
             .filter(|item| item.status == "failed")
             .map(|item| serde_json::json!({
                 "file_name": pytools_core::run_logging::portable_file_name(&item.input),
                 "reason": item.detail,
-            })).collect::<Vec<_>>());
+            }))
+            .collect::<Vec<_>>());
         let path = log_dir.join(format!("{feature_id}_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &report) {
             Ok(()) => {
-                if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, log_view == "developer")))); }
+                if interactive {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行编号 {}；运行记录：{}",
+                                tracker.run_id,
+                                pytools_core::run_logging::path_for_log_view(
+                                    &path,
+                                    log_view == "developer"
+                                )
+                            )
+                        )
+                    );
+                }
                 unified_report_path = Some(path);
-            },
-            Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("运行记录写入失败：{error}"))),
+            }
+            Err(error) => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("运行记录写入失败：{error}")
+                )
+            ),
         }
     }
     let run_history_path = if log_view == "developer" {
-        match write_conversion_run_history(&log_dir, feature_id, function, engine, &result, &events) {
+        match write_conversion_run_history(&log_dir, feature_id, function, engine, &result, &events)
+        {
             Ok(path) => Some(path),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("历史运行记录写入失败：{error}"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("历史运行记录写入失败：{error}")
+                    )
+                );
+                None
+            }
         }
     } else {
         None
     };
     let mut output = serde_json::to_value(&result)?;
     output["run_id"] = serde_json::json!(tracker.run_id);
-    if let Some(path) = unified_report_path { output["run_summary_path"] = serde_json::json!(path.to_string_lossy()); }
+    if let Some(path) = unified_report_path {
+        output["run_summary_path"] = serde_json::json!(path.to_string_lossy());
+    }
     if let Some(path) = run_history_path {
         output["run_history_path"] = serde_json::Value::String(path.to_string_lossy().into_owned());
     }
     for item in result.items.iter().filter(|item| item.status == "failed") {
-        let name = item.input.file_name().unwrap_or(item.input.as_os_str()).to_string_lossy();
-        let reason = if item.detail.contains("external fidelity engine") || item.detail.contains("该功能需要外部引擎") { "需要可用的转换引擎" }
-            else if item.detail.contains("unsupported") { "文件格式不受支持" }
-            else if item.detail.contains("does not exist") { "源文件不存在" }
-            else { "转换或保存失败，请检查文件及访问权限" };
-        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("转换失败：{name}；{reason}；具体原因：{}；运行编号 {}", item.detail, tracker.run_id)));
+        let name = item
+            .input
+            .file_name()
+            .unwrap_or(item.input.as_os_str())
+            .to_string_lossy();
+        let reason = if item.detail.contains("external fidelity engine")
+            || item.detail.contains("该功能需要外部引擎")
+        {
+            "需要可用的转换引擎"
+        } else if item.detail.contains("unsupported") {
+            "文件格式不受支持"
+        } else if item.detail.contains("does not exist") {
+            "源文件不存在"
+        } else {
+            "转换或保存失败，请检查文件及访问权限"
+        };
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                Level::Error,
+                &format!(
+                    "转换失败：{name}；{reason}；具体原因：{}；运行编号 {}",
+                    item.detail, tracker.run_id
+                )
+            )
+        );
     }
     if interactive && log_view != "developer" {
-        let stats = &unified.input_stats;
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { Level::Warn } else { Level::Info }, &format!( "转换结束：发现 {} 个文件，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {:.3} 秒", stats.selected, stats.succeeded, stats.failed, stats.skipped, (unified.total_elapsed_ms) as f64 / 1000.0)));
+        let outputs = result
+            .items
+            .iter()
+            .filter_map(|item| item.output.clone())
+            .collect::<Vec<_>>();
+        emit_unified_terminal_summary_with_outputs(&unified, &outputs);
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -10915,20 +12918,20 @@ fn emit_conversion_event_view(
     event: &ConversionProgressEvent,
     event_value: &serde_json::Value,
 ) {
-    match log_view {
-        "user" => {
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if event.status == "skipped" { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
-            let message = if let Some(stage_elapsed_ms) = event.stage_elapsed_ms { format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0) } else { event.user_message.clone() };
-            eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
-        }
-        "developer" => {
-            if let Ok(line) = serde_json::to_string(event_value) {
-                eprintln!("{line}");
-            }
-        }
-        "off" => {}
-        _ => unreachable!("conversion log view is validated before execution"),
-    }
+    let current = event
+        .input_index
+        .or_else(|| (event.completed_files > 0).then_some(event.completed_files));
+    let phase_change = current.is_none()
+        || (event.status == "completed" && event.completed_files >= event.total_files);
+    emit_batch_event_view(
+        log_view,
+        event.total_files,
+        current,
+        &event.status,
+        phase_change,
+        &event.user_message,
+        Some(event_value),
+    );
 }
 
 fn write_conversion_run_history(
@@ -10939,8 +12942,12 @@ fn write_conversion_run_history(
     result: &pytools_core::conversion::ConversionRun,
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
-    fs::create_dir_all(log_dir)
-        .with_context(|| format!("create conversion log directory {}", display_path_for_user(&log_dir)))?;
+    fs::create_dir_all(log_dir).with_context(|| {
+        format!(
+            "create conversion log directory {}",
+            display_path_for_user(&log_dir)
+        )
+    })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -10976,8 +12983,12 @@ fn write_conversion_run_history(
         "total_elapsed_ms": events.last().map(|event| event["total_elapsed_ms"].clone()),
         "events": events,
     });
-    fs::write(&path, serde_json::to_vec_pretty(&history)?)
-        .with_context(|| format!("write conversion run history {}", display_path_for_user(&path)))?;
+    fs::write(&path, serde_json::to_vec_pretty(&history)?).with_context(|| {
+        format!(
+            "write conversion run history {}",
+            display_path_for_user(&path)
+        )
+    })?;
     Ok(path)
 }
 
@@ -11415,7 +13426,16 @@ fn run_timeline_extract_cli_report(
                     "issues": plan.issues,
                 }));
                 if log_view == "user" {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("目标簿计划已保存，未修改既有文件：{}", display_path_for_user(&plan_path))));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Info,
+                            &format!(
+                                "目标簿计划已保存，未修改既有文件：{}",
+                                display_path_for_user(&plan_path)
+                            )
+                        )
+                    );
                 }
                 continue;
             }
@@ -11465,9 +13485,12 @@ fn run_timeline_extract_cli_report(
                         "issues": plan.issues,
                     }));
                     if log_view == "user" {
-                        eprintln!( "目标簿写入完成：{}，新增 {} 行，耗时 {:.3} 秒",
+                        eprintln!(
+                            "目标簿写入完成：{}，新增 {} 行，耗时 {:.3} 秒",
                             display_path_for_user(&plan.target),
-                            plan.appended_rows, (elapsed_ms) as f64 / 1000.0);
+                            plan.appended_rows,
+                            (elapsed_ms) as f64 / 1000.0
+                        );
                     }
                     if log_view != "off" {
                         let event = TimelineExtractRunEvent {
@@ -11589,7 +13612,8 @@ fn run_timeline_extract_cli_report(
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = history_path {
-                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    output["run_log_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
@@ -11685,33 +13709,77 @@ fn write_timeline_extract_run_history(
 fn run_timeline_precheck_cli(arguments: Vec<String>) -> Result<()> {
     let options = parse_cli_arguments(arguments)?;
     let config = required_path(&options, "config")?;
-    let log_dir = options.values.get("log-dir").map(PathBuf::from).unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let log_view = options.values.get("log-view").map(String::as_str).unwrap_or("user");
-    anyhow::ensure!(matches!(log_view, "user" | "developer" | "off"), "--log-view must be user, developer, or off");
+    let log_dir = options
+        .values
+        .get("log-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
+    let log_view = options
+        .values
+        .get("log-view")
+        .map(String::as_str)
+        .unwrap_or("user");
+    anyhow::ensure!(
+        matches!(log_view, "user" | "developer" | "off"),
+        "--log-view must be user, developer, or off"
+    );
     let mut unified = UnifiedRunSession::new(&log_dir, "PT-1-5", "时序配置预校验", log_view, None);
     unified.set_inputs(std::slice::from_ref(&config), None);
     let report = match run_timeline_precheck(&config) {
         Ok(report) => report,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            unified.operation_failure("configuration_read", "CONFIG_READ_FAILED", "时序配置预校验读取失败", &error);
+            unified.operation_failure(
+                "configuration_read",
+                "CONFIG_READ_FAILED",
+                "时序配置预校验读取失败",
+                &error,
+            );
             let _ = unified.finish(true, false, false, &[], None, None, None);
             return Err(error);
         }
     };
     unified.set_discovered(1);
     if report.errors > 0 {
-        unified.file_result(1, pytools_core::run_logging::FileStatus::Failed, true, "configuration_validation", "配置预校验发现错误", Some("CONFIG_VALIDATION_FAILED"), None);
+        unified.file_result(
+            1,
+            pytools_core::run_logging::FileStatus::Failed,
+            true,
+            "configuration_validation",
+            "配置预校验发现错误",
+            Some("CONFIG_VALIDATION_FAILED"),
+            None,
+        );
         for issue in report.issues.iter().filter(|issue| issue.level == "error") {
-            unified.progress(pytools_core::run_logging::Level::Error, "configuration_issue", "configuration_validation", "failed", &format!("{}：{}", issue.location, issue.message), None, None, Some(serde_json::json!({"location": issue.location})));
+            unified.progress(
+                pytools_core::run_logging::Level::Error,
+                "configuration_issue",
+                "configuration_validation",
+                "failed",
+                &format!("{}：{}", issue.location, issue.message),
+                None,
+                None,
+                Some(serde_json::json!({"location": issue.location})),
+            );
         }
     } else {
-        unified.file_result(1, pytools_core::run_logging::FileStatus::Succeeded, true, "configuration_validation", "配置预校验通过", None, None);
+        unified.file_result(
+            1,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "configuration_validation",
+            "配置预校验通过",
+            None,
+            None,
+        );
     }
-    let (summary, summary_path) = unified.finish(report.errors > 0, false, false, &[], None, None, None);
+    let (summary, summary_path) =
+        unified.finish(report.errors > 0, false, false, &[], None, None, None);
     let mut value = serde_json::to_value(&report)?;
     value["run_id"] = serde_json::json!(summary.run_id.clone());
-    if let Some(path) = summary_path { value["run_summary_path"] = serde_json::json!(path); }
+    if let Some(path) = summary_path {
+        value["run_summary_path"] = serde_json::json!(path);
+    }
     println!("{}", serde_json::to_string_pretty(&value)?);
     if report.errors > 0 {
         bail!("时序配置预校验发现 {} 项错误", report.errors);
@@ -11719,27 +13787,64 @@ fn run_timeline_precheck_cli(arguments: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-fn run_interactive_timeline_precheck<W>(output: &mut W, config_path: &Path, global: &GlobalConfig, log_view: &str) -> Result<()>
+fn run_interactive_timeline_precheck<W>(
+    output: &mut W,
+    config_path: &Path,
+    global: &GlobalConfig,
+    log_view: &str,
+) -> Result<()>
 where
     W: Write,
 {
-    let mut diagnostic = UnifiedRunSession::new(&global.log_dir, "PT-1-5", "时序配置预校验", log_view, None);
+    let mut diagnostic =
+        UnifiedRunSession::new(&global.log_dir, "PT-1-5", "时序配置预校验", log_view, None);
     diagnostic.set_inputs(std::slice::from_ref(&config_path.to_path_buf()), Some(1));
     writeln!(output, "\n=== 预校验报告 ===")?;
-    writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("开始预校验配置文件 {}", pytools_core::run_logging::portable_file_name(config_path))))?;
+    writeln!(
+        output,
+        "{}",
+        pytools_core::run_logging::terminal_line(
+            pytools_core::run_logging::Level::Info,
+            &format!(
+                "开始预校验配置文件 {}",
+                pytools_core::run_logging::portable_file_name(config_path)
+            )
+        )
+    )?;
     let report = match run_timeline_precheck(config_path) {
         Ok(report) => report,
         Err(error) => {
             diagnostic.mark_inputs_unavailable();
-            diagnostic.operation_failure("configuration_read", "CONFIG_READ_FAILED", "时序配置预校验读取失败", &error);
+            diagnostic.operation_failure(
+                "configuration_read",
+                "CONFIG_READ_FAILED",
+                "时序配置预校验读取失败",
+                &error,
+            );
             let _ = diagnostic.finish(true, false, false, &[], None, None, None);
             return Err(error);
         }
     };
     if report.errors > 0 {
-        diagnostic.file_result(1, pytools_core::run_logging::FileStatus::Failed, true, "configuration_validation", "配置预校验发现错误", Some("CONFIG_VALIDATION_FAILED"), None);
+        diagnostic.file_result(
+            1,
+            pytools_core::run_logging::FileStatus::Failed,
+            true,
+            "configuration_validation",
+            "配置预校验发现错误",
+            Some("CONFIG_VALIDATION_FAILED"),
+            None,
+        );
     } else {
-        diagnostic.file_result(1, pytools_core::run_logging::FileStatus::Succeeded, true, "configuration_validation", "配置预校验通过", None, None);
+        diagnostic.file_result(
+            1,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "configuration_validation",
+            "配置预校验通过",
+            None,
+            None,
+        );
     }
     for issue in &report.issues {
         let level = if issue.level == "error" {
@@ -11747,10 +13852,25 @@ where
         } else {
             "警告"
         };
-        let log_level = if issue.level == "error" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Warn };
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(log_level, &format!("[{level}] {}: {}", issue.location, issue.message)))?;
+        let log_level = if issue.level == "error" {
+            pytools_core::run_logging::Level::Error
+        } else {
+            pytools_core::run_logging::Level::Warn
+        };
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                log_level,
+                &format!("[{level}] {}: {}", issue.location, issue.message)
+            )
+        )?;
         diagnostic.progress(
-            if issue.level == "error" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Warn },
+            if issue.level == "error" {
+                pytools_core::run_logging::Level::Error
+            } else {
+                pytools_core::run_logging::Level::Warn
+            },
             "configuration_issue",
             "configuration_validation",
             &issue.level,
@@ -11760,14 +13880,56 @@ where
             Some(serde_json::json!({"location": issue.location})),
         );
     }
-    let (summary, summary_path) = diagnostic.finish(report.errors > 0, false, false, &[], None, None, None);
-    writeln!(output, "{}", pytools_core::run_logging::terminal_line(if report.errors > 0 { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, &format!("预校验完成：错误 {} 项，警告 {} 项", report.errors, report.warnings)))?;
+    let (summary, summary_path) =
+        diagnostic.finish(report.errors > 0, false, false, &[], None, None, None);
+    writeln!(
+        output,
+        "{}",
+        pytools_core::run_logging::terminal_line(
+            if report.errors > 0 {
+                pytools_core::run_logging::Level::Error
+            } else {
+                pytools_core::run_logging::Level::Info
+            },
+            &format!(
+                "预校验完成：错误 {} 项，警告 {} 项",
+                report.errors, report.warnings
+            )
+        )
+    )?;
     if report.errors == 0 {
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, "时序配置预校验通过。"))?;
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                "时序配置预校验通过。"
+            )
+        )?;
     } else {
-        writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, &format!("发现 {} 项错误，请按上方位置修正后重试。", report.errors)))?;
+        writeln!(
+            output,
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Error,
+                &format!("发现 {} 项错误，请按上方位置修正后重试。", report.errors)
+            )
+        )?;
     }
-    writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("运行编号 {}{}", summary.run_id, summary_path.map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())))?;
+    writeln!(
+        output,
+        "{}",
+        pytools_core::run_logging::terminal_line(
+            pytools_core::run_logging::Level::Info,
+            &format!(
+                "运行编号 {}{}",
+                summary.run_id,
+                summary_path
+                    .map(|path| format!("；运行记录 {}", display_path_for_user(&path)))
+                    .unwrap_or_default()
+            )
+        )
+    )?;
     Ok(())
 }
 
@@ -11860,7 +14022,13 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
                     error_type,
                     &events,
                 ) {
-                    Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", display_path_for_user(&path)))),
+                    Ok(path) => eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            pytools_core::run_logging::Level::Info,
+                            &format!("PT-1-1 run history: {}", display_path_for_user(&path))
+                        )
+                    ),
                     Err(history_error) => {
                         eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("pytools: warning: could not write PT-1-1 run history: {history_error:#}")))
                     }
@@ -11888,16 +14056,44 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
         log_dir = global.log_dir.clone();
     }
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker, TaskStatus};
-    let mut tracker = RunTracker::with_id("PT-1-1", "表头路径比对", &options.positional, run_id.clone());
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut tracker = RunTracker::with_id(
+        "PT-1-1",
+        "表头路径比对",
+        &options.positional,
+        run_id.clone(),
+    );
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-1-1", &run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}")
+                    )
+                );
+                None
+            }
         }
     };
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "configuration", "started", "开始表头路径比对")) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+        if let Err(error) = writer.write(&tracker.event(
+            Level::Info,
+            "run_started",
+            "configuration",
+            "started",
+            "开始表头路径比对",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
     if log_view != "off" {
@@ -11918,41 +14114,89 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
 
     let mut compared_before = 0usize;
     let compare_result = run_header_path_compare_with_progress(
-            &template,
-            &options.positional,
-            &rules,
-            &global,
-            |core_event| {
-                let mut event = core_event.clone();
-                if let Some(index) = event.progress.current_input {
-                    match (event.phase.as_str(), event.status.as_str(), tracker.state(index)) {
-                        ("source_processing", "skipped", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                        ("source_read", "started", Some(FileStatus::Pending)) => { compared_before = event.progress.compared_sheets; let _ = tracker.transition(index, FileStatus::InProgress); }
-                        ("source_read", "failed", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Failed); }
-                        ("source_compare", "completed" | "partial", Some(FileStatus::InProgress)) => {
-                            let state = if event.progress.compared_sheets > compared_before { FileStatus::Succeeded } else { FileStatus::Skipped };
-                            let _ = tracker.transition(index, state);
-                        }
-                        _ => {}
+        &template,
+        &options.positional,
+        &rules,
+        &global,
+        |core_event| {
+            let mut event = core_event.clone();
+            if let Some(index) = event.progress.current_input {
+                match (
+                    event.phase.as_str(),
+                    event.status.as_str(),
+                    tracker.state(index),
+                ) {
+                    ("source_processing", "skipped", Some(FileStatus::Pending)) => {
+                        let _ = tracker.transition(index, FileStatus::Skipped);
                     }
+                    ("source_read", "started", Some(FileStatus::Pending)) => {
+                        compared_before = event.progress.compared_sheets;
+                        let _ = tracker.transition(index, FileStatus::InProgress);
+                    }
+                    ("source_read", "failed", Some(FileStatus::InProgress)) => {
+                        let _ = tracker.transition(index, FileStatus::Failed);
+                    }
+                    ("source_compare", "completed" | "partial", Some(FileStatus::InProgress)) => {
+                        let state = if event.progress.compared_sheets > compared_before {
+                            FileStatus::Succeeded
+                        } else {
+                            FileStatus::Skipped
+                        };
+                        let _ = tracker.transition(index, state);
+                    }
+                    _ => {}
                 }
-                event.sequence = events.len() + 1;
-                event.total_elapsed_ms = run_started.elapsed().as_millis();
-                progress = event.progress.clone();
-                if let Some(writer) = diagnostic.as_mut() {
-                    let level = if event.status == "failed" { Level::Error } else if matches!(event.status.as_str(), "skipped" | "partial") { Level::Warn } else { Level::Info };
-                    let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, "表头路径比对阶段");
-                    record.timestamp = event.timestamp.clone();
-                    record.file_index = event.progress.current_input;
-                    record.file_name = event.progress.current_input.and_then(|index| options.positional.get(index.saturating_sub(1))).map(|path| pytools_core::run_logging::portable_file_name(path));
-                    record.engine = event.actual_engine.clone();
-                    record.elapsed_ms = event.stage_elapsed_ms;
-                    if event.status == "failed" { record.error_code = Some(if event.phase == "report_write" { "OUTPUT_WRITE_FAILED" } else { "EXCEL_READ_FAILED" }.to_owned()); }
-                    if let Err(error) = writer.write(&record) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+            }
+            event.sequence = events.len() + 1;
+            event.total_elapsed_ms = run_started.elapsed().as_millis();
+            progress = event.progress.clone();
+            if let Some(writer) = diagnostic.as_mut() {
+                let level = if event.status == "failed" {
+                    Level::Error
+                } else if matches!(event.status.as_str(), "skipped" | "partial") {
+                    Level::Warn
+                } else {
+                    Level::Info
+                };
+                let mut record = tracker.event(
+                    level,
+                    &event.phase,
+                    &event.phase,
+                    &event.status,
+                    "表头路径比对阶段",
+                );
+                record.timestamp = event.timestamp.clone();
+                record.file_index = event.progress.current_input;
+                record.file_name = event
+                    .progress
+                    .current_input
+                    .and_then(|index| options.positional.get(index.saturating_sub(1)))
+                    .map(|path| pytools_core::run_logging::portable_file_name(path));
+                record.engine = event.actual_engine.clone();
+                record.elapsed_ms = event.stage_elapsed_ms;
+                if event.status == "failed" {
+                    record.error_code = Some(
+                        if event.phase == "report_write" {
+                            "OUTPUT_WRITE_FAILED"
+                        } else {
+                            "EXCEL_READ_FAILED"
+                        }
+                        .to_owned(),
+                    );
                 }
-                emit_header_path_compare_event_view(log_view, &mut events, event);
-            },
-        );
+                if let Err(error) = writer.write(&record) {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
+                }
+            }
+            emit_header_path_compare_event_view(log_view, &mut events, event);
+        },
+    );
     let status = match &compare_result {
         Err(_) => "failed",
         Ok(_)
@@ -11992,37 +14236,139 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
     }
     let mut compare_error_summary = None;
     if let Err(error) = compare_result.as_ref() {
-        let stage = events.iter().rev().find(|event| event.status == "failed").map(|event| event.phase.as_str()).unwrap_or("comparison");
-        let code = if stage == "report_write" { "OUTPUT_WRITE_FAILED" } else { "EXCEL_COMPARE_FAILED" };
+        let stage = events
+            .iter()
+            .rev()
+            .find(|event| event.status == "failed")
+            .map(|event| event.phase.as_str())
+            .unwrap_or("comparison");
+        let code = if stage == "report_write" {
+            "OUTPUT_WRITE_FAILED"
+        } else {
+            "EXCEL_COMPARE_FAILED"
+        };
         compare_error_summary = Some(pytools_core::run_logging::ErrorSummary {
             stage: stage.to_owned(),
             code: code.to_owned(),
             message: "表头路径比对失败".to_owned(),
-            file_name: progress.current_input.and_then(|index| options.positional.get(index.saturating_sub(1))).map(|path| pytools_core::run_logging::portable_file_name(path)),
+            file_name: progress
+                .current_input
+                .and_then(|index| options.positional.get(index.saturating_sub(1)))
+                .map(|path| pytools_core::run_logging::portable_file_name(path)),
             sheet_name: None,
         });
         if let Some(writer) = diagnostic.as_mut() {
-            let mut detail = tracker.event(Level::Error, "operation_failed", stage, "failed", "表头路径比对失败");
+            let mut detail = tracker.event(
+                Level::Error,
+                "operation_failed",
+                stage,
+                "failed",
+                "表头路径比对失败",
+            );
             detail.error_code = Some(code.to_owned());
-            if log_view == "developer" { detail.details = Some(serde_json::json!({"error_chain": format!("{error:#}")})); }
-            if let Err(write_error) = writer.write(&detail) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}"))); }
+            if log_view == "developer" {
+                detail.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
+            }
+            if let Err(write_error) = writer.write(&detail) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{write_error}")
+                    )
+                );
+            }
         }
     }
-    let paths = compare_result.as_ref().ok().map(|path| vec![path_for_log_view(path, log_view)]).unwrap_or_default();
-    let mut unified = tracker.finish(compare_result.is_err(), false, compare_result.is_ok() && tracker.input_stats().succeeded == 0, paths, diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+    tracker.set_business_metric("比对工作表数", serde_json::json!(progress.compared_sheets));
+    tracker.set_business_metric("未匹配输入数", serde_json::json!(progress.unmatched_inputs));
+    tracker.set_business_metric(
+        "部分未匹配输入数",
+        serde_json::json!(progress.partially_unmatched_inputs),
+    );
+    if progress.unmatched_inputs > 0 {
+        tracker.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new(
+                "未匹配工作表",
+                "部分输入工作表未匹配模板路径",
+            )
+            .count(progress.unmatched_inputs),
+        );
+    }
+    if progress.partially_unmatched_inputs > 0 {
+        tracker.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new(
+                "部分未匹配",
+                "工作簿中存在未匹配的工作表",
+            )
+            .count(progress.partially_unmatched_inputs),
+        );
+    }
+    let paths = compare_result
+        .as_ref()
+        .ok()
+        .map(|path| vec![path_for_log_view(path, log_view)])
+        .unwrap_or_default();
+    let mut unified = tracker.finish(
+        compare_result.is_err(),
+        false,
+        compare_result.is_ok() && tracker.input_stats().succeeded == 0,
+        paths,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
     unified.error_summary = compare_error_summary;
-    if compare_result.is_ok() && unified.input_stats.succeeded > 0 && (progress.unmatched_inputs > 0 || progress.partially_unmatched_inputs > 0 || progress.failed_inputs > 0) { unified.overall_status = TaskStatus::PartialSuccess; }
-    unified.output_stats = Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(unified.output_paths.len()), sheets_saved: None, saved: Some(compare_result.is_ok()) });
+    if compare_result.is_ok()
+        && unified.input_stats.succeeded > 0
+        && (progress.unmatched_inputs > 0
+            || progress.partially_unmatched_inputs > 0
+            || progress.failed_inputs > 0)
+    {
+        unified.overall_status = TaskStatus::PartialSuccess;
+    }
+    unified.output_stats = Some(pytools_core::run_logging::OutputStats {
+        workbooks_saved: Some(unified.output_paths.len()),
+        sheets_saved: None,
+        saved: Some(compare_result.is_ok()),
+    });
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if compare_result.is_err() { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", unified.overall_status), "表头路径比对结束")) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+        if let Err(error) = writer.write(&tracker.event(
+            if compare_result.is_err() {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", unified.overall_status),
+            "表头路径比对结束",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
-    let unified_path = if log_view == "off" { None } else {
-        let path = log_dir.join("run-unified").join(format!("PT-1-1_{run_id}.json"));
+    let unified_path = if log_view == "off" {
+        None
+    } else {
+        let path = log_dir
+            .join("run-unified")
+            .join(format!("PT-1-1_{run_id}.json"));
         match write_json_report_create_new(&path, &unified) {
             Ok(()) => Some(path),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("统一运行记录写入失败：{error}")
+                    )
+                );
+                None
+            }
         }
     };
     let history_result = if log_view == "developer" {
@@ -12039,11 +14385,23 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
     } else {
         None
     };
+    if interactive && log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
+    }
     let output = match compare_result {
         Ok(path) => path,
         Err(_error) => {
             if let Some(Ok(history_path)) = history_result.as_ref() {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("PT-1-1 run history: {}", display_path_for_user(&history_path))));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        pytools_core::run_logging::Level::Info,
+                        &format!(
+                            "PT-1-1 run history: {}",
+                            display_path_for_user(&history_path)
+                        )
+                    )
+                );
             } else if let Some(Err(history_error)) = history_result.as_ref() {
                 eprintln!(
                     "pytools: warning: could not write PT-1-1 run history: {history_error:#}"
@@ -12052,17 +14410,22 @@ fn run_timeline_compare_cli(arguments: Vec<String>, interactive: bool) -> Result
             bail!("表头路径比对未完成；请检查配置、模板、源工作簿和输出目录");
         }
     };
-    let mut report = serde_json::json!({"output": output, "run_id": run_id, "run_summary_path": unified_path});
+    let mut report =
+        serde_json::json!({"output": output, "run_id": run_id, "run_summary_path": unified_path});
     if let Some(history_result) = history_result {
         match history_result {
             Ok(path) => report["run_history_path"] = serde_json::json!(path),
             Err(error) => report["history_warning"] = serde_json::json!(error.to_string()),
         }
     }
-    if interactive && log_view != "developer" {
+    if interactive && log_view == "user" {
+        // The shared runtime logger already printed the final summary.
+    } else if interactive && log_view == "off" {
         let stats = &unified.input_stats;
         println!("{}", pytools_core::run_logging::terminal_line(if matches!(unified.overall_status, TaskStatus::Failed | TaskStatus::PartialSuccess) { Level::Warn } else { Level::Info }, &format!("表头比对结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；报告：{}；运行编号 {}", stats.selected, stats.succeeded, stats.failed, stats.skipped, display_path_for_user(&output), tracker.run_id)));
-    } else { println!("{}", serde_json::to_string(&report)?); }
+    } else {
+        println!("{}", serde_json::to_string(&report)?);
+    }
     if log_view == "user" {
         eprintln!(
             "[人工确认] 请核对比对报告中的“原始路径/标准路径”候选；确认后再录入配置工作簿的“路径标准化映射”表，供后续时序汇总使用。本次运行只生成报告，配置和源工作簿保持不变。"
@@ -12106,20 +14469,17 @@ fn emit_header_path_compare_event_view(
     events: &mut Vec<HeaderPathCompareRunEvent>,
     event: HeaderPathCompareRunEvent,
 ) {
-    match log_view {
-        "user" => {
-            let level = match event.status.as_str() { "failed" => pytools_core::run_logging::Level::Error, "partial" | "skipped" => pytools_core::run_logging::Level::Warn, _ => pytools_core::run_logging::Level::Info };
-            let message = if matches!(event.status.as_str(), "completed" | "partial" | "failed" | "skipped") { format!( "{}；阶段用时 {:.3} 秒，总用时 {:.3} 秒", event.user_message, (event.stage_elapsed_ms.unwrap_or_default()) as f64 / 1000.0, (event.total_elapsed_ms) as f64 / 1000.0) } else { event.user_message.clone() };
-            eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
-        },
-        "developer" => match serde_json::to_string(&event) {
-            Ok(encoded) => eprintln!("{encoded}"),
-            Err(_) => {
-                eprintln!("{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}")
-            }
-        },
-        _ => return,
-    }
+    let current = event.progress.current_input;
+    let value = serde_json::to_value(&event).ok();
+    emit_batch_event_view(
+        log_view,
+        event.progress.total_inputs,
+        current,
+        &event.status,
+        current.is_none(),
+        &event.user_message,
+        value.as_ref(),
+    );
     events.push(event);
 }
 
@@ -12197,12 +14557,24 @@ fn run_wide_summary_cli_report(
         .map(PathBuf::from)
         .unwrap_or_else(|| global.log_dir.clone());
     if log_view == "user" {
-        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, "开始宽表汇总，正在读取配置"));
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                "开始宽表汇总，正在读取配置"
+            )
+        );
     }
     let rules = pytools_core::config::load_timeline_rules(&config)?;
     let maps = pytools_core::config::load_path_maps(&config)?;
     if log_view == "user" {
-        eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("已启用时序配置：{} 项", rules.len())));
+        eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                pytools_core::run_logging::Level::Info,
+                &format!("已启用时序配置：{} 项", rules.len())
+            )
+        );
     }
     let capabilities = options.values.get("capabilities").map(PathBuf::from);
     let platform = options.values.get("platform").map(String::as_str);
@@ -12293,10 +14665,7 @@ fn run_wide_summary_cli_report(
             let matched = selected
                 .iter()
                 .filter(|path| {
-                    let workbook_name = path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
+                    let workbook_name = path.file_name().unwrap_or_default().to_string_lossy();
                     pytools_core::rule_engine::pick_rules_for_workbook(
                         &rules,
                         &workbook_name,
@@ -12311,9 +14680,21 @@ fn run_wide_summary_cli_report(
         .collect::<Vec<_>>();
     if log_view == "user" {
         for rule in &rules {
-            let rule_name = if rule.name.trim().is_empty() { "未命名规则" } else { rule.name.trim() };
-            let sheet_keyword = if rule.sheet_keyword.trim().is_empty() { "（未限制）" } else { rule.sheet_keyword.trim() };
-            let key_columns = if rule.target_dedup_cols.is_empty() { "（未配置）".to_owned() } else { rule.target_dedup_cols.join(", ") };
+            let rule_name = if rule.name.trim().is_empty() {
+                "未命名规则"
+            } else {
+                rule.name.trim()
+            };
+            let sheet_keyword = if rule.sheet_keyword.trim().is_empty() {
+                "（未限制）"
+            } else {
+                rule.sheet_keyword.trim()
+            };
+            let key_columns = if rule.target_dedup_cols.is_empty() {
+                "（未配置）".to_owned()
+            } else {
+                rule.target_dedup_cols.join(", ")
+            };
             let matched = rule_source_matches
                 .iter()
                 .find(|(row_no, _)| *row_no == rule.row_no)
@@ -12337,17 +14718,42 @@ fn run_wide_summary_cli_report(
         }
     }
     let mut tracker = RunTracker::with_id(feature_id, "时序宽表汇总", &selected, run_id.clone());
-    if options.positional.is_empty() { tracker.set_discovered(selected.len()); }
-    let mut diagnostic = if log_view == "off" { None } else {
+    if options.positional.is_empty() {
+        tracker.set_discovered(selected.len());
+    }
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), feature_id, &run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
+                None
+            }
         }
     };
     let mut diagnostic_failed = false;
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "configuration", "started", "开始时序宽表汇总")) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+        if let Err(error) = writer.write(&tracker.event(
+            Level::Info,
+            "run_started",
+            "configuration",
+            "started",
+            "开始时序宽表汇总",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
             diagnostic_failed = true;
         }
     }
@@ -12361,15 +14767,27 @@ fn run_wide_summary_cli_report(
             row_suffix,
             |mut event| {
                 if let Some(index) = event.source_input_index {
-                    match (event.phase.as_str(), event.status.as_str(), tracker.state(index)) {
-                        ("source_filter", "skipped", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
+                    match (
+                        event.phase.as_str(),
+                        event.status.as_str(),
+                        tracker.state(index),
+                    ) {
+                        ("source_filter", "skipped", Some(FileStatus::Pending)) => {
+                            let _ = tracker.transition(index, FileStatus::Skipped);
+                        }
                         ("source_read", "started", Some(FileStatus::Pending)) => {
                             matched_before = event.progress.matched_rule_sheets;
                             let _ = tracker.transition(index, FileStatus::InProgress);
                         }
-                        (_, "failed", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Failed); }
+                        (_, "failed", Some(FileStatus::InProgress)) => {
+                            let _ = tracker.transition(index, FileStatus::Failed);
+                        }
                         ("rule_aggregation", "completed", Some(FileStatus::InProgress)) => {
-                            let state = if event.progress.matched_rule_sheets > matched_before { FileStatus::Succeeded } else { FileStatus::Skipped };
+                            let state = if event.progress.matched_rule_sheets > matched_before {
+                                FileStatus::Succeeded
+                            } else {
+                                FileStatus::Skipped
+                            };
                             let _ = tracker.transition(index, state);
                         }
                         _ => {}
@@ -12380,7 +14798,16 @@ fn run_wide_summary_cli_report(
                 if let Some(writer) = diagnostic.as_mut() {
                     let record = wide_diagnostic_event(&tracker, &event);
                     if let Err(error) = writer.write(&record) {
-                        if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; }
+                        if !diagnostic_failed {
+                            eprintln!(
+                                "{}",
+                                pytools_core::run_logging::terminal_line(
+                                    Level::Warn,
+                                    &format!("诊断日志写入失败：{error}")
+                                )
+                            );
+                            diagnostic_failed = true;
+                        }
                     }
                 }
                 emit_wide_summary_event(log_view, &mut events, event);
@@ -12433,47 +14860,108 @@ fn run_wide_summary_cli_report(
         (false, _) => (Vec::new(), "not_run".to_owned()),
     };
     let diagnostic_path = diagnostic_path_for_log_view(diagnostic.as_ref(), log_view);
-    let mut full_output_paths = output.as_deref().map(Path::to_path_buf).into_iter().collect::<Vec<_>>();
+    let mut full_output_paths = output
+        .as_deref()
+        .map(Path::to_path_buf)
+        .into_iter()
+        .collect::<Vec<_>>();
     for item in &target_writes {
         if item["status"] == "succeeded" {
             if let Some(path) = item["target"].as_str() {
                 let path = PathBuf::from(path);
-                if !full_output_paths.iter().any(|existing| existing == &path) { full_output_paths.push(path); }
+                if !full_output_paths.iter().any(|existing| existing == &path) {
+                    full_output_paths.push(path);
+                }
             }
         }
     }
-    let output_paths = full_output_paths.iter().map(|path| path_for_log_view(path, log_view)).collect::<Vec<_>>();
-    let critical_failure = result.is_err() || matches!(target_write_status.as_str(), "failed" | "blocked");
-    let mut unified = tracker.finish(critical_failure, false, output.is_none() && result.is_ok(), output_paths, diagnostic_path);
-    if target_write_status == "partial" { unified.overall_status = TaskStatus::PartialSuccess; }
-    let all_outputs_saved = output.is_some() && !matches!(target_write_status.as_str(), "partial" | "failed" | "blocked");
-    unified.output_stats = Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(unified.output_paths.len()), sheets_saved: None, saved: Some(all_outputs_saved) });
+    let output_paths = full_output_paths
+        .iter()
+        .map(|path| path_for_log_view(path, log_view))
+        .collect::<Vec<_>>();
+    let critical_failure =
+        result.is_err() || matches!(target_write_status.as_str(), "failed" | "blocked");
+    let mut unified = tracker.finish(
+        critical_failure,
+        false,
+        output.is_none() && result.is_ok(),
+        output_paths,
+        diagnostic_path,
+    );
+    if target_write_status == "partial" {
+        unified.overall_status = TaskStatus::PartialSuccess;
+    }
+    let all_outputs_saved = output.is_some()
+        && !matches!(
+            target_write_status.as_str(),
+            "partial" | "failed" | "blocked"
+        );
+    unified.output_stats = Some(pytools_core::run_logging::OutputStats {
+        workbooks_saved: Some(unified.output_paths.len()),
+        sheets_saved: None,
+        saved: Some(all_outputs_saved),
+    });
     if critical_failure {
         if let Some(event) = events.iter().rev().find(|event| event.status == "failed") {
             unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
                 stage: event.phase.clone(),
                 code: summary_event_error_code(event.error_type.as_deref(), &event.phase),
                 message: if event.phase == "target_write" {
-                    target_writes.iter().rev().find(|item| item["status"] == "failed")
-                        .and_then(|item| item["error"].as_str()).map(safe_wide_target_error)
-                        .unwrap_or_else(|| "目标工作簿写入失败；请检查目标文件、工作表和写入权限".to_owned())
-                } else { "宽表汇总未完成；请检查输入文件和配置".to_owned() },
-                file_name: event.workbook_name.as_deref().map(|name| pytools_core::run_logging::portable_file_name(Path::new(name))),
+                    target_writes
+                        .iter()
+                        .rev()
+                        .find(|item| item["status"] == "failed")
+                        .and_then(|item| item["error"].as_str())
+                        .map(safe_wide_target_error)
+                        .unwrap_or_else(|| {
+                            "目标工作簿写入失败；请检查目标文件、工作表和写入权限".to_owned()
+                        })
+                } else {
+                    "宽表汇总未完成；请检查输入文件和配置".to_owned()
+                },
+                file_name: event
+                    .workbook_name
+                    .as_deref()
+                    .map(|name| pytools_core::run_logging::portable_file_name(Path::new(name))),
                 sheet_name: event.worksheet_name.clone(),
             });
         }
     }
     if let Err(error) = result.as_ref() {
         let event = events.iter().rev().find(|event| event.status == "failed");
-        let stage = event.map(|event| event.phase.as_str()).unwrap_or("wide_summary");
+        let stage = event
+            .map(|event| event.phase.as_str())
+            .unwrap_or("wide_summary");
         if let Some(writer) = diagnostic.as_mut() {
-            let mut failure = tracker.event(Level::Error, "operation_failed", stage, "failed", "宽表汇总未完成；请检查失败阶段、文件和配置");
-            failure.error_code = Some(summary_event_error_code(event.and_then(|event| event.error_type.as_deref()), stage));
-            failure.file_name = event.and_then(|event| event.workbook_name.as_deref()).map(|name| pytools_core::run_logging::portable_file_name(Path::new(name)));
+            let mut failure = tracker.event(
+                Level::Error,
+                "operation_failed",
+                stage,
+                "failed",
+                "宽表汇总未完成；请检查失败阶段、文件和配置",
+            );
+            failure.error_code = Some(summary_event_error_code(
+                event.and_then(|event| event.error_type.as_deref()),
+                stage,
+            ));
+            failure.file_name = event
+                .and_then(|event| event.workbook_name.as_deref())
+                .map(|name| pytools_core::run_logging::portable_file_name(Path::new(name)));
             failure.sheet_name = event.and_then(|event| event.worksheet_name.clone());
-            if log_view == "developer" { failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")})); }
+            if log_view == "developer" {
+                failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
+            }
             if let Err(write_error) = writer.write(&failure) {
-                if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}；业务结果仍保留"))); diagnostic_failed = true; }
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{write_error}；业务结果仍保留")
+                        )
+                    );
+                    diagnostic_failed = true;
+                }
             }
         }
     }
@@ -12484,15 +14972,47 @@ fn run_wide_summary_cli_report(
                 record.details = Some(serde_json::json!({"diagnostic": event.user_message}));
             }
             if let Err(error) = writer.write(&record) {
-                if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; }
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}")
+                        )
+                    );
+                    diagnostic_failed = true;
+                }
                 break;
             }
         }
-        let event = tracker.event(if critical_failure { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", unified.overall_status), "时序宽表汇总结束");
-        if let Err(error) = writer.write(&event) { if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); } }
+        let event = tracker.event(
+            if critical_failure {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", unified.overall_status),
+            "时序宽表汇总结束",
+        );
+        if let Err(error) = writer.write(&event) {
+            if !diagnostic_failed {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+            }
+        }
     }
 
-    let progress = events.last().map(|event| event.progress.clone()).unwrap_or_default();
+    let progress = events
+        .last()
+        .map(|event| event.progress.clone())
+        .unwrap_or_default();
     if log_view == "user" {
         for rule in &rules {
             let completed_sheets = events
@@ -12528,7 +15048,10 @@ fn run_wide_summary_cli_report(
     let status = if result.is_err() {
         "failed"
     } else if progress.failed_inputs > 0
-        || matches!(target_write_status.as_str(), "partial" | "failed" | "blocked")
+        || matches!(
+            target_write_status.as_str(),
+            "partial" | "failed" | "blocked"
+        )
     {
         "partial"
     } else if output.is_some() {
@@ -12542,7 +15065,9 @@ fn run_wide_summary_cli_report(
     if log_view != "developer" {
         for event in &mut history_events {
             if let Some(name) = event.workbook_name.take() {
-                event.workbook_name = Some(pytools_core::run_logging::portable_file_name(Path::new(&name)));
+                event.workbook_name = Some(pytools_core::run_logging::portable_file_name(
+                    Path::new(&name),
+                ));
             }
             if event.status == "failed" {
                 let message = match event.phase.as_str() {
@@ -12559,11 +15084,18 @@ fn run_wide_summary_cli_report(
             }
         }
         for item in &mut history_target_writes {
-            if let Some(target) = item.get("target").and_then(serde_json::Value::as_str).map(str::to_owned) {
-                item["target"] = serde_json::Value::String(path_for_log_view(Path::new(&target), log_view));
+            if let Some(target) = item
+                .get("target")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+            {
+                item["target"] =
+                    serde_json::Value::String(path_for_log_view(Path::new(&target), log_view));
             }
             if item["status"] == "failed" {
-                let safe_error = item["error"].as_str().map(safe_wide_target_error)
+                let safe_error = item["error"]
+                    .as_str()
+                    .map(safe_wide_target_error)
                     .unwrap_or_else(|| "目标工作簿写入失败；请检查文件、工作表和权限".to_owned());
                 item["error"] = serde_json::Value::String(safe_error);
             }
@@ -12612,7 +15144,9 @@ fn run_wide_summary_cli_report(
             })
         });
         let path = log_dir.join(format!("{feature_id}_{run_id}.json"));
-        let output_display = output.as_deref().map(|path| path_for_log_view(path, log_view));
+        let output_display = output
+            .as_deref()
+            .map(|path| path_for_log_view(path, log_view));
         let report = serde_json::json!({
             "schema_version": 1,
             "product": "pytools",
@@ -12679,7 +15213,10 @@ fn run_wide_summary_cli_report(
                     let display_path = display_path_for_user(&path);
                     result["run_log_path"] = serde_json::Value::String(display_path.clone());
                     if log_view == "user" {
-                        eprintln!("{} 运行记录已保存：{display_path}", pytools_core::engine_diag::now_prefix());
+                        eprintln!(
+                            "{} 运行记录已保存：{display_path}",
+                            pytools_core::engine_diag::now_prefix()
+                        );
                     }
                 }
             }
@@ -12688,12 +15225,18 @@ fn run_wide_summary_cli_report(
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("{} 运行记录已保存：{}", pytools_core::engine_diag::now_prefix(), display_path_for_user(&path));
+                    eprintln!(
+                        "{} 运行记录已保存：{}",
+                        pytools_core::engine_diag::now_prefix(),
+                        display_path_for_user(&path)
+                    );
                 }
                 let stats = &unified.input_stats;
                 eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("宽表汇总失败：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，未完成 {} 个；运行编号 {run_id}", stats.selected, stats.attempted, stats.succeeded, stats.failed, stats.skipped, stats.pending)));
                 let _ = error;
-                Err(anyhow::anyhow!("宽表汇总失败，请检查失败阶段、文件和配置；运行编号 {run_id}"))
+                Err(anyhow::anyhow!(
+                    "宽表汇总失败，请检查失败阶段、文件和配置；运行编号 {run_id}"
+                ))
             } else {
                 Err(error)
             }
@@ -12765,7 +15308,10 @@ fn execute_wide_summary_target_writes(
         })
         .collect();
     if targets.is_empty() {
-        let enabled = rules.iter().filter(|rule| rule.target_write_enabled).count();
+        let enabled = rules
+            .iter()
+            .filter(|rule| rule.target_write_enabled)
+            .count();
         let mut event = new_wide_summary_cli_event(
             events,
             run_started,
@@ -12796,7 +15342,10 @@ fn execute_wide_summary_target_writes(
                 total_inputs,
                 "target_write",
                 "failed",
-                format!("读取汇总文件 {} 失败：{error:#}", display_path_for_user(&summary_path)),
+                format!(
+                    "读取汇总文件 {} 失败：{error:#}",
+                    display_path_for_user(&summary_path)
+                ),
                 Some(stage_started.elapsed().as_millis()),
                 0,
                 &["pytools-core", "umya-spreadsheet"],
@@ -12821,7 +15370,9 @@ fn execute_wide_summary_target_writes(
     let mut any_ok = false;
     let mut any_failed = false;
     for rule in targets {
-        let Some(target) = rule.target_wb_path.as_ref() else { continue };
+        let Some(target) = rule.target_wb_path.as_ref() else {
+            continue;
+        };
         let Some(target_sheet_name) = rule
             .target_sheet
             .as_deref()
@@ -12838,9 +15389,18 @@ fn execute_wide_summary_target_writes(
                 any_failed = true;
                 let message = format!("目标路径文件夹不存在：{}", display_path_for_user(&parent));
                 let mut event = new_wide_summary_cli_event(
-                    events, run_started, feature_id, total_inputs, "target_write", "failed",
-                    message.clone(), Some(stage_started.elapsed().as_millis()), 0,
-                    &["pytools-core", "umya-spreadsheet"], None, Some("target_folder_missing"),
+                    events,
+                    run_started,
+                    feature_id,
+                    total_inputs,
+                    "target_write",
+                    "failed",
+                    message.clone(),
+                    Some(stage_started.elapsed().as_millis()),
+                    0,
+                    &["pytools-core", "umya-spreadsheet"],
+                    None,
+                    Some("target_folder_missing"),
                 );
                 event.workbook_name = Some(target.to_string_lossy().into_owned());
                 emit_wide_summary_event(_log_view, events, event);
@@ -12860,12 +15420,21 @@ fn execute_wide_summary_target_writes(
                 Err(error) => {
                     any_failed = true;
                     let mut event = new_wide_summary_cli_event(
-                        events, run_started, feature_id, total_inputs, "target_write", "failed",
+                        events,
+                        run_started,
+                        feature_id,
+                        total_inputs,
+                        "target_write",
+                        "failed",
                         "读取目标工作簿快照失败；未执行写入".to_owned(),
-                        Some(stage_started.elapsed().as_millis()), 0,
-                        &["pytools-core", "sha2"], None, Some("target_snapshot_error"),
+                        Some(stage_started.elapsed().as_millis()),
+                        0,
+                        &["pytools-core", "sha2"],
+                        None,
+                        Some("target_snapshot_error"),
                     );
-                    event.workbook_name = Some(pytools_core::run_logging::portable_file_name(target));
+                    event.workbook_name =
+                        Some(pytools_core::run_logging::portable_file_name(target));
                     emit_wide_summary_event(_log_view, events, event);
                     results.push(serde_json::json!({"target": display_path_for_user(&target).to_string(), "status": "failed", "error": format!("读取目标文件快照失败：{error:#}")}));
                     continue;
@@ -12881,10 +15450,18 @@ fn execute_wide_summary_target_writes(
                     any_failed = true;
                     let message = format!("打开既有目标工作簿失败：{error:#}");
                     let mut event = new_wide_summary_cli_event(
-                        events, run_started, feature_id, total_inputs, "target_write", "failed",
+                        events,
+                        run_started,
+                        feature_id,
+                        total_inputs,
+                        "target_write",
+                        "failed",
                         format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
-                        Some(stage_started.elapsed().as_millis()), 0,
-                        &["pytools-core", "umya-spreadsheet"], None, Some("target_write_error"),
+                        Some(stage_started.elapsed().as_millis()),
+                        0,
+                        &["pytools-core", "umya-spreadsheet"],
+                        None,
+                        Some("target_write_error"),
                     );
                     event.workbook_name = Some(target.to_string_lossy().into_owned());
                     emit_wide_summary_event(_log_view, events, event);
@@ -12902,14 +15479,29 @@ fn execute_wide_summary_target_writes(
         let existed_sheet = book.get_sheet_by_name(&target_sheet_name).is_ok();
         // 每条规则只能写入对应的汇总工作表；名称冲突时拒绝猜测。
         let summary_sheet_name = pytools_core::sheet_extract::sanitize_sheet_name(&rule.name);
-        let ambiguous = rules.iter().filter(|other| pytools_core::sheet_extract::sanitize_sheet_name(&other.name).eq_ignore_ascii_case(&summary_sheet_name)).count() > 1;
+        let ambiguous = rules
+            .iter()
+            .filter(|other| {
+                pytools_core::sheet_extract::sanitize_sheet_name(&other.name)
+                    .eq_ignore_ascii_case(&summary_sheet_name)
+            })
+            .count()
+            > 1;
         if ambiguous || summary_book.get_sheet_by_name(&summary_sheet_name).is_err() {
             any_failed = true;
             let mut event = new_wide_summary_cli_event(
-                events, run_started, feature_id, total_inputs, "target_write", "failed",
+                events,
+                run_started,
+                feature_id,
+                total_inputs,
+                "target_write",
+                "failed",
                 "汇总工作表不存在或名称不唯一；未执行写入".to_owned(),
-                Some(stage_started.elapsed().as_millis()), 0,
-                &["pytools-core", "umya-spreadsheet"], None, Some("summary_sheet_missing"),
+                Some(stage_started.elapsed().as_millis()),
+                0,
+                &["pytools-core", "umya-spreadsheet"],
+                None,
+                Some("summary_sheet_missing"),
             );
             event.workbook_name = Some(pytools_core::run_logging::portable_file_name(target));
             event.worksheet_name = Some(target_sheet_name.clone());
@@ -12973,10 +15565,18 @@ fn execute_wide_summary_target_writes(
                     "目标工作表 {target_sheet_name:?} 与汇总表头不一致，已拒绝写入（不清空既有数据）：{reason}"
                 );
                 let mut event = new_wide_summary_cli_event(
-                    events, run_started, feature_id, total_inputs, "target_write", "failed",
+                    events,
+                    run_started,
+                    feature_id,
+                    total_inputs,
+                    "target_write",
+                    "failed",
                     format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
-                    Some(stage_started.elapsed().as_millis()), 0,
-                    &["pytools-core", "umya-spreadsheet"], None, Some("target_header_mismatch"),
+                    Some(stage_started.elapsed().as_millis()),
+                    0,
+                    &["pytools-core", "umya-spreadsheet"],
+                    None,
+                    Some("target_header_mismatch"),
                 );
                 event.workbook_name = Some(target.to_string_lossy().into_owned());
                 event.worksheet_name = Some(target_sheet_name.clone());
@@ -13013,29 +15613,38 @@ fn execute_wide_summary_target_writes(
         let summary_headers: Vec<String> = (1..=summary_max_col)
             .map(|column| umya_cell_display(summary_ws_for_dedup, column, 1))
             .collect();
-        let key_names = match pytools_core::timeline_ops::wide_target_key_names(rule, &summary_headers) {
-            Ok(names) => names,
-            Err(error) => {
-                // 与 Python 一致：去重列不存在时跳过目标写入，不做猜测。
-                let message = format!("解析目标去重列失败，已跳过目标写入：{error:#}");
-                let mut event = new_wide_summary_cli_event(
-                    events, run_started, feature_id, total_inputs, "target_write", "skipped",
-                    format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
-                    Some(stage_started.elapsed().as_millis()), 0,
-                    &["pytools-core"], None, Some("target_dedup_columns_missing"),
-                );
-                event.workbook_name = Some(target.to_string_lossy().into_owned());
-                event.worksheet_name = Some(target_sheet_name.clone());
-                emit_wide_summary_event(_log_view, events, event);
-                results.push(serde_json::json!({
-                    "target": display_path_for_user(&target).to_string(),
-                    "sheet": target_sheet_name,
-                    "status": "skipped",
-                    "error": message,
-                }));
-                continue;
-            }
-        };
+        let key_names =
+            match pytools_core::timeline_ops::wide_target_key_names(rule, &summary_headers) {
+                Ok(names) => names,
+                Err(error) => {
+                    // 与 Python 一致：去重列不存在时跳过目标写入，不做猜测。
+                    let message = format!("解析目标去重列失败，已跳过目标写入：{error:#}");
+                    let mut event = new_wide_summary_cli_event(
+                        events,
+                        run_started,
+                        feature_id,
+                        total_inputs,
+                        "target_write",
+                        "skipped",
+                        format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
+                        Some(stage_started.elapsed().as_millis()),
+                        0,
+                        &["pytools-core"],
+                        None,
+                        Some("target_dedup_columns_missing"),
+                    );
+                    event.workbook_name = Some(target.to_string_lossy().into_owned());
+                    event.worksheet_name = Some(target_sheet_name.clone());
+                    emit_wide_summary_event(_log_view, events, event);
+                    results.push(serde_json::json!({
+                        "target": display_path_for_user(&target).to_string(),
+                        "sheet": target_sheet_name,
+                        "status": "skipped",
+                        "error": message,
+                    }));
+                    continue;
+                }
+            };
         let key_columns: Vec<usize> = key_names
             .iter()
             .map(|name| {
@@ -13052,7 +15661,8 @@ fn execute_wide_summary_target_writes(
                 .map(|&column| umya_cell_display(sheet, column as u32, row))
                 .collect()
         };
-        let mut seen_keys: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+        let mut seen_keys: std::collections::HashSet<Vec<String>> =
+            std::collections::HashSet::new();
         if existed_sheet {
             let target_ws = book
                 .get_sheet_by_name(&target_sheet_name)
@@ -13061,7 +15671,8 @@ fn execute_wide_summary_target_writes(
                 seen_keys.insert(row_key(target_ws, row));
             }
         }
-        let mut batch_keys: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
+        let mut batch_keys: std::collections::HashSet<Vec<String>> =
+            std::collections::HashSet::new();
         let mut batch_dedup_rows = 0usize;
         let mut existing_filtered_rows = 0usize;
         let mut kept_rows = Vec::<u32>::new();
@@ -13087,10 +15698,18 @@ fn execute_wide_summary_target_writes(
                 display_path_for_user(&target)
             );
             let mut event = new_wide_summary_cli_event(
-                events, run_started, feature_id, total_inputs, "target_write", "skipped",
+                events,
+                run_started,
+                feature_id,
+                total_inputs,
+                "target_write",
+                "skipped",
                 message.clone(),
-                Some(stage_started.elapsed().as_millis()), 0,
-                &["pytools-core", "umya-spreadsheet"], None, Some("no_new_rows_after_dedup"),
+                Some(stage_started.elapsed().as_millis()),
+                0,
+                &["pytools-core", "umya-spreadsheet"],
+                None,
+                Some("no_new_rows_after_dedup"),
             );
             event.workbook_name = Some(target.to_string_lossy().into_owned());
             event.worksheet_name = Some(target_sheet_name.clone());
@@ -13154,19 +15773,29 @@ fn execute_wide_summary_target_writes(
             let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
             let mut candidate = None;
             for index in 0..1000 {
-                let path = std::env::temp_dir().join(format!("pytools-wide-target-{}-{stamp}-{index}.xlsx", std::process::id()));
+                let path = std::env::temp_dir().join(format!(
+                    "pytools-wide-target-{}-{stamp}-{index}.xlsx",
+                    std::process::id()
+                ));
                 match OpenOptions::new().write(true).create_new(true).open(&path) {
-                    Ok(file) => { drop(file); candidate = Some(TemporaryFile::new(path)); break; }
+                    Ok(file) => {
+                        drop(file);
+                        candidate = Some(TemporaryFile::new(path));
+                        break;
+                    }
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                     Err(error) => return Err(error).context("创建目标写入临时文件失败"),
                 }
             }
             let candidate = candidate.context("无法分配目标写入临时文件")?;
-            umya::writer::xlsx::write(&book, candidate.path()).context("保存目标工作簿候选文件失败")?;
+            umya::writer::xlsx::write(&book, candidate.path())
+                .context("保存目标工作簿候选文件失败")?;
             if let Some(hash) = original_hash.as_deref() {
-                replace_target_from_candidate(candidate.path(), target, hash).context("校验并安全替换目标工作簿失败")?;
+                replace_target_from_candidate(candidate.path(), target, hash)
+                    .context("校验并安全替换目标工作簿失败")?;
             } else {
-                create_target_from_candidate(candidate.path(), target).context("发布新目标工作簿失败")?;
+                create_target_from_candidate(candidate.path(), target)
+                    .context("发布新目标工作簿失败")?;
             }
             Ok(())
         })();
@@ -13174,10 +15803,18 @@ fn execute_wide_summary_target_writes(
             any_failed = true;
             let message = format!("保存目标工作簿失败：{error:#}");
             let mut event = new_wide_summary_cli_event(
-                events, run_started, feature_id, total_inputs, "target_write", "failed",
+                events,
+                run_started,
+                feature_id,
+                total_inputs,
+                "target_write",
+                "failed",
                 format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
-                Some(stage_started.elapsed().as_millis()), 0,
-                &["pytools-core", "umya-spreadsheet"], None, Some("target_write_error"),
+                Some(stage_started.elapsed().as_millis()),
+                0,
+                &["pytools-core", "umya-spreadsheet"],
+                None,
+                Some("target_write_error"),
             );
             event.workbook_name = Some(target.to_string_lossy().into_owned());
             emit_wide_summary_event(_log_view, events, event);
@@ -13263,7 +15900,10 @@ fn display_path_for_user(path: &Path) -> String {
 }
 
 fn safe_wide_target_error(error: &str) -> String {
-    if error.contains("表头不一致") || error.contains("表头列数不同") || error.contains("列表头不同") {
+    if error.contains("表头不一致")
+        || error.contains("表头列数不同")
+        || error.contains("列表头不同")
+    {
         "目标工作表表头与汇总不一致，已拒绝写入；既有目标数据未更改".to_owned()
     } else if error.contains("不存在或名称不唯一") || error.contains("汇总工作表") {
         "汇总工作表不存在或名称不唯一，未执行写入".to_owned()
@@ -13351,17 +15991,23 @@ fn wide_diagnostic_event(
     let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, message);
     record.timestamp = event.timestamp.clone();
     record.file_index = event.source_input_index;
-    record.file_name = event.workbook_name.as_deref().map(|name| pytools_core::run_logging::portable_file_name(Path::new(name)));
+    record.file_name = event
+        .workbook_name
+        .as_deref()
+        .map(|name| pytools_core::run_logging::portable_file_name(Path::new(name)));
     record.sheet_name = event.worksheet_name.clone();
     record.config_row = event.config_row;
     record.engine = event.actual_engine.clone();
     record.elapsed_ms = event.stage_elapsed_ms;
     if event.status == "failed" {
-        record.error_code = Some(match event.phase.as_str() {
-            "source_read" => "EXCEL_READ_FAILED",
-            "summary_write" | "target_write" => "OUTPUT_WRITE_FAILED",
-            _ => "INTERNAL_OPERATION_FAILED",
-        }.to_owned());
+        record.error_code = Some(
+            match event.phase.as_str() {
+                "source_read" => "EXCEL_READ_FAILED",
+                "summary_write" | "target_write" => "OUTPUT_WRITE_FAILED",
+                _ => "INTERNAL_OPERATION_FAILED",
+            }
+            .to_owned(),
+        );
     }
     record
 }
@@ -13380,14 +16026,20 @@ fn emit_wide_summary_event(
         },
         "user" => {
             if event.status == "failed"
-                || matches!(event.phase.as_str(), "source_match" | "summary_write" | "target_write" | "source_discovery")
+                || matches!(
+                    event.phase.as_str(),
+                    "source_match" | "summary_write" | "target_write" | "source_discovery"
+                )
             {
                 let level = match event.status.as_str() {
                     "failed" => pytools_core::run_logging::Level::Error,
                     "skipped" => pytools_core::run_logging::Level::Warn,
                     _ => pytools_core::run_logging::Level::Info,
                 };
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(level, &event.user_message)
+                );
             }
         }
         _ => {}
@@ -13428,14 +16080,25 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         .unwrap_or_default();
     let run_id = format!("pytools-pt-6-1-{}-{nonce}", std::process::id());
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker, SheetStatus};
-    let mut tracker = RunTracker::with_id("PT-6-1", "按使用区域快速汇总", &options.positional, run_id.clone());
+    let mut tracker = RunTracker::with_id(
+        "PT-6-1",
+        "按使用区域快速汇总",
+        &options.positional,
+        run_id.clone(),
+    );
     let mut diagnostic = if log_view == "off" {
         None
     } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-6-1", &run_id) {
             Ok(writer) => Some(writer),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
                 None
             }
         }
@@ -13444,110 +16107,145 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
     let mut events = Vec::<SummaryRunEvent>::new();
     let mut next_sheet_index = std::collections::HashMap::<usize, usize>::new();
     let result = summarize_used_ranges_with_progress(&options.positional, &output_dir, |event| {
-            let input_index = event.progress.current_input_index;
-            if let Some(index) = input_index {
-                match (event.phase.as_str(), event.status.as_str(), tracker.state(index)) {
-                    ("input_filter", "skipped", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                    ("extent_scan", "started", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::InProgress); }
-                    ("extent_scan" | "value_read", "failed", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Failed); }
-                    ("row_write", "succeeded", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Succeeded); }
+        let input_index = event.progress.current_input_index;
+        if let Some(index) = input_index {
+            match (
+                event.phase.as_str(),
+                event.status.as_str(),
+                tracker.state(index),
+            ) {
+                ("input_filter", "skipped", Some(FileStatus::Pending)) => {
+                    let _ = tracker.transition(index, FileStatus::Skipped);
+                }
+                ("extent_scan", "started", Some(FileStatus::Pending)) => {
+                    let _ = tracker.transition(index, FileStatus::InProgress);
+                }
+                ("extent_scan" | "value_read", "failed", Some(FileStatus::InProgress)) => {
+                    let _ = tracker.transition(index, FileStatus::Failed);
+                }
+                ("row_write", "succeeded", Some(FileStatus::InProgress)) => {
+                    let _ = tracker.transition(index, FileStatus::Succeeded);
+                }
+                _ => {}
+            }
+        }
+        if event.phase == "sheet_process" {
+            if let (Some(index), Some(sheet_name)) =
+                (input_index, event.progress.current_sheet.as_deref())
+            {
+                match event.status.as_str() {
+                    "started" => {
+                        let sheet_index = next_sheet_index.entry(index).or_default();
+                        *sheet_index += 1;
+                        if tracker
+                            .discover_sheet(index, Some(*sheet_index), sheet_name)
+                            .is_ok()
+                        {
+                            let _ = tracker.transition_sheet(
+                                index,
+                                sheet_name,
+                                SheetStatus::InProgress,
+                                &event.phase,
+                                None,
+                                None,
+                            );
+                        }
+                    }
+                    "succeeded" | "skipped" | "failed" => {
+                        if tracker.sheet_state(index, sheet_name) == Some(SheetStatus::InProgress) {
+                            let next = match event.status.as_str() {
+                                "succeeded" => SheetStatus::Succeeded,
+                                "skipped" => SheetStatus::Skipped,
+                                _ => SheetStatus::Failed,
+                            };
+                            let error_code = event
+                                .error_type
+                                .as_deref()
+                                .map(|kind| summary_event_error_code(Some(kind), &event.phase));
+                            let _ = tracker.transition_sheet(
+                                index,
+                                sheet_name,
+                                next,
+                                &event.phase,
+                                None,
+                                error_code.as_deref(),
+                            );
+                        }
+                    }
                     _ => {}
                 }
             }
-            if event.phase == "sheet_process" {
-                if let (Some(index), Some(sheet_name)) =
-                    (input_index, event.progress.current_sheet.as_deref())
-                {
-                    match event.status.as_str() {
-                        "started" => {
-                            let sheet_index = next_sheet_index.entry(index).or_default();
-                            *sheet_index += 1;
-                            if tracker
-                                .discover_sheet(index, Some(*sheet_index), sheet_name)
-                                .is_ok()
-                            {
-                                let _ = tracker.transition_sheet(
-                                    index,
-                                    sheet_name,
-                                    SheetStatus::InProgress,
-                                    &event.phase,
-                                    None,
-                                    None,
-                                );
-                            }
-                        }
-                        "succeeded" | "skipped" | "failed" => {
-                            if tracker.sheet_state(index, sheet_name)
-                                == Some(SheetStatus::InProgress)
-                            {
-                                let next = match event.status.as_str() {
-                                    "succeeded" => SheetStatus::Succeeded,
-                                    "skipped" => SheetStatus::Skipped,
-                                    _ => SheetStatus::Failed,
-                                };
-                                let error_code = event
-                                    .error_type
-                                    .as_deref()
-                                    .map(|kind| summary_event_error_code(Some(kind), &event.phase));
-                                let _ = tracker.transition_sheet(
-                                    index,
-                                    sheet_name,
-                                    next,
-                                    &event.phase,
-                                    None,
-                                    error_code.as_deref(),
-                                );
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            let level = match event.status.as_str() { "failed" => Level::Error, "skipped" => Level::Warn, "started" | "running" => Level::Info, "succeeded" if event.phase == "row_write" || event.phase == "run" => Level::Info, _ => Level::Debug };
-            let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, &event.user_message);
-            record.timestamp = event.timestamp.clone();
-            record.file_index = if event.file_name.is_some() { input_index } else { None };
-            record.file_name = event.file_name.clone();
-            record.sheet_name = event.progress.current_sheet.clone();
-            record.engine = event.actual_engine.clone();
-            record.elapsed_ms = event.stage_elapsed_ms;
-            record.error_code = event.error_type.as_ref().map(|_| match event.phase.as_str() {
+        }
+        let level = match event.status.as_str() {
+            "failed" => Level::Error,
+            "skipped" => Level::Warn,
+            "started" | "running" => Level::Info,
+            "succeeded" if event.phase == "row_write" || event.phase == "run" => Level::Info,
+            _ => Level::Debug,
+        };
+        let mut record = tracker.event(
+            level,
+            &event.phase,
+            &event.phase,
+            &event.status,
+            &event.user_message,
+        );
+        record.timestamp = event.timestamp.clone();
+        record.file_index = if event.file_name.is_some() {
+            input_index
+        } else {
+            None
+        };
+        record.file_name = event.file_name.clone();
+        record.sheet_name = event.progress.current_sheet.clone();
+        record.engine = event.actual_engine.clone();
+        record.elapsed_ms = event.stage_elapsed_ms;
+        record.error_code = event.error_type.as_ref().map(|_| {
+            match event.phase.as_str() {
                 "extent_scan" | "value_read" => "EXCEL_READ_FAILED",
                 "prepare_output" | "output_save" => "OUTPUT_WRITE_FAILED",
                 _ => "INTERNAL_OPERATION_FAILED",
-            }.to_owned());
-            if let Some(writer) = diagnostic.as_mut() {
-                if let Err(error) = writer.write(&record) {
-                    if !diagnostic_failed {
-                        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}；业务处理继续")));
-                        diagnostic_failed = true;
-                    }
-                }
             }
-            if log_view == "developer" {
-                match serde_json::to_string(&event) {
-                    Ok(encoded) => eprintln!("{encoded}"),
-                    Err(_) => eprintln!(
-                        "{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}"
-                    ),
-                }
-            } else if log_view == "user" && (event.status == "failed" || (event.status == "skipped" && event.phase != "sheet_process")
-                || matches!((event.phase.as_str(), event.status.as_str()), ("run", _) | ("row_write", "succeeded") | ("output_save", "started"))) {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
-            }
-            events.push(event);
+            .to_owned()
         });
+        if let Some(writer) = diagnostic.as_mut() {
+            if let Err(error) = writer.write(&record) {
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{error}；业务处理继续")
+                        )
+                    );
+                    diagnostic_failed = true;
+                }
+            }
+        }
+        if log_view == "developer"
+            || (log_view == "user"
+                && (event.status == "failed"
+                    || (event.status == "skipped" && event.phase != "sheet_process")
+                    || matches!(
+                        (event.phase.as_str(), event.status.as_str()),
+                        ("run", _) | ("row_write", "succeeded") | ("output_save", "started")
+                    )))
+        {
+            emit_summary_batch_event_view(log_view, &event);
+        }
+        events.push(event);
+    });
 
     if matches!(&result, Ok(summary) if !summary.saved) {
         tracker.skip_unfinished();
     } else if result.is_err() {
         if let Some(event) = events.last() {
-            if let (Some(index), Some(sheet_name)) =
-                (event.progress.current_input_index, event.progress.current_sheet.as_deref())
-            {
+            if let (Some(index), Some(sheet_name)) = (
+                event.progress.current_input_index,
+                event.progress.current_sheet.as_deref(),
+            ) {
                 if tracker.sheet_state(index, sheet_name) == Some(SheetStatus::InProgress) {
-                    let code =
-                        summary_event_error_code(event.error_type.as_deref(), &event.phase);
+                    let code = summary_event_error_code(event.error_type.as_deref(), &event.phase);
                     let _ = tracker.transition_sheet(
                         index,
                         sheet_name,
@@ -13568,10 +16266,19 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         }
     }
     let diagnostic_path = diagnostic_path_for_log_view(diagnostic.as_ref(), log_view);
-    let outputs = result.as_ref().ok().and_then(|summary| summary.path.as_ref())
+    let outputs = result
+        .as_ref()
+        .ok()
+        .and_then(|summary| summary.path.as_ref())
         .map(|path| vec![path_for_log_view(path, log_view)])
         .unwrap_or_default();
-    let mut unified = tracker.finish(result.is_err(), false, matches!(&result, Ok(summary) if !summary.saved), outputs, diagnostic_path.clone());
+    let mut unified = tracker.finish(
+        result.is_err(),
+        false,
+        matches!(&result, Ok(summary) if !summary.saved),
+        outputs,
+        diagnostic_path.clone(),
+    );
     if let Some(last) = events.last() {
         let progress = &last.progress;
         let tracked = tracker.sheet_stats();
@@ -13587,40 +16294,71 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
         }
         unified.record_stats = Some(pytools_core::run_logging::RecordStats {
             rows_processed: Some(progress.processed_rows),
-            rows_written: result.as_ref().ok().filter(|summary| summary.saved).map(|summary| summary.rows),
+            rows_written: result
+                .as_ref()
+                .ok()
+                .filter(|summary| summary.saved)
+                .map(|summary| summary.rows),
         });
         if result.is_err() {
             let failed_event = events.iter().rev().find(|event| event.status == "failed");
             unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
-                stage: failed_event.map(|event| event.phase.clone()).unwrap_or_else(|| last.phase.clone()),
+                stage: failed_event
+                    .map(|event| event.phase.clone())
+                    .unwrap_or_else(|| last.phase.clone()),
                 code: summary_event_error_code(
                     failed_event.and_then(|event| event.error_type.as_deref()),
-                    failed_event.map(|event| event.phase.as_str()).unwrap_or(last.phase.as_str()),
+                    failed_event
+                        .map(|event| event.phase.as_str())
+                        .unwrap_or(last.phase.as_str()),
                 ),
-                message: failed_event.map(|event| event.user_message.clone()).unwrap_or_else(|| "按使用区域汇总未完成；请检查输入工作簿和输出目录".to_owned()),
-                file_name: failed_event.and_then(|event| event.file_name.clone()).or_else(|| last.file_name.clone()),
-                sheet_name: failed_event.and_then(|event| event.progress.current_sheet.clone()).or_else(|| last.progress.current_sheet.clone()),
+                message: failed_event
+                    .map(|event| event.user_message.clone())
+                    .unwrap_or_else(|| {
+                        "按使用区域汇总未完成；请检查输入工作簿和输出目录".to_owned()
+                    }),
+                file_name: failed_event
+                    .and_then(|event| event.file_name.clone())
+                    .or_else(|| last.file_name.clone()),
+                sheet_name: failed_event
+                    .and_then(|event| event.progress.current_sheet.clone())
+                    .or_else(|| last.progress.current_sheet.clone()),
             });
         }
     }
     unified.output_stats = Some(pytools_core::run_logging::OutputStats {
         workbooks_saved: Some(unified.output_paths.len()),
-        sheets_saved: result.as_ref().ok().filter(|summary| summary.saved).map(|_| 1),
+        sheets_saved: result
+            .as_ref()
+            .ok()
+            .filter(|summary| summary.saved)
+            .map(|_| 1),
         saved: Some(result.as_ref().is_ok_and(|summary| summary.saved)),
     });
-    if let Some(execution) = result.as_ref().ok().and_then(|summary| summary.execution.as_ref()) {
+    if let Some(execution) = result
+        .as_ref()
+        .ok()
+        .and_then(|summary| summary.execution.as_ref())
+    {
         unified.performance_stats = Some(pytools_core::run_logging::PerformanceStats {
-            read_elapsed_ms: Some(execution.read_elapsed_ms), write_elapsed_ms: Some(execution.write_elapsed_ms),
+            read_elapsed_ms: Some(execution.read_elapsed_ms),
+            write_elapsed_ms: Some(execution.write_elapsed_ms),
         });
     }
     if let Err(error) = result.as_ref() {
         let failed_event = events.iter().rev().find(|event| event.status == "failed");
-        let stage = failed_event.map(|event| event.phase.as_str()).unwrap_or("summary");
-        let message = failed_event.map(|event| event.user_message.as_str()).unwrap_or("按使用区域汇总未完成");
+        let stage = failed_event
+            .map(|event| event.phase.as_str())
+            .unwrap_or("summary");
+        let message = failed_event
+            .map(|event| event.user_message.as_str())
+            .unwrap_or("按使用区域汇总未完成");
         if let Some(writer) = diagnostic.as_mut() {
-            let mut failure = tracker.event(Level::Error, "operation_failed", stage, "failed", message);
+            let mut failure =
+                tracker.event(Level::Error, "operation_failed", stage, "failed", message);
             failure.error_code = Some(summary_event_error_code(
-                failed_event.and_then(|event| event.error_type.as_deref()), stage,
+                failed_event.and_then(|event| event.error_type.as_deref()),
+                stage,
             ));
             let failure_context = failed_event.or_else(|| {
                 events.iter().rev().find(|event| {
@@ -13648,83 +16386,41 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             }
             if let Err(write_error) = writer.write(&failure) {
                 if !diagnostic_failed {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}；业务结果仍保留")));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{write_error}；业务结果仍保留")
+                        )
+                    );
                     diagnostic_failed = true;
                 }
             }
         }
     }
     if let Some(writer) = diagnostic.as_mut() {
-        let event = tracker.event(if result.is_err() { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", unified.overall_status), format!("{}结束", tracker.feature_name));
-        if let Err(error) = writer.write(&event) {
-            if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}；业务结果仍保留"))); }
-        }
-    }
-    if interactive && log_view == "user" {
-        let stats = &unified.input_stats;
-        let (status, level) = match unified.overall_status {
-            pytools_core::run_logging::TaskStatus::Success => ("成功", Level::Info),
-            pytools_core::run_logging::TaskStatus::PartialSuccess => ("部分成功", Level::Warn),
-            pytools_core::run_logging::TaskStatus::Failed => ("失败", Level::Error),
-            pytools_core::run_logging::TaskStatus::Cancelled => ("已取消", Level::Warn),
-            pytools_core::run_logging::TaskStatus::NoOp => ("无需处理", Level::Info),
-        };
-        let sheet_summary = unified
-            .sheet_stats
-            .as_ref()
-            .map(|sheets| {
-                format!(
-                    "；工作表发现 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个",
-                    sheets.discovered,
-                    sheets.attempted,
-                    sheets.succeeded,
-                    sheets.failed,
-                    sheets.skipped
-                )
-            })
-            .unwrap_or_default();
-        let record_summary = unified.record_stats.as_ref().map(|records| {
-            let processed = records
-                .rows_processed
-                .map(|rows| format!("处理 {rows} 行"))
-                .unwrap_or_else(|| "处理行数未采集".to_owned());
-            let written = records
-                .rows_written
-                .map(|rows| format!("输出 {rows} 行"))
-                .unwrap_or_else(|| "输出行数未采集".to_owned());
-            format!("；{processed}，{written}")
-        }).unwrap_or_default();
-        let performance_summary = unified
-            .performance_stats
-            .as_ref()
-            .map(|performance| {
-                format!("；读取耗时 {}，写入耗时 {}", performance
-                        .read_elapsed_ms
-                        .map(|value| format!("{:.3} 秒", value as f64 / 1000.0))
-                        .unwrap_or_else(|| "未采集".to_owned()), performance
-                        .write_elapsed_ms
-                        .map(|value| format!("{:.3} 秒", value as f64 / 1000.0))
-                        .unwrap_or_else(|| "未采集".to_owned()))
-            })
-            .unwrap_or_default();
-        eprintln!(
-            "{}",
-            pytools_core::run_logging::terminal_line(
-                level,
-            &format!( "{}{status}：选择 {} 个，尝试 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个，取消 {} 个，未完成 {} 个{sheet_summary}{record_summary}{performance_summary}；总耗时 {:.3} 秒；运行编号 {}",
-                    tracker.feature_name,
-                    stats.selected,
-                    stats.attempted,
-                    stats.succeeded,
-                    stats.failed,
-                    stats.skipped,
-                    stats.cancelled,
-                    stats.pending, (unified.total_elapsed_ms) as f64 / 1000.0,
-                    run_id
-                )
-            )
+        let event = tracker.event(
+            if result.is_err() {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", unified.overall_status),
+            format!("{}结束", tracker.feature_name),
         );
-        if let Some(path) = &diagnostic_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("诊断日志：{path}"))); }
+        if let Err(error) = writer.write(&event) {
+            if !diagnostic_failed {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}；业务结果仍保留")
+                    )
+                );
+            }
+        }
     }
 
     if result.is_err()
@@ -13760,6 +16456,10 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
                 pytools_core::run_logging::terminal_line(Level::Error, &event.user_message)
             );
         }
+    }
+
+    if interactive && log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
     }
 
     let run_log_path = if log_view == "off" {
@@ -13829,29 +16529,36 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    output["run_log_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
-                    eprintln!(
-                        "{}",
-                        pytools_core::run_logging::terminal_line(
-                            Level::Info,
-                            &format!(
-                                "运行记录已保存：{}",
-                                path_for_log_view(&path, log_view)
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Info,
+                                &format!("运行记录已保存：{}", path_for_log_view(&path, log_view))
                             )
-                        )
-                    );
+                        );
                     }
                 }
             }
-            if interactive && log_view != "developer" {
+            if interactive && log_view == "user" {
+                Ok(())
+            } else if interactive && log_view == "off" {
                 if let Some(path) = output["path"].as_str() {
-                    println!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("汇总文件：{path}")));
+                    println!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!("汇总文件：{path}")
+                        )
+                    );
                 }
+                Ok(())
             } else {
                 println!("{}", serde_json::to_string_pretty(&output)?);
+                Ok(())
             }
-            Ok(())
         }
         Err(error) => {
             if log_view == "user" {
@@ -13860,10 +16567,7 @@ fn run_summary_used_range_cli(arguments: Vec<String>, interactive: bool) -> Resu
                         "{}",
                         pytools_core::run_logging::terminal_line(
                             Level::Info,
-                            &format!(
-                                "运行记录已保存：{}",
-                                path_for_log_view(&path, log_view)
-                            )
+                            &format!("运行记录已保存：{}", path_for_log_view(&path, log_view))
                         )
                     );
                 }
@@ -13908,107 +16612,179 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         .unwrap_or_default();
     let run_id = format!("pytools-pt-6-2-named-{}-{nonce}", std::process::id());
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
-    let mut tracker = RunTracker::with_id("PT-6-2", "按模板命名区域汇总", &options.positional, run_id.clone());
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut tracker = RunTracker::with_id(
+        "PT-6-2",
+        "按模板命名区域汇总",
+        &options.positional,
+        run_id.clone(),
+    );
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-6-2", &run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}")
+                    )
+                );
+                None
+            }
         }
     };
     let mut diagnostic_failed = false;
     let mut events = Vec::<SummaryRunEvent>::new();
     let result = summarize_by_named_ranges_with_progress(
-            &template,
-            &options.positional,
-            &output_dir,
-            |event| {
-                let index = event.progress.current_input_index;
-                if let Some(index) = index {
-                    match (event.phase.as_str(), event.status.as_str(), tracker.state(index)) {
-                        ("input_filter", "skipped", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                        ("source_read", "started", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::InProgress); }
-                        ("source_structure", "skipped", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                        (_, "failed", Some(FileStatus::InProgress)) if event.file_name.is_some() => { let _ = tracker.transition(index, FileStatus::Failed); }
-                        ("row_extract", "succeeded", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Succeeded); }
-                        _ => {}
-                    }
-                }
-                let detailed_phase = matches!(
+        &template,
+        &options.positional,
+        &output_dir,
+        |event| {
+            let index = event.progress.current_input_index;
+            if let Some(index) = index {
+                match (
                     event.phase.as_str(),
-                    "template_read"
-                        | "source_read"
-                        | "sheet_validation"
-                        | "sheet_routing"
-                        | "summary_region_read"
-                        | "cell_field_read"
-                        | "template_validation"
-                );
-                let level = match event.status.as_str() {
-                    "failed" => Level::Error,
-                    "skipped" | "warning" => Level::Warn,
-                    "started" => Level::Info,
-                    "succeeded" if detailed_phase => Level::Info,
-                    _ => Level::Debug,
-                };
-                let safe_message = &event.user_message;
-                let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, safe_message);
-                record.timestamp = event.timestamp.clone();
-                record.file_index = if event.file_name.is_some() { index } else { None };
-                record.file_name = event.file_name.clone();
-                record.sheet_name = event.progress.current_sheet.clone();
-                record.engine = event.actual_engine.clone();
-                record.elapsed_ms = event.stage_elapsed_ms;
-                if event.status == "failed" {
-                    record.error_code = Some(summary_event_error_code(
-                        event.error_type.as_deref(),
-                        &event.phase,
-                    ));
+                    event.status.as_str(),
+                    tracker.state(index),
+                ) {
+                    ("input_filter", "skipped", Some(FileStatus::Pending)) => {
+                        let _ = tracker.transition(index, FileStatus::Skipped);
+                    }
+                    ("source_read", "started", Some(FileStatus::Pending)) => {
+                        let _ = tracker.transition(index, FileStatus::InProgress);
+                    }
+                    ("source_structure", "skipped", Some(FileStatus::InProgress)) => {
+                        let _ = tracker.transition(index, FileStatus::Skipped);
+                    }
+                    (_, "failed", Some(FileStatus::InProgress)) if event.file_name.is_some() => {
+                        let _ = tracker.transition(index, FileStatus::Failed);
+                    }
+                    ("row_extract", "succeeded", Some(FileStatus::InProgress)) => {
+                        let _ = tracker.transition(index, FileStatus::Succeeded);
+                    }
+                    _ => {}
                 }
-                if let Some(writer) = diagnostic.as_mut() {
-                    if let Err(error) = writer.write(&record) {
-                        if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); diagnostic_failed = true; }
+            }
+            let detailed_phase = matches!(
+                event.phase.as_str(),
+                "template_read"
+                    | "source_read"
+                    | "sheet_validation"
+                    | "sheet_routing"
+                    | "summary_region_read"
+                    | "cell_field_read"
+                    | "template_validation"
+            );
+            let level = match event.status.as_str() {
+                "failed" => Level::Error,
+                "skipped" | "warning" => Level::Warn,
+                "started" => Level::Info,
+                "succeeded" if detailed_phase => Level::Info,
+                _ => Level::Debug,
+            };
+            let safe_message = &event.user_message;
+            let mut record = tracker.event(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                safe_message,
+            );
+            record.timestamp = event.timestamp.clone();
+            record.file_index = if event.file_name.is_some() {
+                index
+            } else {
+                None
+            };
+            record.file_name = event.file_name.clone();
+            record.sheet_name = event.progress.current_sheet.clone();
+            record.engine = event.actual_engine.clone();
+            record.elapsed_ms = event.stage_elapsed_ms;
+            if event.status == "failed" {
+                record.error_code = Some(summary_event_error_code(
+                    event.error_type.as_deref(),
+                    &event.phase,
+                ));
+            }
+            if let Some(writer) = diagnostic.as_mut() {
+                if let Err(error) = writer.write(&record) {
+                    if !diagnostic_failed {
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("诊断日志写入失败：{error}")
+                            )
+                        );
+                        diagnostic_failed = true;
                     }
                 }
-                if log_view == "developer" {
-                    match serde_json::to_string(&event) {
-                        Ok(encoded) => eprintln!("{encoded}"),
-                        Err(_) => eprintln!(
-                            "{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}"
-                        ),
-                    }
-                } else if log_view == "user" && (
-                    matches!(event.status.as_str(), "failed" | "skipped" | "warning")
-                        || matches!(event.phase.as_str(), "run" | "row_extract" | "output_save")
+            }
+            if log_view == "developer"
+                || (log_view == "user"
+                    && (matches!(event.status.as_str(), "failed" | "skipped" | "warning")
                         || matches!(
                             event.phase.as_str(),
-                            "template_read"
+                            "run"
+                                | "row_extract"
+                                | "output_save"
                                 | "source_read"
                                 | "sheet_validation"
-                                | "sheet_routing"
-                                | "summary_region_read"
-                                | "cell_field_read"
-                                | "template_validation"
-                        )
-                ) {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(level, safe_message));
-                }
-                events.push(event);
-            },
-        );
+                        )))
+            {
+                emit_summary_batch_event_view(log_view, &event);
+            }
+            events.push(event);
+        },
+    );
     if result.is_err() {
         if let Some(last) = events.last() {
             if last.file_name.is_some() {
                 if let Some(index) = last.progress.current_input_index {
-                    if tracker.state(index) == Some(FileStatus::InProgress) { let _ = tracker.transition(index, FileStatus::Failed); }
+                    if tracker.state(index) == Some(FileStatus::InProgress) {
+                        let _ = tracker.transition(index, FileStatus::Failed);
+                    }
                 }
             }
         }
     }
-    let outputs = result.as_ref().ok().and_then(|summary| summary.path.as_ref())
+    let outputs = result
+        .as_ref()
+        .ok()
+        .and_then(|summary| summary.path.as_ref())
         .map(|path| vec![path_for_log_view(path, log_view)])
         .unwrap_or_default();
-    let mut unified = tracker.finish(result.is_err(), false, matches!(&result, Ok(summary) if !summary.saved), outputs, diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
-    unified.output_stats = Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(unified.output_paths.len()), sheets_saved: None, saved: Some(result.as_ref().is_ok_and(|summary| summary.saved)) });
+    if let Some(summary) = result.as_ref().ok() {
+        tracker.set_business_metric("成功处理源工作簿数", serde_json::json!(summary.files));
+        tracker.set_business_metric("提取行数", serde_json::json!(summary.rows));
+        tracker.set_business_metric(
+            "跳过源文件或工作表项",
+            serde_json::json!(summary.skipped_sources.len()),
+        );
+    }
+    for event in events.iter().filter(|event| event.status == "warning") {
+        tracker.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new("业务提醒", &event.user_message).at(
+                event.file_name.as_deref(),
+                event.progress.current_sheet.as_deref(),
+                None,
+            ),
+        );
+    }
+    let mut unified = tracker.finish(
+        result.is_err(),
+        false,
+        matches!(&result, Ok(summary) if !summary.saved),
+        outputs,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
+    unified.output_stats = Some(pytools_core::run_logging::OutputStats {
+        workbooks_saved: Some(unified.output_paths.len()),
+        sheets_saved: None,
+        saved: Some(result.as_ref().is_ok_and(|summary| summary.saved)),
+    });
     if result.is_err() {
         if let Some(event) = events.iter().rev().find(|event| event.status == "failed") {
             unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
@@ -14022,63 +16798,56 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         if let (Err(error), Some(writer)) = (&result, diagnostic.as_mut()) {
             let event = events.iter().rev().find(|event| event.status == "failed");
             let stage = event.map(|event| event.phase.as_str()).unwrap_or("summary");
-            let mut failure = tracker.event(Level::Error, "operation_failed", stage, "failed", "按模板命名区域汇总失败");
-            failure.error_code = Some(summary_event_error_code(event.and_then(|event| event.error_type.as_deref()), stage));
-            if log_view == "developer" { failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")})); }
+            let mut failure = tracker.event(
+                Level::Error,
+                "operation_failed",
+                stage,
+                "failed",
+                "按模板命名区域汇总失败",
+            );
+            failure.error_code = Some(summary_event_error_code(
+                event.and_then(|event| event.error_type.as_deref()),
+                stage,
+            ));
+            if log_view == "developer" {
+                failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
+            }
             if let Err(write_error) = writer.write(&failure) {
-                if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}"))); diagnostic_failed = true; }
+                if !diagnostic_failed {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{write_error}")
+                        )
+                    );
+                    diagnostic_failed = true;
+                }
             }
         }
     }
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if result.is_err() { Level::Error } else { Level::Info }, "run_finished", "run", &format!("{:?}", unified.overall_status), "命名区域汇总结束")) {
-            if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+        if let Err(error) = writer.write(&tracker.event(
+            if result.is_err() {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", unified.overall_status),
+            "命名区域汇总结束",
+        )) {
+            if !diagnostic_failed {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+            }
         }
-    }
-    if interactive {
-        let stats = &unified.input_stats;
-        let (level, summary_message) = if result.is_err() {
-            (
-                Level::Error,
-                format!(
-                    "按模板命名区域汇总失败：已尝试 {} 个源文件，失败 {} 个，跳过 {} 个，待处理 {} 个；耗时 {:.3} 秒",
-                    stats.attempted,
-                    stats.failed,
-                    stats.skipped,
-                    stats.pending,
-                    unified.total_elapsed_ms as f64 / 1000.0
-                ),
-            )
-        } else if stats.failed > 0 || stats.pending > 0 {
-            (
-                Level::Warn,
-                format!(
-                    "按模板命名区域汇总部分完成：已尝试 {} 个源文件，成功 {} 个，失败 {} 个，跳过 {} 个，待处理 {} 个；耗时 {:.3} 秒",
-                    stats.attempted,
-                    stats.succeeded,
-                    stats.failed,
-                    stats.skipped,
-                    stats.pending,
-                    unified.total_elapsed_ms as f64 / 1000.0
-                ),
-            )
-        } else {
-            (
-                Level::Info,
-                format!(
-                    "按模板命名区域汇总完成：已尝试 {} 个源文件，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {:.3} 秒",
-                    stats.attempted,
-                    stats.succeeded,
-                    stats.failed,
-                    stats.skipped,
-                    unified.total_elapsed_ms as f64 / 1000.0
-                ),
-            )
-        };
-        eprintln!(
-            "{}",
-            pytools_core::run_logging::terminal_line(level, &summary_message)
-        );
     }
 
     if result.is_err()
@@ -14137,6 +16906,10 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         }
     }
 
+    if interactive && log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
+    }
+
     let run_log_path = if log_view == "off" {
         None
     } else {
@@ -14148,8 +16921,7 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
         };
         let failure = result.as_ref().err().map(|error| {
             let event = events.last();
-            let (error_type, root_hint) =
-                classify_named_range_failure(&format!("{error:#}"));
+            let (error_type, root_hint) = classify_named_range_failure(&format!("{error:#}"));
             let failure_type = event
                 .and_then(|event| event.error_type.as_deref())
                 .filter(|event_type| *event_type != "template_named_region_invalid")
@@ -14172,6 +16944,8 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
             "feature_name": unified.feature_name,
             "ended_at": unified.ended_at,
             "input_stats": unified.input_stats,
+            "business_metrics": unified.business_metrics,
+            "business_issues": unified.business_issues,
             "inputs": unified.inputs,
             "output_stats": unified.output_stats,
             "output_paths": unified.output_paths,
@@ -14199,18 +16973,36 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id);
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    output["run_log_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                 }
             }
-            if interactive && log_view != "developer" {
-                if let Some(path) = output["path"].as_str() { println!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("汇总文件：{path}"))); }
-            } else { println!("{}", serde_json::to_string_pretty(&output)?); }
-            Ok(())
+            if interactive && log_view == "user" {
+                Ok(())
+            } else if interactive && log_view == "off" {
+                if let Some(path) = output["path"].as_str() {
+                    println!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!("汇总文件：{path}")
+                        )
+                    );
+                }
+                Ok(())
+            } else {
+                println!("{}", serde_json::to_string_pretty(&output)?);
+                Ok(())
+            }
         }
         Err(error) => {
             if interactive && log_view == "user" {
-                Err(anyhow::anyhow!("按模板命名区域汇总失败；请检查上方提示的失败阶段、模板区域与源文件"))
-            } else { Err(error) }
+                Err(anyhow::anyhow!(
+                    "按模板命名区域汇总失败；请检查上方提示的失败阶段、模板区域与源文件"
+                ))
+            } else {
+                Err(error)
+            }
         }
     }
 }
@@ -14218,26 +17010,57 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
 fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let options = parse_cli_arguments(arguments)?;
     let template = required_path(&options, "template")?;
-    anyhow::ensure!(!options.positional.is_empty(), "provide at least one source workbook path");
-    let output_dir = options.values.get("output-dir").map(PathBuf::from)
+    anyhow::ensure!(
+        !options.positional.is_empty(),
+        "provide at least one source workbook path"
+    );
+    let output_dir = options
+        .values
+        .get("output-dir")
+        .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("output"));
-    let log_view = options.values.get("log-view").map(String::as_str).unwrap_or("user");
-    anyhow::ensure!(matches!(log_view, "user" | "developer" | "off"), "--log-view must be user, developer, or off");
-    let log_dir = options.values.get("log-dir").map(PathBuf::from)
+    let log_view = options
+        .values
+        .get("log-view")
+        .map(String::as_str)
+        .unwrap_or("user");
+    anyhow::ensure!(
+        matches!(log_view, "user" | "developer" | "off"),
+        "--log-view must be user, developer, or off"
+    );
+    let log_dir = options
+        .values
+        .get("log-dir")
+        .map(PathBuf::from)
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
 
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
     let run_started = Instant::now();
     let started_at = Local::now().to_rfc3339();
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos()).unwrap_or_default();
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
     let run_id = format!("pytools-pt-6-3-validation-{}-{nonce}", std::process::id());
-    let mut tracker = RunTracker::with_id("PT-6-3", "按模板校验区域提取校验", &options.positional, run_id.clone());
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut tracker = RunTracker::with_id(
+        "PT-6-3",
+        "按模板校验区域提取校验",
+        &options.positional,
+        run_id.clone(),
+    );
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-6-3", &run_id) {
             Ok(writer) => Some(writer),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；继续处理")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；继续处理")
+                    )
+                );
                 None
             }
         }
@@ -14250,12 +17073,26 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
         &output_dir,
         |event| {
             if let Some(index) = event.progress.current_input_index {
-                match (event.phase.as_str(), event.status.as_str(), tracker.state(index)) {
-                    ("input_filter", "skipped", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                    ("source_read", "started", Some(FileStatus::Pending)) => { let _ = tracker.transition(index, FileStatus::InProgress); }
-                    ("source_validation", "skipped", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Skipped); }
-                    ("validation_calculation", "succeeded", Some(FileStatus::InProgress)) => { let _ = tracker.transition(index, FileStatus::Succeeded); }
-                    (_, "failed", Some(FileStatus::InProgress)) if event.file_name.is_some() => { let _ = tracker.transition(index, FileStatus::Failed); }
+                match (
+                    event.phase.as_str(),
+                    event.status.as_str(),
+                    tracker.state(index),
+                ) {
+                    ("input_filter", "skipped", Some(FileStatus::Pending)) => {
+                        let _ = tracker.transition(index, FileStatus::Skipped);
+                    }
+                    ("source_read", "started", Some(FileStatus::Pending)) => {
+                        let _ = tracker.transition(index, FileStatus::InProgress);
+                    }
+                    ("source_validation", "skipped", Some(FileStatus::InProgress)) => {
+                        let _ = tracker.transition(index, FileStatus::Skipped);
+                    }
+                    ("validation_calculation", "succeeded", Some(FileStatus::InProgress)) => {
+                        let _ = tracker.transition(index, FileStatus::Succeeded);
+                    }
+                    (_, "failed", Some(FileStatus::InProgress)) if event.file_name.is_some() => {
+                        let _ = tracker.transition(index, FileStatus::Failed);
+                    }
                     _ => {}
                 }
             }
@@ -14265,7 +17102,13 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
                 "started" | "succeeded" => Level::Info,
                 _ => Level::Debug,
             };
-            let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, &event.user_message);
+            let mut record = tracker.event(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+            );
             record.timestamp = event.timestamp.clone();
             record.file_index = if event.file_name.is_some() {
                 event.progress.current_input_index
@@ -14277,31 +17120,58 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
             record.engine = event.actual_engine.clone();
             record.elapsed_ms = event.stage_elapsed_ms;
             if event.status == "failed" {
-                record.error_code = Some(event.error_type.clone().unwrap_or_else(|| "named_validation_error".to_owned()));
+                record.error_code = Some(
+                    event
+                        .error_type
+                        .clone()
+                        .unwrap_or_else(|| "named_validation_error".to_owned()),
+                );
             }
             if let Some(writer) = diagnostic.as_mut() {
                 if let Err(error) = writer.write(&record) {
                     if !diagnostic_failed {
-                        eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("诊断日志写入失败：{error}")
+                            )
+                        );
                         diagnostic_failed = true;
                     }
                 }
             }
-            if log_view == "developer" {
-                if let Ok(encoded) = serde_json::to_string(&event) { eprintln!("{encoded}"); }
-            } else if log_view == "user" && matches!(event.status.as_str(), "started" | "failed" | "skipped" | "warning")
-                || log_view == "user" && matches!(event.phase.as_str(), "run" | "validation_calculation" | "output_save") {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
+            if log_view == "developer"
+                || (log_view == "user"
+                    && (matches!(event.status.as_str(), "failed" | "skipped" | "warning")
+                        || matches!(
+                            event.phase.as_str(),
+                            "run" | "validation_calculation" | "output_save"
+                        )))
+            {
+                emit_summary_batch_event_view(log_view, &event);
             }
             events.push(event);
         },
     );
     if result.is_err() && !events.last().is_some_and(|event| event.status == "failed") {
-        let message = result.as_ref().err().map(|error| error.root_cause().to_string()).unwrap_or_default();
-        let event = tracker.event(Level::Error, "operation_failed", "validation_extract", "failed", &format!("按模板校验区域提取校验失败：{message}"));
+        let message = result
+            .as_ref()
+            .err()
+            .map(|error| error.root_cause().to_string())
+            .unwrap_or_default();
+        let event = tracker.event(
+            Level::Error,
+            "operation_failed",
+            "validation_extract",
+            "failed",
+            &format!("按模板校验区域提取校验失败：{message}"),
+        );
         if let Some(writer) = diagnostic.as_mut() {
             if let Err(error) = writer.write(&event) {
-                if !diagnostic_failed { eprintln!("诊断日志写入失败：{error}"); }
+                if !diagnostic_failed {
+                    eprintln!("诊断日志写入失败：{error}");
+                }
             }
         }
         events.push(SummaryRunEvent {
@@ -14310,7 +17180,10 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
             phase: "operation_failed".to_owned(),
             status: "failed".to_owned(),
             user_message: format!("按模板校验区域提取校验失败：{message}"),
-            progress: events.last().map(|event| event.progress.clone()).unwrap_or_default(),
+            progress: events
+                .last()
+                .map(|event| event.progress.clone())
+                .unwrap_or_default(),
             file_name: events.last().and_then(|event| event.file_name.clone()),
             stage_elapsed_ms: None,
             total_elapsed_ms: run_started.elapsed().as_millis(),
@@ -14318,21 +17191,68 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
             actual_engine: None,
             error_type: Some("named_validation_extract_error".to_owned()),
         });
-        if log_view == "user" { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("按模板校验区域提取校验失败：{message}"))); }
+        if log_view == "user" {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Error,
+                    &format!("按模板校验区域提取校验失败：{message}")
+                )
+            );
+        }
     }
-    let outputs = result.as_ref().ok().and_then(|result| result.path.as_ref())
-        .map(|path| vec![path_for_log_view(path, log_view)]).unwrap_or_default();
-    let mut unified = tracker.finish(result.is_err(), false, matches!(&result, Ok(result) if !result.saved), outputs,
-        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+    if let Some(result) = result.as_ref().ok() {
+        tracker.set_business_metric("成功读取工作簿数", serde_json::json!(result.files));
+        tracker.set_business_metric("提取校验结果数", serde_json::json!(result.rows));
+        tracker.set_business_metric(
+            "跳过源文件或工作表项",
+            serde_json::json!(result.skipped_sources.len()),
+        );
+        if result.rows > 0 {
+            tracker.record_business_issue(
+                pytools_core::run_logging::BusinessIssue::new(
+                    "校验异常",
+                    "提取到需要人工查看的校验结果",
+                )
+                .count(result.rows),
+            );
+        }
+    }
+    for event in events.iter().filter(|event| event.status == "warning") {
+        tracker.record_business_issue(
+            pytools_core::run_logging::BusinessIssue::new("业务提醒", &event.user_message).at(
+                event.file_name.as_deref(),
+                event.progress.current_sheet.as_deref(),
+                None,
+            ),
+        );
+    }
+    let outputs = result
+        .as_ref()
+        .ok()
+        .and_then(|result| result.path.as_ref())
+        .map(|path| vec![path_for_log_view(path, log_view)])
+        .unwrap_or_default();
+    let mut unified = tracker.finish(
+        result.is_err(),
+        false,
+        matches!(&result, Ok(result) if !result.saved),
+        outputs,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
     unified.output_stats = Some(pytools_core::run_logging::OutputStats {
-        workbooks_saved: Some(unified.output_paths.len()), sheets_saved: Some(1),
+        workbooks_saved: Some(unified.output_paths.len()),
+        sheets_saved: Some(1),
         saved: Some(result.as_ref().is_ok_and(|result| result.saved)),
     });
     if result.is_err() {
         if let Some(event) = events.iter().rev().find(|event| event.status == "failed") {
             unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
                 stage: event.phase.clone(),
-                code: event.error_type.clone().unwrap_or_else(|| "named_validation_extract_error".to_owned()),
+                code: event
+                    .error_type
+                    .clone()
+                    .unwrap_or_else(|| "named_validation_extract_error".to_owned()),
                 message: event.user_message.clone(),
                 file_name: event.file_name.clone(),
                 sheet_name: event.progress.current_sheet.clone(),
@@ -14340,13 +17260,32 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
         }
     }
     if let Some(writer) = diagnostic.as_mut() {
-        let finished = tracker.event(if result.is_err() { Level::Error } else { Level::Info }, "run_finished", "run",
-            &format!("{:?}", unified.overall_status), "按模板校验区域提取校验结束");
+        let finished = tracker.event(
+            if result.is_err() {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "run",
+            &format!("{:?}", unified.overall_status),
+            "按模板校验区域提取校验结束",
+        );
         if let Err(error) = writer.write(&finished) {
-            if !diagnostic_failed { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+            if !diagnostic_failed {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+            }
         }
     }
-    let report_path = if log_view == "off" { None } else {
+    let report_path = if log_view == "off" {
+        None
+    } else {
         let path = log_dir.join(format!("PT-6-3_{run_id}.json"));
         let report = serde_json::json!({
             "schema_version": 1,
@@ -14361,6 +17300,8 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
             "ended_at": unified.ended_at,
             "input_stats": unified.input_stats,
             "output_stats": unified.output_stats,
+            "business_metrics": unified.business_metrics,
+            "business_issues": unified.business_issues,
             "output_paths": unified.output_paths,
             "diagnostic_log_path": unified.diagnostic_log_path,
             "summary": result.as_ref().ok(),
@@ -14371,43 +17312,55 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
         match write_json_report_create_new(&path, &report) {
             Ok(()) => Some(path),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存校验运行汇总：{error}")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法保存校验运行汇总：{error}")
+                    )
+                );
                 None
             }
         }
     };
 
+    if interactive && log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
+    }
+
     match result {
         Ok(result) => {
-            let level = if unified.input_stats.failed > 0 || unified.input_stats.skipped > 0 || unified.input_stats.pending > 0 {
-                Level::Warn
-            } else {
-                Level::Info
-            };
-            let summary = format!("按模板校验区域提取校验完成：成功 {} 个工作簿，命中 {} 条，跳过 {} 项；耗时 {:.3} 秒",
-                result.files, result.rows, result.skipped_sources.len(), run_started.elapsed().as_secs_f64());
-            eprintln!("{}", pytools_core::run_logging::terminal_line(level, &summary));
-            if interactive && log_view != "developer" {
+            if interactive && log_view == "user" {
+                Ok(())
+            } else if interactive && log_view == "off" {
                 if let Some(path) = result.path.as_ref() {
-                    println!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("校验结果：{}", path_for_log_view(path, log_view))));
+                    println!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!("校验结果：{}", path_for_log_view(path, log_view))
+                        )
+                    );
                 }
                 Ok(())
             } else {
-                println!("{}", serde_json::to_string_pretty(&serde_json::json!({"result": result, "run_summary": report_path}))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"result": result, "run_summary": report_path})
+                    )?
+                );
                 Ok(())
             }
         }
         Err(error) => {
-            let attempted = unified.input_stats.attempted;
-            let failed = unified.input_stats.failed;
-            let skipped = unified.input_stats.skipped;
-            let pending = unified.input_stats.pending;
             if interactive {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error,
-                    &format!("按模板校验区域提取校验未完成：已尝试 {attempted} 个，失败 {failed} 个，跳过 {skipped} 个，待处理 {pending} 个；耗时 {:.3} 秒",
-                        run_started.elapsed().as_secs_f64())));
-                Err(anyhow::anyhow!("按模板校验区域提取校验失败；请检查失败阶段、源工作簿副本和模板配置"))
-            } else { Err(error) }
+                Err(anyhow::anyhow!(
+                    "按模板校验区域提取校验失败；请检查失败阶段、源工作簿副本和模板配置"
+                ))
+            } else {
+                Err(error)
+            }
         }
     }
 }
@@ -14445,48 +17398,60 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-6-2-{}-{nonce}", std::process::id());
-    use pytools_core::run_logging::{EventWriter, Level, PerformanceStats, RecordStats, RunTracker, TaskStatus};
-    let mut tracker = RunTracker::with_id("PT-6-2", "按批注汇总", &options.positional, run_id.clone());
+    use pytools_core::run_logging::{
+        EventWriter, Level, PerformanceStats, RecordStats, RunTracker,
+    };
+    let mut tracker =
+        RunTracker::with_id("PT-6-2", "按批注汇总", &options.positional, run_id.clone());
     let mut diagnostic = if log_view == "off" {
         None
     } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-6-2", &run_id) {
             Ok(writer) => Some(writer),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
                 None
             }
         }
     };
     if let Some(writer) = diagnostic.as_mut() {
-        let event = tracker.event(Level::Info, "run_started", "run", "started", "开始按批注汇总");
+        let event = tracker.event(
+            Level::Info,
+            "run_started",
+            "run",
+            "started",
+            "开始按批注汇总",
+        );
         if let Err(error) = writer.write(&event) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
     let mut events = Vec::<SummaryRunEvent>::new();
     let mut sheet_stats = pytools_core::run_logging::SheetStats::default();
     let mut log_write_warning_emitted = false;
-    let result = summarize_by_comments_with_progress(&template, &options.positional, &output_dir, |event| {
-            if log_view == "developer" {
-                match serde_json::to_string(&event) {
-                    Ok(encoded) => eprintln!("{encoded}"),
-                    Err(_) => eprintln!(
-                        "{{\"phase\":\"progress_event\",\"status\":\"serialization_failed\"}}"
-                    ),
-                }
-            } else if log_view == "user" {
-                let level = match event.status.as_str() {
-                    "failed" => Level::Error,
-                    "skipped" | "warning" | "partial" => Level::Warn,
-                    _ => Level::Info,
-                };
-                let message = if event.status == "failed" {
-                    format!("按批注汇总阶段 {} 失败；请检查对应文件和模板", event.phase)
+    let result =
+        summarize_by_comments_with_progress(&template, &options.positional, &output_dir, |event| {
+            if log_view == "developer" || log_view == "user" {
+                if event.status == "failed" {
+                    let mut contextual = event.clone();
+                    contextual.user_message =
+                        format!("按批注汇总阶段 {} 失败；请检查对应文件和模板", event.phase);
+                    emit_summary_batch_event_view(log_view, &contextual);
                 } else {
-                    event.user_message.clone()
-                };
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
+                    emit_summary_batch_event_view(log_view, &event);
+                }
             }
             record_summary_progress_event(
                 &mut tracker,
@@ -14538,27 +17503,49 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
         if log_view == "developer" {
             eprintln!("{}", serde_json::to_string(&failure_event)?);
         } else {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, "按批注汇总失败；详细阶段见运行记录"));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Error,
+                    "按批注汇总失败；详细阶段见运行记录"
+                )
+            );
         }
         events.push(failure_event);
     }
 
     if let Err(error) = result.as_ref() {
         let failed_event = events.iter().rev().find(|event| event.status == "failed");
-        let stage = failed_event.map(|event| event.phase.as_str()).unwrap_or("summary");
+        let stage = failed_event
+            .map(|event| event.phase.as_str())
+            .unwrap_or("summary");
         if let Some(writer) = diagnostic.as_mut() {
-            let mut failure = tracker.event(Level::Error, "operation_failed", stage, "failed", "按批注汇总未完成；请检查关联文件和模板");
+            let mut failure = tracker.event(
+                Level::Error,
+                "operation_failed",
+                stage,
+                "failed",
+                "按批注汇总未完成；请检查关联文件和模板",
+            );
             failure.error_code = Some(summary_event_error_code(
-                failed_event.and_then(|event| event.error_type.as_deref()), stage,
+                failed_event.and_then(|event| event.error_type.as_deref()),
+                stage,
             ));
             failure.file_name = failed_event.and_then(|event| event.file_name.clone());
-            failure.sheet_name = failed_event.and_then(|event| event.progress.current_sheet.clone());
+            failure.sheet_name =
+                failed_event.and_then(|event| event.progress.current_sheet.clone());
             if log_view == "developer" {
                 failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")}));
             }
             if let Err(write_error) = writer.write(&failure) {
                 if !log_write_warning_emitted {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}；业务结果仍保留")));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{write_error}；业务结果仍保留")
+                        )
+                    );
                     log_write_warning_emitted = true;
                 }
             }
@@ -14572,7 +17559,9 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
                 event.phase.contains("output")
                     || event.phase == "prepare_output"
                     || event.error_type.as_deref().is_some_and(|kind| {
-                        kind.contains("output") || kind.contains("template") || kind.contains("config")
+                        kind.contains("output")
+                            || kind.contains("template")
+                            || kind.contains("config")
                     })
             });
         let no_op = result.as_ref().is_ok_and(|summary| !summary.saved);
@@ -14582,10 +17571,19 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
             .and_then(|summary| summary.path.as_ref())
             .map(|path| vec![path_for_log_view(path, log_view)])
             .unwrap_or_default();
-        let diagnostic_path = diagnostic
-            .as_ref()
-            .map(|writer| pytools_core::run_logging::diagnostic_path_for_log_view(writer.path(), log_view == "developer"));
-        let mut summary = tracker.finish(critical_failure, false, no_op, output_paths, diagnostic_path);
+        let diagnostic_path = diagnostic.as_ref().map(|writer| {
+            pytools_core::run_logging::diagnostic_path_for_log_view(
+                writer.path(),
+                log_view == "developer",
+            )
+        });
+        let mut summary = tracker.finish(
+            critical_failure,
+            false,
+            no_op,
+            output_paths,
+            diagnostic_path,
+        );
         input_stats_available = summary.input_stats.pending == 0;
         summary.input_stats_available = input_stats_available;
         if sheet_stats.discovered > 0 || sheet_stats.attempted > 0 {
@@ -14635,6 +17633,9 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
         &log_dir,
         log_view,
     );
+    if interactive && log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
+    }
 
     let run_log_path = if log_view == "off" {
         None
@@ -14683,10 +17684,12 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
             if log_view != "off" {
                 output["run_id"] = serde_json::Value::String(run_id.clone());
                 if let Some(path) = &unified_path {
-                    output["run_summary_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    output["run_summary_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                 }
                 if let Some(path) = run_log_path {
-                    output["run_log_path"] = serde_json::Value::String(display_path_for_user(&path).to_string());
+                    output["run_log_path"] =
+                        serde_json::Value::String(display_path_for_user(&path).to_string());
                     if log_view == "user" {
                         eprintln!(
                             "{}",
@@ -14702,25 +17705,38 @@ fn run_summary_comments_cli(arguments: Vec<String>, interactive: bool) -> Result
                 }
             }
             if interactive && log_view == "user" {
-                let stats = &unified_summary.input_stats;
-                println!("{}", pytools_core::run_logging::terminal_line(
-                    if matches!(unified_summary.overall_status, TaskStatus::PartialSuccess | TaskStatus::Failed) { Level::Warn } else { Level::Info },
-                    &format!("批注汇总结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；输出 {} 行{}",
-                        stats.selected, stats.succeeded, stats.failed, stats.skipped, output["rows"],
-                        output.get("path").and_then(serde_json::Value::as_str).map(|path| format!("；文件 {path}")).unwrap_or_default())
-                ));
-                if let Some(path) = &unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(path, log_view == "developer")))); }
+                Ok(())
             } else {
                 println!("{}", serde_json::to_string_pretty(&output)?);
+                Ok(())
             }
-            Ok(())
         }
         Err(error) => {
             if log_view == "user" {
                 if let Some(path) = run_log_path {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))));
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行记录已保存：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
                 }
-                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("统一记录：{}", pytools_core::run_logging::path_for_log_view(&path, false)))); }
+                if let Some(path) = unified_path {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "统一记录：{}",
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
+                }
             }
             Err(error)
         }
@@ -14793,15 +17809,38 @@ fn run_archive_menu_operation(
     );
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
     let mut tracker = RunTracker::with_id(feature_id, description, &[], run_id.clone());
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&global.log_dir.join("run-events"), feature_id, &run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
+                None
+            }
         }
     };
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(Level::Info, "run_started", "archive", "started", description)) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+        if let Err(error) = writer.write(&tracker.event(
+            Level::Info,
+            "run_started",
+            "archive",
+            "started",
+            description,
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
     let actual_engines = archive_actual_engines(operation);
@@ -14828,14 +17867,52 @@ fn run_archive_menu_operation(
     let result = match result {
         Ok(result) => result,
         Err(error) => {
-            let mut summary = tracker.finish(true, false, false, vec![], diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+            let mut summary = tracker.finish(
+                true,
+                false,
+                false,
+                vec![],
+                diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+            );
             summary.input_stats_available = false;
+            summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
+                stage: "archive_operation".to_owned(),
+                code: "ARCHIVE_OPERATION_FAILED".to_owned(),
+                message: format!("{description}失败：{error:#}"),
+                file_name: None,
+                sheet_name: None,
+            });
             if let Some(writer) = diagnostic.as_mut() {
-                if let Err(log_error) = writer.write(&tracker.event(Level::Error, "run_finished", "archive", "failed", format!("{description}失败"))) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{log_error}"))); }
+                if let Err(log_error) = writer.write(&tracker.event(
+                    Level::Error,
+                    "run_finished",
+                    "archive",
+                    "failed",
+                    format!("{description}失败"),
+                )) {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("诊断日志写入失败：{log_error}")
+                        )
+                    );
+                }
             }
             if log_view != "off" {
-                let path = global.log_dir.join("run-unified").join(format!("{feature_id}_{run_id}.json"));
-                if let Err(log_error) = write_json_report_create_new(&path, &summary) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{log_error}"))); }
+                let path = global
+                    .log_dir
+                    .join("run-unified")
+                    .join(format!("{feature_id}_{run_id}.json"));
+                if let Err(log_error) = write_json_report_create_new(&path, &summary) {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("统一运行记录写入失败：{log_error}")
+                        )
+                    );
+                }
             }
             let failed = archive_run_event(
                 feature_id,
@@ -14887,23 +17964,44 @@ fn run_archive_menu_operation(
                     }
                 }
             }
+            if log_view == "user" {
+                emit_unified_terminal_summary_with_outputs(&summary, &[]);
+            }
             return Err(error);
         }
     };
 
-    let discovered = result.rows.iter().map(|row| PathBuf::from(&row.source_path)).collect::<Vec<_>>();
+    let discovered = result
+        .rows
+        .iter()
+        .map(|row| PathBuf::from(&row.source_path))
+        .collect::<Vec<_>>();
     let _ = tracker.set_inputs(&discovered);
     tracker.set_discovered(discovered.len());
     for (index, row) in result.rows.iter().enumerate() {
         let position = index + 1;
-        let state = if row.status.starts_with("失败") { FileStatus::Failed }
-            else if row.status.starts_with("跳过") { FileStatus::Skipped }
-            else { FileStatus::Succeeded };
-        if state != FileStatus::Skipped { let _ = tracker.transition(position, FileStatus::InProgress); }
+        let state = if row.status.starts_with("失败") {
+            FileStatus::Failed
+        } else if row.status.starts_with("跳过") {
+            FileStatus::Skipped
+        } else {
+            FileStatus::Succeeded
+        };
+        if state != FileStatus::Skipped {
+            let _ = tracker.transition(position, FileStatus::InProgress);
+        }
         let _ = tracker.transition(position, state);
         if let Some(writer) = diagnostic.as_mut() {
-            let level = match state { FileStatus::Failed => Level::Error, FileStatus::Skipped => Level::Warn, _ => Level::Info };
-            let status = match state { FileStatus::Failed => "failed", FileStatus::Skipped => "skipped", _ => "succeeded" };
+            let level = match state {
+                FileStatus::Failed => Level::Error,
+                FileStatus::Skipped => Level::Warn,
+                _ => Level::Info,
+            };
+            let status = match state {
+                FileStatus::Failed => "failed",
+                FileStatus::Skipped => "skipped",
+                _ => "succeeded",
+            };
             let item_message = match state {
                 FileStatus::Succeeded => format!("{description}：文件已归档"),
                 FileStatus::Skipped => format!("{description}：文件被跳过"),
@@ -14913,23 +18011,117 @@ fn run_archive_menu_operation(
             let mut event = tracker.event(level, "file_result", "archive", status, item_message);
             event.file_index = Some(position);
             event.file_name = Some(row.file_name.clone());
-            if state == FileStatus::Failed { event.error_code = Some("FILE_ARCHIVE_FAILED".to_owned()); }
-            if let Err(log_error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{log_error}"))); break; }
+            if state == FileStatus::Failed {
+                event.error_code = Some("FILE_ARCHIVE_FAILED".to_owned());
+            }
+            if let Err(log_error) = writer.write(&event) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{log_error}")
+                    )
+                );
+                break;
+            }
         }
     }
-    let unified = tracker.finish(false, false, result.rows.is_empty(), vec![path_for_log_view(&result.output, log_view)], diagnostic_path_for_log_view(diagnostic.as_ref(), log_view));
+    let mut unified = tracker.finish(
+        false,
+        false,
+        result.rows.is_empty(),
+        vec![path_for_log_view(&result.output, log_view)],
+        diagnostic_path_for_log_view(diagnostic.as_ref(), log_view),
+    );
+    unified
+        .business_metrics
+        .insert("发现文件数".to_owned(), serde_json::json!(result.files));
+    unified
+        .business_metrics
+        .insert("无效条目数".to_owned(), serde_json::json!(result.invalid));
+    unified
+        .business_metrics
+        .insert("已复制数".to_owned(), serde_json::json!(result.copied));
+    unified
+        .business_metrics
+        .insert("跳过数".to_owned(), serde_json::json!(result.skipped));
+    unified
+        .business_metrics
+        .insert("失败数".to_owned(), serde_json::json!(result.failed));
+    if result.invalid > 0 {
+        unified.business_issues.push(
+            pytools_core::run_logging::BusinessIssue::new(
+                "无效归档项",
+                "发现无法按当前规则归档的输入项",
+            )
+            .count(result.invalid),
+        );
+    }
+    if let Some(row) = result
+        .rows
+        .iter()
+        .find(|row| row.status.starts_with("失败"))
+    {
+        unified.error_summary = Some(pytools_core::run_logging::ErrorSummary {
+            stage: "archive_copy".to_owned(),
+            code: "FILE_ARCHIVE_FAILED".to_owned(),
+            message: if row.note.trim().is_empty() {
+                row.status.clone()
+            } else {
+                row.note.clone()
+            },
+            file_name: Some(row.file_name.clone()),
+            sheet_name: None,
+        });
+    }
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(log_error) = writer.write(&tracker.event(if result.failed > 0 { Level::Error } else { Level::Info }, "run_finished", "archive", &format!("{:?}", unified.overall_status), format!("{description}结束"))) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{log_error}"))); }
+        if let Err(log_error) = writer.write(&tracker.event(
+            if result.failed > 0 {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "archive",
+            &format!("{:?}", unified.overall_status),
+            format!("{description}结束"),
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{log_error}")
+                )
+            );
+        }
     }
     if log_view != "off" {
         let mut report = serde_json::to_value(&unified)?;
         report["selected_path_count"] = serde_json::json!(input_paths);
         report["archive_stats"] = serde_json::json!({"files": result.files, "invalid": result.invalid, "copied": result.copied, "skipped": result.skipped, "failed": result.failed});
-        let path = global.log_dir.join("run-unified").join(format!("{feature_id}_{run_id}.json"));
+        let path = global
+            .log_dir
+            .join("run-unified")
+            .join(format!("{feature_id}_{run_id}.json"));
         match write_json_report_create_new(&path, &report) {
-            Ok(()) if log_view == "user" => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {run_id}；运行记录：{}", pytools_core::run_logging::path_for_log_view(&path, false)))),
-            Ok(()) => {},
-            Err(log_error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{log_error}"))),
+            Ok(()) if log_view == "user" => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!(
+                        "运行编号 {run_id}；运行记录：{}",
+                        pytools_core::run_logging::path_for_log_view(&path, false)
+                    )
+                )
+            ),
+            Ok(()) => {}
+            Err(log_error) => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("统一运行记录写入失败：{log_error}")
+                )
+            ),
         }
     }
 
@@ -14951,8 +18143,15 @@ fn run_archive_menu_operation(
         2,
         "archive_operation",
         status,
-        &format!( "{description}完成：文件 {}，无效 {}，已复制 {}，跳过 {}，失败 {}，用时 {:.3} 秒",
-            result.files, result.invalid, result.copied, result.skipped, result.failed, (elapsed_ms) as f64 / 1000.0),
+        &format!(
+            "{description}完成：文件 {}，无效 {}，已复制 {}，跳过 {}，失败 {}，用时 {:.3} 秒",
+            result.files,
+            result.invalid,
+            result.copied,
+            result.skipped,
+            result.failed,
+            (elapsed_ms) as f64 / 1000.0
+        ),
         input_paths,
         Some(&result),
         elapsed_ms,
@@ -14960,7 +18159,9 @@ fn run_archive_menu_operation(
         None,
     );
     if log_view != "off" {
-        emit_archive_run_event(log_view, &completed);
+        if log_view == "developer" {
+            emit_archive_run_event(log_view, &completed);
+        }
         let events = [started, completed];
         match write_archive_run_history(
             &global.log_dir,
@@ -14992,7 +18193,13 @@ fn run_archive_menu_operation(
                 )
             ),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("pytools: could not save {feature_id} run history: {error:#}")))
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("pytools: could not save {feature_id} run history: {error:#}")
+                    )
+                )
             }
         }
     }
@@ -15000,8 +18207,32 @@ fn run_archive_menu_operation(
     if log_view == "developer" {
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
-        let message = format!( "{description}结束：文件={} 无效={} 已复制={} 跳过={} 失败={} 用时={:.3} 秒 报告={}", result.files, result.invalid, result.copied, result.skipped, result.failed, (elapsed_ms) as f64 / 1000.0, display_path_for_user(&result.output));
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { Level::Warn } else { Level::Info }, &message));
+        if log_view == "user" {
+            for row in &result.rows {
+                let level = if row.status.starts_with("失败") {
+                    Some(Level::Error)
+                } else if row.status.starts_with("无效") {
+                    Some(Level::Warn)
+                } else {
+                    None
+                };
+                if let Some(level) = level {
+                    let detail = if row.note.trim().is_empty() {
+                        row.status.as_str()
+                    } else {
+                        row.note.as_str()
+                    };
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            level,
+                            &format!("{}：{}", row.file_name, detail)
+                        )
+                    );
+                }
+            }
+        }
+        emit_unified_terminal_summary_with_outputs(&unified, std::slice::from_ref(&result.output));
     }
     Ok(())
 }
@@ -15062,7 +18293,17 @@ fn emit_archive_run_event(log_view: &str, event: &serde_json::Value) {
                 eprintln!("{{\"phase\":\"archive_operation\",\"status\":\"serialization_failed\"}}")
             }
         },
-        "user" => eprintln!("{}", pytools_core::run_logging::terminal_line(if event["status"] == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info }, event["user_message"].as_str().unwrap_or("归档处理中"))),
+        "user" => eprintln!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                if event["status"] == "failed" {
+                    pytools_core::run_logging::Level::Error
+                } else {
+                    pytools_core::run_logging::Level::Info
+                },
+                event["user_message"].as_str().unwrap_or("归档处理中")
+            )
+        ),
         _ => {}
     }
 }
@@ -15079,8 +18320,12 @@ fn write_archive_run_history(
     error_type: Option<&str>,
     events: &[serde_json::Value],
 ) -> Result<PathBuf> {
-    fs::create_dir_all(log_dir)
-        .with_context(|| format!("create archive log directory {}", display_path_for_user(&log_dir)))?;
+    fs::create_dir_all(log_dir).with_context(|| {
+        format!(
+            "create archive log directory {}",
+            display_path_for_user(&log_dir)
+        )
+    })?;
     let report = serde_json::json!({
         "schema_version": 1,
         "product": "pytools",
@@ -15183,8 +18428,12 @@ fn create_rust_report_copy(
     )?;
     verify_planning_snapshot(input, expected_source_hash)?;
     let output = specialized_report_copy_path(input, "PyTools_专用报表处理结果")?;
-    create_target_from_candidate(candidate, &output)
-        .with_context(|| format!("publish Rust report copy to {}", display_path_for_user(&output)))?;
+    create_target_from_candidate(candidate, &output).with_context(|| {
+        format!(
+            "publish Rust report copy to {}",
+            display_path_for_user(&output)
+        )
+    })?;
     Ok(serde_json::json!({
         "engine": "rust_xlsxwriter",
         "execution": "created_and_validated_workbook_copy",
@@ -15205,10 +18454,18 @@ fn specialized_report_copy_path(input: &Path, directory_name: &str) -> Result<Pa
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let result_dir = parent.join(directory_name);
-    fs::create_dir_all(&result_dir)
-        .with_context(|| format!("create report result directory {}", display_path_for_user(&result_dir)))?;
-    let metadata = fs::symlink_metadata(&result_dir)
-        .with_context(|| format!("inspect report result directory {}", display_path_for_user(&result_dir)))?;
+    fs::create_dir_all(&result_dir).with_context(|| {
+        format!(
+            "create report result directory {}",
+            display_path_for_user(&result_dir)
+        )
+    })?;
+    let metadata = fs::symlink_metadata(&result_dir).with_context(|| {
+        format!(
+            "inspect report result directory {}",
+            display_path_for_user(&result_dir)
+        )
+    })?;
     anyhow::ensure!(
         metadata.is_dir() && !metadata.file_type().is_symlink(),
         "report result path must be a real directory: {}",
@@ -15245,7 +18502,9 @@ fn path_has_directory_entry(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error).with_context(|| format!("inspect path {}", display_path_for_user(&path))),
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect path {}", display_path_for_user(&path)))
+        }
     }
 }
 
@@ -15253,14 +18512,21 @@ fn remove_regular_candidate(path: &Path) -> Result<()> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error).with_context(|| format!("inspect {}", display_path_for_user(&path))),
+        Err(error) => {
+            return Err(error).with_context(|| format!("inspect {}", display_path_for_user(&path)))
+        }
     };
     anyhow::ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink(),
         "refusing to remove non-regular candidate {}",
         display_path_for_user(&path)
     );
-    fs::remove_file(path).with_context(|| format!("remove temporary candidate {}", display_path_for_user(&path)))
+    fs::remove_file(path).with_context(|| {
+        format!(
+            "remove temporary candidate {}",
+            display_path_for_user(&path)
+        )
+    })
 }
 
 fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
@@ -15305,11 +18571,32 @@ fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
 
     let mut events = Vec::<serde_json::Value>::new();
     let mut active_stage = None;
+    let mut unified =
+        UnifiedRunSession::new(&log_dir, "PT-4-8", "按配置映射文件名", &log_view, None);
+    unified.set_inputs(&files, Some(files.len()));
     let operation_result = if log_view == "off" {
         run_local_filename_map_candidate(&config_path, &files)
     } else {
         run_local_filename_map_with_progress(&config_path, &files, |event| {
             let event_value = local_filename_map_event_with_stage_elapsed(event, &mut active_stage);
+            let level = match event.status.as_str() {
+                "failed" => pytools_core::run_logging::Level::Error,
+                "partial_failure" => pytools_core::run_logging::Level::Warn,
+                _ => pytools_core::run_logging::Level::Info,
+            };
+            unified.progress(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+                Some(event_value["stage_elapsed_ms"].as_u64().unwrap_or_default() as u128),
+                event.actual_engine.as_deref(),
+                event
+                    .error_type
+                    .as_ref()
+                    .map(|error| serde_json::json!({"error_type": error})),
+            );
             if log_view == "developer" {
                 events.push(event_value.clone());
             }
@@ -15327,9 +18614,65 @@ fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
             if let Some(Err(history_error)) = history_result.as_ref() {
                 eprintln!("pytools: could not write local-map run history: {history_error:#}");
             }
+            unified.mark_inputs_unavailable();
+            unified.operation_failure(
+                "configuration_or_rename",
+                "FILE_RENAME_FAILED",
+                "局部文件名映射失败",
+                &error,
+            );
+            let (mut summary, _) = unified.finish(true, false, false, &[], None, None, None);
+            summary.input_stats_available = false;
+            if log_view == "user" {
+                emit_unified_terminal_summary_with_outputs(&summary, &[]);
+            }
             return Err(error);
         }
     };
+    unified.set_discovered(result.rows.len());
+    let mut output_paths = Vec::new();
+    for (index, row) in result.rows.iter().enumerate() {
+        let renamed = row.status == "已按局部映射改名";
+        let failed = row.status == "跳过：改名失败";
+        let status = if failed {
+            pytools_core::run_logging::FileStatus::Failed
+        } else if renamed {
+            pytools_core::run_logging::FileStatus::Succeeded
+        } else {
+            pytools_core::run_logging::FileStatus::Skipped
+        };
+        unified.file_result(
+            index + 1,
+            status,
+            !row.status.contains("非文件"),
+            "rename",
+            &row.status,
+            failed.then_some("FILE_RENAME_FAILED"),
+            None,
+        );
+        if renamed {
+            let source = Path::new(&row.source_path);
+            if let Some(parent) = source.parent() {
+                output_paths.push(parent.join(&row.new_name));
+            }
+        }
+    }
+    unified.set_business_metric("映射规则数", serde_json::json!(result.rules));
+    unified.set_business_metric("实际改名数", serde_json::json!(result.ok));
+    unified.set_business_metric("业务报告跳过数", serde_json::json!(result.skip));
+    let (unified_summary, unified_path) = unified.finish(
+        false,
+        false,
+        result.ok == 0 && result.skip > 0,
+        &output_paths,
+        Some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(result.ok),
+            sheets_saved: None,
+            saved: Some(result.ok > 0),
+        }),
+        None,
+        None,
+    );
     let (history_path, history_warning) = match history_result {
         Some(Ok(path)) => (Some(path), None),
         Some(Err(error)) => (None, Some(error.to_string())),
@@ -15341,6 +18684,13 @@ fn run_local_filename_map(arguments: Vec<String>) -> Result<()> {
     }
     if let Some(warning) = history_warning {
         output["run_history_warning"] = serde_json::json!(warning);
+    }
+    output["run_id"] = serde_json::json!(unified_summary.run_id);
+    if let Some(path) = unified_path {
+        output["run_summary_path"] = serde_json::json!(path);
+    }
+    if log_view == "user" {
+        emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
     }
     println!("{}", serde_json::to_string_pretty(&output)?);
     Ok(())
@@ -15374,41 +18724,17 @@ fn emit_local_filename_map_event_view(
     event: &LocalFilenameMapProgressEvent,
     event_value: &serde_json::Value,
 ) {
-    match log_view {
-        "user" => {
-            let level = match event.status.as_str() {
-                "failed" => pytools_core::run_logging::Level::Error,
-                "partial_failure" => pytools_core::run_logging::Level::Warn,
-                _ => pytools_core::run_logging::Level::Info,
-            };
-            if event.status == "started" {
-                eprintln!(
-                    "{}",
-                    pytools_core::run_logging::terminal_line(level, &event.user_message)
-                );
-            } else if let Some(stage_elapsed_ms) = event_value["stage_elapsed_ms"].as_u64() {
-                eprintln!(
-                    "{}",
-                    pytools_core::run_logging::terminal_line(
-                        level,
-                        &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)
-                    )
-                );
-            } else {
-                eprintln!(
-                    "{}",
-                    pytools_core::run_logging::terminal_line(level, &event.user_message)
-                );
-            }
-        }
-        "developer" => {
-            if let Ok(line) = serde_json::to_string(event_value) {
-                eprintln!("{line}");
-            }
-        }
-        "off" => {}
-        _ => unreachable!("local-map log view is validated before execution"),
-    }
+    let current =
+        (event.completed_files > 0).then_some(event.completed_files.min(event.total_files));
+    emit_batch_event_view(
+        log_view,
+        event.total_files,
+        current,
+        &event.status,
+        current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
+        &event.user_message,
+        Some(event_value),
+    );
 }
 
 fn write_local_filename_map_run_history(
@@ -15505,14 +18831,34 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let mut legacy_log = match open_batch_rename_log(&log_dir) {
         Ok(value) => Some(value),
-        Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Warn, &format!("无法创建重命名日志：{error}；业务处理继续"))); None }
+        Err(error) => {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    pytools_core::run_logging::Level::Warn,
+                    &format!("无法创建重命名日志：{error}；业务处理继续")
+                )
+            );
+            None
+        }
     };
     use pytools_core::run_logging::{EventWriter, FileStatus, Level, RunTracker};
     let mut tracker = RunTracker::new("PT-4-1", "按配置批量重命名", &paths);
-    let mut diagnostic = if log_view == "off" { None } else {
+    let mut diagnostic = if log_view == "off" {
+        None
+    } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-4-1", &tracker.run_id) {
             Ok(writer) => Some(writer),
-            Err(error) => { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}"))); None }
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}")
+                    )
+                );
+                None
+            }
         }
     };
     let mut events = Vec::<BatchRenameProgressEvent>::new();
@@ -15520,13 +18866,33 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let run_result = run_batch_rename_business(&config_path, &paths, |event| {
         emit_batch_rename_event_view(&log_view, event);
         if let Some(writer) = diagnostic.as_mut() {
-            let level = if event.status == "failed" { Level::Error } else { Level::Info };
-            let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, &event.user_message);
+            let level = if event.status == "failed" {
+                Level::Error
+            } else {
+                Level::Info
+            };
+            let mut record = tracker.event(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+            );
             record.timestamp = event.timestamp.clone();
             record.elapsed_ms = Some(event.stage_elapsed_ms);
             record.engine = event.actual_engine.clone();
-            if event.status == "failed" { record.error_code = Some("CONFIG_READ_FAILED".to_owned()); }
-            if let Err(error) = writer.write(&record) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+            if event.status == "failed" {
+                record.error_code = Some("CONFIG_READ_FAILED".to_owned());
+            }
+            if let Err(error) = writer.write(&record) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+            }
         }
         if log_view == "developer" {
             events.push(event.clone());
@@ -15544,15 +18910,41 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
         Ok(result) => result,
         Err(error) => {
             if let Some((_, file)) = legacy_log.as_mut() {
-                if let Err(log_error) = write_batch_rename_failure_log(file, failure_event.as_ref()) {
+                if let Err(log_error) = write_batch_rename_failure_log(file, failure_event.as_ref())
+                {
                     eprintln!("pytools: could not write batch-rename failure log: {log_error:#}");
                 }
             }
-            let summary = tracker.finish(true, false, false, vec![], diagnostic_path_for_log_view(diagnostic.as_ref(), &log_view));
-            if let Some(writer) = diagnostic.as_mut() { let _ = writer.write(&tracker.event(Level::Error, "run_finished", "configuration", "failed", "按配置批量重命名失败")); }
+            let summary = tracker.finish(
+                true,
+                false,
+                false,
+                vec![],
+                diagnostic_path_for_log_view(diagnostic.as_ref(), &log_view),
+            );
+            if interactive && log_view == "user" {
+                emit_unified_terminal_summary_with_outputs(&summary, &[]);
+            }
+            if let Some(writer) = diagnostic.as_mut() {
+                let _ = writer.write(&tracker.event(
+                    Level::Error,
+                    "run_finished",
+                    "configuration",
+                    "failed",
+                    "按配置批量重命名失败",
+                ));
+            }
             if log_view != "off" {
                 let path = log_dir.join(format!("PT-4-1_{}.run.json", tracker.run_id));
-                if let Err(log_error) = write_json_report_create_new(&path, &summary) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{log_error}"))); }
+                if let Err(log_error) = write_json_report_create_new(&path, &summary) {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Warn,
+                            &format!("统一运行记录写入失败：{log_error}")
+                        )
+                    );
+                }
             }
             if let Some(Err(history_error)) = history_result.as_ref() {
                 eprintln!("pytools: could not write batch-rename run history: {history_error:#}");
@@ -15560,38 +18952,133 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
             return Err(error);
         }
     };
-    let log_warning = legacy_log.as_mut().and_then(|(_, file)| write_batch_rename_log(file, &result.rows).err());
+    let log_warning = legacy_log
+        .as_mut()
+        .and_then(|(_, file)| write_batch_rename_log(file, &result.rows).err());
     let mut outputs = Vec::new();
     for (index, row) in result.rows.iter().enumerate() {
         let position = index + 1;
-        let state = if row.status == "renamed" { FileStatus::Succeeded }
-            else if row.reason.starts_with("rename_failed") || row.reason == "not_exists" || row.reason.starts_with("full_name_no_code") { FileStatus::Failed }
-            else { FileStatus::Skipped };
+        let state = if row.status == "renamed" {
+            FileStatus::Succeeded
+        } else if row.reason.starts_with("rename_failed")
+            || row.reason == "not_exists"
+            || row.reason.starts_with("full_name_no_code")
+        {
+            FileStatus::Failed
+        } else {
+            FileStatus::Skipped
+        };
         let _ = tracker.transition(position, FileStatus::InProgress);
         let _ = tracker.transition(position, state);
-        if state == FileStatus::Succeeded { if let Some(parent) = paths[index].parent() { outputs.push(parent.join(&row.new_name).to_string_lossy().into_owned()); } }
+        if state == FileStatus::Succeeded {
+            if let Some(parent) = paths[index].parent() {
+                outputs.push(parent.join(&row.new_name).to_string_lossy().into_owned());
+            }
+        }
         if let Some(writer) = diagnostic.as_mut() {
-            let level = match state { FileStatus::Failed => Level::Error, FileStatus::Skipped => Level::Warn, _ => Level::Info };
-            let status = match state { FileStatus::Failed => "failed", FileStatus::Skipped => "skipped", _ => "succeeded" };
+            let level = match state {
+                FileStatus::Failed => Level::Error,
+                FileStatus::Skipped => Level::Warn,
+                _ => Level::Info,
+            };
+            let status = match state {
+                FileStatus::Failed => "failed",
+                FileStatus::Skipped => "skipped",
+                _ => "succeeded",
+            };
             let mut event = tracker.event(level, "file_result", "rename", status, "重命名文件结果");
             event.file_index = Some(position);
             event.file_name = Some(row.original_name.clone());
-            if state == FileStatus::Failed { event.error_code = Some(if row.reason == "not_exists" { "FILE_NOT_FOUND" } else if row.reason.starts_with("full_name_no_code") { "CONFIG_MAPPING_MISSING" } else { "FILE_RENAME_FAILED" }.to_owned()); }
-            if let Err(error) = writer.write(&event) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); break; }
+            if state == FileStatus::Failed {
+                event.error_code = Some(
+                    if row.reason == "not_exists" {
+                        "FILE_NOT_FOUND"
+                    } else if row.reason.starts_with("full_name_no_code") {
+                        "CONFIG_MAPPING_MISSING"
+                    } else {
+                        "FILE_RENAME_FAILED"
+                    }
+                    .to_owned(),
+                );
+            }
+            if let Err(error) = writer.write(&event) {
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("诊断日志写入失败：{error}")
+                    )
+                );
+                break;
+            }
         }
     }
     let stats = tracker.input_stats();
-    let outputs = outputs.iter().map(|path| path_for_log_view(Path::new(path), &log_view)).collect();
-    let unified = tracker.finish(false, false, stats.succeeded == 0 && stats.failed == 0, outputs, diagnostic_path_for_log_view(diagnostic.as_ref(), &log_view));
+    tracker.set_business_metric("实际改名数", serde_json::json!(stats.succeeded));
+    tracker.set_business_metric("未改名条目", serde_json::json!(stats.skipped));
+    tracker.set_business_metric("失败条目", serde_json::json!(stats.failed));
+    let outputs = outputs
+        .iter()
+        .map(|path| path_for_log_view(Path::new(path), &log_view))
+        .collect();
+    let unified = tracker.finish(
+        false,
+        false,
+        stats.succeeded == 0 && stats.failed == 0,
+        outputs,
+        diagnostic_path_for_log_view(diagnostic.as_ref(), &log_view),
+    );
     if let Some(writer) = diagnostic.as_mut() {
-        if let Err(error) = writer.write(&tracker.event(if stats.failed > 0 { Level::Error } else { Level::Info }, "run_finished", "rename", &format!("{:?}", unified.overall_status), "批量重命名结束")) { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}"))); }
+        if let Err(error) = writer.write(&tracker.event(
+            if stats.failed > 0 {
+                Level::Error
+            } else {
+                Level::Info
+            },
+            "run_finished",
+            "rename",
+            &format!("{:?}", unified.overall_status),
+            "批量重命名结束",
+        )) {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
+        }
     }
     let mut unified_path = None;
     if log_view != "off" {
         let path = log_dir.join(format!("PT-4-1_{}.run.json", tracker.run_id));
         match write_json_report_create_new(&path, &unified) {
-            Ok(()) => { if interactive { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；运行记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, log_view == "developer")))); } unified_path = Some(path); }
-            Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("统一运行记录写入失败：{error}"))),
+            Ok(()) => {
+                if interactive {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行编号 {}；运行记录：{}",
+                                tracker.run_id,
+                                pytools_core::run_logging::path_for_log_view(
+                                    &path,
+                                    log_view == "developer"
+                                )
+                            )
+                        )
+                    );
+                }
+                unified_path = Some(path);
+            }
+            Err(error) => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("统一运行记录写入失败：{error}")
+                )
+            ),
         }
     }
     let (history_path, history_warning) = match history_result {
@@ -15606,7 +19093,12 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
             serde_json::json!(legacy_log.as_ref().map(|(path, _)| path.to_string_lossy())),
         );
         object.insert("run_id".to_owned(), serde_json::json!(tracker.run_id));
-        if let Some(path) = unified_path { object.insert("run_summary_path".to_owned(), serde_json::json!(path.to_string_lossy())); }
+        if let Some(path) = unified_path {
+            object.insert(
+                "run_summary_path".to_owned(),
+                serde_json::json!(path.to_string_lossy()),
+            );
+        }
         if let Some(path) = history_path {
             object.insert(
                 "run_history_path".to_owned(),
@@ -15624,30 +19116,26 @@ fn run_batch_rename(arguments: Vec<String>, interactive: bool) -> Result<()> {
         }
     }
     if interactive && log_view != "developer" {
-        println!("{}", pytools_core::run_logging::terminal_line(if stats.failed > 0 { Level::Warn } else { Level::Info }, &format!( "按配置批量重命名结束：选择 {} 个，成功 {} 个，失败 {} 个，跳过 {} 个；耗时 {:.3} 秒", stats.selected, stats.succeeded, stats.failed, stats.skipped, (unified.total_elapsed_ms) as f64 / 1000.0)));
-    } else { println!("{}", serde_json::to_string_pretty(&output)?); }
+        emit_unified_terminal_summary_with_outputs(&unified, &[]);
+    } else {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    }
     Ok(())
 }
 
 fn emit_batch_rename_event_view(log_view: &str, event: &BatchRenameProgressEvent) {
-    match log_view {
-        "user" => {
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
-            let message = match event.status.as_str() {
-                "progress" => format!( "{}（阶段用时 {:.3} 秒）", event.user_message, (event.stage_elapsed_ms) as f64 / 1000.0),
-                "completed" | "failed" => format!( "{}；阶段用时 {:.3} 秒，总用时 {:.3} 秒", event.user_message, (event.stage_elapsed_ms) as f64 / 1000.0, (event.total_elapsed_ms) as f64 / 1000.0),
-                _ => event.user_message.clone(),
-            };
-            eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
-        },
-        "developer" => {
-            if let Ok(line) = serde_json::to_string(event) {
-                eprintln!("{line}");
-            }
-        }
-        "off" => {}
-        _ => unreachable!("batch-rename log view is validated before execution"),
-    }
+    let current =
+        (event.completed_files > 0).then_some(event.completed_files.min(event.total_files));
+    let value = serde_json::to_value(event).ok();
+    emit_batch_event_view(
+        log_view,
+        event.total_files,
+        current,
+        &event.status,
+        current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
+        &event.user_message,
+        value.as_ref(),
+    );
 }
 
 fn write_batch_rename_run_history(
@@ -15682,8 +19170,12 @@ fn write_batch_rename_run_history(
 }
 
 fn open_batch_rename_log(log_dir: &Path) -> Result<(PathBuf, File)> {
-    fs::create_dir_all(log_dir)
-        .with_context(|| format!("create batch-rename log directory {}", display_path_for_user(&log_dir)))?;
+    fs::create_dir_all(log_dir).with_context(|| {
+        format!(
+            "create batch-rename log directory {}",
+            display_path_for_user(&log_dir)
+        )
+    })?;
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let base = format!("3_3_batch_rename_{timestamp}");
     for index in 0usize.. {
@@ -15697,7 +19189,8 @@ fn open_batch_rename_log(log_dir: &Path) -> Result<(PathBuf, File)> {
             Ok(file) => return Ok((path, file)),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(error).with_context(|| format!("create log {}", display_path_for_user(&path)))
+                return Err(error)
+                    .with_context(|| format!("create log {}", display_path_for_user(&path)))
             }
         }
     }
@@ -15726,7 +19219,13 @@ fn write_batch_rename_log(
                 "INFO"
             };
             let reason = row.reason.split_whitespace().next().unwrap_or("unknown");
-            (level, format!("skip file={} reason={reason}", pytools_core::run_logging::portable_file_name(Path::new(file))))
+            (
+                level,
+                format!(
+                    "skip file={} reason={reason}",
+                    pytools_core::run_logging::portable_file_name(Path::new(file))
+                ),
+            )
         };
         let line = format!(
             "{} [{level}] {message}",
@@ -15767,7 +19266,11 @@ fn run_content_prefix_unrename_cli(arguments: Vec<String>, interactive: bool) ->
     run_content_prefix_cli(arguments, false, interactive)
 }
 
-fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive: bool) -> Result<()> {
+fn run_content_prefix_cli(
+    arguments: Vec<String>,
+    add_prefix: bool,
+    interactive: bool,
+) -> Result<()> {
     let Some((config_path, files, log_dir, log_view)) =
         parse_content_prefix_cli_arguments(arguments)?
     else {
@@ -15778,7 +19281,11 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
     } else {
         ("PT-4-7", "unrename-by-content")
     };
-    let feature_name = if add_prefix { "按工作簿内容添加文件名前缀" } else { "按工作簿内容取消文件名前缀" };
+    let feature_name = if add_prefix {
+        "按工作簿内容添加文件名前缀"
+    } else {
+        "按工作簿内容取消文件名前缀"
+    };
     let mut unified = UnifiedRunSession::new(&log_dir, feature_id, feature_name, &log_view, None);
     unified.set_inputs(&files, Some(files.len()));
     let mut events = Vec::<serde_json::Value>::new();
@@ -15794,8 +19301,24 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
     } else if add_prefix {
         run_content_prefix_rename_xlsx_candidate_with_progress(&config_path, &files, |event| {
             let event_value = file_sort_event_with_stage_elapsed(event, &mut active_stage);
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
-            unified.progress(level, &event.phase, &event.phase, &event.status, &event.user_message, Some(event.elapsed_ms), event.actual_engine.as_deref(), event.error_type.as_ref().map(|error| serde_json::json!({"error_type": error})));
+            let level = if event.status == "failed" {
+                pytools_core::run_logging::Level::Error
+            } else {
+                pytools_core::run_logging::Level::Info
+            };
+            unified.progress(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+                Some(event.elapsed_ms),
+                event.actual_engine.as_deref(),
+                event
+                    .error_type
+                    .as_ref()
+                    .map(|error| serde_json::json!({"error_type": error})),
+            );
             if log_view == "developer" {
                 events.push(event_value.clone());
             }
@@ -15824,18 +19347,43 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
         Ok(result) => result,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            unified.operation_failure("file_processing", "FILE_OPERATION_FAILED", "文件内容命名处理失败", &error);
-            let _ = unified.finish(true, false, false, &[], Some(pytools_core::run_logging::OutputStats { workbooks_saved: None, sheets_saved: None, saved: None }), None, None);
+            unified.operation_failure(
+                "file_processing",
+                "FILE_OPERATION_FAILED",
+                "文件内容命名处理失败",
+                &error,
+            );
+            let _ = unified.finish(
+                true,
+                false,
+                false,
+                &[],
+                Some(pytools_core::run_logging::OutputStats {
+                    workbooks_saved: None,
+                    sheets_saved: None,
+                    saved: None,
+                }),
+                None,
+                None,
+            );
             return Err(error);
         }
     };
     let (rows, summary_output) = match &result {
         ContentPrefixOperationReport::Rename(report) => (
-            report.rows.iter().map(|row| (row.source_path.clone(), row.status.clone())).collect::<Vec<_>>(),
+            report
+                .rows
+                .iter()
+                .map(|row| (row.source_path.clone(), row.status.clone()))
+                .collect::<Vec<_>>(),
             (report.ok, report.skip),
         ),
         ContentPrefixOperationReport::Unrename(report) => (
-            report.rows.iter().map(|row| (row.source_path.clone(), row.status.clone())).collect::<Vec<_>>(),
+            report
+                .rows
+                .iter()
+                .map(|row| (row.source_path.clone(), row.status.clone()))
+                .collect::<Vec<_>>(),
             (report.ok, report.skip),
         ),
     };
@@ -15849,13 +19397,31 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
             pytools_core::run_logging::FileStatus::Skipped
         };
         let code = match status {
-            pytools_core::run_logging::FileStatus::Failed if row_status.contains("读取") => Some("EXCEL_READ_FAILED"),
+            pytools_core::run_logging::FileStatus::Failed if row_status.contains("读取") => {
+                Some("EXCEL_READ_FAILED")
+            }
             pytools_core::run_logging::FileStatus::Failed => Some("FILE_RENAME_FAILED"),
-            pytools_core::run_logging::FileStatus::Skipped if row_status.contains("格式") => Some("FORMAT_UNSUPPORTED"),
+            pytools_core::run_logging::FileStatus::Skipped if row_status.contains("格式") => {
+                Some("FORMAT_UNSUPPORTED")
+            }
             _ => None,
         };
-        unified.file_result(index + 1, status, !row_status.contains("非文件"), "rename", row_status, code, None);
+        unified.file_result(
+            index + 1,
+            status,
+            !row_status.contains("非文件"),
+            "rename",
+            row_status,
+            code,
+            None,
+        );
     }
+    unified.set_business_metric("实际改名数", serde_json::json!(summary_output.0));
+    unified.set_business_metric("未改名条目", serde_json::json!(summary_output.1));
+    unified.set_business_metric(
+        "失败条目",
+        serde_json::json!(unified.tracker.input_stats().failed),
+    );
     let (unified_summary, unified_path) = unified.finish(
         false,
         false,
@@ -15881,12 +19447,7 @@ fn run_content_prefix_cli(arguments: Vec<String>, add_prefix: bool, interactive:
             serde_json::json!(format!("could not write structured run history: {error:#}"));
     }
     if interactive && log_view == "user" {
-        let operation_name = if add_prefix {
-            "按工作簿内容添加文件名前缀"
-        } else {
-            "按工作簿内容取消文件名前缀"
-        };
-        println!("{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Info, &format!("{operation_name}结束：成功 {} 个，跳过 {} 个，失败 {} 个；运行编号 {}{}", summary_output.0, summary_output.1, unified_summary.input_stats.failed, unified_summary.run_id, unified_path.as_ref().map(|path| format!("；日志 {}", display_path_for_user(&path))).unwrap_or_default())));
+        emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
     } else {
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
@@ -16046,15 +19607,32 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
     let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("output"));
     let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = file_sort_log_view(log_view)?;
-    let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-9", "文件排序前缀添加", &log_view, None);
+    let mut unified =
+        UnifiedRunSession::new(&log_dir, "PT-4-9", "文件排序前缀添加", &log_view, None);
     unified.set_inputs(&files, Some(files.len()));
     let mut events = Vec::new();
     let mut active_stage = None;
     let operation_result =
         run_file_sort_prefix_with_progress_business(&config_path, &files, &output_dir, |event| {
             let event_value = file_sort_event_with_stage_elapsed(event, &mut active_stage);
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
-            unified.progress(level, &event.phase, &event.phase, &event.status, &event.user_message, Some(event.elapsed_ms), event.actual_engine.as_deref(), event.error_type.as_ref().map(|error| serde_json::json!({"error_type": error})));
+            let level = if event.status == "failed" {
+                pytools_core::run_logging::Level::Error
+            } else {
+                pytools_core::run_logging::Level::Info
+            };
+            unified.progress(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+                Some(event.elapsed_ms),
+                event.actual_engine.as_deref(),
+                event
+                    .error_type
+                    .as_ref()
+                    .map(|error| serde_json::json!({"error_type": error})),
+            );
             if log_view == "developer" {
                 events.push(event_value.clone());
             }
@@ -16072,7 +19650,12 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
         Ok(result) => result,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            unified.operation_failure("file_sort", "FILE_SORT_FAILED", "文件排序前缀处理失败", &error);
+            unified.operation_failure(
+                "file_sort",
+                "FILE_SORT_FAILED",
+                "文件排序前缀处理失败",
+                &error,
+            );
             let _ = unified.finish(true, false, false, &[], None, None, None);
             return Err(error);
         }
@@ -16081,17 +19664,36 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
     for (index, row) in result.rows.iter().enumerate() {
         let status = match row.status.as_str() {
             "失败" => pytools_core::run_logging::FileStatus::Failed,
-            "未命中" | "跳过：非文件" | "跳过：无匹配排序前缀" => pytools_core::run_logging::FileStatus::Skipped,
+            "未命中" | "跳过：非文件" | "跳过：无匹配排序前缀" => {
+                pytools_core::run_logging::FileStatus::Skipped
+            }
             _ => pytools_core::run_logging::FileStatus::Succeeded,
         };
-        unified.file_result(index + 1, status, !row.status.contains("非文件"), "file_rename", &row.status, (status == pytools_core::run_logging::FileStatus::Failed).then_some("FILE_RENAME_FAILED"), (status == pytools_core::run_logging::FileStatus::Failed).then(|| row.remark.clone()));
+        unified.file_result(
+            index + 1,
+            status,
+            !row.status.contains("非文件"),
+            "file_rename",
+            &row.status,
+            (status == pytools_core::run_logging::FileStatus::Failed)
+                .then_some("FILE_RENAME_FAILED"),
+            (status == pytools_core::run_logging::FileStatus::Failed).then(|| row.remark.clone()),
+        );
     }
+    unified.set_business_metric("实际改名数", serde_json::json!(result.renamed));
+    unified.set_business_metric("未命中数", serde_json::json!(result.unmatched));
+    unified.set_business_metric("跳过条目", serde_json::json!(result.skipped));
+    unified.set_business_metric("失败条目", serde_json::json!(result.failed));
     let (unified_summary, unified_path) = unified.finish(
         false,
         false,
         result.renamed == 0 && result.failed == 0,
         std::slice::from_ref(&result.output),
-        Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(1), sheets_saved: None, saved: Some(true) }),
+        Some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(1),
+            sheets_saved: None,
+            saved: Some(true),
+        }),
         None,
         None,
     );
@@ -16104,12 +19706,14 @@ fn run_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Result<()>
         eprintln!("pytools: warning: could not write complete operation log: {error:#}");
     }
     if interactive && log_view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(if result.failed > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!("文件排序前缀添加结束：重命名 {} 个，未命中 {} 个，跳过 {} 个，失败 {} 个；报告 {}；运行编号 {}{}", result.renamed, result.unmatched, result.skipped, result.failed, display_path_for_user(&result.output), unified_summary.run_id, unified_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
+        emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
         return Ok(());
     }
     let mut output = serde_json::to_value(result)?;
     output["run_id"] = serde_json::json!(unified_summary.run_id.clone());
-    if let Some(path) = unified_path.as_ref() { output["run_summary_path"] = serde_json::json!(path); }
+    if let Some(path) = unified_path.as_ref() {
+        output["run_summary_path"] = serde_json::json!(path);
+    }
     if let Ok(Some(log_path)) = &legacy_log_result {
         output["log_path"] = serde_json::json!(log_path);
     }
@@ -16164,25 +19768,17 @@ fn emit_file_sort_event_view(
     event: &FileSortProgressEvent,
     event_value: &serde_json::Value,
 ) {
-    match log_view {
-        "user" => {
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
-            if event.status == "started" {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
-            } else if let Some(stage_elapsed_ms) = event_value["stage_elapsed_ms"].as_u64() {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &format!( "{} 阶段用时 {:.3} 秒。", event.user_message, (stage_elapsed_ms) as f64 / 1000.0)));
-            } else {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(level, &event.user_message));
-            }
-        }
-        "developer" => {
-            if let Ok(line) = serde_json::to_string(event_value) {
-                eprintln!("{line}");
-            }
-        }
-        "off" => {}
-        _ => unreachable!("file-sort log view is validated before execution"),
-    }
+    let current =
+        (event.completed_files > 0).then_some(event.completed_files.min(event.total_files));
+    emit_batch_event_view(
+        log_view,
+        event.total_files,
+        current,
+        &event.status,
+        current.is_none() || matches!(event.status.as_str(), "completed" | "run_finished"),
+        &event.user_message,
+        Some(event_value),
+    );
 }
 
 fn write_file_sort_run_history(
@@ -16369,7 +19965,8 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
     let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("output"));
     let log_dir = log_dir.unwrap_or_else(pytools_core::run_logging::default_log_dir);
     let log_view = file_sort_log_view(log_view)?;
-    let mut unified = UnifiedRunSession::new(&log_dir, "PT-4-10", "取消文件排序前缀", &log_view, None);
+    let mut unified =
+        UnifiedRunSession::new(&log_dir, "PT-4-10", "取消文件排序前缀", &log_view, None);
     unified.set_inputs(&files, Some(files.len()));
     let mut events = Vec::new();
     let mut active_stage = None;
@@ -16379,8 +19976,24 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
         &output_dir,
         |event| {
             let event_value = file_sort_event_with_stage_elapsed(event, &mut active_stage);
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else { pytools_core::run_logging::Level::Info };
-            unified.progress(level, &event.phase, &event.phase, &event.status, &event.user_message, Some(event.elapsed_ms), event.actual_engine.as_deref(), event.error_type.as_ref().map(|error| serde_json::json!({"error_type": error})));
+            let level = if event.status == "failed" {
+                pytools_core::run_logging::Level::Error
+            } else {
+                pytools_core::run_logging::Level::Info
+            };
+            unified.progress(
+                level,
+                &event.phase,
+                &event.phase,
+                &event.status,
+                &event.user_message,
+                Some(event.elapsed_ms),
+                event.actual_engine.as_deref(),
+                event
+                    .error_type
+                    .as_ref()
+                    .map(|error| serde_json::json!({"error_type": error})),
+            );
             if log_view == "developer" {
                 events.push(event_value.clone());
             }
@@ -16399,7 +20012,12 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
         Ok(result) => result,
         Err(error) => {
             unified.mark_inputs_unavailable();
-            unified.operation_failure("file_sort", "FILE_SORT_FAILED", "取消文件排序前缀处理失败", &error);
+            unified.operation_failure(
+                "file_sort",
+                "FILE_SORT_FAILED",
+                "取消文件排序前缀处理失败",
+                &error,
+            );
             let _ = unified.finish(true, false, false, &[], None, None, None);
             return Err(error);
         }
@@ -16408,17 +20026,32 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
     for (index, row) in result.rows.iter().enumerate() {
         let status = match row.status.as_str() {
             "失败" => pytools_core::run_logging::FileStatus::Failed,
-            "未命中" | "跳过：非文件" | "跳过：无匹配排序前缀" => pytools_core::run_logging::FileStatus::Skipped,
+            "未命中" | "跳过：非文件" | "跳过：无匹配排序前缀" => {
+                pytools_core::run_logging::FileStatus::Skipped
+            }
             _ => pytools_core::run_logging::FileStatus::Succeeded,
         };
-        unified.file_result(index + 1, status, !row.status.contains("非文件"), "file_rename", &row.status, (status == pytools_core::run_logging::FileStatus::Failed).then_some("FILE_RENAME_FAILED"), None);
+        unified.file_result(
+            index + 1,
+            status,
+            !row.status.contains("非文件"),
+            "file_rename",
+            &row.status,
+            (status == pytools_core::run_logging::FileStatus::Failed)
+                .then_some("FILE_RENAME_FAILED"),
+            None,
+        );
     }
     let (unified_summary, unified_path) = unified.finish(
         false,
         false,
         result.renamed == 0 && result.failed == 0,
         std::slice::from_ref(&result.output),
-        Some(pytools_core::run_logging::OutputStats { workbooks_saved: Some(1), sheets_saved: None, saved: Some(true) }),
+        Some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(1),
+            sheets_saved: None,
+            saved: Some(true),
+        }),
         None,
         None,
     );
@@ -16436,7 +20069,9 @@ fn run_remove_file_sort_prefix(arguments: Vec<String>, interactive: bool) -> Res
     }
     let mut output = serde_json::to_value(result)?;
     output["run_id"] = serde_json::json!(unified_summary.run_id.clone());
-    if let Some(path) = unified_path.as_ref() { output["run_summary_path"] = serde_json::json!(path); }
+    if let Some(path) = unified_path.as_ref() {
+        output["run_summary_path"] = serde_json::json!(path);
+    }
     if let Ok(Some(log_path)) = &legacy_log_result {
         output["log_path"] = serde_json::json!(log_path);
     }
@@ -16592,22 +20227,45 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             );
         }
     }
-    let mut tracker = RunTracker::with_id("PT-7-6", "工作表数据提取", &source_workbooks, run_id.clone());
+    let mut tracker = RunTracker::with_id(
+        "PT-7-6",
+        "工作表数据提取",
+        &source_workbooks,
+        run_id.clone(),
+    );
     let mut diagnostic = if view == "off" {
         None
     } else {
         match EventWriter::create(&log_dir.join("run-events"), "PT-7-6", &run_id) {
             Ok(writer) => Some(writer),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续")));
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法创建诊断日志：{error}；业务处理继续")
+                    )
+                );
                 None
             }
         }
     };
     if let Some(writer) = diagnostic.as_mut() {
-        let event = tracker.event(Level::Info, "run_started", "run", "started", "开始工作表提取");
+        let event = tracker.event(
+            Level::Info,
+            "run_started",
+            "run",
+            "started",
+            "开始工作表提取",
+        );
         if let Err(error) = writer.write(&event) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}")));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}")
+                )
+            );
         }
     }
     let mut events = Vec::<SummaryRunEvent>::new();
@@ -16649,7 +20307,9 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     .map(|event| event.progress.clone())
                     .unwrap_or_default();
                 let prior_phase = prior.map(|event| event.phase.as_str()).unwrap_or("run");
-                let output_failure = prior_phase.contains("output") || prior_phase.contains("publish") || prior_phase.contains("commit");
+                let output_failure = prior_phase.contains("output")
+                    || prior_phase.contains("publish")
+                    || prior_phase.contains("commit");
                 if output_failure {
                     progress.current_input_index = None;
                     progress.current_sheet = None;
@@ -16658,19 +20318,35 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                 let mut event = SummaryRunEvent {
                     sequence: events.len() + 1,
                     timestamp: Local::now().to_rfc3339(),
-                    phase: if output_failure { "output_write".to_owned() } else { "source_extract".to_owned() },
+                    phase: if output_failure {
+                        "output_write".to_owned()
+                    } else {
+                        "source_extract".to_owned()
+                    },
                     status: "failed".to_owned(),
                     user_message: "工作表提取失败".to_owned(),
                     progress,
-                    file_name: if output_failure { None } else { prior.and_then(|event| event.file_name.clone()) },
+                    file_name: if output_failure {
+                        None
+                    } else {
+                        prior.and_then(|event| event.file_name.clone())
+                    },
                     stage_elapsed_ms: Some(run_started.elapsed().as_millis()),
                     total_elapsed_ms: run_started.elapsed().as_millis(),
                     components: vec!["pytools-core".to_owned()],
                     actual_engine: None,
-                    error_type: Some(if output_failure { "output_write_error" } else { "extraction_failed" }.to_owned()),
+                    error_type: Some(
+                        if output_failure {
+                            "output_write_error"
+                        } else {
+                            "extraction_failed"
+                        }
+                        .to_owned(),
+                    ),
                 };
                 if !output_failure && event.progress.current_input_index.is_none() {
-                    event.progress.current_input_index = prior.and_then(|prior| prior.progress.current_input_index);
+                    event.progress.current_input_index =
+                        prior.and_then(|prior| prior.progress.current_input_index);
                 }
                 record_summary_progress_event(
                     &mut tracker,
@@ -16683,12 +20359,35 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                 );
                 emit_extract_sheets_event(&mut events, view, event);
             }
-            let output_failure = events.iter().rev().find(|event| event.status == "failed").is_some_and(|event| event.phase.contains("output"));
+            let output_failure = events
+                .iter()
+                .rev()
+                .find(|event| event.status == "failed")
+                .is_some_and(|event| event.phase.contains("output"));
             let failed_event = events.iter().rev().find(|event| event.status == "failed");
-            let mut summary = tracker.finish(output_failure, false, false, Vec::new(), diagnostic_path_for_log_view(diagnostic.as_ref(), view));
+            let mut summary = tracker.finish(
+                output_failure,
+                false,
+                false,
+                Vec::new(),
+                diagnostic_path_for_log_view(diagnostic.as_ref(), view),
+            );
             summary.input_stats_available = summary.input_stats.pending == 0;
-            if sheet_stats.discovered > 0 || sheet_stats.attempted > 0 { summary.sheet_stats = Some(sheet_stats.clone()); }
-            summary.output_stats = Some(pytools_core::run_logging::OutputStats { workbooks_saved: if output_failure { None } else { Some(0) }, sheets_saved: if output_failure { None } else { Some(0) }, saved: if output_failure { None } else { Some(false) } });
+            summary
+                .business_metrics
+                .insert("启用配置项数".to_owned(), serde_json::json!(tasks.len()));
+            summary.business_metrics.insert(
+                "失败工作簿数".to_owned(),
+                serde_json::json!(summary.input_stats.failed),
+            );
+            if sheet_stats.discovered > 0 || sheet_stats.attempted > 0 {
+                summary.sheet_stats = Some(sheet_stats.clone());
+            }
+            summary.output_stats = Some(pytools_core::run_logging::OutputStats {
+                workbooks_saved: if output_failure { None } else { Some(0) },
+                sheets_saved: if output_failure { None } else { Some(0) },
+                saved: if output_failure { None } else { Some(false) },
+            });
             if let Some(event) = failed_event {
                 summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
                     stage: event.phase.clone(),
@@ -16699,19 +20398,42 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                 });
             }
             if let Some(writer) = diagnostic.as_mut() {
-                let stage = failed_event.map(|event| event.phase.as_str()).unwrap_or("source_extract");
-                let mut failure = tracker.event(Level::Error, "operation_failed", stage, "failed", "工作表提取未完成；请检查关联文件、工作表和配置行");
+                let stage = failed_event
+                    .map(|event| event.phase.as_str())
+                    .unwrap_or("source_extract");
+                let mut failure = tracker.event(
+                    Level::Error,
+                    "operation_failed",
+                    stage,
+                    "failed",
+                    "工作表提取未完成；请检查关联文件、工作表和配置行",
+                );
                 failure.error_code = Some(summary_event_error_code(
-                    failed_event.and_then(|event| event.error_type.as_deref()), stage,
+                    failed_event.and_then(|event| event.error_type.as_deref()),
+                    stage,
                 ));
                 failure.file_name = failed_event.and_then(|event| event.file_name.clone());
-                failure.sheet_name = failed_event.and_then(|event| event.progress.current_sheet.clone());
-                if view == "developer" { failure.details = Some(serde_json::json!({"error_chain": format!("{error:#}")})); }
+                failure.sheet_name =
+                    failed_event.and_then(|event| event.progress.current_sheet.clone());
+                if view == "developer" {
+                    failure.details =
+                        Some(serde_json::json!({"error_chain": format!("{error:#}")}));
+                }
                 if let Err(write_error) = writer.write(&failure) {
-                    if !log_write_warning_emitted { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{write_error}"))); log_write_warning_emitted = true; }
+                    if !log_write_warning_emitted {
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("诊断日志写入失败：{write_error}")
+                            )
+                        );
+                        log_write_warning_emitted = true;
+                    }
                 }
             }
-            let unified_path = save_unified_run_summary(&tracker, &mut diagnostic, &mut summary, &log_dir, view);
+            let unified_path =
+                save_unified_run_summary(&tracker, &mut diagnostic, &mut summary, &log_dir, view);
             if view != "off" {
                 if let Err(history_error) = save_extract_sheets_run_history(
                     &log_dir,
@@ -16723,28 +20445,29 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     Some("extraction_failed"),
                     &events,
                 ) {
-                    eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存工作表提取记录：{history_error}")));
-                }
-                if interactive && view == "user" {
                     eprintln!(
                         "{}",
                         pytools_core::run_logging::terminal_line(
-                            Level::Error,
-                            &format!(
-                                "工作表提取失败；运行编号 {}{}",
-                                tracker.run_id,
-                                unified_path
-                                    .map(|path| format!(
-                                        "；运行记录 {}",
-                                        pytools_core::run_logging::path_for_log_view(
-                                            &path,
-                                            log_view.as_deref() == Some("developer")
-                                        )
-                                    ))
-                                    .unwrap_or_default()
-                            )
+                            Level::Warn,
+                            &format!("无法保存工作表提取记录：{history_error}")
                         )
                     );
+                }
+                if interactive && view == "user" {
+                    emit_unified_terminal_summary_with_outputs(&summary, &[]);
+                    if let Some(path) = unified_path {
+                        eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Info,
+                                &format!(
+                                    "运行编号 {}；统一记录：{}",
+                                    tracker.run_id,
+                                    pytools_core::run_logging::path_for_log_view(&path, false)
+                                )
+                            )
+                        );
+                    }
                 }
             }
             return Err(error);
@@ -16757,8 +20480,13 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         "succeeded"
     };
     let view = log_view.as_deref().unwrap_or("user");
-    let output_paths = result.paths.iter().map(|path| path_for_log_view(Path::new(path), view)).collect::<Vec<_>>();
-    let no_op = result.output_files == 0 && result.extracted_sheets == 0 && result.failed_files == 0;
+    let output_paths = result
+        .paths
+        .iter()
+        .map(|path| path_for_log_view(Path::new(path), view))
+        .collect::<Vec<_>>();
+    let no_op =
+        result.output_files == 0 && result.extracted_sheets == 0 && result.failed_files == 0;
     let mut unified_summary = tracker.finish(
         false,
         false,
@@ -16775,6 +20503,21 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         sheets_saved: Some(result.extracted_sheets),
         saved: Some(result.output_files > 0),
     });
+    unified_summary
+        .business_metrics
+        .insert("启用配置项数".to_owned(), serde_json::json!(tasks.len()));
+    unified_summary.business_metrics.insert(
+        "输出工作簿数".to_owned(),
+        serde_json::json!(result.output_files),
+    );
+    unified_summary.business_metrics.insert(
+        "提取工作表数".to_owned(),
+        serde_json::json!(result.extracted_sheets),
+    );
+    unified_summary.business_metrics.insert(
+        "失败工作簿数".to_owned(),
+        serde_json::json!(result.failed_files),
+    );
     if result.failed_files > 0 {
         if let Some(event) = events.iter().rev().find(|event| event.status == "failed") {
             unified_summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
@@ -16786,7 +20529,13 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             });
         }
     }
-    let unified_path = save_unified_run_summary(&tracker, &mut diagnostic, &mut unified_summary, &log_dir, view);
+    let unified_path = save_unified_run_summary(
+        &tracker,
+        &mut diagnostic,
+        &mut unified_summary,
+        &log_dir,
+        view,
+    );
     if view != "off" {
         match save_extract_sheets_run_history(
             &log_dir,
@@ -16799,29 +20548,54 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             &events,
         ) {
             Ok(path) if view == "user" => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("工作表提取运行记录已保存：{}", pytools_core::run_logging::path_for_log_view(&path, false))))
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Info,
+                        &format!(
+                            "工作表提取运行记录已保存：{}",
+                            pytools_core::run_logging::path_for_log_view(&path, false)
+                        )
+                    )
+                )
             }
-            Ok(path) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("PT-7-6 run history: {}", display_path_for_user(&path)))),
+            Ok(path) => eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!("PT-7-6 run history: {}", display_path_for_user(&path))
+                )
+            ),
             Err(error) => {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存工作表提取记录：{error}")))
+                eprintln!(
+                    "{}",
+                    pytools_core::run_logging::terminal_line(
+                        Level::Warn,
+                        &format!("无法保存工作表提取记录：{error}")
+                    )
+                )
             }
         }
     }
 
     if interactive && view == "user" {
-        println!("{}", pytools_core::run_logging::terminal_line(
-            if result.failed_files > 0 { Level::Warn } else { Level::Info },
-            &format!("工作表提取结束：选择 {} 个，成功 {} 个，失败 {} 个，输出 {} 个工作簿 / {} 张表",
-                unified_summary.input_stats.selected,
-                unified_summary.input_stats.succeeded,
-                unified_summary.input_stats.failed,
-                result.output_files,
-                result.extracted_sheets)
-        ));
-        for path in &result.paths {
-            println!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("输出：{path}")));
+        emit_unified_terminal_summary_with_outputs(
+            &unified_summary,
+            &result.paths.iter().map(PathBuf::from).collect::<Vec<_>>(),
+        );
+        if let Some(path) = unified_path {
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Info,
+                    &format!(
+                        "运行编号 {}；统一记录：{}",
+                        tracker.run_id,
+                        pytools_core::run_logging::path_for_log_view(&path, view == "developer")
+                    )
+                )
+            );
         }
-        if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, view == "developer")))); }
     } else {
         let mut output = serde_json::to_value(&result)?;
         if view != "off" {
@@ -16903,30 +20677,37 @@ fn record_summary_progress_event(
             | "file_process"
     );
     if input_scoped_phase {
-      if let Some(index) = event.progress.current_input_index {
-        let current = tracker.state(index);
-        let next = match event.status.as_str() {
-            "started" | "running" if current == Some(FileStatus::Pending) => {
-                Some(FileStatus::InProgress)
+        if let Some(index) = event.progress.current_input_index {
+            let current = tracker.state(index);
+            let next = match event.status.as_str() {
+                "started" | "running" if current == Some(FileStatus::Pending) => {
+                    Some(FileStatus::InProgress)
+                }
+                "failed"
+                    if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) =>
+                {
+                    Some(FileStatus::Failed)
+                }
+                "skipped"
+                    if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) =>
+                {
+                    Some(FileStatus::Skipped)
+                }
+                "succeeded"
+                    if event.phase == terminal_success_phase
+                        && matches!(
+                            current,
+                            Some(FileStatus::Pending | FileStatus::InProgress)
+                        ) =>
+                {
+                    Some(FileStatus::Succeeded)
+                }
+                _ => None,
+            };
+            if let Some(next) = next {
+                let _ = tracker.transition(index, next);
             }
-            "failed" if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) => {
-                Some(FileStatus::Failed)
-            }
-            "skipped" if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) => {
-                Some(FileStatus::Skipped)
-            }
-            "succeeded"
-                if event.phase == terminal_success_phase
-                    && matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) =>
-            {
-                Some(FileStatus::Succeeded)
-            }
-            _ => None,
-        };
-        if let Some(next) = next {
-            let _ = tracker.transition(index, next);
         }
-      }
     }
 
     let Some(writer) = writer else { return };
@@ -16958,7 +20739,10 @@ fn record_summary_progress_event(
     record.engine = event.actual_engine.clone();
     record.elapsed_ms = event.stage_elapsed_ms;
     if event.status == "failed" {
-        record.error_code = Some(summary_event_error_code(event.error_type.as_deref(), &event.phase));
+        record.error_code = Some(summary_event_error_code(
+            event.error_type.as_deref(),
+            &event.phase,
+        ));
     }
     if let Err(error) = writer.write(&record) {
         if !*log_write_warning_emitted {
@@ -16979,7 +20763,12 @@ fn record_summary_progress_event(
 /// 承载真正的业务失败点（如“模板缺少表头区域_N”“缺少汇总区域”等）。
 /// 返回 (error_type, 用户可读根因说明)。
 fn classify_named_range_failure(error_chain: &str) -> (&'static str, String) {
-    let root = error_chain.lines().map(str::trim).rev().find(|line| !line.is_empty()).unwrap_or_default();
+    let root = error_chain
+        .lines()
+        .map(str::trim)
+        .rev()
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
     let matched = |needle: &str| root.contains(needle) || error_chain.contains(needle);
     // 按业务检查点从细到粗匹配；root 优先，避免被外层上下文抢走。
     if root.contains("has no 表头区域") {
@@ -16992,19 +20781,26 @@ fn classify_named_range_failure(error_chain: &str) -> (&'static str, String) {
         return ("missing_summary_region", root.to_owned());
     }
     if root.contains("没有相交的表头区域") {
-        return ("summary_region_without_header_intersection", root.to_owned());
+        return (
+            "summary_region_without_header_intersection",
+            root.to_owned(),
+        );
     }
     if matched("模板中没有可用命名区域") {
         return (
             "template_has_no_named_regions",
-            "模板中没有可用命名区域；请配置 表头区域_N 与 固定行汇总区域_N 或 任意行汇总区域_N".to_owned(),
+            "模板中没有可用命名区域；请配置 表头区域_N 与 固定行汇总区域_N 或 任意行汇总区域_N"
+                .to_owned(),
         );
     }
     if root.contains("模板工作表") && root.contains("不存在") {
         return ("template_sheet_missing", root.to_owned());
     }
     if matched("named-range summary template must be") {
-        return ("template_format_error", "命名区域模板只支持 XLSX/XLSM".to_owned());
+        return (
+            "template_format_error",
+            "命名区域模板只支持 XLSX/XLSM".to_owned(),
+        );
     }
     if matched("没有可汇总的源工作簿") {
         return (
@@ -17013,7 +20809,10 @@ fn classify_named_range_failure(error_chain: &str) -> (&'static str, String) {
         );
     }
     if root.is_empty() {
-        ("summary_error", "汇总失败；请查看诊断日志了解失败阶段".to_owned())
+        (
+            "summary_error",
+            "汇总失败；请查看诊断日志了解失败阶段".to_owned(),
+        )
     } else {
         ("summary_error", root.to_owned())
     }
@@ -17052,9 +20851,12 @@ fn save_unified_run_summary(
     if log_view == "off" {
         return None;
     }
-    let diagnostic_path = writer
-        .as_ref()
-        .map(|event_writer| pytools_core::run_logging::diagnostic_path_for_log_view(event_writer.path(), log_view == "developer"));
+    let diagnostic_path = writer.as_ref().map(|event_writer| {
+        pytools_core::run_logging::diagnostic_path_for_log_view(
+            event_writer.path(),
+            log_view == "developer",
+        )
+    });
     summary.diagnostic_log_path = diagnostic_path;
     if let Some(writer) = writer.as_mut() {
         let status = format!("{:?}", summary.overall_status);
@@ -17063,7 +20865,13 @@ fn save_unified_run_summary(
             TaskStatus::PartialSuccess | TaskStatus::Cancelled => Level::Warn,
             TaskStatus::Success | TaskStatus::NoOp => Level::Info,
         };
-        let event = tracker.event(level, "run_finished", "run", &status, format!("{}结束", tracker.feature_name));
+        let event = tracker.event(
+            level,
+            "run_finished",
+            "run",
+            &status,
+            format!("{}结束", tracker.feature_name),
+        );
         if let Err(error) = writer.write(&event) {
             eprintln!(
                 "{}",
@@ -17154,8 +20962,12 @@ fn save_extract_sheets_run_history(
         "events": events,
     });
     let path = log_dir.join(format!("PT-7-6_{run_id}.run.json"));
-    fs::write(&path, serde_json::to_vec_pretty(&history)?)
-        .with_context(|| format!("write worksheet extraction run history {}", display_path_for_user(&path)))?;
+    fs::write(&path, serde_json::to_vec_pretty(&history)?).with_context(|| {
+        format!(
+            "write worksheet extraction run history {}",
+            display_path_for_user(&path)
+        )
+    })?;
     Ok(path)
 }
 
@@ -17205,10 +21017,12 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
     }
 
     let global = match config_path.as_ref() {
-        Some(path) => Some(
-            load_global(path)
-                .with_context(|| format!("load global configuration from {}", display_path_for_user(&path)))?,
-        ),
+        Some(path) => Some(load_global(path).with_context(|| {
+            format!(
+                "load global configuration from {}",
+                display_path_for_user(&path)
+            )
+        })?),
         None => None,
     };
     let output_dir = output_dir
@@ -17218,17 +21032,15 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         .or_else(|| global.as_ref().map(|config| config.log_dir.clone()))
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
 
-    use pytools_core::run_logging::{EventWriter, Level, RecordStats, RunTracker};
+    use pytools_core::run_logging::{EventWriter, Level, RunTracker};
     let mut events = Vec::new();
     let mut tracker = None::<RunTracker>;
     let mut diagnostic = None::<EventWriter>;
     let mut sheet_stats = pytools_core::run_logging::SheetStats::default();
     let mut log_write_warning_emitted = false;
-    let operation_result = run_region_sum_check_with_progress(
-        &source_workbooks,
-        &output_dir,
-        &log_dir,
-        |event| {
+    let source_labels = pytools_core::run_logging::disambiguated_file_names(&source_workbooks);
+    let operation_result =
+        run_region_sum_check_with_progress(&source_workbooks, &output_dir, &log_dir, |event| {
             if tracker.is_none() {
                 tracker = Some(RunTracker::with_id(
                     "PT-7-5",
@@ -17237,13 +21049,22 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     event.run_id.clone(),
                 ));
                 if view != "off" {
-                    match EventWriter::create(&log_dir.join("run-events"), "PT-7-5", &event.run_id) {
+                    match EventWriter::create(&log_dir.join("run-events"), "PT-7-5", &event.run_id)
+                    {
                         Ok(writer) => diagnostic = Some(writer),
-                        Err(error) => eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法创建诊断日志：{error}；业务处理继续"))),
+                        Err(error) => eprintln!(
+                            "{}",
+                            pytools_core::run_logging::terminal_line(
+                                Level::Warn,
+                                &format!("无法创建诊断日志：{error}；业务处理继续")
+                            )
+                        ),
                     }
                 }
             }
-            let Some(tracker) = tracker.as_mut() else { return };
+            let Some(tracker) = tracker.as_mut() else {
+                return;
+            };
             record_region_sum_progress_event(
                 tracker,
                 diagnostic.as_mut(),
@@ -17252,26 +21073,39 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
                 &mut sheet_stats,
                 &mut log_write_warning_emitted,
             );
-            emit_region_sum_event(view, &event);
+            emit_region_sum_event(view, &event, &source_labels);
             events.push(event);
-        },
-    );
-    let tracker = tracker.unwrap_or_else(|| RunTracker::new("PT-7-5", "地区总分校验", &source_workbooks));
+        });
+    let tracker =
+        tracker.unwrap_or_else(|| RunTracker::new("PT-7-5", "地区总分校验", &source_workbooks));
     if view != "off" {
         if let Err(error) = write_region_sum_run_history(&log_dir, &events, &operation_result) {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("无法保存地区总分校验记录：{error}")));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("无法保存地区总分校验记录：{error}")
+                )
+            );
         }
     }
     let failed_event = events.iter().rev().find(|event| event.status == "failed");
     let critical_failure = operation_result.is_err()
-        && failed_event.is_some_and(|event| matches!(event.phase.as_str(), "output_setup" | "report_write" | "log_setup"));
+        && failed_event.is_some_and(|event| {
+            matches!(
+                event.phase.as_str(),
+                "output_setup" | "report_write" | "log_setup"
+            )
+        });
     let paths = operation_result
         .as_ref()
         .ok()
         .and_then(|result| result.path.as_ref())
         .map(|path| vec![path_for_log_view(path, view)])
         .unwrap_or_default();
-    let no_op = operation_result.as_ref().is_ok_and(|result| result.sheets == 0 && result.errors == 0);
+    let no_op = operation_result
+        .as_ref()
+        .is_ok_and(|result| result.sheets == 0 && result.errors == 0);
     let mut unified_summary = tracker.finish(
         critical_failure,
         false,
@@ -17284,15 +21118,27 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         unified_summary.sheet_stats = Some(sheet_stats);
     }
     if let Ok(result) = &operation_result {
-        unified_summary.record_stats = Some(RecordStats {
-            rows_processed: Some(result.sheets),
-            rows_written: Some(result.sheets),
-        });
+        unified_summary
+            .business_metrics
+            .insert("核对工作表数".to_owned(), serde_json::json!(result.sheets));
+        unified_summary
+            .business_metrics
+            .insert("发现差异数".to_owned(), serde_json::json!(result.errors));
+        unified_summary.business_metrics.insert(
+            "失败工作簿数".to_owned(),
+            serde_json::json!(result.failed_files),
+        );
         unified_summary.output_stats = Some(pytools_core::run_logging::OutputStats {
             workbooks_saved: Some(if result.path.is_some() { 1 } else { 0 }),
-            sheets_saved: result.path.as_ref().map(|_| 1),
+            sheets_saved: None,
             saved: Some(result.path.is_some()),
         });
+        if result.errors > 0 {
+            unified_summary.business_issues.push(
+                pytools_core::run_logging::BusinessIssue::new("地区总分校验", "校验发现不一致项")
+                    .count(result.errors),
+            );
+        }
     } else {
         unified_summary.output_stats = Some(pytools_core::run_logging::OutputStats {
             workbooks_saved: None,
@@ -17304,25 +21150,52 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
         unified_summary.error_summary = Some(pytools_core::run_logging::ErrorSummary {
             stage: event.phase.clone(),
             code: summary_event_error_code(event.error_type.as_deref(), &event.phase),
-            message: "地区总分校验未完成；请检查输入工作簿和结果目录".to_owned(),
-            file_name: event.input_index.and_then(|index| index.checked_sub(1)).and_then(|index| source_workbooks.get(index)).map(|path| pytools_core::run_logging::portable_file_name(path)),
+            message: event.user_message.clone(),
+            file_name: event
+                .input_index
+                .and_then(|index| index.checked_sub(1))
+                .and_then(|index| source_labels.get(index))
+                .cloned(),
             sheet_name: None,
         });
     }
-    let unified_path = save_unified_run_summary(&tracker, &mut diagnostic, &mut unified_summary, &log_dir, view);
+    let unified_path = save_unified_run_summary(
+        &tracker,
+        &mut diagnostic,
+        &mut unified_summary,
+        &log_dir,
+        view,
+    );
     match operation_result {
         Ok(result) => {
-            let path = result.path.as_ref().map(|path| path.to_string_lossy().into_owned());
             if interactive && view == "user" {
-                println!("{}", pytools_core::run_logging::terminal_line(
-                    if result.failed_files > 0 { Level::Warn } else { Level::Info },
-                    &format!("地区总分校验结束：成功 {} 个，失败 {} 个，核对 {} 张工作表，发现 {} 项差异{}",
-                        unified_summary.input_stats.succeeded, unified_summary.input_stats.failed,
-                        result.sheets, result.errors,
-                        path.as_deref().map(|path| format!("；报表 {path}")).unwrap_or_default())
-                ));
-                if let Some(path) = unified_path { eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Info, &format!("运行编号 {}；统一记录：{}", tracker.run_id, pytools_core::run_logging::path_for_log_view(&path, view == "developer")))); }
+                let outputs = result
+                    .path
+                    .as_ref()
+                    .map(std::slice::from_ref)
+                    .unwrap_or(&[]);
+                emit_unified_terminal_summary_with_outputs(&unified_summary, outputs);
+                if let Some(path) = unified_path {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行编号 {}；统一记录：{}",
+                                tracker.run_id,
+                                pytools_core::run_logging::path_for_log_view(
+                                    &path,
+                                    view == "developer"
+                                )
+                            )
+                        )
+                    );
+                }
             } else {
+                let path = result
+                    .path
+                    .as_ref()
+                    .map(|path| path.to_string_lossy().into_owned());
                 let mut output = serde_json::json!({
                     "files": result.files,
                     "sheets": result.sheets,
@@ -17332,14 +21205,29 @@ fn run_region_sum(arguments: Vec<String>, interactive: bool) -> Result<()> {
                     "log_path": result.log_path.to_string_lossy(),
                     "run_id": tracker.run_id,
                 });
-                if let Some(path) = unified_path { output["run_summary_path"] = serde_json::json!(path); }
+                if let Some(path) = unified_path {
+                    output["run_summary_path"] = serde_json::json!(path);
+                }
                 println!("{}", serde_json::to_string_pretty(&output)?);
             }
             Ok(())
         }
         Err(error) => {
             if view == "user" {
-                eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Error, &format!("地区总分校验失败；运行编号 {}{}", tracker.run_id, unified_path.map(|path| format!("；诊断记录 {}", pytools_core::run_logging::path_for_log_view(&path, false))).unwrap_or_default())));
+                emit_unified_terminal_summary_with_outputs(&unified_summary, &[]);
+                if let Some(path) = unified_path {
+                    eprintln!(
+                        "{}",
+                        pytools_core::run_logging::terminal_line(
+                            Level::Info,
+                            &format!(
+                                "运行编号 {}；统一记录：{}",
+                                tracker.run_id,
+                                pytools_core::run_logging::path_for_log_view(&path, false)
+                            )
+                        )
+                    );
+                }
             }
             Err(error)
         }
@@ -17363,12 +21251,24 @@ fn record_region_sum_progress_event(
     if let Some(index) = event.input_index {
         let current = tracker.state(index);
         let next = match (event.phase.as_str(), event.status.as_str()) {
-            ("workbook_read", "started") if current == Some(FileStatus::Pending) => Some(FileStatus::InProgress),
-            ("input_validation" | "workbook_read", "failed") if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) => Some(FileStatus::Failed),
-            ("region_check", "completed") if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) => Some(FileStatus::Succeeded),
+            ("workbook_read", "started") if current == Some(FileStatus::Pending) => {
+                Some(FileStatus::InProgress)
+            }
+            ("input_validation" | "workbook_read", "failed")
+                if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) =>
+            {
+                Some(FileStatus::Failed)
+            }
+            ("region_check", "completed")
+                if matches!(current, Some(FileStatus::Pending | FileStatus::InProgress)) =>
+            {
+                Some(FileStatus::Succeeded)
+            }
             _ => None,
         };
-        if let Some(next) = next { let _ = tracker.transition(index, next); }
+        if let Some(next) = next {
+            let _ = tracker.transition(index, next);
+        }
     }
 
     let Some(writer) = writer else { return };
@@ -17381,7 +21281,8 @@ fn record_region_sum_progress_event(
     let mut record = tracker.event(level, &event.phase, &event.phase, &event.status, message);
     record.timestamp = event.timestamp.clone();
     record.file_index = event.input_index;
-    record.file_name = event.input_index
+    record.file_name = event
+        .input_index
         .and_then(|index| index.checked_sub(1))
         .and_then(|index| inputs.get(index))
         .map(|path| pytools_core::run_logging::portable_file_name(path));
@@ -17389,33 +21290,85 @@ fn record_region_sum_progress_event(
     record.engine = event.actual_engine.clone();
     record.elapsed_ms = event.stage_elapsed_ms;
     if event.status == "failed" {
-        record.error_code = Some(summary_event_error_code(event.error_type.as_deref(), &event.phase));
+        record.error_code = Some(summary_event_error_code(
+            event.error_type.as_deref(),
+            &event.phase,
+        ));
     }
     if let Err(error) = writer.write(&record) {
         if !*log_write_warning_emitted {
-            eprintln!("{}", pytools_core::run_logging::terminal_line(Level::Warn, &format!("诊断日志写入失败：{error}；业务处理继续")));
+            eprintln!(
+                "{}",
+                pytools_core::run_logging::terminal_line(
+                    Level::Warn,
+                    &format!("诊断日志写入失败：{error}；业务处理继续")
+                )
+            );
             *log_write_warning_emitted = true;
         }
     }
 }
 
-fn emit_region_sum_event(log_view: &str, event: &RegionSumRunEvent) {
+fn emit_region_sum_event(log_view: &str, event: &RegionSumRunEvent, file_labels: &[String]) {
     match log_view {
         "user" => {
-            let level = if event.status == "failed" { pytools_core::run_logging::Level::Error } else if matches!(event.status.as_str(), "skipped" | "warning") { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info };
-            // 失败阶段给可读结论（阶段名+指引），成功阶段保留事件原消息。
-            let message = if event.status == "failed" { format!("地区总分校验阶段 {} 失败；请检查对应工作簿", event.phase) } else { event.user_message.clone() };
-            eprintln!("{}", pytools_core::run_logging::terminal_line(level, &message));
+            use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy};
+            let total = event.progress.total_files;
+            let current = event.input_index;
+            let mut message = event.user_message.clone();
+            if let (Some(index), Some(original_name)) = (current, event.workbook_name.as_deref()) {
+                if let Some(label) = index
+                    .checked_sub(1)
+                    .and_then(|index| file_labels.get(index))
+                {
+                    message = message.replace(original_name, label);
+                }
+            }
+            if event.status == "failed" {
+                message = format!("地区总分校验阶段 {} 失败：{message}", event.phase);
+            }
+            let phase_change = matches!(
+                event.phase.as_str(),
+                "run" | "output_setup" | "report_write" | "log_setup"
+            );
+            let policy = BatchLogPolicy::new(total);
+            let kind = if event.status == "failed" {
+                BatchEventKind::Failure
+            } else if matches!(event.status.as_str(), "warning" | "skipped") {
+                BatchEventKind::BusinessIssue
+            } else if phase_change {
+                BatchEventKind::PhaseChange
+            } else {
+                BatchEventKind::Routine
+            };
+            // Large batches show one checkpoint per group of files. Per-sheet
+            // business findings and every failure remain visible.
+            if total > 8 && kind == BatchEventKind::Routine && event.phase != "region_check" {
+                return;
+            }
+            if policy.should_emit(current, kind) {
+                emit_batch_event_view(
+                    "user",
+                    total,
+                    current,
+                    &event.status,
+                    phase_change,
+                    &message,
+                    None,
+                );
+            }
         }
         "developer" => {
             let mut safe = event.clone();
-            if safe.status == "failed" { safe.user_message = format!("地区总分校验阶段 {} 失败", safe.phase); }
+            if safe.status == "failed" {
+                safe.user_message = format!("地区总分校验阶段 {} 失败", safe.phase);
+            }
             match serde_json::to_string(&safe) {
-            Ok(encoded) => eprintln!("{encoded}"),
-            Err(_) => eprintln!(
-                "{{\"feature_id\":\"PT-7-5\",\"phase\":\"{}\",\"status\":\"{}\"}}",
-                event.phase, event.status
-            ),
+                Ok(encoded) => eprintln!("{encoded}"),
+                Err(_) => eprintln!(
+                    "{{\"feature_id\":\"PT-7-5\",\"phase\":\"{}\",\"status\":\"{}\"}}",
+                    event.phase, event.status
+                ),
             }
         }
         "off" => {}
@@ -17463,8 +21416,12 @@ fn write_region_sum_run_history(
         "failure_type": events.iter().rev().find(|event| event.status == "failed").and_then(|event| event.error_type.clone()),
         "events": events,
     });
-    fs::create_dir_all(log_dir)
-        .with_context(|| format!("create PT-7-5 history directory {}", display_path_for_user(&log_dir)))?;
+    fs::create_dir_all(log_dir).with_context(|| {
+        format!(
+            "create PT-7-5 history directory {}",
+            display_path_for_user(&log_dir)
+        )
+    })?;
     let path = log_dir.join(format!("PT-7-5_{}.run.json", first.run_id));
     fs::write(&path, serde_json::to_vec_pretty(&history)?)
         .with_context(|| format!("write PT-7-5 run history {}", display_path_for_user(&path)))?;
@@ -17566,11 +21523,19 @@ mod wide_summary_path_tests {
 mod unified_run_session_tests {
     use super::UnifiedRunSession;
     use pytools_core::run_logging::{FileStatus, OutputStats, TaskStatus};
-    use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn temporary_directory(label: &str) -> PathBuf {
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path = std::env::temp_dir().join(format!("pytools-{label}-{}-{nonce}", std::process::id()));
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("pytools-{label}-{}-{nonce}", std::process::id()));
         fs::create_dir_all(&path).unwrap();
         path
     }
@@ -17579,22 +21544,46 @@ mod unified_run_session_tests {
     fn user_run_summary_correlates_file_results_and_hides_absolute_paths() {
         let root = temporary_directory("user-run-log");
         let mut session = UnifiedRunSession::new(&root, "PT-TEST", "日志适配器测试", "user", None);
-        let inputs = [PathBuf::from(r"C:\业务\机构甲.xlsx"), PathBuf::from(r"C:\业务\机构乙.xlsx")];
+        let inputs = [
+            PathBuf::from(r"C:\业务\机构甲.xlsx"),
+            PathBuf::from(r"C:\业务\机构乙.xlsx"),
+        ];
         session.set_inputs(&inputs, Some(2));
-        session.file_result(1, FileStatus::Succeeded, true, "read_and_write", "文件处理完成", None, None);
-        session.file_result(2, FileStatus::Skipped, true, "selection", "文件不符合筛选条件", None, None);
+        session.file_result(
+            1,
+            FileStatus::Succeeded,
+            true,
+            "read_and_write",
+            "文件处理完成",
+            None,
+            None,
+        );
+        session.file_result(
+            2,
+            FileStatus::Skipped,
+            true,
+            "selection",
+            "文件不符合筛选条件",
+            None,
+            None,
+        );
         let output = PathBuf::from(r"C:\业务输出\汇总.xlsx");
         let (summary, summary_path) = session.finish(
             false,
             false,
             false,
             std::slice::from_ref(&output),
-            Some(OutputStats { workbooks_saved: Some(1), sheets_saved: None, saved: Some(true) }),
+            Some(OutputStats {
+                workbooks_saved: Some(1),
+                sheets_saved: None,
+                saved: Some(true),
+            }),
             None,
             None,
         );
         let summary_path = summary_path.unwrap();
-        let persisted: serde_json::Value = serde_json::from_slice(&fs::read(summary_path).unwrap()).unwrap();
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(summary_path).unwrap()).unwrap();
         assert_eq!(summary.overall_status, TaskStatus::Success);
         assert_eq!(persisted["run_id"], summary.run_id);
         assert_eq!(persisted["input_stats"]["selected"], 2);
@@ -17602,7 +21591,12 @@ mod unified_run_session_tests {
         assert_eq!(persisted["input_stats"]["succeeded"], 1);
         assert_eq!(persisted["input_stats"]["skipped"], 1);
         assert_eq!(persisted["output_paths"][0], "汇总.xlsx");
-        assert!(persisted.get("diagnostic_log_path").unwrap().as_str().unwrap().ends_with(".jsonl"));
+        assert!(persisted
+            .get("diagnostic_log_path")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .ends_with(".jsonl"));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -17610,19 +21604,36 @@ mod unified_run_session_tests {
     fn developer_run_log_keeps_the_error_chain_and_failed_stage() {
         let root = temporary_directory("developer-run-log");
         let input = PathBuf::from(r"C:\业务\机构甲.xlsx");
-        let mut session = UnifiedRunSession::new(&root, "PT-TEST", "日志适配器测试", "developer", None);
+        let mut session =
+            UnifiedRunSession::new(&root, "PT-TEST", "日志适配器测试", "developer", None);
         session.set_inputs(std::slice::from_ref(&input), Some(1));
         let error = anyhow::anyhow!("reader failed: invalid workbook");
-        session.operation_failure("workbook_read", "EXCEL_READ_FAILED", "工作簿读取失败", &error);
+        session.operation_failure(
+            "workbook_read",
+            "EXCEL_READ_FAILED",
+            "工作簿读取失败",
+            &error,
+        );
         let (summary, summary_path) = session.finish(true, false, false, &[], None, None, None);
         let summary_path = summary_path.unwrap();
         assert_eq!(summary.overall_status, TaskStatus::Failed);
-        let event_path = root.join("run-events").join(format!("PT-TEST_{}.jsonl", summary.run_id));
+        let event_path = root
+            .join("run-events")
+            .join(format!("PT-TEST_{}.jsonl", summary.run_id));
         let content = fs::read_to_string(event_path).unwrap();
-        let events = content.lines().map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap()).collect::<Vec<_>>();
-        let failed = events.iter().find(|event| event["event_name"] == "operation_failed").unwrap();
+        let events = content
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        let failed = events
+            .iter()
+            .find(|event| event["event_name"] == "operation_failed")
+            .unwrap();
         assert_eq!(failed["stage"], "workbook_read");
-        assert_eq!(failed["details"]["error_chain"], "reader failed: invalid workbook");
+        assert_eq!(
+            failed["details"]["error_chain"],
+            "reader failed: invalid workbook"
+        );
         assert!(summary_path.exists());
         let _ = fs::remove_dir_all(root);
     }

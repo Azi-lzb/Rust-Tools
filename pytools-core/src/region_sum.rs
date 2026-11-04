@@ -363,14 +363,18 @@ where
                 &mut log,
                 log_stamp,
                 "ERROR",
-                &format!(
-                    "打开失败: {file_name} - unsupported workbook extension"
-                ),
+                &format!("打开失败: {file_name} - unsupported workbook extension"),
             );
             emitter.emit(
                 "input_validation",
                 "failed",
-                format!("第 {input_index} 个工作簿格式不受支持，已跳过"),
+                format!(
+                    "第 {input_index} 个工作簿格式不受支持：仅支持 .xlsx，实际扩展名为 {}",
+                    source
+                        .extension()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or("未知")
+                ),
                 Some(input_index),
                 None,
                 &[],
@@ -401,16 +405,14 @@ where
                 emitter.progress.failed_files += 1;
                 let error_message = format!("打开失败: {file_name} - {error:#}")
                     .replace(&source.display().to_string(), &file_name);
-                write_log(
-                    &mut log,
-                    log_stamp,
-                    "ERROR",
-                    &error_message,
-                );
+                write_log(&mut log, log_stamp, "ERROR", &error_message);
                 emitter.emit(
                     "workbook_read",
                     "failed",
-                    format!("第 {input_index} 个工作簿读取失败，已跳过"),
+                    format!(
+                        "第 {input_index} 个工作簿读取失败：{}",
+                        format!("{error:#}").replace(&source.display().to_string(), &file_name)
+                    ),
                     Some(input_index),
                     Some(read_started.elapsed()),
                     &["calamine"],
@@ -467,7 +469,11 @@ where
             ));
             emitter.emit(
                 "sheet_check",
-                if sheet_error_count > 0 { "warning" } else { "completed" },
+                if sheet_error_count > 0 {
+                    "warning"
+                } else {
+                    "completed"
+                },
                 format!("分地区总分核对完成：发现 {sheet_error_count} 处差异"),
                 Some(input_index),
                 Some(sheet_started.elapsed()),
@@ -496,6 +502,11 @@ where
             None,
         );
     }
+
+    // File context must not leak into the shared report-writing/task-summary
+    // events after the last selected workbook has been processed.
+    emitter.current_workbook_name = None;
+    emitter.current_worksheet_name = None;
 
     emitter.emit(
         "report_write",

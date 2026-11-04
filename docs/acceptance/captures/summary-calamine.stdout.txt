@@ -1,0 +1,21 @@
+[2026-11-04 22:02:24] [INFO] 开始按使用区域汇总：1 个输入，1 个可用工作簿
+[2026-11-04 22:02:24] [INFO] 工作簿「formula-output.xlsx」：工作簿汇总完成 [1/1]：formula-output.xlsx
+[2026-11-04 22:02:24] [INFO] 正在保存汇总工作簿
+[2026-11-04 22:02:24] [INFO] 按使用区域汇总完成：1 个工作簿，3 行
+[2026-11-04 22:02:24] [INFO] 运行记录已保存：PT-6-1_pytools-pt-6-1-25408-1793800944472217000.json
+{
+  "execution": {
+    "ooxml_error_cells_patched": 0,
+    "read_elapsed_ms": 7,
+    "reader_engine": "calamine",
+    "total_elapsed_ms": 29,
+    "write_elapsed_ms": 15,
+    "writer_engine": "rust_xlsxwriter"
+  },
+  "files": 1,
+  "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\RustTools-COM-formula-26bed446ead746a3b806c99f0ec7b821\\calamine-output\\20261104_220224_按使用区域汇总（全量）.xlsx",
+  "rows": 3,
+  "run_id": "pytools-pt-6-1-25408-1793800944472217000",
+  "run_log_path": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\PT-6-1_pytools-pt-6-1-25408-1793800944472217000.json",
+  "saved": true
+}

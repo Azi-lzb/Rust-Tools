@@ -37,12 +37,7 @@ fn unique_temp_dir(label: &str) -> PathBuf {
     path
 }
 
-fn add_sheet(
-    workbook: &mut Workbook,
-    name: &str,
-    headers: &[&str],
-    rows: &[Vec<ConfigCell>],
-) {
+fn add_sheet(workbook: &mut Workbook, name: &str, headers: &[&str], rows: &[Vec<ConfigCell>]) {
     let sheet = workbook.add_worksheet();
     sheet.set_name(name).expect("sheet name");
     for (column, header) in headers.iter().enumerate() {
@@ -149,11 +144,32 @@ fn loaders_accept_the_real_config_workbook_schema() -> Result<()> {
                 "",
                 "",
             ]),
-            text_row(&["N", "停用规则", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]),
+            text_row(&[
+                "N",
+                "停用规则",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ]),
         ],
     );
     // Excel 数值 1 与文本 "1" 都应开启目标写入。
-    workbook.worksheet_from_name("时序提取规则")?.write_number(1, 15, 1.0)?;
+    workbook
+        .worksheet_from_name("时序提取规则")?
+        .write_number(1, 15, 1.0)?;
 
     // 路径标准化映射：真实表 10 列（含备注），可带末尾空列。
     add_sheet(
@@ -379,7 +395,14 @@ fn loaders_accept_the_real_config_workbook_schema() -> Result<()> {
             "排除归档的后缀",
         ],
         &[
-            text_row(&["Y", "测试：_金融", "测试：_金融", "更具体的关键词放前面", "", ""]),
+            text_row(&[
+                "Y",
+                "测试：_金融",
+                "测试：_金融",
+                "更具体的关键词放前面",
+                "",
+                "",
+            ]),
             text_row(&["N", "停用类型", "停用类型", "", "", ""]),
         ],
     );
@@ -438,7 +461,10 @@ fn loaders_accept_the_real_config_workbook_schema() -> Result<()> {
     assert_eq!(rule.col_header_rows, [38, 39], "列表头行 38,39 splits");
     assert_eq!(rule.data_row_start, 40);
     assert!(rule.target_write_enabled, "启用目标写入 1 is truthy");
-    assert!(!rule.output_row_no, "real 18-col sheet has no 行序号 column");
+    assert!(
+        !rule.output_row_no,
+        "real 18-col sheet has no 行序号 column"
+    );
     assert_eq!(
         rule.target_wb_path.as_deref(),
         Some(absolute_target.as_path())
@@ -458,9 +484,15 @@ fn loaders_accept_the_real_config_workbook_schema() -> Result<()> {
     assert!(tasks[0].enabled);
     assert!(!tasks[1].enabled);
     assert!(tasks[0].task_name.is_empty(), "real sheet has no 任务名");
-    assert!(tasks[0].write_mode.is_empty(), "执行模式 is not a 写入方式 alias");
+    assert!(
+        tasks[0].write_mode.is_empty(),
+        "执行模式 is not a 写入方式 alias"
+    );
     assert_eq!(tasks[0].key_cols, [3, 4], "复合键 3;4 parses");
-    assert_eq!(tasks[0].source_wb.as_deref(), Some(absolute_source.as_path()));
+    assert_eq!(
+        tasks[0].source_wb.as_deref(),
+        Some(absolute_source.as_path())
+    );
 
     // 打印任务：文本打印模式、数字布尔、打印区域。
     let prints = load_print_tasks(&config_path)?;
@@ -477,7 +509,10 @@ fn loaders_accept_the_real_config_workbook_schema() -> Result<()> {
     assert!(foreign.contains("示范外资银行"));
     let ordered = load_institution_mapping_ordered(&config_path)?;
     assert_eq!(ordered.len(), 3);
-    assert_eq!(ordered[0], ("测试银行甲".to_owned(), "测试银行甲".to_owned()));
+    assert_eq!(
+        ordered[0],
+        ("测试银行甲".to_owned(), "测试银行甲".to_owned())
+    );
 
     // 工作表提取：Y 行加载、多区域分号保留、无 目标工作表 列 → 留空。
     let extracts = load_extract_tasks(&config_path)?;

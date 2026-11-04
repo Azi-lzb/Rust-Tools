@@ -1,5 +1,6 @@
 //! Plan serialization and evidence-gated ExcelModifier execution.
 
+use crate::file_commit::TargetCommitReport;
 use anyhow::{Context, Result};
 use excel_editor::{
     BackendCapability, EditBackend, EditExecutionReport, EditOperation, EngineId, ExcelEditPlan,
@@ -7,7 +8,6 @@ use excel_editor::{
     UmyaXlsxBackend, UmyaXlsxValidator,
 };
 use serde::Deserialize;
-use crate::file_commit::TargetCommitReport;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -80,9 +80,8 @@ pub fn apply_plan_in_place(
         Ok(commit) => commit,
         Err(error) => {
             let _ = fs::remove_file(&candidate);
-            return Err(error).with_context(|| {
-                format!("就地提交修改结果到 {} 失败", target.display())
-            });
+            return Err(error)
+                .with_context(|| format!("就地提交修改结果到 {} 失败", target.display()));
         }
     };
     let _ = fs::remove_file(&candidate);
@@ -105,7 +104,10 @@ fn unique_in_place_candidate(target: &Path) -> Result<PathBuf> {
             return Ok(candidate);
         }
     }
-    anyhow::bail!("cannot allocate an in-place candidate beside {}", target.display())
+    anyhow::bail!(
+        "cannot allocate an in-place candidate beside {}",
+        target.display()
+    )
 }
 
 pub fn apply_plan_with_capability_file(

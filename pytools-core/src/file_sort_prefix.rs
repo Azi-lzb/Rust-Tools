@@ -467,7 +467,10 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在读取第 {input_index}/{} 个工作簿并匹配文件名前缀。", files.len()),
+            format!(
+                "正在读取第 {input_index}/{} 个工作簿并匹配文件名前缀。",
+                files.len()
+            ),
         );
         let (row, used_reader) = content_prefix_rename_row(source, &specs);
         if row.new_name.is_empty() {
@@ -703,7 +706,10 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在读取第 {input_index}/{} 个工作簿并匹配待撤销的文件名前缀。", files.len()),
+            format!(
+                "正在读取第 {input_index}/{} 个工作簿并匹配待撤销的文件名前缀。",
+                files.len()
+            ),
         );
         let (row, used_reader) = content_prefix_unrename_row(source, &specs, &sort_prefixes);
         if row.new_name.is_empty() {
@@ -1051,7 +1057,11 @@ where
             &["Rust"],
             None,
             None,
-            format!("正在按文件排序规则取消前缀：第 {}/{} 个文件。", index + 1, files.len()),
+            format!(
+                "正在按文件排序规则取消前缀：第 {}/{} 个文件。",
+                index + 1,
+                files.len()
+            ),
         );
         let mut row = FileSortPrefixRemovalRow {
             source_path: source.to_string_lossy().into_owned(),
@@ -1207,7 +1217,10 @@ where
             components,
             Some(engine),
             (event_status == "failed").then_some("file_rename_failed"),
-            format!( "{event_message} 本文件用时 {:.3} 秒。", (file_started.elapsed().as_millis()) as f64 / 1000.0),
+            format!(
+                "{event_message} 本文件用时 {:.3} 秒。",
+                (file_started.elapsed().as_millis()) as f64 / 1000.0
+            ),
         );
     }
 
@@ -1681,7 +1694,11 @@ where
             &["Rust"],
             Some("RustFilesystem"),
             None,
-            format!("正在按文件排序规则添加前缀：第 {}/{} 个文件。", index + 1, files.len()),
+            format!(
+                "正在按文件排序规则添加前缀：第 {}/{} 个文件。",
+                index + 1,
+                files.len()
+            ),
         );
         let source_path = source.to_string_lossy().into_owned();
         let original_name = source
@@ -1803,7 +1820,10 @@ where
             &["Rust"],
             Some("RustFilesystem"),
             (event_status == "failed").then_some("file_rename_failed"),
-            format!( "{event_message} 本文件用时 {:.3} 秒。", (file_started.elapsed().as_millis()) as f64 / 1000.0),
+            format!(
+                "{event_message} 本文件用时 {:.3} 秒。",
+                (file_started.elapsed().as_millis()) as f64 / 1000.0
+            ),
         );
     }
 

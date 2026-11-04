@@ -16,9 +16,9 @@
 //! 共通的行为对齐原 Python：不拒绝 Excel 错误值（原工具原样输出）、
 //! 允许写入已存在的目标工作簿、段间空一行、公式取缓存值不留公式。
 
-use anyhow::{bail, ensure, Context, Result};
 use crate::config::PrintTask;
 use crate::engine_diag::{DiagEvent, DiagOutcome, DiagStage};
+use anyhow::{bail, ensure, Context, Result};
 use excel_reader::SheetDump;
 use std::{
     fs,
@@ -86,11 +86,12 @@ fn parse_a1(address: &str) -> Option<(usize, usize)> {
     (row > 0 && column > 0).then_some((row, column))
 }
 
-
 /// 解析 A1 区域文本（如 "B2:B3"、"'Sheet'!$A$1:$C$2"）为行列边界。
 fn parse_range_bounds(text: &str) -> Option<(usize, usize, usize, usize)> {
     let text = text.split('!').last().unwrap_or(text).replace('$', "");
-    let (start, end) = text.split_once(':').unwrap_or((text.as_str(), text.as_str()));
+    let (start, end) = text
+        .split_once(':')
+        .unwrap_or((text.as_str(), text.as_str()));
     let (r1, c1) = parse_a1(start.trim())?;
     let (r2, c2) = parse_a1(end.trim())?;
     Some((r1.min(r2), c1.min(c2), r1.max(r2), c1.max(c2)))
@@ -235,15 +236,24 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     for task in enabled {
         let Some(target) = task.target_wb.as_ref() else {
             run.task_skipped += 1;
-            run.issues.push(format!("第 {} 行：目标工作簿为空", task.row_no));
+            run.issues
+                .push(format!("第 {} 行：目标工作簿为空", task.row_no));
             continue;
         };
         grouped.entry(target.clone()).or_default().push(task);
     }
 
     for (target, target_tasks) in grouped {
-        ensure!(is_xlsx(&target), "打印目标必须是 .xlsx/.xlsm：{}", target.display());
-        ensure!(!target.exists(), "目标路径已存在，拒绝写入：{}", target.display());
+        ensure!(
+            is_xlsx(&target),
+            "打印目标必须是 .xlsx/.xlsm：{}",
+            target.display()
+        );
+        ensure!(
+            !target.exists(),
+            "目标路径已存在，拒绝写入：{}",
+            target.display()
+        );
         let mut book = if target.is_file() {
             umya_spreadsheet::reader::xlsx::read(&target)
                 .with_context(|| format!("umya 打开既有目标 {}", target.display()))?
@@ -273,20 +283,29 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
             let Some(source_path) = task.source_wb.as_ref() else {
                 run.task_skipped += 1;
                 run.events.push(
-                    DiagEvent::new("umya-spreadsheet", DiagStage::ReadSource, DiagOutcome::Skipped)
-                        .with_row(task.row_no)
-                        .with_message("配置的源工作簿路径为空"),
+                    DiagEvent::new(
+                        "umya-spreadsheet",
+                        DiagStage::ReadSource,
+                        DiagOutcome::Skipped,
+                    )
+                    .with_row(task.row_no)
+                    .with_message("配置的源工作簿路径为空"),
                 );
-                run.issues.push(format!("第 {} 行：源工作簿为空", task.row_no));
+                run.issues
+                    .push(format!("第 {} 行：源工作簿为空", task.row_no));
                 continue;
             };
             if !source_path.is_file() || !is_xlsx(source_path) {
                 run.task_failed += 1;
                 run.events.push(
-                    DiagEvent::new("umya-spreadsheet", DiagStage::ReadSource, DiagOutcome::Failed)
-                        .with_row(task.row_no)
-                        .with_file(source_path.to_string_lossy().into_owned())
-                        .with_message("源工作簿不存在或不是 xlsx/xlsm"),
+                    DiagEvent::new(
+                        "umya-spreadsheet",
+                        DiagStage::ReadSource,
+                        DiagOutcome::Failed,
+                    )
+                    .with_row(task.row_no)
+                    .with_file(source_path.to_string_lossy().into_owned())
+                    .with_message("源工作簿不存在或不是 xlsx/xlsm"),
                 );
                 run.issues.push(format!(
                     "第 {} 行：[文件] 源工作簿不存在或不是 xlsx/xlsm：{}",
@@ -310,8 +329,11 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                         .with_elapsed_ms(task_started.elapsed().as_millis())
                         .with_message(format!("{error:#}")),
                     );
-                    run.issues
-                        .push(format!("第 {} 行：[读取] umya 读取源工作簿 {} 失败：{error}", task.row_no, source_path.display()));
+                    run.issues.push(format!(
+                        "第 {} 行：[读取] umya 读取源工作簿 {} 失败：{error}",
+                        task.row_no,
+                        source_path.display()
+                    ));
                     continue;
                 }
             };
@@ -329,14 +351,13 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                         .with_row(task.row_no)
                         .with_file(source_path.to_string_lossy().into_owned())
                         .with_sheet(task.source_ws.clone())
-                        .with_message(format!(
-                            "源工作簿中不存在工作表 {:?}",
-                            task.source_ws
-                        )),
+                        .with_message(format!("源工作簿中不存在工作表 {:?}", task.source_ws)),
                     );
                     run.issues.push(format!(
                         "第 {} 行：[配置] 源工作簿 {} 中不存在工作表 {:?}",
-                        task.row_no, source_path.display(), task.source_ws
+                        task.row_no,
+                        source_path.display(),
+                        task.source_ws
                     ));
                     continue;
                 }
@@ -361,7 +382,11 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                 }
             } else {
                 book.new_sheet(target_name.clone()).map_err(|error| {
-                    anyhow::anyhow!("第 {} 行：[复制] umya 在目标 {} 新建工作表 {target_name:?} 失败：{error}", task.row_no, target.display())
+                    anyhow::anyhow!(
+                        "第 {} 行：[复制] umya 在目标 {} 新建工作表 {target_name:?} 失败：{error}",
+                        task.row_no,
+                        target.display()
+                    )
                 })?;
             }
 
@@ -382,8 +407,10 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                             .with_row(task.row_no)
                             .with_message(format!("打印区域非法：{error:#}")),
                         );
-                        run.issues
-                            .push(format!("第 {} 行：[配置] 打印区域非法：{error:#}", task.row_no));
+                        run.issues.push(format!(
+                            "第 {} 行：[配置] 打印区域非法：{error:#}",
+                            task.row_no
+                        ));
                         continue;
                     }
                 }
@@ -409,14 +436,12 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                         else {
                             continue;
                         };
-                        let Some(source_cell) = source_ws_ref.get_cell(src_address.as_str())
-                        else {
+                        let Some(source_cell) = source_ws_ref.get_cell(src_address.as_str()) else {
                             continue;
                         };
                         let style = source_cell.get_style().clone();
                         let raw = source_cell.get_raw_value().clone();
-                        let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name)
-                        else {
+                        let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) else {
                             continue;
                         };
                         let target_cell = target_ws_ref.cell_mut((dst_col, dst_row));
@@ -436,10 +461,7 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                     let format = match source_book.get_sheet_by_name(&source_sheet_name) {
                         Ok(source_ws_ref) => {
                             let props = source_ws_ref.get_sheet_format_properties();
-                            Some((
-                                props.default_row_height(),
-                                props.default_column_width(),
-                            ))
+                            Some((props.default_row_height(), props.default_column_width()))
                         }
                         Err(_) => None,
                     };
@@ -463,33 +485,31 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                 // 复制列宽与行高：umya 的 new_sheet 不会继承尺寸，
                 // 缺失会让数值挤在默认列宽里显示不全（用户反馈的“数值还原不好”）。
                 {
-                    let widths: Vec<(u32, f64)> = match source_book
-                        .get_sheet_by_name(&source_sheet_name)
-                    {
-                        Ok(source_ws_ref) => (0..cols)
-                            .filter_map(|offset| {
-                                let src_col = c1 as u32 + offset;
-                                source_ws_ref
-                                    .get_column_dimension_by_number(&src_col)
-                                    .map(|column| (1 + offset, column.get_width()))
-                            })
-                            .collect(),
-                        Err(_) => Vec::new(),
-                    };
-                    let heights: Vec<(u32, f64)> = match source_book
-                        .get_sheet_by_name(&source_sheet_name)
-                    {
-                        Ok(source_ws_ref) => (0..rows)
-                            .filter_map(|offset| {
-                                let src_row = r1 as u32 + offset;
-                                source_ws_ref
-                                    .get_row_dimension(&src_row)
-                                    .map(|row| (dst_start_row_for_segment + offset, row.get_height()))
-                            })
-                            .filter(|(_, height)| *height > 0.0)
-                            .collect(),
-                        Err(_) => Vec::new(),
-                    };
+                    let widths: Vec<(u32, f64)> =
+                        match source_book.get_sheet_by_name(&source_sheet_name) {
+                            Ok(source_ws_ref) => (0..cols)
+                                .filter_map(|offset| {
+                                    let src_col = c1 as u32 + offset;
+                                    source_ws_ref
+                                        .get_column_dimension_by_number(&src_col)
+                                        .map(|column| (1 + offset, column.get_width()))
+                                })
+                                .collect(),
+                            Err(_) => Vec::new(),
+                        };
+                    let heights: Vec<(u32, f64)> =
+                        match source_book.get_sheet_by_name(&source_sheet_name) {
+                            Ok(source_ws_ref) => (0..rows)
+                                .filter_map(|offset| {
+                                    let src_row = r1 as u32 + offset;
+                                    source_ws_ref.get_row_dimension(&src_row).map(|row| {
+                                        (dst_start_row_for_segment + offset, row.get_height())
+                                    })
+                                })
+                                .filter(|(_, height)| *height > 0.0)
+                                .collect(),
+                            Err(_) => Vec::new(),
+                        };
                     if let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) {
                         for (column, width) in widths {
                             target_ws_ref
@@ -497,9 +517,7 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                                 .set_width(width);
                         }
                         for (row, height) in heights {
-                            target_ws_ref
-                                .get_row_dimension_mut(&row)
-                                .set_height(height);
+                            target_ws_ref.get_row_dimension_mut(&row).set_height(height);
                         }
                     }
                 }
@@ -603,17 +621,24 @@ pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
             }
         }
         let save_started = Instant::now();
-        ensure!(!target.exists(), "目标路径在处理期间已出现，拒绝写入：{}", target.display());
+        ensure!(
+            !target.exists(),
+            "目标路径在处理期间已出现，拒绝写入：{}",
+            target.display()
+        );
         if let Err(error) = umya_spreadsheet::writer::xlsx::write(&book, &target) {
             run.events.push(
-                DiagEvent::new("umya-spreadsheet", DiagStage::SaveOutput, DiagOutcome::Failed)
-                    .with_file(target.to_string_lossy().into_owned())
-                    .with_elapsed_ms(save_started.elapsed().as_millis())
-                    .with_message(format!("{error:#}")),
+                DiagEvent::new(
+                    "umya-spreadsheet",
+                    DiagStage::SaveOutput,
+                    DiagOutcome::Failed,
+                )
+                .with_file(target.to_string_lossy().into_owned())
+                .with_elapsed_ms(save_started.elapsed().as_millis())
+                .with_message(format!("{error:#}")),
             );
-            return Err(error).with_context(|| {
-                format!("[写入] umya 写出目标工作簿 {} 失败", target.display())
-            });
+            return Err(error)
+                .with_context(|| format!("[写入] umya 写出目标工作簿 {} 失败", target.display()));
         }
         run.events.push(
             DiagEvent::new("umya-spreadsheet", DiagStage::SaveOutput, DiagOutcome::Ok)
@@ -662,7 +687,10 @@ fn copy_raw_value_static(
 }
 
 /// 3-5：openpyxl，逐属性复制样式，行为对齐原 PyTools `print_310.py`。
-pub fn run_openpyxl_engine(tasks: &[PrintTask], python_exe: Option<&str>) -> Result<StaticPrintRun> {
+pub fn run_openpyxl_engine(
+    tasks: &[PrintTask],
+    python_exe: Option<&str>,
+) -> Result<StaticPrintRun> {
     let enabled: Vec<&PrintTask> = tasks.iter().filter(|task| task.enabled).collect();
     ensure!(
         !enabled.is_empty(),
@@ -929,8 +957,8 @@ print(json.dumps({'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': 
         "openpyxl 打印引擎失败：{}",
         String::from_utf8_lossy(&output.stderr).trim()
     );
-    let report: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .context("解析 openpyxl 打印引擎输出失败")?;
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("解析 openpyxl 打印引擎输出失败")?;
     let mut run = StaticPrintRun {
         task_ok: report["task_ok"].as_u64().unwrap_or(0) as usize,
         task_skipped: report["task_skipped"].as_u64().unwrap_or(0) as usize,
@@ -1025,44 +1053,65 @@ pub fn run_configured_static_print(
     config_path: &Path,
     engine: StaticPrintEngine,
 ) -> Result<StaticPrintRun> {
-    let tasks = crate::config::load_print_tasks(config_path)
-        .with_context(|| format!("[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）", config_path.display()))?;
+    let tasks = crate::config::load_print_tasks(config_path).with_context(|| {
+        format!(
+            "[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）",
+            config_path.display()
+        )
+    })?;
     let enabled = tasks.iter().filter(|task| task.enabled).count();
     let mut rejected = StaticPrintRun::default();
-    let tasks = tasks.into_iter().filter(|task| {
-        if task.enabled && task.target_wb.as_ref().is_some_and(|target| target.exists()) {
-            let target = task.target_wb.as_ref().expect("target checked");
-            rejected.task_failed += 1;
-            let message = format!("目标路径已存在，拒绝写入，请修改打印配置中的目标路径或移走已有文件：{}", target.display());
-            rejected.issues.push(format!("打印配置第 {} 行：{message}", task.row_no));
-            rejected.events.push(
-                DiagEvent::new(engine.label(), DiagStage::SaveOutput, DiagOutcome::Failed)
-                    .with_row(task.row_no)
-                    .with_file(target.to_string_lossy().into_owned())
-                    .with_sheet(task.source_ws.clone())
-                    .with_message(message),
-            );
-            false
-        } else {
-            true
-        }
-    }).collect::<Vec<_>>();
+    let tasks = tasks
+        .into_iter()
+        .filter(|task| {
+            if task.enabled
+                && task
+                    .target_wb
+                    .as_ref()
+                    .is_some_and(|target| target.exists())
+            {
+                let target = task.target_wb.as_ref().expect("target checked");
+                rejected.task_failed += 1;
+                let message = format!(
+                    "目标路径已存在，拒绝写入，请修改打印配置中的目标路径或移走已有文件：{}",
+                    target.display()
+                );
+                rejected
+                    .issues
+                    .push(format!("打印配置第 {} 行：{message}", task.row_no));
+                rejected.events.push(
+                    DiagEvent::new(engine.label(), DiagStage::SaveOutput, DiagOutcome::Failed)
+                        .with_row(task.row_no)
+                        .with_file(target.to_string_lossy().into_owned())
+                        .with_sheet(task.source_ws.clone())
+                        .with_message(message),
+                );
+                false
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<_>>();
     let mut run = if enabled > 0 && !tasks.iter().any(|task| task.enabled) {
         StaticPrintRun::default()
-    } else { match engine {
-        StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
-        StaticPrintEngine::Umya => run_umya_engine(&tasks),
-        StaticPrintEngine::Openpyxl => {
-            run_openpyxl_engine(&tasks, probe_python_exe().as_deref())
-        }
-    }? };
+    } else {
+        match engine {
+            StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
+            StaticPrintEngine::Umya => run_umya_engine(&tasks),
+            StaticPrintEngine::Openpyxl => {
+                run_openpyxl_engine(&tasks, probe_python_exe().as_deref())
+            }
+        }?
+    };
     run.task_failed += rejected.task_failed;
     run.issues.extend(rejected.issues);
     run.events.extend(rejected.events);
     // 配置读取成功事件排在最前（读取引擎：calamine）。
-    let mut events = vec![DiagEvent::new("calamine", DiagStage::ReadConfig, DiagOutcome::Ok)
-        .with_file(config_path.to_string_lossy().into_owned())
-        .with_message(format!("启用 {enabled} 项打印任务"))];
+    let mut events = vec![
+        DiagEvent::new("calamine", DiagStage::ReadConfig, DiagOutcome::Ok)
+            .with_file(config_path.to_string_lossy().into_owned())
+            .with_message(format!("启用 {enabled} 项打印任务")),
+    ];
     events.append(&mut run.events);
     run.events = events;
     Ok(run)

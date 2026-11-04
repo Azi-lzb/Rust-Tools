@@ -24,7 +24,7 @@ fn temporary_directory(label: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let path = std::env::temp_dir().join(format!(
-        "pytools-content-unrename-{label}-{}-{unique}-{:?}", 
+        "pytools-content-unrename-{label}-{}-{unique}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ));

@@ -414,7 +414,12 @@ where
             &mut on_event,
             "file_processing",
             "started",
-            format!("正在按机构映射标准化第 {}/{} 个文件名：{}", index + 1, inputs.len(), file_name),
+            format!(
+                "正在按机构映射标准化第 {}/{} 个文件名：{}",
+                index + 1,
+                inputs.len(),
+                file_name
+            ),
             progress.clone(),
             Some(file_name.clone()),
             None,
@@ -1121,7 +1126,12 @@ fn build_and_optionally_apply_institution_plan(
                 let mut components = vec!["Rust".to_owned(), "ExcelModifier".to_owned()];
                 components.push(engine.clone());
                 components.push(engine_language(&engine).to_owned());
-                (serde_json::to_value(execution).ok(), engine, components, None)
+                (
+                    serde_json::to_value(execution).ok(),
+                    engine,
+                    components,
+                    None,
+                )
             },
         )
     } else {
@@ -1275,7 +1285,10 @@ fn build_and_optionally_apply_institution_plan(
         "safe_commit",
         "completed",
         if options.in_place {
-            format!("源工作簿已通过快照校验安全替换：{}。", output_path.display())
+            format!(
+                "源工作簿已通过快照校验安全替换：{}。",
+                output_path.display()
+            )
         } else {
             format!("规范化副本已验证并保存：{}。", output_path.display())
         },

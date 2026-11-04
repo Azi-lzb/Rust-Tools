@@ -1579,8 +1579,7 @@ mod tests {
         let mut unverified =
             capability(EngineId::UmyaSpreadsheet, [EditOperationKind::SetCellValue]);
         unverified.status = CapabilityStatus::Unverified;
-        let mut unsupported =
-            capability(EngineId::OoxmlPatch, [EditOperationKind::SetCellValue]);
+        let mut unsupported = capability(EngineId::OoxmlPatch, [EditOperationKind::SetCellValue]);
         unsupported.status = CapabilityStatus::Unsupported;
         let modifier = ExcelModifier::new(
             "test-linux-x86_64",
