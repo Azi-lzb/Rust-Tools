@@ -178,3 +178,18 @@
   7 个业务工作簿批次命中 187 条，耗时约 10.4 秒；
   新增单测 `relationship_target_tests`、`copies_referenced_template_sheets_missing_from_the_target`；
   `cargo test -p pytools-core -p ooxml-patch` 全绿。
+
+补充（2026-11-04，1-3/1-4 表结构校验按合并单元格语义比较）：
+- 用户模板的表结构区域 `A5:A26` 是合并单元格，模板只在锚点 A5 保存
+  「借款人证件类型」，其余格为空；源工作簿把同样的值重复写进 A6–A26。
+  两者在 Excel 中显示完全一致、合并区域也完全相同，但结构校验按原始存储值
+  逐格比较，于是报出 21 处「A 单元格值/公式不同」，导致整张
+  `存量单位贷款信息` 被跳过、不参与校验。
+- 修复：`named_summary_structure_preflight` 对位于**双方都存在的**合并区域内的
+  非锚点格，只要求源值为空或等于模板锚点值；与锚点不同的真实差异仍会报出。
+  新增 `merged_region_anchor` 辅助函数。
+- 效果（真实模板 + 7 个业务工作簿）：`存量单位贷款信息` 通过结构校验，
+  4 个校验区域全部参与，补装 `参照表`/`集中系统数据` 后命中结果
+  187 → **316 条**，跳过项 28 → 14。
+- 新增单测 `structure_preflight_accepts_repeated_values_inside_a_merge`
+  （同时验证重复值放行、不同值仍报错）；`cargo test -p pytools-core -p ooxml-patch` 全绿。

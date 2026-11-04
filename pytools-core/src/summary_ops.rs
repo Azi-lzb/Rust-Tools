@@ -4055,6 +4055,18 @@ fn named_summary_structure_check(
     Ok(None)
 }
 
+/// Top-left cell of the merged region containing `address`, if any.
+fn merged_region_anchor(
+    merges: &[(usize, usize, usize, usize)],
+    address: &str,
+) -> Option<String> {
+    let (row, column) = parse_a1(address)?;
+    merges.iter().find_map(|(top, left, bottom, right)| {
+        (row >= *top && row <= *bottom && column >= *left && column <= *right)
+            .then(|| format!("{}{}", column_letters(*left), top))
+    })
+}
+
 fn named_summary_structure_preflight(
     bounds: NamedRegionBounds,
     template: &SheetDump,
@@ -4078,6 +4090,19 @@ fn named_summary_structure_preflight(
             addresses.insert(address.clone());
         }
     }
+    let inner_merges = |sheet: &SheetDump| -> Result<Vec<(usize, usize, usize, usize)>> {
+        Ok(parse_merged_ranges(&sheet.merges)?
+            .into_iter()
+            .filter(|range| {
+                range.0 >= bounds.start_row
+                    && range.2 <= bounds.end_row
+                    && range.1 >= bounds.start_column
+                    && range.3 <= bounds.end_column
+            })
+            .collect())
+    };
+    let template_inner_merges = inner_merges(template)?;
+    let source_inner_merges = inner_merges(source)?;
     let mut differences = Vec::new();
     for address in addresses {
         let template_formula = template.formulas.get(&address);
@@ -4086,10 +4111,32 @@ fn named_summary_structure_preflight(
             (Some(left), Some(right)) => {
                 left.trim_start_matches('=') == right.trim_start_matches('=')
             }
-            (None, None) => named_summary_value_matches(
-                template.values.get(&address).unwrap_or(&empty_value),
-                source.values.get(&address),
-            ),
+            (None, None) => {
+                // Excel renders a merged region from its top-left cell only, so
+                // the other cells of the region legitimately hold either a
+                // repeated copy of that value or nothing at all. Comparing raw
+                // stored values made every merged header block look different.
+                // A genuinely different value there is still a mismatch.
+                let merged_non_anchor = parse_a1(&address).is_some_and(|(row, column)| {
+                    is_merged_non_anchor(&template_inner_merges, row, column)
+                        && is_merged_non_anchor(&source_inner_merges, row, column)
+                });
+                if merged_non_anchor {
+                    let anchor = merged_region_anchor(&template_inner_merges, &address);
+                    let anchor_value = anchor
+                        .as_ref()
+                        .and_then(|anchor| template.values.get(anchor))
+                        .unwrap_or(&empty_value);
+                    let source_value = source.values.get(&address);
+                    named_summary_value_matches(anchor_value, source_value)
+                        || source_value.is_none_or(serde_json::Value::is_null)
+                } else {
+                    named_summary_value_matches(
+                        template.values.get(&address).unwrap_or(&empty_value),
+                        source.values.get(&address),
+                    )
+                }
+            }
             _ => false,
         };
         if !equal {
@@ -5978,6 +6025,59 @@ mod comment_region_tests {
 #[cfg(test)]
 mod merged_cell_tests {
     use super::*;
+
+    /// A merged header block renders identically whether only its anchor holds
+    /// the label or every cell of the region repeats it. Real bank workbooks
+    /// differ exactly here, so structure validation must treat both as equal.
+    #[test]
+    fn structure_preflight_accepts_repeated_values_inside_a_merge() -> Result<()> {
+        let sheet = |a6: Option<&str>| SheetDump {
+            name: "存量单位贷款信息".to_owned(),
+            values: [
+                ("A5".to_owned(), serde_json::json!({"type":"string","value":"借款人证件类型"})),
+                (
+                    "A6".to_owned(),
+                    match a6 {
+                        Some(text) => serde_json::json!({"type":"string","value":text}),
+                        None => serde_json::Value::Null,
+                    },
+                ),
+            ]
+            .into_iter()
+            .filter(|(_, value)| !value.is_null())
+            .collect(),
+            formulas: BTreeMap::new(),
+            formula_status: "read_by_calamine".to_owned(),
+            merges: vec!["A5:A26".to_owned()],
+            merge_status: "read_by_calamine".to_owned(),
+            comments: BTreeMap::new(),
+            comments_status: "read_by_calamine".to_owned(),
+            conditional_formatting: Vec::new(),
+            conditional_formatting_status: "read_by_calamine".to_owned(),
+            data_validations: Vec::new(),
+            data_validations_status: "read_by_calamine".to_owned(),
+        };
+        let bounds = NamedRegionBounds {
+            start_row: 4,
+            end_row: 26,
+            start_column: 1,
+            end_column: 2,
+        };
+        let template = sheet(None);
+        let repeated = sheet(Some("借款人证件类型"));
+        assert!(
+            named_summary_structure_preflight(bounds, &template, &repeated)?.is_none(),
+            "a repeated merged value must not be reported as a structure mismatch"
+        );
+
+        // A genuinely different value in the region still fails.
+        let different = sheet(Some("别的字段"));
+        assert!(
+            named_summary_structure_preflight(bounds, &template, &different)?.is_some(),
+            "a different value inside the merge must still be reported"
+        );
+        Ok(())
+    }
 
     #[test]
     fn merged_range_non_anchor_cells_are_omitted() -> Result<()> {
