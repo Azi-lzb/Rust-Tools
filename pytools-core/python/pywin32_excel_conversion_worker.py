@@ -46,6 +46,33 @@ def _absolute(value: str) -> Path:
     return Path(value).expanduser().resolve()
 
 
+def _force_recalc(application: Any) -> tuple[str | None, list[str]]:
+    """Force every formula to be recalculated before SaveAs.
+
+    `Calculate` is deliberately absent: measured on a freshly opened workbook
+    whose cached values were stale (999 instead of 34), `Application.Calculate`
+    left the cache untouched because nothing was marked dirty. It reports no
+    error, so treating it as success would publish stale numbers that
+    Calamine-style readers consume. `CalculateFull` still forces a full
+    calculation of all formulas; only the dependency-tree rebuild is skipped.
+
+    Returns `(method_name, errors)`; `method_name` is None when every method
+    failed. These are Application-level methods - Workbook exposes none of them.
+    """
+    errors: list[str] = []
+    for name in ("CalculateFullRebuild", "CalculateFull"):
+        method = getattr(application, name, None)
+        if method is None:
+            errors.append(f"{name}: 该 COM 宿主不提供此方法")
+            continue
+        try:
+            method()
+            return name, errors
+        except Exception as error:
+            errors.append(f"{name}: {type(error).__name__}: {error}")
+    return None, errors
+
+
 def _matrix(value: Any, rows: int, columns: int) -> list[list[Any]]:
     """Normalize a Range.Formula/Value2 payload into rows x columns.
 
@@ -359,9 +386,23 @@ class ConversionSession:
                         f"(native ET is {ET_FILE_FORMAT})"
                     )
             stage = "调用 Excel/WPS 完整重算工作簿"
-            application.CalculateFullRebuild()
-            stage = "读取完整重算后的源工作簿公式和值"
+            recalc_method, recalc_errors = _force_recalc(application)
+            stage = "读取源工作簿公式和值"
             source_snapshot = _snapshot(workbook)
+            formula_cells = sum(len(sheet["formulas"]) for sheet in source_snapshot)
+            if recalc_method is None:
+                if formula_cells:
+                    # Both methods failed and the workbook has formulas: the
+                    # cached values may be stale, and the source/candidate
+                    # comparison below cannot detect it (it would compare the
+                    # same stale numbers on both sides).
+                    raise RuntimeError(
+                        f"工作簿无法重算（{formula_cells} 个公式单元格）；"
+                        f"为避免发布陈旧公式缓存，已取消转换："
+                        + "；".join(recalc_errors)
+                    )
+                # No formulas: nothing to recalculate, so the failure is inert.
+                # Keep the reason in the evidence instead of hiding it.
             stage = "通过 pywin32 写入 XLSX 候选"
             workbook.SaveAs(str(output), XLSX_FILE_FORMAT)
             workbook.Close(SaveChanges=False)
@@ -372,7 +413,15 @@ class ConversionSession:
             stage = "读取候选工作簿并验证公式和值"
             output_snapshot = _snapshot(reopened)
             validation = _compare(source_snapshot, output_snapshot)
-            validation["calculation"] = "CalculateFullRebuild before SaveAs"
+            if recalc_method is not None:
+                validation["recalc_method"] = recalc_method
+                validation["calculation"] = f"{recalc_method} before SaveAs"
+                if recalc_errors:
+                    validation["recalc_fallback_errors"] = recalc_errors
+            else:
+                validation["recalc_failed"] = True
+                validation["recalc_errors"] = recalc_errors
+                validation["calculation"] = "no formulas; recalc not required"
             if source_file_format is not None:
                 validation["source_extension"] = suffix.lstrip(".")
                 validation["source_file_format"] = source_file_format
@@ -443,7 +492,13 @@ class ConversionSession:
             application.CutCopyMode = False
 
             stage = "调用 Excel/WPS 完整重算校验公式"
-            application.CalculateFullRebuild()
+            # 1-4 always copies formula cells in, so a failed recalculation
+            # would report stale/blank results as if they were computed.
+            recalc_method, recalc_errors = _force_recalc(application)
+            if recalc_method is None:
+                raise RuntimeError(
+                    "校验区域公式无法重算，已取消提取：" + "；".join(recalc_errors)
+                )
             source_workbook.Save()
 
             stage = "读取校验区域公式计算结果"

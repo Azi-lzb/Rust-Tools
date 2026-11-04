@@ -1461,6 +1461,20 @@ fn conversion_writes_recalculated_formula_cache_for_calamine() -> Result<()> {
         "xls → xlsx conversion failed: {}",
         String::from_utf8_lossy(&converted.stderr)
     );
+    // 重算方式必须写进证据：CalculateFullRebuild 是首选，只有它失败才降级
+    // CalculateFull。Application.Calculate 不算——它对刚打开的陈旧缓存无效。
+    let report: Value = serde_json::from_slice(&converted.stdout)?;
+    assert!(
+        matches!(
+            report["validation"]["recalc_method"].as_str(),
+            Some("CalculateFullRebuild") | Some("CalculateFull")
+        ),
+        "conversion must report which Application-level recalc ran: {report}"
+    );
+    assert!(
+        report["validation"].get("recalc_failed").is_none(),
+        "a workbook with formulas must not be published without recalculation: {report}"
+    );
 
     // calamine 视角：公式文本与缓存值都要在，且缓存值必须是重算结果。
     let dump = read_workbook(&output)?;
