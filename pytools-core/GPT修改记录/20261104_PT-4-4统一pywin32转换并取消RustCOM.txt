@@ -133,3 +133,26 @@
   跳过的 28 项均为表结构区域与模板不符（业务路由判断），非错误。
   新增 `shared_formula_translation_tests` 3 项（含真实 INDIRECT 公式翻译）；
   `cargo test -p pytools-core -p ooxml-patch` 全绿。
+
+补充（2026-11-04，1-4 自动补装公式引用的模板工作表）：
+- 用户反馈：模板校验区域的公式引用了源文件没有的工作表（如 `集中系统数据`、
+  `参照表`），Excel 重算时引用落空，结果不对；要求从模板把这些表复制进副本。
+- 实测该模板：`存量单位贷款信息` 的 19 个校验区域公式引用了 `参照表` 与
+  `集中系统数据`，源工作簿只有 6 个业务表、缺这 3 个模板表；这三个表都是纯静态
+  数据（0 公式，仅共享字符串与批注）。
+- 实现（`ooxml_patch::copy_cell_region`）：
+  - `sheet_references_in_formula` 解析公式中的 `Sheet!` 引用（支持 `'My Sheet'!`
+    引号形式，跳过字符串字面量，因此 `INDIRECT("…!")` 不会被误判为静态引用）；
+  - 引用表在目标中不存在时，从模板复制该工作表部件，并同步更新
+    `xl/workbook.xml` 的 `<sheet>`、`xl/_rels/workbook.xml.rels` 与
+    `[Content_Types].xml` overrides；
+  - 复制的模板表若自身含公式则明确拒绝（否则会带入未重算的陈旧缓存），
+    提示改为数值表或手工补入源工作簿；
+  - `CellRegionCopyReport.sheets_copied` 回报补装清单，1-4 成功日志追加
+    「已从模板补装公式引用的工作表：…」。
+- 验证：真实模板 + 全 4 个校验区域复制，1072 个公式单元格，补装
+  `["参照表", "集中系统数据"]`；7 个业务工作簿批次命中 187 条，耗时约 10.6 秒；
+  新增单测 `copies_referenced_template_sheets_missing_from_the_target`、
+  `sheet_reference_detection_tests` 2 项；`cargo test -p pytools-core -p ooxml-patch` 全绿。
+- 说明：当前批次中 `存量单位贷款信息` 因表结构区域（A4:B90）与源工作簿不符而被
+  路由跳过，故该表的公式引用补装未在本批实际触发；补装能力已单独验证可用。

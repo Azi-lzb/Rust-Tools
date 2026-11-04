@@ -1753,6 +1753,9 @@ pub struct CellRegionCopyReport {
     pub cells_with_formula: usize,
     pub cells_cleared: usize,
     pub worksheet_parts: Vec<String>,
+    /// Template sheets copied into the target because copied formulas
+    /// reference them and the target did not have them.
+    pub sheets_copied: Vec<String>,
 }
 
 /// Copy formula cells from one workbook's sheet region into another workbook's
@@ -1837,6 +1840,16 @@ pub fn copy_cell_region(
         "cell region copy produced no worksheet changes"
     );
 
+    // Formulas copied above may reference sheets the target does not have
+    // (`集中系统数据`, `参照表`, …). Those sheets live in the template, so copy
+    // them in; otherwise Excel evaluates the formulas against nothing and the
+    // extracted results are wrong rather than merely incomplete.
+    let referenced = collect_referenced_sheets(&formulas_by_sheet);
+    let (sheet_changes, sheets_copied) =
+        plan_missing_template_sheets(source, output, &source_sheets, &referenced)?;
+    report.sheets_copied = sheets_copied;
+    replacements.extend(sheet_changes);
+
     // Rewrite the package to a sibling temp file, then replace the target:
     // `output` is the caller's working copy and must survive a mid-write
     // failure intact.
@@ -1857,6 +1870,7 @@ pub fn copy_cell_region(
             .open(&staged)
             .with_context(|| format!("create staged copy {}", staged.display()))?;
         let mut writer = ZipWriter::new(file);
+        let mut written = BTreeSet::new();
         for index in 0..input_zip.len() {
             let mut entry = input_zip.by_index(index)?;
             let name = entry.name().to_owned();
@@ -1868,12 +1882,21 @@ pub fn copy_cell_region(
                 writer.add_directory(name, options)?;
             } else {
                 writer.start_file(&name, options)?;
+                written.insert(name.clone());
                 if let Some(bytes) = replacements.get(&name) {
                     writer.write_all(bytes)?;
                 } else {
                     std::io::copy(&mut entry, &mut writer)?;
                 }
             }
+        }
+        // Parts that exist only in the replacements (copied template sheets).
+        for (name, bytes) in &replacements {
+            if written.contains(name) {
+                continue;
+            }
+            writer.start_file(name, SimpleFileOptions::default())?;
+            writer.write_all(bytes)?;
         }
         writer.finish()?;
         Ok(())
@@ -1886,6 +1909,237 @@ pub fn copy_cell_region(
     fs::rename(&staged, output)
         .with_context(|| format!("replace {} with copied cell regions", output.display()))?;
     Ok(report)
+}
+
+/// Sheet names referenced by the copied formulas (`Sheet!A1`, `'My Sheet'!A1`).
+fn collect_referenced_sheets(
+    formulas_by_sheet: &BTreeMap<String, BTreeMap<String, String>>,
+) -> BTreeSet<String> {
+    let mut referenced = BTreeSet::new();
+    for formulas in formulas_by_sheet.values() {
+        for text in formulas.values() {
+            for name in sheet_references_in_formula(text) {
+                referenced.insert(name);
+            }
+        }
+    }
+    referenced
+}
+
+/// Extract `Sheet!` prefixes from a formula, honouring quoted names.
+fn sheet_references_in_formula(text: &str) -> Vec<String> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut names = Vec::new();
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < characters.len() {
+        let current = characters[index];
+        if in_string {
+            if current == '"' {
+                if characters.get(index + 1) == Some(&'"') {
+                    index += 2;
+                    continue;
+                }
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if current == '"' {
+            in_string = true;
+            index += 1;
+            continue;
+        }
+        if current == '\'' {
+            // Quoted sheet name: 'My Sheet'!A1
+            let start = index + 1;
+            let mut end = start;
+            while end < characters.len() && characters[end] != '\'' {
+                end += 1;
+            }
+            if end < characters.len() && characters.get(end + 1) == Some(&'!') {
+                names.push(characters[start..end].iter().collect());
+            }
+            index = end + 1;
+            continue;
+        }
+        if current.is_alphanumeric() || current == '_' {
+            let start = index;
+            while index < characters.len()
+                && (characters[index].is_alphanumeric() || characters[index] == '_')
+            {
+                index += 1;
+            }
+            if characters.get(index) == Some(&'!') {
+                names.push(characters[start..index].iter().collect());
+            }
+            continue;
+        }
+        index += 1;
+    }
+    names
+}
+
+/// Copy template sheets into the target when copied formulas reference them
+/// and the target lacks them.
+///
+/// Only data-only sheets are supported. A sheet carrying its own formulas would
+/// need its dependency graph evaluated too, so that case is refused with a
+/// clear message instead of silently importing stale caches.
+fn plan_missing_template_sheets(
+    source: &Path,
+    output: &Path,
+    source_sheets: &BTreeMap<String, String>,
+    referenced: &BTreeSet<String>,
+) -> Result<(BTreeMap<String, Vec<u8>>, Vec<String>)> {
+    let target_sheets = sheet_parts(output)?;
+    let missing = referenced
+        .iter()
+        .filter(|name| !target_sheets.keys().any(|existing| existing.eq_ignore_ascii_case(name)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut changes = BTreeMap::new();
+    if missing.is_empty() {
+        return Ok((changes, Vec::new()));
+    }
+
+    let mut source_zip = ZipArchive::new(fs::File::open(source)?)?;
+    let mut target_zip = ZipArchive::new(fs::File::open(output)?)?;
+    let mut workbook = read_zip_part(&mut target_zip, "xl/workbook.xml")?;
+    let mut workbook_rels = read_zip_part(&mut target_zip, "xl/_rels/workbook.xml.rels")?;
+    let mut content_types = read_zip_part(&mut target_zip, "[Content_Types].xml")?;
+
+    let mut copied = Vec::new();
+    for name in missing {
+        let Some(part) = source_sheets
+            .iter()
+            .find(|(sheet, _)| sheet.eq_ignore_ascii_case(&name))
+            .map(|(_, part)| part.clone())
+        else {
+            bail!("公式引用了工作表 {name:?}，但模板中也没有这个表，无法补装");
+        };
+        let sheet_xml = read_zip_part(&mut source_zip, &part)
+            .with_context(|| format!("read template sheet {name:?}"))?;
+        ensure!(
+            !has_formula_elements(&sheet_xml),
+            "公式引用的模板工作表 {name:?} 自身包含公式；请先在模板中把它改为数值表，\
+             或手动把该表加入源工作簿"
+        );
+        // A fresh part name that cannot collide with the target's.
+        let next_index = target_sheets
+            .values()
+            .filter_map(|existing| {
+                existing
+                    .rsplit('/')
+                    .next()
+                    .and_then(|file| file.strip_prefix("sheet"))
+                    .and_then(|file| file.strip_suffix(".xml"))
+                    .and_then(|index| index.parse::<u32>().ok())
+            })
+            .max()
+            .unwrap_or(0)
+            + 1 + copied.len() as u32;
+        let new_part = format!("xl/worksheets/sheet{next_index}.xml");
+        changes.insert(new_part.clone(), sheet_xml);
+        let relationship_id = format!("rId{}", next_relationship_id(&workbook_rels)?);
+        let sheet_id = next_sheet_id(&workbook)?;
+        workbook = append_sheet_entry(&workbook, &name, sheet_id, &relationship_id)?;
+        workbook_rels = append_worksheet_relationship(&workbook_rels, &relationship_id, &new_part)?;
+        content_types = append_content_type_override(&content_types, &new_part)?;
+        copied.push(name);
+    }
+    changes.insert("xl/workbook.xml".to_owned(), workbook);
+    changes.insert("xl/_rels/workbook.xml.rels".to_owned(), workbook_rels);
+    changes.insert("[Content_Types].xml".to_owned(), content_types);
+    Ok((changes, copied))
+}
+
+fn has_formula_elements(sheet_xml: &[u8]) -> bool {
+    Document::parse(std::str::from_utf8(sheet_xml).unwrap_or_default())
+        .map(|document| {
+            document.descendants().any(|node| {
+                node.is_element()
+                    && node.tag_name().namespace() == Some(MAIN_NS)
+                    && node.tag_name().name() == "f"
+            })
+        })
+        .unwrap_or(true)
+}
+
+fn next_relationship_id(workbook_rels: &[u8]) -> Result<u32> {
+    let document = Document::parse(std::str::from_utf8(workbook_rels)?)
+        .context("parse workbook relationships")?;
+    Ok(document
+        .descendants()
+        .filter_map(|node| node.attribute("Id"))
+        .filter_map(|id| id.strip_prefix("rId"))
+        .filter_map(|index| index.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0)
+        + 1)
+}
+
+fn next_sheet_id(workbook: &[u8]) -> Result<u32> {
+    let document = Document::parse(std::str::from_utf8(workbook)?)
+        .context("parse target workbook.xml")?;
+    Ok(document
+        .descendants()
+        .filter(|node| node.tag_name().name() == "sheet")
+        .filter_map(|node| node.attribute("sheetId"))
+        .filter_map(|id| id.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0)
+        + 1)
+}
+
+fn append_sheet_entry(
+    workbook: &[u8],
+    name: &str,
+    sheet_id: u32,
+    relationship_id: &str,
+) -> Result<Vec<u8>> {
+    let xml = std::str::from_utf8(workbook)?;
+    let anchor = xml
+        .rfind("</sheets>")
+        .context("workbook.xml has no </sheets>")?;
+    let entry = format!(
+        r#"<sheet name="{}" sheetId="{sheet_id}" r:id="{relationship_id}"/>"#,
+        escape_xml_text(name)
+    );
+    let mut patched = xml.to_owned();
+    patched.insert_str(anchor, &entry);
+    Ok(patched.into_bytes())
+}
+
+fn append_worksheet_relationship(
+    workbook_rels: &[u8],
+    relationship_id: &str,
+    part: &str,
+) -> Result<Vec<u8>> {
+    let xml = std::str::from_utf8(workbook_rels)?;
+    let anchor = xml
+        .rfind("</Relationships>")
+        .context("workbook relationships have no closing tag")?;
+    let target = part.strip_prefix("xl/").unwrap_or(part);
+    let entry = format!(
+        r#"<Relationship Id="{relationship_id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="{target}"/>"#
+    );
+    let mut patched = xml.to_owned();
+    patched.insert_str(anchor, &entry);
+    Ok(patched.into_bytes())
+}
+
+fn append_content_type_override(content_types: &[u8], part: &str) -> Result<Vec<u8>> {
+    let xml = std::str::from_utf8(content_types)?;
+    let anchor = xml
+        .rfind("</Types>")
+        .context("[Content_Types].xml has no closing tag")?;
+    let entry = format!(
+        r#"<Override PartName="/{part}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"#
+    );
+    let mut patched = xml.to_owned();
+    patched.insert_str(anchor, &entry);
+    Ok(patched.into_bytes())
 }
 
 /// Formula text for every cell the template defines inside `address`.
@@ -4313,11 +4567,13 @@ mod cell_region_copy_tests {
             r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#
         );
         let sheet = format!(r#"<worksheet xmlns="{MAIN_NS}">{worksheet}</worksheet>"#);
+        let types = r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#.to_owned();
         let mut zip = ZipWriter::new(File::create(path)?);
         for (name, content) in [
             ("_rels/.rels", root_rels),
             ("xl/workbook.xml", book),
             ("xl/_rels/workbook.xml.rels", book_rels),
+            ("[Content_Types].xml", types),
             ("xl/worksheets/sheet1.xml", sheet),
         ] {
             zip.start_file(name, SimpleFileOptions::default())?;
@@ -4369,6 +4625,83 @@ mod cell_region_copy_tests {
 
         let _ = fs::remove_file(&template);
         let _ = fs::remove_file(&target);
+        Ok(())
+    }
+
+    #[test]
+    fn copies_referenced_template_sheets_missing_from_the_target() -> Result<()> {
+        let template = temp_path("tpl_sheets");
+        let target = temp_path("target_sheets");
+        // Template: Sheet1 with a formula referencing a sheet the target lacks,
+        // plus that referenced sheet carrying static data.
+        workbook_with_extra_sheet(
+            &template,
+            r#"<sheetData><row r="5"><c r="A5"><f>参照表!B1*2</f></c></row></sheetData>"#,
+            "参照表",
+            r#"<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>21</v></c></row></sheetData>"#,
+        )?;
+        workbook(&target, r#"<sheetData><row r="5"><c r="A5"><v>0</v></c></row></sheetData>"#)?;
+
+        let report = copy_cell_region(
+            &template,
+            &target,
+            &[CellRegionCopyRequest {
+                source_sheet: "Sheet1".to_owned(),
+                target_sheet: "Sheet1".to_owned(),
+                address: "A5".to_owned(),
+            }],
+        )?;
+        assert_eq!(report.cells_with_formula, 1);
+        assert_eq!(report.sheets_copied, vec!["参照表".to_owned()]);
+
+        let bytes = fs::read(&target)?;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+        let mut workbook = String::new();
+        {
+            use std::io::Read;
+            zip.by_name("xl/workbook.xml")?.read_to_string(&mut workbook)?;
+        }
+        assert!(workbook.contains("参照表"), "referenced sheet must be registered: {workbook}");
+        let parts = zip
+            .file_names()
+            .filter(|name| name.starts_with("xl/worksheets/sheet"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        assert_eq!(parts.len(), 2, "template sheet part must be added: {parts:?}");
+        Ok(())
+    }
+
+    /// Two-sheet workbook whose second sheet is registered in workbook.xml,
+    /// its relationships and [Content_Types].xml.
+    fn workbook_with_extra_sheet(
+        path: &PathBuf,
+        first_sheet: &str,
+        extra_name: &str,
+        extra_sheet: &str,
+    ) -> Result<()> {
+        let root_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
+        );
+        let book = format!(
+            r#"<workbook xmlns="{MAIN_NS}" xmlns:r="{REL_NS}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="{extra_name}" sheetId="2" r:id="rId2"/></sheets></workbook>"#
+        );
+        let book_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>"#
+        );
+        let types = r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#.to_owned();
+        let mut zip = ZipWriter::new(File::create(path)?);
+        for (name, content) in [
+            ("_rels/.rels", root_rels),
+            ("xl/workbook.xml", book),
+            ("xl/_rels/workbook.xml.rels", book_rels),
+            ("[Content_Types].xml", types),
+            ("xl/worksheets/sheet1.xml", format!(r#"<worksheet xmlns="{MAIN_NS}">{first_sheet}</worksheet>"#)),
+            ("xl/worksheets/sheet2.xml", format!(r#"<worksheet xmlns="{MAIN_NS}">{extra_sheet}</worksheet>"#)),
+        ] {
+            zip.start_file(name, SimpleFileOptions::default())?;
+            zip.write_all(content.as_bytes())?;
+        }
+        zip.finish()?;
         Ok(())
     }
 
@@ -4466,5 +4799,33 @@ mod shared_formula_translation_tests {
             r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(ROW(E9),COLUMN(C9))))"#
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod sheet_reference_detection_tests {
+    use super::sheet_references_in_formula;
+
+    #[test]
+    fn finds_plain_and_quoted_sheet_references() {
+        assert_eq!(
+            sheet_references_in_formula("INDEX(集中系统数据!$1:$1048576,1)"),
+            vec!["集中系统数据".to_owned()]
+        );
+        assert_eq!(
+            sheet_references_in_formula("VLOOKUP($D$3,参照表!$A:$B,2,0)"),
+            vec!["参照表".to_owned()]
+        );
+        assert_eq!(
+            sheet_references_in_formula("'My Sheet'!A1+'Other 2'!B2"),
+            vec!["My Sheet".to_owned(), "Other 2".to_owned()]
+        );
+    }
+
+    #[test]
+    fn ignores_string_literals() {
+        // The INDIRECT text must not be treated as a live sheet reference for
+        // copy planning; the runtime string is resolved by Excel.
+        assert!(sheet_references_in_formula(r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(1,1)))"#).is_empty());
     }
 }

@@ -2164,8 +2164,17 @@ fn extract_named_validation_regions_inner(
         output_rows.extend(matched);
         progress.completed_files += 1;
         files_processed += 1;
+        let copied_sheets = if calculation.copied_template_sheets.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "；已从模板补装公式引用的工作表：{}（{} 个）",
+                calculation.copied_template_sheets.join("、"),
+                calculation.copied_template_sheets.len()
+            )
+        };
         emitter.emit("validation_calculation", "succeeded",
-            format!("校验区域重算完成：「{file_name}」/「{}」；{}；提取命中结果 {hit_count} 条",
+            format!("校验区域重算完成：「{file_name}」/「{}」；{}；提取命中结果 {hit_count} 条{copied_sheets}",
                 routed_sheets.join("、"), calculation.application),
             &progress, Some(source), Some(validation_started.elapsed()), &["pytools-core", "pywin32", "Excel/WPS COM"],
             Some("pywin32 Excel/WPS COM"), None);

@@ -309,6 +309,7 @@ impl ConversionRuntime {
                 application: calculation.application,
                 cells: calculation.cells,
                 copied_formula_cells: copied.cells_with_formula,
+                copied_template_sheets: copied.sheets_copied,
             })
         }
         #[cfg(not(windows))]
@@ -669,6 +670,9 @@ pub(crate) struct NamedValidationCalculation {
     /// Cells whose template formulas were copied in by the OOXML patcher
     /// before COM recalculated the working copy.
     pub copied_formula_cells: usize,
+    /// Template sheets the patcher had to add because the copied formulas
+    /// reference them and the working copy lacked them.
+    pub copied_template_sheets: Vec<String>,
 }
 
 #[cfg(windows)]
@@ -954,6 +958,7 @@ impl PythonExcelWorker {
             application,
             cells,
             copied_formula_cells: 0,
+            copied_template_sheets: Vec::new(),
         })
     }
 }
