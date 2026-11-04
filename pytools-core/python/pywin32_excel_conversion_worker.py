@@ -40,14 +40,28 @@ def _write_json(value: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
+def _absolute(value: str) -> Path:
+    """Office/WPS COM resolves relative paths against its own working
+    directory, so every path crossing the COM boundary must be absolute."""
+    return Path(value).expanduser().resolve()
+
+
 def _matrix(value: Any, rows: int, columns: int) -> list[list[Any]]:
+    """Normalize a Range.Formula/Value2 payload into rows x columns.
+
+    pywin32 is inconsistent here: a multi-cell range comes back as a tuple of
+    row-tuples even when it has a single column, so `(('base',), ('10',))`
+    must become `[['base'], ['10']]` instead of a list of 1-tuples.
+    """
     if rows == 1 and columns == 1:
         return [[value]]
     if rows == 1:
+        if isinstance(value, tuple) and len(value) == 1 and isinstance(value[0], tuple):
+            value = value[0]
         return [list(value)]
     if columns == 1:
-        return [[item] for item in value]
-    return [list(row) for row in value]
+        return [list(item) if isinstance(item, tuple) else [item] for item in value]
+    return [list(row) if isinstance(row, tuple) else [row] for row in value]
 
 
 def _snapshot(workbook: Any) -> list[dict[str, Any]]:
@@ -311,8 +325,8 @@ class ConversionSession:
                 pass
 
     def convert(self, source_text: str, output_text: str) -> dict[str, Any]:
-        source = Path(source_text)
-        output = Path(output_text)
+        source = _absolute(source_text)
+        output = _absolute(output_text)
         stage = "检查转换路径"
         workbook: Any | None = None
         reopened: Any | None = None
@@ -393,8 +407,8 @@ class ConversionSession:
         source_copy_text: str,
         regions: list[dict[str, str]],
     ) -> dict[str, Any]:
-        template_path = Path(template_text)
-        source_copy_path = Path(source_copy_text)
+        template_path = _absolute(template_text)
+        source_copy_path = _absolute(source_copy_text)
         stage = "检查校验区域临时副本"
         template_workbook: Any | None = None
         source_workbook: Any | None = None
@@ -492,8 +506,8 @@ class ConversionSession:
 
     def convert_word(self, source_text: str, output_text: str) -> dict[str, Any]:
         """Convert a Word/WPS Writer document to .docx through Word COM."""
-        source = Path(source_text)
-        output = Path(output_text)
+        source = _absolute(source_text)
+        output = _absolute(output_text)
         stage = "检查转换路径"
         document: Any | None = None
         try:
@@ -553,7 +567,7 @@ class ConversionSession:
 
     def extract_word_text(self, input_text: str) -> dict[str, Any]:
         """Plain text of a document, for fidelity validation after conversion."""
-        source = Path(input_text)
+        source = _absolute(input_text)
         stage = "检查文档路径"
         document: Any | None = None
         try:

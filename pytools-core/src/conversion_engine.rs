@@ -1215,7 +1215,13 @@ fn run_pywin32(
     source_ext: &str,
     runtime: &mut ConversionRuntime,
 ) -> Result<ComExecution> {
-    let output_parent = output
+    // Excel/WPS COM resolves relative paths against *its own* working
+    // directory, not ours, so every path handed to the worker must be
+    // absolute. `std::path::absolute` keeps the drive-letter form (unlike
+    // canonicalize's `\\?\` prefix, which Office rejects).
+    let absolute_output = std::path::absolute(output)
+        .with_context(|| format!("resolve absolute output path {}", output.display()))?;
+    let output_parent = absolute_output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
@@ -1237,7 +1243,7 @@ fn run_pywin32(
     let result = match target {
         "xlsx" => {
             #[cfg(windows)]
-            let result = runtime.spreadsheet_pywin32(&com_input, output);
+            let result = runtime.spreadsheet_pywin32(&com_input, &absolute_output);
             #[cfg(not(windows))]
             let result = {
                 let _ = runtime;
@@ -1247,7 +1253,7 @@ fn run_pywin32(
         }
         "docx" => {
             #[cfg(windows)]
-            let result = runtime.word_pywin32(&com_input, output);
+            let result = runtime.word_pywin32(&com_input, &absolute_output);
             #[cfg(not(windows))]
             let result = {
                 let _ = runtime;
