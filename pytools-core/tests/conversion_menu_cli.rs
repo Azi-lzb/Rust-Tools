@@ -1425,3 +1425,110 @@ fn find_files_with_extension(root: &Path, extension: &str) -> Result<Vec<PathBuf
 fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
+
+/// 4-4 转换后 xlsx 必须带**已算好的公式缓存值**：下游（1-1/1-2/1-3）
+/// 用 calamine 读取，calamine 只读缓存、不计算，`fullCalcOnLoad` 对它是
+/// 无效标记。因此转换流程必须在 SaveAs 前用 COM 的
+/// `CalculateFullRebuild`（或 LO 的 OOXMLRecalcMode=0）真正重算。
+///
+/// 该测试需要 Windows Excel/WPS COM：夹具用 COM 现场生成带公式的 .xls，
+/// 转换后再用 excel_reader（calamine）读回缓存值。COM 不可用时明确跳过，
+/// 不伪报通过。
+#[test]
+fn conversion_writes_recalculated_formula_cache_for_calamine() -> Result<()> {
+    if !spreadsheet_com_available() {
+        eprintln!("skipping: no Excel/WPS spreadsheet COM available for this host");
+        return Ok(());
+    }
+    let root = TestDirectory::new()?;
+    let source = root.path().join("formula-source.xls");
+    let output = root.path().join("formula-converted.xlsx");
+    make_formula_xls(&source)?;
+
+    let converted = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["convert-file", "--input"])
+        .arg(&source)
+        .args(["--output"])
+        .arg(&output)
+        .args(["--to", "xlsx"])
+        .output()?;
+    assert!(
+        converted.status.success(),
+        "xls → xlsx conversion failed: {}",
+        String::from_utf8_lossy(&converted.stderr)
+    );
+
+    // calamine 视角：公式文本与缓存值都要在，且缓存值必须是重算结果。
+    let dump = read_workbook(&output)?;
+    let sheet = dump
+        .sheets
+        .first()
+        .context("converted workbook has no worksheet")?;
+    assert_eq!(
+        sheet.formulas.get("A4").map(String::as_str),
+        Some("A2*2+7"),
+        "formula text must survive conversion"
+    );
+    let cached = sheet
+        .values
+        .get("A4")
+        .context("converted formula cell has no cached value")?;
+    let cached_number = cached
+        .get("value")
+        .and_then(Value::as_f64)
+        .context("converted cached value is not numeric")?;
+    assert!(
+        (cached_number - 27.0).abs() < 1e-9,
+        "cached value must be the recalculated result (10*2+7=27), found {cached_number}"
+    );
+    Ok(())
+}
+
+/// 生成一个带真实公式的旧版 .xls 夹具（值 10，公式 A4=A2*2+7）。
+fn make_formula_xls(path: &Path) -> Result<()> {
+    // 纯 ASCII 脚本内容，避免 -File 模式下的编码差异。
+    let script = format!(
+        "$ErrorActionPreference='Stop'\n\
+$app=New-Object -ComObject Excel.Application\n\
+try {{\n\
+  $app.Visible=$false\n\
+  $b=$app.Workbooks.Add()\n\
+  $s=$b.Worksheets.Item(1)\n\
+  $s.Name='Data'\n\
+  $s.Cells.Item(1,1)='base'\n\
+  $s.Cells.Item(2,1)=10\n\
+  $s.Cells.Item(4,1).Formula='=A2*2+7'\n\
+  $b.SaveAs('{}',56)\n\
+  $b.Close($false)\n\
+}} finally {{ $app.Quit() }}\n",
+        // PowerShell 单引号字符串不做转义：反斜杠原样保留，只需处理单引号。
+        path.to_string_lossy().replace('\'', "''")
+    );
+    let script_path = path.with_extension("make-xls.ps1");
+    fs::write(&script_path, script)?;
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script_path)
+        .output()?;
+    let _ = fs::remove_file(&script_path);
+    anyhow::ensure!(
+        output.status.success() && path.is_file(),
+        "failed to build the formula .xls fixture: {} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+/// 本机是否有可用的表格 COM 引擎（只探测注册表激活，不打开工作簿）。
+fn spreadsheet_com_available() -> bool {
+    let probe = "$ErrorActionPreference='Stop'; \
+$app=$null; foreach ($n in @('Excel.Application','ket.Application','KET.Application')) { \
+if ($null -eq $app) { try { $app=New-Object -ComObject $n } catch {} } }; \
+if ($null -eq $app) { exit 1 } else { $app.Quit(); exit 0 }";
+    Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", probe])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
