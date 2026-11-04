@@ -60,3 +60,22 @@
 - 验证：conversion_menu_cli 14/14；全量 `cargo test -p pytools-core` 通过；用真实
   仲恺样本实测输出形如
   `正在检查第 1/3 个待转换文件「2026.09 3030 中国银行 仲恺区存贷统计月报.xls」。`
+
+补充（2026-11-04，1-3 汇总：错误值与跳过日志）：
+- 用户反馈 xlsx 源在固定行汇总区域报「公式 1人民币!D12 没有可用的已保存结果」，
+  但同一数据的 .xls 可以读取，且用户已人工保存计算过。
+- 实测根因：D12 的 XML 为 `<c r="D12" s="14" t="e"><f t="shared" si="0"/><v>#DIV/0!</v></c>`
+  ——缓存值存在且是公式的合法错误结果。原校验把所有 `type=="error"` 一律当作
+  “没有保存结果”拒绝。.xls 之所以通过纯属巧合：BIFF 共享公式未被 Calamine 映射到
+  该地址（`formulas` 无 D12），所以该检查根本没执行；xlsx 有公式才触发。
+- 原 Python 用 COM `Value2` 读值，`#DIV/0!` 作为普通值原样写入输出，从不拒绝。
+- 修复：`ensure_named_summary_formula_cache` 与 `read_named_summary_fields` 只拒绝
+  真正缺失的缓存（值缺失或为 null）；错误 token 正常进入输出，由既有
+  `PendingErrorCell` + OOXML 补丁写回真实 Excel 错误单元格。
+- 同时修复跳过统计不可追溯：工作表级“路由通过但无有效数据行”的跳过原先只累加计数、
+  不发日志，导致汇总行「跳过 1 个源文件/工作表项」无法定位。现补发 WARN 事件，
+  并让结束行列出具体工作簿/工作表（超过 10 项时注明剩余数量）。
+- 验证：真实 TCL 样本（xlsx）由报错变为 `rows: 42`、输出含 `t="e"` 的 `#DIV/0!`；
+  .xls 批次结束行定位到「2026.09 3030 中国银行…xls」/「Sheet1」；
+  新增单测 `error_result_counts_as_a_saved_formula_cache`、`skip_summary_names_the_workbook_and_sheet`；
+  `cargo test -p pytools-core` 全绿。

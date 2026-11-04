@@ -3013,10 +3013,28 @@ fn summarize_by_named_ranges_inner(
                 progress.processed_sheets += 1;
             } else if source_sheet_has_valid_route {
                 progress.sheets_skipped += 1;
+                let reason = "模板路由和表结构校验通过，但所有汇总区域均没有有效数据行".to_owned();
                 skipped_sheet_reasons
                     .entry(source_sheet.name.clone())
                     .or_default()
-                    .insert("模板路由和表结构校验通过，但所有汇总区域均没有有效数据行".to_owned());
+                    .insert(reason.clone());
+                // Emit here as well: without this a workbook where some sheets
+                // succeed and one is skipped produced no per-sheet line, so the
+                // final "跳过 N 项" count could not be traced back to a sheet.
+                emitter.emit(
+                    "summary_region_read",
+                    "skipped",
+                    format!(
+                        "跳过源工作表「{}」的汇总区域读取：{reason}",
+                        source_sheet.name
+                    ),
+                    &progress,
+                    Some(source),
+                    None,
+                    &["pytools-core", "calamine"],
+                    Some("calamine"),
+                    Some("summary_region_empty"),
+                );
             }
         }
         progress.current_sheet = None;
@@ -3316,10 +3334,10 @@ fn summarize_by_named_ranges_inner(
         "run",
         "succeeded",
         format!(
-            "按模板命名区域汇总完成：{} 个工作簿，{} 行，跳过 {} 个源文件/工作表项",
+            "按模板命名区域汇总完成：{} 个工作簿，{} 行，{}",
             result.files,
             result.rows,
-            result.skipped_sources.len(),
+            named_range_skip_summary(&result.skipped_sources),
         ),
         &progress,
         None,
@@ -3329,6 +3347,34 @@ fn summarize_by_named_ranges_inner(
         None,
     );
     Ok(result)
+}
+
+/// Human-readable skip tail for the run summary.
+///
+/// A bare count ("跳过 1 个源文件/工作表项") is not actionable: users cannot
+/// tell whether the skipped item mattered. List the affected workbook and
+/// sheet names, capped so a pathological input cannot flood the log.
+fn named_range_skip_summary(skipped: &[NamedRangeSourceSkip]) -> String {
+    if skipped.is_empty() {
+        return "跳过 0 个源文件/工作表项".to_owned();
+    }
+    const LIST_LIMIT: usize = 10;
+    let listed = skipped
+        .iter()
+        .take(LIST_LIMIT)
+        .map(|skip| match &skip.sheet_name {
+            Some(sheet) => format!("「{}」/「{sheet}」", skip.file_name),
+            None => format!("「{}」", skip.file_name),
+        })
+        .collect::<Vec<_>>()
+        .join("、");
+    let remaining = skipped.len().saturating_sub(LIST_LIMIT);
+    let suffix = if remaining > 0 {
+        format!("，另有 {remaining} 项未列出")
+    } else {
+        String::new()
+    };
+    format!("跳过 {} 个源文件/工作表项：{listed}{suffix}", skipped.len())
 }
 
 fn parse_named_region_name(name: &str) -> Result<Option<(NamedRegionKind, String)>> {
@@ -4105,7 +4151,7 @@ fn read_named_summary_fields(
         let value = sheet.values.get(&address).cloned().unwrap_or(serde_json::Value::Null);
         if sheet.formulas.contains_key(&address) {
             anyhow::ensure!(
-                !value.is_null() && value.get("type").and_then(serde_json::Value::as_str) != Some("error"),
+                !value.is_null(),
                 "附加字段 {} 的公式 {}!{} 没有可用的已保存结果；请先计算并保存源工作簿",
                 field.name,
                 sheet.name,
@@ -4117,6 +4163,16 @@ fn read_named_summary_fields(
     Ok((values, missing))
 }
 
+/// A formula cell must carry a saved result before it is summarized.
+///
+/// An error result such as `#DIV/0!` **is** a saved result: the workbook was
+/// calculated and Excel persisted the error token. Treating it as "not
+/// calculated" rejected legitimate workbooks - and inconsistently, because a
+/// legacy `.xls` whose shared formula is not mapped to that address by
+/// Calamine skipped this check entirely while the same data as `.xlsx` failed.
+/// Only a genuinely absent cache (no `<v>` at all) is rejected here; error
+/// tokens flow through to the output, which patches them back to real Excel
+/// error cells.
 fn ensure_named_summary_formula_cache(
     sheet: &SheetDump,
     bounds: NamedRegionBounds,
@@ -4129,8 +4185,7 @@ fn ensure_named_summary_formula_cache(
             || column < bounds.start_column || column > bounds.end_column { continue; }
         let value = sheet.values.get(address);
         anyhow::ensure!(
-            value.is_some_and(|value| !value.is_null()
-                && value.get("type").and_then(serde_json::Value::as_str) != Some("error")),
+            value.is_some_and(|value| !value.is_null()),
             "{scope}公式 {}!{} 没有可用的已保存结果；请先计算并保存工作簿",
             sheet.name,
             address
@@ -5875,6 +5930,76 @@ mod merged_cell_tests {
 #[cfg(test)]
 mod named_range_spec_tests {
     use super::*;
+
+    /// A formula whose saved result is an Excel error token (`#DIV/0!` here)
+    /// was calculated and saved; it must not be reported as a missing cache.
+    /// Regression: `.xlsx` sources failed with "没有可用的已保存结果" while the
+    /// same data as `.xls` passed only because Calamine mapped no formula to
+    /// that address, so the cache check never ran.
+    #[test]
+    fn error_result_counts_as_a_saved_formula_cache() -> Result<()> {
+        let mut values = BTreeMap::new();
+        values.insert(
+            "D12".to_owned(),
+            serde_json::json!({"type":"error", "value":"Div0"}),
+        );
+        let mut formulas = BTreeMap::new();
+        formulas.insert("D12".to_owned(), "(C12-B12)/B12".to_owned());
+        let sheet = SheetDump {
+            name: "1人民币".to_owned(),
+            values,
+            formulas,
+            formula_status: "read_by_calamine".to_owned(),
+            merges: Vec::new(),
+            merge_status: "read_by_calamine".to_owned(),
+            comments: BTreeMap::new(),
+            comments_status: "read_by_calamine".to_owned(),
+            conditional_formatting: Vec::new(),
+            conditional_formatting_status: "read_by_calamine".to_owned(),
+            data_validations: Vec::new(),
+            data_validations_status: "read_by_calamine".to_owned(),
+        };
+        let bounds = NamedRegionBounds {
+            start_row: 12,
+            end_row: 12,
+            start_column: 4,
+            end_column: 4,
+        };
+        ensure_named_summary_formula_cache(&sheet, bounds, "汇总区域")?;
+
+        // A formula with no stored result at all is still rejected.
+        let mut missing = sheet;
+        missing.values.clear();
+        assert!(ensure_named_summary_formula_cache(&missing, bounds, "汇总区域").is_err());
+        Ok(())
+    }
+
+    /// The run summary must name what was skipped; a bare count leaves the
+    /// user unable to tell whether the skipped item mattered.
+    #[test]
+    fn skip_summary_names_the_workbook_and_sheet() {
+        let skips = vec![
+            NamedRangeSourceSkip {
+                file_name: "报告.xls".to_owned(),
+                sheet_name: Some("Sheet1".to_owned()),
+                reason: "所有汇总区域均没有有效数据行".to_owned(),
+            },
+            NamedRangeSourceSkip {
+                file_name: "另一个.xlsx".to_owned(),
+                sheet_name: None,
+                reason: "输入格式不受支持".to_owned(),
+            },
+        ];
+        let summary = named_range_skip_summary(&skips);
+        assert_eq!(
+            summary,
+            "跳过 2 个源文件/工作表项：「报告.xls」/「Sheet1」、「另一个.xlsx」"
+        );
+        assert_eq!(
+            named_range_skip_summary(&[]),
+            "跳过 0 个源文件/工作表项"
+        );
+    }
 
     #[test]
     fn named_regions_accept_audit_and_numbered_names() -> Result<()> {
