@@ -5,7 +5,7 @@
 
 ## 1. 项目目标与已确认边界
 
-Rust-Tools 独立维护现有 PyTools 业务和仓库内 Excel-Core。Rust 负责业务核心、读取、规则计算、新建工作簿及 ExcelEditPlan/ExcelModifier 调度；既有工作簿修改按具体能力和证据选择本地后端。隔离 openpyxl worker 仅可用于受限的既有 XLSX 修改，未来 Windows COM 仅为单独验证且显式选择的可选能力，均不得承载 PyTools 业务逻辑。原 Python 项目只读，仅在用户需要时作为行为参考。公式计算与工作簿修改分开，默认关闭。
+Rust-Tools 独立维护现有 PyTools 业务和仓库内 Excel-Core。Rust 负责业务核心、读取、规则计算、新建工作簿及 ExcelEditPlan/ExcelModifier 调度；既有工作簿修改按具体能力和证据选择本地后端。隔离 openpyxl worker 仅可用于受限的既有 XLSX 修改，未来 Windows COM 仅为单独验证且显式选择的可选能力，均不得承载 PyTools 业务逻辑。原 Python 项目只读，仅在用户需要时作为行为参考。公式计算与工作簿修改分开，默认关闭。面向未来新项目/新功能的通用默认选型见 §4.6；它不触发 Rust-Tools 现有功能迁移，现有生产路由仍以本文件登记的能力和验收证据为准。
 
 目标交付为麒麟 V10 x86_64 和统信 UOS V20 x86_64 离线 deb，兼容 glibc 2.28；核心路径不得要求用户预装 Python、Go、Office、WPS、LibreOffice 或 JVM。启用 openpyxl 引擎时可在 deb 内置隔离 Python runtime 与依赖，不得使用系统 Python、用户 PATH 或联网 pip。可选 LibreOffice 计算能力须明确独立运行时来源；Windows COM 不进入 Linux deb 或其必要依赖。ABI 和打包约束见根 AGENTS.md。
 
@@ -100,12 +100,42 @@ openpyxl 仅可通过隔离 worker 用于已验收的既有 XLSX 修改；未来
 
 `ExcelCalculator` 是与 ExcelModifier 分离的未来能力；本阶段计算目标为 LibreOffice Calc（Windows/Linux）和 Microsoft Excel COM（Windows）。此前列出的 WPS COM 是历史候选，不属于当前计算范围，除非用户另行确认。默认关闭，计算模式区分普通重算与完整重算。LibreOffice 基础公式计算的可行性已由用户实际测试确认，不重复泛泛的可行性调研；具体公式覆盖率、与 Excel 的公式语义一致性、保存保真和 Linux 离线运行时仍未验收。不得宣称计算结果完全等价。显式选择不可用或未经该功能验收的引擎时返回明确错误；界面仅列出已实现、可用且有匹配能力证据的选项。
 
+未来新 Excel 工具的计算引擎默认按平台选择：Windows 使用 pywin32 调用 Microsoft Excel COM，Linux 使用 LibreOffice Calc。Rust 项目可通过隔离 Python worker 使用 pywin32；Linux 需按部署目标提供或说明 LibreOffice 运行时来源。它们只负责真正执行公式重算，不承担读取、新建、修改或业务规则计算；普通读写不得强制依赖 Office/LibreOffice。现有 ExcelCalculator 仍遵守本节的显式启用、能力验收和可选依赖边界。
+
 ### 4.5 本项目的 Excel-Core 维护
 
 - 按用户明确提出的业务问题维护本地 Excel-Core，保留已有实现和兼容路径，不为其他项目统一而覆盖或重写。
 - 读取、新建和既有工作簿修改分别按当前操作的实际契约选择已有能力；改变生产默认路由应具备对应操作、格式和必要保留项的证据。
 - 保留现有 openpyxl worker、接口、测试和兼容依赖；未经测试，不得移除旧功能。Go/Excelize、COM 或其他扩展不是默认任务。
 - 既有区域复制默认保留公式原文；引用平移和公式重算须单独明确。用户未提出相关功能时，不主动开展引擎扩展或全面验收。
+
+### 4.6 未来 Excel 工具的统一默认选型
+
+本节定义 Rust 与 Python 项目今后新增 Excel 功能时的默认候选；“默认”表示优先采用并按目标契约验证，不代表任意文件/格式的能力已通过验收，也不自动替换本仓库已经运行的引擎。Rust-Tools 现有功能继续按 §4.1–§4.5、§6 的项目约束和实际 capability 路由执行。不得为满足本节而立即迁移或删除既有实现。
+
+| 项目语言 | 操作 | 默认候选 | 补充或边界 |
+|---|---|---|---|
+| Rust | 常规读取 | `calamine` | 复杂属性按需使用经过验证的 OOXML reader；`openpyxl` 可作为复杂读取辅助，不默认整簿重复读取。 |
+| Rust | 从零新建 XLSX | `rust_xlsxwriter` | 验证业务值、格式、公式文本及资源需求；不作为既有工作簿编辑器。 |
+| Rust | 基于模板生成新文件 | 复制模板后用 `openpyxl` 填充 | 模板对象保真需按实际文件验证；不能可靠保留的对象评估经过验证的 OOXML 定点处理。Python 只提供 Excel 专用能力，Rust 继续承担业务逻辑。 |
+| Rust | 修改既有 XLSX | `openpyxl` | 通过隔离、按工作簿批处理的 worker 调用；需验证重存对无关内容及约定保留对象的影响。能力或部署未验收时，继续使用已验证路由或明确拒绝，不得强制切换。 |
+| Rust | 严格保真定点修改 | 经验证的 OOXML 定点修改 | 仅限关系及依赖可证明、范围明确并有结果校验的操作；OOXML 不是通用整簿引擎。 |
+| Rust | 公式计算 | Windows：pywin32 + Microsoft Excel COM；Linux：LibreOffice Calc | 与读写/业务计算分离，作为按需能力；检查重算完成状态、公式结果和保存影响。 |
+| Python | 常规读取 | `python-calamine` | 复杂属性由 OOXML 或 `openpyxl` 补充；不默认用 `openpyxl` 读取全部数据。 |
+| Python | 从零新建 XLSX | `XlsxWriter` | 适用于新建和批量写入，不用于修改已有工作簿。 |
+| Python | 基于模板生成新文件 | 复制模板后用 `openpyxl` 填充 | 先评估模板内容及高级对象的保真风险。 |
+| Python | 修改既有 XLSX | `openpyxl` | 按目标对象和格式验证；高保真局部修改可评估 OOXML。 |
+| Python | 严格保真定点修改 | 经验证的 OOXML 定点修改 | 同样需要处理 ZIP/XML 关系并验证结果，不能仅凭使用 OOXML 宣称无损。 |
+| Python | 公式计算 | Windows：pywin32 + Microsoft Excel COM；Linux：LibreOffice Calc | 与公式读写、普通新建/修改区分；只在实际需要计算时检查依赖。 |
+
+统一决策要求：
+
+1. 先确认项目主语言、操作类型、文件格式、模板/保真要求和是否需要公式计算，再选对应引擎；读取、新建、修改、特殊属性处理、公式计算可以分别使用不同引擎。
+2. 公式写入、公式文本读取、缓存结果读取、触发重算和保存重算结果是不同操作。`calamine`、`python-calamine`、`rust_xlsxwriter`、`XlsxWriter`、`openpyxl` 均不作为通用公式计算引擎。
+3. `.xls`、`.xlsx`、`.xlsm`、`.xlsb`、`.xltx`、`.xltm` 的结构能力不同；数据读取后重写只代表数据迁移，不代表高保真格式转换。不得从扩展名或库的语言/实现方式推断兼容性或性能。
+4. 对已有文件明确输出副本/覆盖策略，优先临时文件写出并按业务契约验证后再替换；不得在失败时损坏源文件或静默丢弃未声明对象。
+5. 变更引擎或声称性能提升时，以代表性文件对比业务结果、必要结构、耗时和资源占用；未实测不得宣称更快或更保真。替代默认引擎时记录原因、依赖变化、兼容风险及回退条件，并遵循用户授权。
+6. 以上默认是未来开发的选型指导。存量功能不要求立即符合；发现差异先记录，只有用户明确要求迁移/修复时才修改实现。
 
 ## 5. 操作编号和目标方向
 
