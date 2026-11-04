@@ -1,0 +1,30 @@
+{
+  "result": {
+    "execution": {
+      "ooxml_error_cells_patched": 0,
+      "read_elapsed_ms": 60,
+      "reader_engine": "calamine + namespace-aware OOXML supplement",
+      "total_elapsed_ms": 5926,
+      "write_elapsed_ms": 53,
+      "writer_engine": "rust_xlsxwriter"
+    },
+    "files": 2,
+    "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\acc-14-1jkcld7b\\out\\20261105_070506_按模板校验区域提取校验.xlsx",
+    "rows": 6,
+    "saved": true,
+    "skipped_sources": []
+  },
+  "run_summary": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\PT-6-3_pytools-pt-6-3-validation-25272-1793833500334977900.json"
+}
+
+--- stderr ---
+[2026-11-05 07:05:00] [INFO] 开始按模板校验区域提取校验：2 个输入
+[2026-11-05 07:05:05] [INFO] 工作簿「2026.09 5k01 广州银行 仲恺区存贷统计月报.xls」，工作表「2外币」：正在通过 Excel/WPS COM 重算「2026.09 5k01 广州银行 仲恺区存贷统计月报.xls」的校验区域（2 个区域）
+[2026-11-05 07:05:05] [INFO] 工作簿「2026.09 5k01 广州银行 仲恺区存贷统计月报.xls」，工作表「2外币」：校验区域重算完成：「2026.09 5k01 广州银行 仲恺区存贷统计月报.xls」/「1人民币、2外币」；Excel.Application；提取命中结果 3 条
+[2026-11-05 07:05:05] [INFO] 工作簿「2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx」，工作表「2外币」：正在通过 Excel/WPS COM 重算「2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx」的校验区域（2 个区域）
+[2026-11-05 07:05:06] [INFO] 工作簿「2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx」，工作表「2外币」：校验区域重算完成：「2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx」/「1人民币、2外币」；Excel.Application；提取命中结果 3 条
+[2026-11-05 07:05:06] [INFO] 工作簿「20261105_070506_按模板校验区域提取校验.xlsx」：正在校验并保存校验结果工作簿
+[2026-11-05 07:05:06] [INFO] 工作簿「20261105_070506_按模板校验区域提取校验.xlsx」：校验结果工作簿已保存
+[2026-11-05 07:05:06] [INFO] 工作簿「20261105_070506_按模板校验区域提取校验.xlsx」：按模板校验区域提取校验完成：2 个工作簿，命中结果 6 条，跳过 0 个工作表项
+
+[捕获说明] 1-4 真实仲恺模板 + 2 个源工作簿；分组摘要 + COM 重算 + 补装工作表清单

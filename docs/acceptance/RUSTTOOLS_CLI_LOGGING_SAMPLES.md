@@ -133,3 +133,32 @@
 与第一轮对比：同一错误链从三次重复压缩为一次；单行 12 项统计拆为多组；run_id/统一 JSON 记录名移出用户视图；错误行降回 ERROR、统计行保持 INFO/WARN；进度检查点从 10 个减为 4 个（两条异常 + 首尾）。
 
 完整原始输出：[100 文件 stderr](captures/region-sum-100.stderr.txt)、[10 文件合并流](captures/region-sum-10.terminal.txt)（79 行，0.090 秒）、[50 文件合并流](captures/region-sum-50.terminal.txt)（75 行，0.300 秒）。10 文件为小批量（0.090 秒），按文件显示进度；50/100 均只显示异常与首尾检查点。
+
+
+## 第三轮收尾验收捕获（2026-11-05，最新 Release EXE）
+
+五个优先功能以最新代码真实运行，原始捕获如下：
+
+### 1-4 按模板校验区域提取校验（CLI 子命令 = 菜单同一入口）
+
+[named-validation-round3.terminal.txt](captures/named-validation-round3.terminal.txt)：真实仲恺模板 + xls/xlsx 两源；分组摘要；每工作簿「校验区域重算完成」含命中数；补装清单与 COM 会话由结构化事件承载。
+
+### 3-2 按打印配置生成（openpyxl，交互菜单 3→2）
+
+[print-openpyxl-menu-round3.terminal.txt](captures/print-openpyxl-menu-round3.terminal.txt)：`按配置生成静态打印文件：执行成功` + `保存工作簿 1 个`；无「处理中...」占位行、无内部字段。
+
+### 4-4 Office 格式转换（交互菜单 4→4→1）
+
+[conversion-menu-round3.terminal.txt](captures/conversion-menu-round3.terminal.txt)：pywin32 COM 转换真实 xls（含公式，缓存 27=10*2+7）；菜单 stderr 只出现分组摘要（`Excel 格式转换：执行成功`、`保存工作簿 1 个`），worker JSON 仅在独立 CLI 机器接口中。
+
+### 5-3 删除分机构表中的外资行（交互菜单 5→3）
+
+[foreign-bank-menu-round3.terminal.txt](captures/foreign-bank-menu-round3.terminal.txt)：三输入（可删除/无可删/格式拒绝）；`删除分机构表中的外资行：执行成功` + `输入：2，成功：2`。
+
+### 6-3 执行归档计划（交互菜单 6→3）
+
+[archive-execute-plan-round3.terminal.txt](captures/archive-execute-plan-round3.terminal.txt)：执行 6→1 生成的日期归档计划；`执行归档计划：执行成功` + `已复制数：1` + 结果与计划输出路径。
+
+### 4-4 输出写入失败场景说明
+
+两轮探测（输出目录只读、目标文件独占锁）均被现有流程吸收（同名去重 `_1` 后缀、COM 写入路径），未触发真实写入失败；不做人为伪造样例。失败定位能力由以下真实证据承载：region-sum-100 的 broken.xlsx（文件 + 阶段 + 去重原因）与自动化测试的 `refusing to overwrite existing output` 路径。

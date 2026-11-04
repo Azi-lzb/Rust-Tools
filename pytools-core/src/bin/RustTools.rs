@@ -1691,7 +1691,7 @@ where
     if !config_path.exists() {
         let initialize_started = Instant::now();
         if log_view != "off" {
-            writeln!(output, "正在新建 PyTools 配置表……")?;
+            writeln!(output, "正在新建 rustTools 配置表……")?;
         }
         facts.add_engine("rust_xlsxwriter");
         facts.add_component("pytools_core::config::initialize_new_config");
@@ -21416,7 +21416,7 @@ fn print_usage() {
     eprintln!(
         "Usage:\n\
          pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id>]\n\
-         no command opens the PyTools Rust V2 menu; available categories: 1 (data extraction and summaries 1-5), 2 (configured deduplication and append 1-4), 3 (static print and precheck 1-2), 4 (file processing 1-8), 5 (special reports 1-8), 6 (archive preview and copy), and 7 (configuration and quick actions 1-5)\n\
+         no command opens the rustTools menu; available categories: 1 (data extraction and summaries 1-5), 2 (configured deduplication and append 1-4), 3 (static print and precheck 1-2), 4 (file processing 1-8), 5 (special reports 1-8), 6 (archive preview and copy), and 7 (configuration and quick actions 1-5)\n\
          timeline-precheck --config <workbook.xlsx>\n\
          timeline-compare --config <workbook.xlsx> --template <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
          timeline-extract --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--capabilities <json> --platform <id> [--commit-target]] [<source.xlsx>...]\n\
