@@ -99,3 +99,18 @@
   目标缺失行/单元格自动创建）；`cargo test -p pytools-core -p ooxml-patch` 全绿。
 - 已知代价：整批耗时由约 102 秒升至约 218 秒，因为每个 `.xls` 源都要多走一次
   转换。若后续需要优化，可对同一批次复用已转换的 xlsx 副本。
+
+补充（2026-11-04，1-4 性能：批内复用转换 Worker）：
+- 上一版每个 `.xls` 源都要独立转换，每次 `convert_one` 新建一个 `ConversionRuntime`，
+  即每文件一次 worker + Office 冷启动，整批 22 个文件由约 102 秒升至约 218 秒。
+- 改为复用 1-4 已持有的 `ConversionRuntime`：1-4 的副本转换与校验重算共用同一个
+  pywin32 worker 与同一个 Excel 进程。`conversion::convert_one_with_runtime` 提升为
+  `pub(crate)` 供调用。
+- 实测（同一模板、同一 22 个真实源文件）：
+  - 旧 COM 复制方案：约 102 秒
+  - OOXML 复制 + 每文件冷启动：约 218 秒
+  - OOXML 复制 + 批内复用 Worker：**约 25 秒**
+  - 只给已转换的 `.xlsx` 源：约 17 秒（用户可自行先跑 4-4 达到此值）
+- 输出仍与旧实现逐单元格对拍 0 差异。
+- 另在日志中新增 `validation_conversion` 阶段事件，提示“若已用 4-4 转换过该文件，
+  直接选择 .xlsx 源可跳过这一步”，便于用户按需优化。

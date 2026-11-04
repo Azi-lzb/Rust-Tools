@@ -2047,7 +2047,7 @@ fn extract_named_validation_regions_inner(
             format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；COM 仅修改副本，原文件不变"),
             &progress, Some(source), None, &["pytools-core"], None, None);
         let mut source_copy_created = false;
-        let calculation = (|| -> Result<_> {
+        let calculation = (|runtime: &mut ConversionRuntime| -> Result<_> {
             // 校验副本保留在输出目录的“副本/”下（用户要求）：便于事后
             // 核对 COM 重算时实际读取的数据；同名副本按序号追加。
             let retained_dir = output_dir.join("副本");
@@ -2083,10 +2083,43 @@ fn extract_named_validation_regions_inner(
                 copy_index += 1;
             }
             if needs_conversion {
-                crate::conversion::convert_one(source, &source_copy, "xlsx", "auto")
-                    .with_context(|| {
-                        format!("把「{file_name}」转换为可复算的 .xlsx 副本失败")
-                    })?;
+                let conversion_started = Instant::now();
+                emitter.emit(
+                    "validation_conversion",
+                    "started",
+                    format!(
+                        "源工作簿为旧版格式，正在转换为可复算的 .xlsx 副本；\
+                         若已用 4-4 转换过该文件，直接选择 .xlsx 源可跳过这一步"
+                    ),
+                    &progress,
+                    Some(source),
+                    None,
+                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                    Some("pywin32 Excel/WPS COM"),
+                    None,
+                );
+                crate::conversion::convert_one_with_runtime(
+                    source,
+                    &source_copy,
+                    "xlsx",
+                    "auto",
+                    runtime,
+                )
+                .with_context(|| format!("把「{file_name}」转换为可复算的 .xlsx 副本失败"))?;
+                emitter.emit(
+                    "validation_conversion",
+                    "succeeded",
+                    format!(
+                        "已转换为 .xlsx 副本，耗时 {} ms",
+                        conversion_started.elapsed().as_millis()
+                    ),
+                    &progress,
+                    Some(source),
+                    Some(conversion_started.elapsed()),
+                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                    Some("pywin32 Excel/WPS COM"),
+                    None,
+                );
             } else {
                 fs::copy(source, &source_copy)
                     .with_context(|| format!("创建校验副本失败：{file_name}"))?;
@@ -2099,7 +2132,7 @@ fn extract_named_validation_regions_inner(
                 &progress, Some(source), None, &["pytools-core", "pywin32", "Excel/WPS COM"],
                 Some("pywin32 Excel/WPS COM"), None);
             runtime.recalculate_named_validation_regions(template_path, &source_copy, &file_requests)
-        })();
+        })(&mut runtime);
         let calculation = match calculation {
             Ok(calculation) => calculation,
             Err(error) => {

@@ -159,7 +159,13 @@ pub fn convert_one(input: &Path, output: &Path, target: &str, engine: &str) -> R
     convert_one_with_runtime(input, output, target, engine, &mut runtime)
 }
 
-fn convert_one_with_runtime(
+/// Convert one file on an existing runtime.
+///
+/// Callers that already hold a worker (for example the 1-4 validation flow,
+/// which converts legacy sources before recalculating them) pass their runtime
+/// so the batch reuses one pywin32 worker and one Office process instead of
+/// paying a cold start per file.
+pub(crate) fn convert_one_with_runtime(
     input: &Path,
     output: &Path,
     target: &str,
