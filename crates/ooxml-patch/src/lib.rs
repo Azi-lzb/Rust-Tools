@@ -1809,6 +1809,20 @@ pub fn copy_cell_region(
 
     let mut replacements: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut report = CellRegionCopyReport::default();
+
+    // Sheets referenced by the formulas that will be copied must exist BEFORE
+    // the formulas land, in this same plan. Excel resolves references when it
+    // opens the package, so a plan that writes formulas first and sheets later
+    // would briefly describe a workbook whose formulas point at nothing; doing
+    // sheets first also means a failure here never leaves formulas behind that
+    // reference a sheet nobody copied.
+    let referenced = collect_referenced_sheets(&formulas_by_sheet);
+    let (sheet_changes, sheets_copied) =
+        plan_missing_template_sheets(source, output, &source_sheets, &referenced)?;
+    report.sheets_copied = sheets_copied;
+    replacements.extend(sheet_changes);
+
+    // With every referenced sheet present, copy the region formulas in.
     for request in requests {
         let part = target_sheets
             .get(&request.target_sheet)
@@ -1839,16 +1853,21 @@ pub fn copy_cell_region(
         !replacements.is_empty(),
         "cell region copy produced no worksheet changes"
     );
-
-    // Formulas copied above may reference sheets the target does not have
-    // (`集中系统数据`, `参照表`, …). Those sheets live in the template, so copy
-    // them in; otherwise Excel evaluates the formulas against nothing and the
-    // extracted results are wrong rather than merely incomplete.
-    let referenced = collect_referenced_sheets(&formulas_by_sheet);
-    let (sheet_changes, sheets_copied) =
-        plan_missing_template_sheets(source, output, &source_sheets, &referenced)?;
-    report.sheets_copied = sheets_copied;
-    replacements.extend(sheet_changes);
+    // Invariant: every sheet the copied formulas reference now exists either in
+    // the target already or among the sheets just copied. Without this a silent
+    // gap would make Excel compute against a missing sheet.
+    for name in &referenced {
+        ensure!(
+            target_sheets
+                .keys()
+                .any(|existing| existing.eq_ignore_ascii_case(name))
+                || report
+                    .sheets_copied
+                    .iter()
+                    .any(|copied| copied.eq_ignore_ascii_case(name)),
+            "公式引用了工作表 {name:?}，但它既不在目标工作簿中，也未能从模板补装"
+        );
+    }
 
     // Rewrite the package to a sibling temp file, then replace the target:
     // `output` is the caller's working copy and must survive a mid-write
@@ -1980,6 +1999,266 @@ fn sheet_references_in_formula(text: &str) -> Vec<String> {
     names
 }
 
+/// Lowest `sheetN.xml` index not yet used by either package.
+fn next_free_sheet_index(used_parts: &BTreeSet<String>) -> u32 {
+    let mut index = 1u32;
+    loop {
+        if !used_parts.contains(&format!("xl/worksheets/sheet{index}.xml")) {
+            return index;
+        }
+        index += 1;
+    }
+}
+
+/// Copy a worksheet part together with the parts its relationships point at.
+///
+/// A worksheet commonly owns `commentsN.xml` and `vmlDrawingN.vml`; the sheet
+/// XML refers to them by relationship id, so copying the sheet alone leaves
+/// dangling references and Excel refuses to open the package. Relationship
+/// targets are rewritten to freshly allocated part names.
+fn copy_worksheet_with_dependencies(
+    source_zip: &mut ZipArchive<fs::File>,
+    source_part: &str,
+    new_part: &str,
+    sheet_xml: &[u8],
+    used_parts: &mut BTreeSet<String>,
+    sheet_index: u32,
+) -> Result<(Vec<u8>, Vec<(String, Vec<u8>)>)> {
+    let source_rels_part = relationships_part(source_part);
+    let Ok(rels_xml) = read_zip_part(source_zip, &source_rels_part) else {
+        // No relationships: nothing to carry over.
+        return Ok((sheet_xml.to_vec(), Vec::new()));
+    };
+    let rels_text = std::str::from_utf8(&rels_xml).context("worksheet rels must be UTF-8")?;
+    let document = Document::parse(rels_text).context("parse worksheet relationships")?;
+
+    let source_dir = source_part.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+    let mut new_rels = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+    );
+    let mut extra_parts = Vec::new();
+    // comments and vml drawings are numbered per sheet in practice; reuse the
+    // sheet's own index so a copied sheet keeps a readable, unique name.
+    let mut comments_index: Option<u32> = None;
+    for relationship in document.descendants().filter(|node| {
+        node.is_element() && node.tag_name().name() == "Relationship"
+    }) {
+        let Some(id) = relationship.attribute("Id") else {
+            continue;
+        };
+        let Some(kind) = relationship.attribute("Type") else {
+            continue;
+        };
+        let Some(target) = relationship.attribute("Target") else {
+            continue;
+        };
+        let resolved = normalize_part(source_dir, target);
+        // Only carry parts whose payload lives in this package.
+        let Ok(bytes) = read_zip_part(source_zip, &resolved) else {
+            // External or missing target: keep it out rather than copy a
+            // dangling reference.
+            continue;
+        };
+        let file_name = resolved.rsplit('/').next().unwrap_or(&resolved);
+        let (prefix, suffix) = match (
+            file_name
+                .strip_suffix(".xml")
+                .and_then(|stem| stem.strip_prefix("comments")),
+            file_name
+                .strip_suffix(".vml")
+                .and_then(|stem| stem.strip_prefix("vmlDrawing")),
+        ) {
+            (Some(_), _) => ("comments", ".xml"),
+            (_, Some(_)) => ("vmlDrawing", ".vml"),
+            _ => {
+                // Anything else (drawings, tables) is not needed for a
+                // data-only sheet; skip instead of inventing a layout.
+                continue;
+            }
+        };
+        let new_index = if prefix == "comments" && comments_index.is_none() {
+            comments_index = Some(sheet_index);
+            sheet_index
+        } else {
+            allocate_indexed_part(used_parts, &resolved, prefix, suffix)
+        };
+        // Keep the source directory (e.g. `xl/drawings`), otherwise the
+        // relationship target points at a part that does not exist.
+        let source_dir_of_part = resolved.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("xl");
+        let new_resolved = format!("{source_dir_of_part}/{prefix}{new_index}{suffix}");
+        used_parts.insert(new_resolved.clone());
+        new_rels.push_str(&format!(
+            r#"<Relationship Id="{id}" Type="{}" Target="{}"/>"#,
+            escape_xml_text(kind),
+            escape_xml_text(&relative_target(new_part, &new_resolved))
+        ));
+        extra_parts.push((new_resolved, bytes));
+    }
+    new_rels.push_str("</Relationships>");
+    if extra_parts.is_empty() {
+        return Ok((sheet_xml.to_vec(), Vec::new()));
+    }
+
+    let new_rels_part = relationships_part(new_part);
+    used_parts.insert(new_rels_part.clone());
+    extra_parts.push((new_rels_part, new_rels.into_bytes()));
+    Ok((sheet_xml.to_vec(), extra_parts))
+}
+
+/// Allocate a copy name for `resolved` that no package part uses yet.
+fn allocate_indexed_part(
+    used_parts: &BTreeSet<String>,
+    resolved: &str,
+    prefix: &str,
+    suffix: &str,
+) -> u32 {
+    let dir = resolved.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("xl");
+    let mut index = 1u32;
+    loop {
+        let candidate = format!("{dir}/{prefix}{index}{suffix}");
+        if !used_parts.contains(&candidate) {
+            return index;
+        }
+        index += 1;
+    }
+}
+
+/// Relationship target from a part in `from_part`'s directory to `to_part`.
+fn relative_target(from_part: &str, to_part: &str) -> String {
+    let from_dir = from_part
+        .rsplit_once('/')
+        .map(|(dir, _)| dir)
+        .unwrap_or("");
+    let to_dir = to_part.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+    let file = to_part
+        .rsplit_once('/')
+        .map(|(_, file)| file)
+        .unwrap_or(to_part);
+    if from_dir == to_dir {
+        return file.to_owned();
+    }
+    // Targets are relative to the part owning the rels file. Both live under
+    // `xl/`, so reaching `xl/` costs one `../`; any extra depth on either side
+    // adds to that.
+    let from_depth = from_dir.split('/').filter(|s| !s.is_empty()).count();
+    let to_depth = to_dir.split('/').filter(|s| !s.is_empty()).count();
+    let climb = from_depth.saturating_sub(1).max(to_depth.saturating_sub(1));
+    let target_dir = to_dir
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("/");
+    let mut target = "../".repeat(climb);
+    if !target_dir.is_empty() {
+        target.push_str(&target_dir);
+        target.push('/');
+    }
+    target.push_str(file);
+    target
+}
+
+/// Rewrite `<c t="s"><v>N</v></c>` cells to inline strings using the source
+/// package's shared-string table.
+///
+/// Shared-string indexes are package-local. A worksheet lifted from another
+/// workbook must therefore stop referring to them; inlining is the smallest
+/// change that keeps the copied sheet self-contained.
+fn inline_shared_strings(
+    source_zip: &mut ZipArchive<fs::File>,
+    sheet_xml: &[u8],
+) -> Result<Vec<u8>> {
+    let strings = read_shared_strings(source_zip)?;
+    if strings.is_empty() {
+        return Ok(sheet_xml.to_vec());
+    }
+    let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
+    let document = Document::parse(xml).context("parse worksheet for shared-string inlining")?;
+    let mut edits = Vec::<(Range<usize>, Vec<u8>)>::new();
+    for cell in document.descendants().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "c"
+            && node.attribute("t") == Some("s")
+    }) {
+        let value = cell
+            .children()
+            .find(|node| {
+                node.is_element()
+                    && node.tag_name().namespace() == Some(MAIN_NS)
+                    && node.tag_name().name() == "v"
+            })
+            .and_then(|node| node.text())
+            .unwrap_or_default()
+            .trim();
+        let Ok(index) = value.parse::<usize>() else {
+            continue;
+        };
+        let Some(text) = strings.get(index) else {
+            bail!(
+                "工作表单元格 {:?} 的共享字符串索引 {index} 超出模板字符串表范围（{} 项）",
+                cell.attribute("r"),
+                strings.len()
+            );
+        };
+        let range = cell.range();
+        let fragment = &xml[range.clone()];
+        let open_end = fragment
+            .find('>')
+            .context("cell element has no closing angle bracket")?;
+        let open_tag = fragment[..open_end].trim_end_matches('/');
+        // Swap `t="s"` for `t="inlineStr"` so the value is read from `<is>`.
+        let swapped = open_tag.replace("t=\"s\"", "t=\"inlineStr\"");
+        if swapped == open_tag {
+            bail!("单元格 {:?} 缺少 t=\"s\" 属性", cell.attribute("r"));
+        }
+        let open_tag = swapped;
+        let replacement = format!(
+            "{open_tag}><is><t xml:space=\"preserve\">{}</t></is></c>",
+            escape_xml_text(text)
+        );
+        edits.push((range, replacement.into_bytes()));
+    }
+    if edits.is_empty() {
+        return Ok(sheet_xml.to_vec());
+    }
+    let mut patched = sheet_xml.to_vec();
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    for (range, replacement) in edits {
+        patched = splice_bytes(&patched, range, &replacement);
+    }
+    Ok(patched)
+}
+
+/// Plain text of every `<si>` in the package's shared-string table.
+fn read_shared_strings(source_zip: &mut ZipArchive<fs::File>) -> Result<Vec<String>> {
+    let Ok(xml) = read_zip_part(source_zip, "xl/sharedStrings.xml") else {
+        return Ok(Vec::new());
+    };
+    let xml = std::str::from_utf8(&xml).context("sharedStrings.xml must be UTF-8")?;
+    let document = Document::parse(xml).context("parse sharedStrings.xml")?;
+    Ok(document
+        .descendants()
+        .filter(|node| {
+            node.is_element()
+                && node.tag_name().namespace() == Some(MAIN_NS)
+                && node.tag_name().name() == "si"
+        })
+        .map(|node| {
+            // Concatenate every <t> in the item; <r> runs and phonetic <rPh>
+            // children both contribute their text nodes.
+            node.descendants()
+                .filter(|child| {
+                    child.is_element()
+                        && child.tag_name().namespace() == Some(MAIN_NS)
+                        && child.tag_name().name() == "t"
+                })
+                .filter_map(|child| child.text())
+                .collect::<String>()
+        })
+        .collect())
+}
+
 /// Copy template sheets into the target when copied formulas reference them
 /// and the target lacks them.
 ///
@@ -2010,6 +2289,13 @@ fn plan_missing_template_sheets(
     let mut content_types = read_zip_part(&mut target_zip, "[Content_Types].xml")?;
 
     let mut copied = Vec::new();
+    // Parts already taken by either package, so copied sheets never overwrite
+    // an existing comments/vml part.
+    let mut used_parts = source_zip
+        .file_names()
+        .chain(target_zip.file_names())
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
     for name in missing {
         let Some(part) = source_sheets
             .iter()
@@ -2020,27 +2306,42 @@ fn plan_missing_template_sheets(
         };
         let sheet_xml = read_zip_part(&mut source_zip, &part)
             .with_context(|| format!("read template sheet {name:?}"))?;
+        // The sheet's `<c t="s"><v>N</v></c>` indexes point into the TEMPLATE's
+        // sharedStrings table. The target has its own table with different
+        // entries, so leaving them alone makes every text cell resolve to the
+        // wrong string (or out of range, which Excel rejects as a corrupt
+        // package). Inline the text instead: the copied sheet then carries its
+        // own strings and needs no shared-table surgery.
+        let sheet_xml = inline_shared_strings(&mut source_zip, &sheet_xml)
+            .with_context(|| format!("inline shared strings for template sheet {name:?}"))?;
         ensure!(
             !has_formula_elements(&sheet_xml),
             "公式引用的模板工作表 {name:?} 自身包含公式；请先在模板中把它改为数值表，\
              或手动把该表加入源工作簿"
         );
         // A fresh part name that cannot collide with the target's.
-        let next_index = target_sheets
-            .values()
-            .filter_map(|existing| {
-                existing
-                    .rsplit('/')
-                    .next()
-                    .and_then(|file| file.strip_prefix("sheet"))
-                    .and_then(|file| file.strip_suffix(".xml"))
-                    .and_then(|index| index.parse::<u32>().ok())
-            })
-            .max()
-            .unwrap_or(0)
-            + 1 + copied.len() as u32;
+        let next_index = next_free_sheet_index(&used_parts);
         let new_part = format!("xl/worksheets/sheet{next_index}.xml");
+        used_parts.insert(new_part.clone());
+
+        // The worksheet's own relationships (comments, VML drawing for comment
+        // boxes) must come along, otherwise the copied sheet keeps `r:id`
+        // references that resolve to nothing and Excel reports the package as
+        // corrupt. Those targets are remapped to fresh part names as well.
+        let (sheet_xml, extra_parts) = copy_worksheet_with_dependencies(
+            &mut source_zip,
+            &part,
+            &new_part,
+            &sheet_xml,
+            &mut used_parts,
+            next_index,
+        )
+        .with_context(|| format!("copy template sheet {name:?} with its dependencies"))?;
         changes.insert(new_part.clone(), sheet_xml);
+        for (extra_name, bytes) in extra_parts {
+            changes.insert(extra_name, bytes);
+        }
+
         let relationship_id = format!("rId{}", next_relationship_id(&workbook_rels)?);
         let sheet_id = next_sheet_id(&workbook)?;
         workbook = append_sheet_entry(&workbook, &name, sheet_id, &relationship_id)?;
@@ -4827,5 +5128,26 @@ mod sheet_reference_detection_tests {
         // The INDIRECT text must not be treated as a live sheet reference for
         // copy planning; the runtime string is resolved by Excel.
         assert!(sheet_references_in_formula(r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(1,1)))"#).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod relationship_target_tests {
+    use super::relative_target;
+
+    #[test]
+    fn resolves_sibling_and_nested_parts() {
+        assert_eq!(
+            relative_target("xl/worksheets/sheet2.xml", "xl/comments2.xml"),
+            "../comments2.xml"
+        );
+        assert_eq!(
+            relative_target("xl/worksheets/sheet2.xml", "xl/drawings/vmlDrawing2.vml"),
+            "../drawings/vmlDrawing2.vml"
+        );
+        assert_eq!(
+            relative_target("xl/worksheets/sheet2.xml", "xl/worksheets/sheet2.xml"),
+            "sheet2.xml"
+        );
     }
 }

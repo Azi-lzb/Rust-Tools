@@ -156,3 +156,25 @@
   `sheet_reference_detection_tests` 2 项；`cargo test -p pytools-core -p ooxml-patch` 全绿。
 - 说明：当前批次中 `存量单位贷款信息` 因表结构区域（A4:B90）与源工作簿不符而被
   路由跳过，故该表的公式引用补装未在本批实际触发；补装能力已单独验证可用。
+
+补充（2026-11-04，补装工作表时同步复制依赖并内联字符串）：
+- 用户要求"先复制 sheet 再复制公式"；同时补装实现本身存在两个会导致产物无法打开的缺陷：
+  1. 只复制了 worksheet XML，未复制它的 comments/vmlDrawing 关系目标，留下悬空的
+     `r:id`；Excel 判定包损坏。
+  2. 工作表内 `<c t="s"><v>N</v></c>` 的共享字符串索引属于**模板包**，直接搬进目标
+     会越界（实测 sheet10/sheet11 共 952 个越界引用），openpyxl 抛 IndexError，
+     Excel 报「类 Workbooks 的 Open 方法无效」。
+- 修复：
+  - 顺序调整为「先补装被引用的工作表，再写入区域公式」，并加不变量检查：
+    任何被公式引用的表必须已存在于目标或已补装，否则失败；
+  - `copy_worksheet_with_dependencies` 连同 worksheet 的 rels 一并复制，
+    把 commentsN.xml / vmlDrawingN.vml 以新编号复制进目标，关系目标用
+    `relative_target` 正确计算相对路径；
+  - `inline_shared_strings` 把复制表里的共享字符串引用改写为 `t="inlineStr"` +
+    `<is><t>…</t></is>`，使该表自包含、不再依赖目标字符串表。
+- 验证：真实模板 + TCL 源，复制 1072 个公式单元格并补装 `参照表`、`集中系统数据`；
+  产物所有 `.rels` 目标 0 悬空、共享字符串越界 0；openpyxl 可读 8 个工作表；
+  Excel 实际打开并 `CalculateFullRebuild` 成功，`R6` 计算出引用补装表的校验文本；
+  7 个业务工作簿批次命中 187 条，耗时约 10.4 秒；
+  新增单测 `relationship_target_tests`、`copies_referenced_template_sheets_missing_from_the_target`；
+  `cargo test -p pytools-core -p ooxml-patch` 全绿。
