@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "suite": "pytools.conversion.librecell_recalc_verification",
+  "date": "2026-11-04",
+  "purpose": "Verify that the LibreOffice conversion path recalculates formulas before saving, so cached values written into the converted XLSX are correct for calamine consumers (PT-1-1/1-2/1-3 read caches only and never calculate).",
+  "why_this_matters": "calamine only reads <v> cached values; the fullCalcOnLoad workbook flag is an Excel/WPS open-time hint that calamine ignores. Without an actual recalculation during conversion the downstream features would read stale numbers.",
+  "environment": {
+    "runtime": "Docker image audit-tools-test-amd64-lo-ready:latest",
+    "libreoffice": "LibreOffice 25.8.7.3 30742500f2d3eb4366ac312fa33d3dcabdb3eba5",
+    "glibc": "2.36-9+deb12u14",
+    "python": "3.12.15",
+    "openpyxl": "3.1.5",
+    "soffice_path": "/opt/libreoffice25.8/program/soffice",
+    "missing_shared_libraries": 0
+  },
+  "fixture": {
+    "kind": "synthetic",
+    "sheet": "Data",
+    "A1": 10,
+    "A2_formula": "=A1*3+4",
+    "expected_recalculated_result": 34,
+    "deliberately_corrupted_cached_value": 999,
+    "corruption_method": "rewrite <v> of the formula cell inside xl/worksheets/sheet1.xml after openpyxl save, then rezip; this simulates a stale cache from a producer that never calculated"
+  },
+  "method": {
+    "step_1": "build the fixture with a stale cached value of 999",
+    "step_2": "create an isolated LibreOffice profile and pre-seed user/registrymodifications.xcu with /org.openoffice.Office.Calc/Formula/Load OOXMLRecalcMode=0 (always recalculate)",
+    "step_3": "run headless soffice --convert-to 'xlsx:Calc MS Excel 2007 XML' with -env:UserInstallation pointing at that profile",
+    "step_4": "read the converted workbook with openpyxl data_only=True (same XML level calamine uses)"
+  },
+  "observed": {
+    "cached_before_conversion": 999,
+    "cached_after_conversion": 34,
+    "verdict": "RECALCULATED-OK"
+  },
+  "conclusion": "With OOXMLRecalcMode=0 pre-seeded in the isolated profile, LibreOffice recalculates on load and SaveAs writes the recalculated value into the formula cache. The converted XLSX therefore carries trustworthy numbers for calamine readers.",
+  "implementation_reference": {
+    "profile_seeding": "pytools-core/src/conversion_engine.rs :: seed_lo_recalc_profile",
+    "applied_at": "libreoffice_user_installation_arg (every isolated profile created by the conversion runtime)"
+  },
+  "other_engines": {
+    "com": "Rust COM calls CalculateFullRebuild before SaveAs (pytools-core/src/conversion_com.rs)",
+    "pywin32": "worker calls application.CalculateFullRebuild() before SaveAs (pytools-core/python/pywin32_excel_conversion_worker.py)",
+    "native": "explicitly value-only: writes formula text without computing caches; not suitable for calamine cache consumers"
+  },
+  "scope_limits": [
+    "This verifies the LibreOffice recalculation switch only; it does not re-run the full PT-4-2 conversion matrix on this image.",
+    "Final acceptance on Kylin V10 / UOS V20 still belongs to the project acceptance stage on the real target machines.",
+    "The Excel/WPS COM path was verified separately on Windows with a real formula workbook (cached result 27 = 10*2+7) and is covered by an automated regression test."
+  ]
+}
