@@ -79,3 +79,23 @@
   .xls 批次结束行定位到「2026.09 3030 中国银行…xls」/「Sheet1」；
   新增单测 `error_result_counts_as_a_saved_formula_cache`、`skip_summary_names_the_workbook_and_sheet`；
   `cargo test -p pytools-core` 全绿。
+
+补充（2026-11-04，1-4 改走 audit 式结构：模板不进 COM）：
+- 用户连续两次遇到 1-4 在「通过 COM 打开校验模板和工作簿副本」阶段报
+  `类 Workbooks 的 Open 方法无效`，而本机用同一模板与 22 个真实源文件连续复跑
+  均成功，说明失败与宿主的瞬时状态有关，不是稳定算法缺陷。原实现的失败面
+  更大：模板和副本要由 Excel 同时打开两个工作簿。
+- 参考 Rust-Audit 的 `s1_formula_copy`（OOXML ImportRange 复制 → COM 重算 →
+  calamine 读值），改为：
+  1. `ooxml_patch::copy_cell_region`：Rust 侧直接把模板校验区域的公式写入工作
+     副本（同地址复制，相对引用无需翻译；丢弃模板缓存值；保留目标单元格样式；
+     模板未定义的区域内单元格清空；目标缺失的单元格/整行按需创建，
+     含自闭合 `<sheetData/>` 展开）；
+  2. 副本先落为私有临时文件再交给 COM，模板不再进入 Excel；
+  3. `.xls/.xlsb/.xlsm` 源先在「副本」目录转换为 `.xlsx` 再复制公式
+     （BIFF 不是 ZIP，OOXML 补丁无法直接改），转换复用 4-4 的引擎链路。
+- 验证：22 个真实业务文件全部成功、命中 3 条；与旧实现输出逐单元格对拍
+  **0 处差异**；新增 `cell_region_copy_tests`（公式复制且不带走模板缓存、
+  目标缺失行/单元格自动创建）；`cargo test -p pytools-core -p ooxml-patch` 全绿。
+- 已知代价：整批耗时由约 102 秒升至约 218 秒，因为每个 `.xls` 源都要多走一次
+  转换。若后续需要优化，可对同一批次复用已转换的 xlsx 副本。

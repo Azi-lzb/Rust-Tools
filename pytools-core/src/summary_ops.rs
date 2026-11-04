@@ -2053,18 +2053,44 @@ fn extract_named_validation_regions_inner(
             let retained_dir = output_dir.join("副本");
             fs::create_dir_all(&retained_dir)
                 .with_context(|| format!("创建副本目录失败：{}", retained_dir.display()))?;
+            // The template formulas are copied into this working copy over
+            // OOXML, which needs an OOXML package. Legacy `.xls` sources are
+            // BIFF, so the copy is converted first - the same route 4-4 uses.
+            let needs_conversion = !source
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case("xlsx")
+                        || extension.eq_ignore_ascii_case("xlsm")
+                });
             let copy_name = source.file_name().context("源工作簿路径缺少文件名")?;
-            let mut source_copy = retained_dir.join(copy_name);
+            let mut source_copy = if needs_conversion {
+                let stem = source
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "copy".to_owned());
+                retained_dir.join(format!("{stem}.xlsx"))
+            } else {
+                retained_dir.join(copy_name)
+            };
             let mut copy_index = 1;
             while source_copy.exists() {
-                let stem = source.file_stem().map(|stem| stem.to_string_lossy().into_owned())
+                let stem = source_copy
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "copy".to_owned());
-                let ext = source.extension().map(|ext| ext.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "xlsx".to_owned());
-                source_copy = retained_dir.join(format!("{stem}_{copy_index}.{ext}"));
+                source_copy = retained_dir.join(format!("{stem}_{copy_index}.xlsx"));
                 copy_index += 1;
             }
-            fs::copy(source, &source_copy).with_context(|| format!("创建校验副本失败：{file_name}"))?;
+            if needs_conversion {
+                crate::conversion::convert_one(source, &source_copy, "xlsx", "auto")
+                    .with_context(|| {
+                        format!("把「{file_name}」转换为可复算的 .xlsx 副本失败")
+                    })?;
+            } else {
+                fs::copy(source, &source_copy)
+                    .with_context(|| format!("创建校验副本失败：{file_name}"))?;
+            }
             source_copy_created = true;
             emitter.emit("validation_copy", "succeeded", format!("校验副本已生成并保留：「{}」；原件未修改", source_copy.display()),
                 &progress, Some(source), None, &["pytools-core"], None, None);

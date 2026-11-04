@@ -12,7 +12,9 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import math
+import shutil
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 from typing import Any
@@ -553,6 +555,25 @@ class ConversionSession:
                 "traceback": traceback.format_exc(limit=6),
             }
 
+    def _open_workbook(self, path: Path, *, read_only: bool, label: str) -> Any:
+        """Open one workbook, rebuilding the host once if Excel rejects it."""
+        first_error: Exception | None = None
+        for attempt in (1, 2):
+            assert self._application is not None
+            try:
+                return self._application.Workbooks.Open(str(path), 0, read_only)
+            except Exception as error:
+                if attempt == 2:
+                    raise RuntimeError(
+                        f"{label}无法打开：{path}\n"
+                        f"第一次错误：{type(first_error).__name__}: {first_error}\n"
+                        f"重建 Excel/WPS 实例后重试仍失败：{type(error).__name__}: {error}"
+                    ) from error
+                first_error = error
+                self._reset_application()
+                self._ensure_application()
+        raise AssertionError("unreachable")
+
     def _open_validation_pair(
         self, template_path: Path, source_copy_path: Path
     ) -> tuple[Any, Any]:
@@ -627,46 +648,77 @@ class ConversionSession:
 
     def recalculate_named_validation(
         self,
-        template_text: str,
         source_copy_text: str,
         regions: list[dict[str, str]],
+        template_text: str | None = None,
     ) -> dict[str, Any]:
-        template_path = _absolute(template_text)
+        """Recalculate validation formulas in one working copy.
+
+        The template is normally NOT opened here: Rust copies its formulas into
+        the working copy over OOXML (`ooxml_patch::copy_cell_region`) so this
+        host only ever opens a single workbook. Passing `template_text` keeps
+        the older two-workbook behaviour available for callers that still need
+        it.
+        """
         source_copy_path = _absolute(source_copy_text)
+        template_path = _absolute(template_text) if template_text else None
         stage = "检查校验区域临时副本"
         template_workbook: Any | None = None
         source_workbook: Any | None = None
+        staging: tempfile.TemporaryDirectory[str] | None = None
         try:
-            if not template_path.is_file():
-                raise FileNotFoundError(f"校验区域模板不存在：{template_path}")
             if not source_copy_path.is_file():
-                raise FileNotFoundError(f"校验区域工作簿副本不存在：{source_copy_path}")
+                raise FileNotFoundError(f"校验工作簿副本不存在：{source_copy_path}")
+            if template_path is not None and not template_path.is_file():
+                raise FileNotFoundError(f"校验区域模板不存在：{template_path}")
             if not regions:
                 raise ValueError("没有可复制的校验区域")
-            # Check both containers locally first: Excel reports damaged
-            # packages as an unhelpful "Workbooks.Open invalid" error.
-            stage = "检查校验模板与副本文件"
-            _validate_container(template_path, "校验区域模板")
+            # Check the container locally first: Excel reports a damaged
+            # package as an unhelpful "Workbooks.Open invalid" error.
+            stage = "检查校验工作簿副本文件"
             _validate_container(source_copy_path, "校验工作簿副本")
+            if template_path is not None:
+                _validate_container(template_path, "校验区域模板")
+
+            # Never hand Excel a path the user may have open. A workbook that
+            # is already open (or that would trigger a "file in use" prompt)
+            # makes `Workbooks.Open` fail with the same opaque 1004 error even
+            # though the file is perfectly valid, because DisplayAlerts is off.
+            # Working on a private staged copy removes that whole failure class.
+            stage = "为 COM 准备私有临时副本"
+            staging = tempfile.TemporaryDirectory(prefix="pytools-validation-")
+            staged_copy = Path(staging.name) / f"copy{source_copy_path.suffix}"
+            shutil.copy2(source_copy_path, staged_copy)
+
             self._ensure_application()
             application = self._application
             if application is None:
                 raise RuntimeError("Excel/WPS COM 尚未启动")
 
-            stage = "通过 COM 打开校验模板和工作簿副本"
-            template_workbook, source_workbook = self._open_validation_pair(
-                template_path, source_copy_path
-            )
+            if template_path is None:
+                stage = "通过 COM 打开工作簿副本"
+                source_workbook = self._open_workbook(
+                    staged_copy, read_only=False, label="校验工作簿副本"
+                )
+            else:
+                staged_template = (
+                    Path(staging.name) / f"template{template_path.suffix}"
+                )
+                shutil.copy2(template_path, staged_template)
+                stage = "通过 COM 打开校验模板和工作簿副本"
+                template_workbook, source_workbook = self._open_validation_pair(
+                    staged_template, staged_copy
+                )
 
-            stage = "复制模板校验公式到工作簿副本"
-            for region in regions:
-                template_sheet = str(region["template_sheet"])
-                source_sheet = str(region["source_sheet"])
-                address = str(region["address"])
-                source_range = template_workbook.Worksheets(template_sheet).Range(address)
-                target_range = source_workbook.Worksheets(source_sheet).Range(address)
-                source_range.Copy(Destination=target_range)
-            application.CutCopyMode = False
+                stage = "复制模板校验公式到工作簿副本"
+                for region in regions:
+                    template_sheet = str(region["template_sheet"])
+                    source_sheet = str(region["source_sheet"])
+                    address = str(region["address"])
+                    source_range = template_workbook.Worksheets(template_sheet).Range(address)
+                    target_range = source_workbook.Worksheets(source_sheet).Range(address)
+                    source_range.Copy(Destination=target_range)
+                application.CutCopyMode = False
 
             stage = "调用 Excel/WPS 完整重算校验公式"
             # 1-4 always copies formula cells in, so a failed recalculation
@@ -713,12 +765,19 @@ class ConversionSession:
 
             source_workbook.Close(SaveChanges=False)
             source_workbook = None
-            template_workbook.Close(SaveChanges=False)
-            template_workbook = None
+            if template_workbook is not None:
+                template_workbook.Close(SaveChanges=False)
+                template_workbook = None
+
+            # Publish the recalculated workbook back to the retained 副本 path
+            # so the file the user inspects is exactly what was calculated.
+            stage = "回写已重算的校验副本"
+            shutil.copy2(staged_copy, source_copy_path)
             return {
                 "ok": True,
                 "application": self._application_name,
                 "process_id": self._process_id,
+                "recalc_method": recalc_method,
                 "cells": cells,
             }
         except Exception as error:
@@ -735,6 +794,9 @@ class ConversionSession:
                 "error": f"{type(error).__name__}: {error}",
                 "traceback": traceback.format_exc(limit=6),
             }
+        finally:
+            if staging is not None:
+                staging.cleanup()
 
     def convert_word(self, source_text: str, output_text: str) -> dict[str, Any]:
         """Convert a Word/WPS Writer document to .docx through Word COM."""
@@ -866,9 +928,9 @@ def _serve() -> int:
                 if operation == "recalculate_named_validation":
                     _write_json(
                         session.recalculate_named_validation(
-                            str(request["template"]),
                             str(request["source_copy"]),
                             request["regions"],
+                            request.get("template"),
                         )
                     )
                     continue

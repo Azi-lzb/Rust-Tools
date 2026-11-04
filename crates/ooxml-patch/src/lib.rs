@@ -1739,6 +1739,395 @@ fn clear_empty_formula_cache_xml(source_xml: &[u8], cell_reference: &str) -> Res
     Ok(patched)
 }
 
+/// One "copy this template sheet region into that copy sheet region" request.
+#[derive(Clone, Debug)]
+pub struct CellRegionCopyRequest {
+    pub source_sheet: String,
+    pub target_sheet: String,
+    /// A1 range in both workbooks; the copy keeps the same coordinates.
+    pub address: String,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct CellRegionCopyReport {
+    pub cells_with_formula: usize,
+    pub cells_cleared: usize,
+    pub worksheet_parts: Vec<String>,
+}
+
+/// Copy formula cells from one workbook's sheet region into another workbook's
+/// same-coordinate region, then write the target back in place.
+///
+/// This exists so an external calculator (Excel/WPS via COM) only ever has to
+/// open ONE workbook: the caller copies the template's validation formulas into
+/// its own working copy here, in Rust, and then only recalculates that copy.
+/// Opening a second workbook doubles the ways an automation host can fail, and
+/// the template usually lives in a user directory that may be open in Excel.
+///
+/// Cached values are dropped, never copied: the template's cache describes the
+/// template's data, and the whole point of the following recalculation is to
+/// compute this workbook's values. Cells the template does not define are
+/// blanked so the region matches the template exactly.
+pub fn copy_cell_region(
+    source: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    requests: &[CellRegionCopyRequest],
+) -> Result<CellRegionCopyReport> {
+    let source = source.as_ref();
+    let output = output.as_ref();
+    ensure!(!requests.is_empty(), "cell region copy requires requests");
+    let canonical_source = fs::canonicalize(source).context("resolve copy source workbook")?;
+    ensure!(
+        !output.exists() || fs::canonicalize(output)? != canonical_source,
+        "cell region copy never edits the template workbook in place"
+    );
+    validate_header_package(source).context("validate cell region copy source")?;
+    validate_header_package(output).context("validate cell region copy target")?;
+
+    let source_sheets = sheet_parts(source)?;
+    let target_sheets = sheet_parts(output)?;
+    let mut source_zip = ZipArchive::new(fs::File::open(source)?)?;
+
+    // template sheet -> address -> formula text
+    let mut formulas_by_sheet: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for request in requests {
+        let part = source_sheets
+            .get(&request.source_sheet)
+            .with_context(|| format!("template sheet {:?} is missing", request.source_sheet))?;
+        if formulas_by_sheet.contains_key(&request.source_sheet) {
+            continue;
+        }
+        let xml = read_zip_part(&mut source_zip, part)?;
+        formulas_by_sheet.insert(
+            request.source_sheet.clone(),
+            region_formulas(&xml, &request.address)?,
+        );
+    }
+
+    let mut replacements: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let mut report = CellRegionCopyReport::default();
+    for request in requests {
+        let part = target_sheets
+            .get(&request.target_sheet)
+            .with_context(|| format!("target sheet {:?} is missing", request.target_sheet))?;
+        let formulas = formulas_by_sheet
+            .get(&request.source_sheet)
+            .expect("template formulas loaded above");
+        let current = replacements
+            .get(part)
+            .cloned()
+            .map(Ok)
+            .unwrap_or_else(|| {
+                read_zip_part(
+                    &mut ZipArchive::new(fs::File::open(output)?)?,
+                    part,
+                )
+            })?;
+        let (patched, with_formula, cleared) =
+            apply_region_formulas(&current, &request.address, formulas)?;
+        report.cells_with_formula += with_formula;
+        report.cells_cleared += cleared;
+        if !report.worksheet_parts.iter().any(|existing| existing == part) {
+            report.worksheet_parts.push(part.clone());
+        }
+        replacements.insert(part.clone(), patched);
+    }
+    ensure!(
+        !replacements.is_empty(),
+        "cell region copy produced no worksheet changes"
+    );
+
+    // Rewrite the package to a sibling temp file, then replace the target:
+    // `output` is the caller's working copy and must survive a mid-write
+    // failure intact.
+    let staged = output.with_file_name(format!(
+        ".{}.cell-region-{}.tmp",
+        output
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "workbook".to_owned()),
+        std::process::id()
+    ));
+    let _ = fs::remove_file(&staged);
+    let write_result = (|| -> Result<()> {
+        let mut input_zip = ZipArchive::new(fs::File::open(output)?)?;
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)
+            .with_context(|| format!("create staged copy {}", staged.display()))?;
+        let mut writer = ZipWriter::new(file);
+        for index in 0..input_zip.len() {
+            let mut entry = input_zip.by_index(index)?;
+            let name = entry.name().to_owned();
+            let mut options = SimpleFileOptions::default().compression_method(entry.compression());
+            if let Some(modified) = entry.last_modified() {
+                options = options.last_modified_time(modified);
+            }
+            if entry.is_dir() {
+                writer.add_directory(name, options)?;
+            } else {
+                writer.start_file(&name, options)?;
+                if let Some(bytes) = replacements.get(&name) {
+                    writer.write_all(bytes)?;
+                } else {
+                    std::io::copy(&mut entry, &mut writer)?;
+                }
+            }
+        }
+        writer.finish()?;
+        Ok(())
+    })()
+    .context("write target workbook with copied cell regions");
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&staged);
+        return Err(error);
+    }
+    fs::rename(&staged, output)
+        .with_context(|| format!("replace {} with copied cell regions", output.display()))?;
+    Ok(report)
+}
+
+/// Formula text for every cell the template defines inside `address`.
+fn region_formulas(
+    sheet_xml: &[u8],
+    address: &str,
+) -> Result<BTreeMap<String, String>> {
+    let (row1, col1, row2, col2) = parse_a1_range(address)?;
+    let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
+    let document = Document::parse(xml).context("parse template worksheet XML")?;
+    let mut formulas = BTreeMap::new();
+    for cell in document.descendants().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "c"
+    }) {
+        let Some(reference) = cell.attribute("r") else {
+            continue;
+        };
+        let (row, column) = match parse_a1_cell(reference) {
+            Ok(position) => position,
+            Err(_) => continue,
+        };
+        if row < row1 || row > row2 || column < col1 || column > col2 {
+            continue;
+        }
+        let formula = cell.children().find(|node| {
+            node.is_element()
+                && node.tag_name().namespace() == Some(MAIN_NS)
+                && node.tag_name().name() == "f"
+        });
+        let Some(formula) = formula else {
+            continue;
+        };
+        // Relative references stay valid because the copy keeps the source
+        // coordinates; shared/array formulas would need translation we do not
+        // implement.
+        let attributes = formula
+            .attributes()
+            .filter(|attribute| attribute.name() != "xmlns")
+            .collect::<Vec<_>>();
+        ensure!(
+            attributes.is_empty(),
+            "校验区域公式 {reference} 使用了共享公式或数组公式（{attributes:?}），暂不支持复制"
+        );
+        let text = formula.text().unwrap_or_default().trim();
+        ensure!(!text.is_empty(), "校验区域公式 {reference} 缺少公式文本");
+        formulas.insert(reference.to_owned(), text.to_owned());    }
+    Ok(formulas)
+}
+
+/// Replace the formulas inside `address` on one sheet.
+fn apply_region_formulas(
+    sheet_xml: &[u8],
+    address: &str,
+    formulas: &BTreeMap<String, String>,
+) -> Result<(Vec<u8>, usize, usize)> {
+    let (row1, col1, row2, col2) = parse_a1_range(address)?;
+    let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
+    let document = Document::parse(xml).context("parse target worksheet XML")?;
+
+    let mut edits: Vec<(Range<usize>, Vec<u8>)> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for cell in document.descendants().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "c"
+    }) {
+        let Some(reference) = cell.attribute("r") else {
+            continue;
+        };
+        let (row, column) = match parse_a1_cell(reference) {
+            Ok(position) => position,
+            Err(_) => continue,
+        };
+        if row < row1 || row > row2 || column < col1 || column > col2 {
+            continue;
+        }
+        seen.insert(reference.to_owned());
+        let formula = formulas.get(reference);
+        // The template's style indexes belong to the template package, so keep
+        // the target cell's own style and swap only its content.
+        let style = cell
+            .attribute_node("s")
+            .map(|attribute| attribute.value().to_owned());
+        let cell_range = cell.range();
+        let fragment = &xml[cell_range.clone()];
+        let open_end = fragment
+            .find('>')
+            .context("cell element has no closing angle bracket")?;
+        let self_closing = fragment.as_bytes()[open_end - 1] == b'/';
+        let mut open_tag = fragment[..open_end].trim_end_matches('/').to_owned();
+        // Drop the cached type so the recalculation decides the real type.
+        if let Some(position) = open_tag.find(" t=") {
+            let end = open_tag[position + 1..]
+                .find(|character: char| character == ' ' || character == '>')
+                .map(|offset| position + 1 + offset)
+                .unwrap_or(open_tag.len());
+            open_tag.replace_range(position..end, "");
+        }
+        let replacement = match formula {
+            Some(text) => format!(
+                "{open_tag}><f>{text}</f></c>",
+                text = escape_xml_text(text)
+            ),
+            None => format!("{open_tag}/>"),
+        };
+        let _ = (style, self_closing);
+        edits.push((cell_range, replacement.into_bytes()));
+    }
+
+    // Cells the template defines but the target does not have. Excel's
+    // Range.Copy (the previous implementation) materializes these, so do the
+    // same: insert a `<c>` into the matching row, creating the row if needed.
+    // Source workbooks legitimately differ here - one bank's sheet may leave
+    // the validation column empty.
+    let mut missing = formulas
+        .keys()
+        .filter(|reference| !seen.contains(*reference))
+        .cloned()
+        .collect::<Vec<_>>();
+    missing.sort_by_key(|reference| {
+        parse_a1_cell(reference)
+            .map(|(row, column)| (row, column))
+            .unwrap_or((u32::MAX, u32::MAX))
+    });
+    // Group by row: several new cells in one row share a single insertion.
+    let mut new_by_row: BTreeMap<u32, Vec<&String>> = BTreeMap::new();
+    for reference in &missing {
+        let (row, _column) = parse_a1_cell(reference)?;
+        new_by_row.entry(row).or_default().push(reference);
+    }
+    // Rows that already exist get their cells appended in place. Rows that do
+    // not exist are created together at the end of `sheetData`, in row order -
+    // inserting them one by one at the same offset would interleave and
+    // produce nested rows.
+    let mut appended_rows = String::new();
+    for (row, references) in &new_by_row {
+        let cells = references
+            .iter()
+            .map(|reference| {
+                format!(
+                    "<c r=\"{reference}\"><f>{}</f></c>",
+                    escape_xml_text(
+                        formulas
+                            .get(*reference)
+                            .expect("missing cell has a formula")
+                    )
+                )
+            })
+            .collect::<String>();
+        match row_insert_offset(&document, *row)? {
+            Some(offset) => edits.push((offset..offset, cells.into_bytes())),
+            None => appended_rows.push_str(&format!("<row r=\"{row}\">{cells}</row>")),
+        }
+    }
+    if !appended_rows.is_empty() {
+        // A source sheet can be almost empty (a bank that fills only the
+        // summary columns). Create the rows rather than refuse: Excel's
+        // Range.Copy does the same.
+        match sheet_data_insert(&document)? {
+            SheetDataInsert::BeforeClose(offset) => {
+                edits.push((offset..offset, appended_rows.into_bytes()))
+            }
+            SheetDataInsert::ReplaceSelfClosing(offset) => edits.push((
+                offset..offset + 1,
+                format!(">{appended_rows}</sheetData>").into_bytes(),
+            )),
+        }
+    }
+
+    let mut patched = sheet_xml.to_vec();
+    let with_formula = seen
+        .iter()
+        .filter(|reference| formulas.contains_key(*reference))
+        .count()
+        + missing.len();
+    let cleared = seen.len() - (with_formula - missing.len());
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    for (range, replacement) in edits {
+        patched = splice_bytes(&patched, range, &replacement);
+    }
+    Ok((patched, with_formula, cleared))
+}
+
+/// Where new rows can be written inside a worksheet's `sheetData`.
+enum SheetDataInsert {
+    /// Insert just before `</sheetData>`.
+    BeforeClose(usize),
+    /// `<sheetData/>` is self-closing: replace the trailing `/` at this offset
+    /// with `>` plus the new rows plus `</sheetData>`.
+    ReplaceSelfClosing(usize),
+}
+
+fn sheet_data_insert(document: &Document<'_>) -> Result<SheetDataInsert> {
+    let sheet_data = document
+        .descendants()
+        .find(|node| {
+            node.is_element()
+                && node.tag_name().namespace() == Some(MAIN_NS)
+                && node.tag_name().name() == "sheetData"
+        })
+        .context("worksheet has no sheetData element")?;
+    let range = sheet_data.range();
+    let fragment = &document.input_text()[range.clone()];
+    if let Some(close) = fragment.rfind("</sheetData>") {
+        return Ok(SheetDataInsert::BeforeClose(range.start + close));
+    }
+    let slash = fragment
+        .rfind('/')
+        .context("sheetData element is neither open nor self-closing")?;
+    Ok(SheetDataInsert::ReplaceSelfClosing(range.start + slash))
+}
+
+/// Byte offset just before `</row>` of `row`, or the end of the sheet data when
+/// the row element does not exist.
+fn row_insert_offset(document: &Document<'_>, row: u32) -> Result<Option<usize>> {
+    let sheet_data = document.descendants().find(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "sheetData"
+    });
+    let Some(sheet_data) = sheet_data else {
+        return Ok(None);
+    };
+    for row_node in sheet_data.children().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "row"
+    }) {
+        if row_node.attribute("r").and_then(|value| value.parse::<u32>().ok()) == Some(row) {
+            let range = row_node.range();
+            let fragment = &document.input_text()[range.clone()];
+            let close = fragment
+                .rfind("</row>")
+                .context("row element has no closing tag")?;
+            return Ok(Some(range.start + close));
+        }
+    }
+    Ok(None)
+}
+
 /// Removes an already-empty cached result from a simple formula cell.
 ///
 /// This narrow patch is intended for writer output that must retain formula
@@ -3625,6 +4014,138 @@ mod formula_cache_recalculation_tests {
         let error = super::clear_formula_caches_for_recalculation_xml(xml.as_bytes())
             .expect_err("shared formula shape must be rejected");
         assert!(error.to_string().contains("unsupported shared/array"));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod cell_region_copy_tests {
+    use super::{copy_cell_region, CellRegionCopyRequest, MAIN_NS, PACKAGE_REL_NS, REL_NS};
+    use anyhow::Result;
+    use std::{
+        fs::{self, File},
+        io::Write,
+        path::PathBuf,
+    };
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    fn temp_path(label: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "ooxml_cell_region_{}_{}_{}.xlsx",
+            std::process::id(),
+            nonce,
+            label
+        ))
+    }
+
+    fn workbook(path: &PathBuf, worksheet: &str) -> Result<()> {
+        let root_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
+        );
+        let book = format!(
+            r#"<workbook xmlns="{MAIN_NS}" xmlns:r="{REL_NS}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+        );
+        let book_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#
+        );
+        let sheet = format!(r#"<worksheet xmlns="{MAIN_NS}">{worksheet}</worksheet>"#);
+        let mut zip = ZipWriter::new(File::create(path)?);
+        for (name, content) in [
+            ("_rels/.rels", root_rels),
+            ("xl/workbook.xml", book),
+            ("xl/_rels/workbook.xml.rels", book_rels),
+            ("xl/worksheets/sheet1.xml", sheet),
+        ] {
+            zip.start_file(name, SimpleFileOptions::default())?;
+            zip.write_all(content.as_bytes())?;
+        }
+        zip.finish()?;
+        Ok(())
+    }
+
+    #[test]
+    fn copies_formulas_and_drops_the_template_cache() -> Result<()> {
+        let template = temp_path("template");
+        let target = temp_path("target");
+        workbook(
+            &template,
+            r#"<sheetData><row r="5"><c r="F5" t="str"><f>IF(B5=0,"","错")</f><v></v></c></row></sheetData>"#,
+        )?;
+        workbook(
+            &target,
+            r#"<sheetData><row r="5"><c r="F5" s="3" t="str"><v>模板缓存</v></c><c r="G5"><v>1</v></c></row></sheetData>"#,
+        )?;
+
+        let report = copy_cell_region(
+            &template,
+            &target,
+            &[CellRegionCopyRequest {
+                source_sheet: "Sheet1".to_owned(),
+                target_sheet: "Sheet1".to_owned(),
+                address: "F5:G5".to_owned(),
+            }],
+        )?;
+        assert_eq!(report.cells_with_formula, 1);
+        assert_eq!(report.cells_cleared, 1);
+
+        let bytes = fs::read(&target)?;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+        let mut xml = String::new();
+        {
+            use std::io::Read;
+            zip.by_name("xl/worksheets/sheet1.xml")?.read_to_string(&mut xml)?;
+        }
+        // Formula copied, template cache not carried over, target style kept.
+        assert!(xml.contains("<f>IF(B5=0,&quot;&quot;,&quot;错&quot;)</f>"), "{xml}");
+        assert!(xml.contains(r#"<c r="F5" s="3">"#), "{xml}");
+        assert!(!xml.contains("模板缓存"), "{xml}");
+        // A cell the template does not define is blanked but retained.
+        assert!(xml.contains(r#"<c r="G5"/>"#), "{xml}");
+        assert!(!xml.contains("<v>1</v>"), "{xml}");
+
+        let _ = fs::remove_file(&template);
+        let _ = fs::remove_file(&target);
+        Ok(())
+    }
+
+    #[test]
+    fn creates_rows_and_cells_missing_from_the_target() -> Result<()> {
+        let template = temp_path("template_missing");
+        let target = temp_path("target_missing");
+        workbook(
+            &template,
+            r#"<sheetData><row r="5"><c r="F5"><f>A5*2</f></c></row><row r="6"><c r="F6"><f>A6*2</f></c></row></sheetData>"#,
+        )?;
+        workbook(&target, r#"<sheetData></sheetData>"#)?;
+
+        copy_cell_region(
+            &template,
+            &target,
+            &[CellRegionCopyRequest {
+                source_sheet: "Sheet1".to_owned(),
+                target_sheet: "Sheet1".to_owned(),
+                address: "F5:F6".to_owned(),
+            }],
+        )?;
+
+        let bytes = fs::read(&target)?;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+        let mut xml = String::new();
+        {
+            use std::io::Read;
+            zip.by_name("xl/worksheets/sheet1.xml")?.read_to_string(&mut xml)?;
+        }
+        // Rows must stay siblings inside sheetData, never nested.
+        assert!(xml.contains(r#"<row r="5"><c r="F5"><f>A5*2</f></c></row>"#), "{xml}");
+        assert!(xml.contains(r#"<row r="6"><c r="F6"><f>A6*2</f></c></row>"#), "{xml}");
+        assert!(xml.contains("</sheetData>"), "{xml}");
+
+        let _ = fs::remove_file(&template);
+        let _ = fs::remove_file(&target);
         Ok(())
     }
 }

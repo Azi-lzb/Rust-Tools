@@ -254,6 +254,11 @@ impl ConversionRuntime {
     /// recalculate it through the packaged Office/WPS COM worker, and return
     /// matching formula results. One runtime reuses the same COM session for
     /// every workbook in a batch.
+    ///
+    /// The formulas are copied here in Rust (OOXML), so the COM host only ever
+    /// opens the caller's working copy. Opening the template through COM as
+    /// well doubled the failure surface: the template usually lives in a user
+    /// directory, and any state Excel dislikes there aborted the whole file.
     pub(crate) fn recalculate_named_validation_regions(
         &mut self,
         template: &Path,
@@ -264,20 +269,51 @@ impl ConversionRuntime {
         if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
             bail!("校验区域计算需要 Excel/WPS COM；当前环境已禁用外部引擎");
         }
+        ensure!(
+            source_copy
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case("xlsx")
+                        || extension.eq_ignore_ascii_case("xlsm")
+                }),
+            "校验区域重算需要 .xlsx/.xlsm 工作副本（当前 {}）",
+            source_copy.display()
+        );
+        let copy_requests = regions
+            .iter()
+            .map(|region| ooxml_patch::CellRegionCopyRequest {
+                source_sheet: region.template_sheet.clone(),
+                target_sheet: region.source_sheet.clone(),
+                address: region.address.clone(),
+            })
+            .collect::<Vec<_>>();
+        let copied = ooxml_patch::copy_cell_region(template, source_copy, &copy_requests)
+            .with_context(|| {
+                format!(
+                    "把模板校验公式复制到工作副本失败（模板：{}）",
+                    template.display()
+                )
+            })?;
         #[cfg(windows)]
         {
             if self.pywin32.is_none() {
                 self.pywin32 = Some(PythonExcelWorker::start()?);
             }
-            self
+            let calculation = self
                 .pywin32
                 .as_mut()
                 .expect("pywin32 worker initialized")
-                .recalculate_named_validation_regions(template, source_copy, regions)
+                .recalculate_named_validation_regions(source_copy, regions)?;
+            Ok(NamedValidationCalculation {
+                application: calculation.application,
+                cells: calculation.cells,
+                copied_formula_cells: copied.cells_with_formula,
+            })
         }
         #[cfg(not(windows))]
         {
-            let _ = (template, source_copy, regions);
+            let _ = copied;
             bail!("校验区域公式重算需要 Windows Excel/WPS COM 与随包 pywin32 Worker");
         }
     }
@@ -630,6 +666,9 @@ pub(crate) struct NamedValidationCellResult {
 pub(crate) struct NamedValidationCalculation {
     pub application: String,
     pub cells: Vec<NamedValidationCellResult>,
+    /// Cells whose template formulas were copied in by the OOXML patcher
+    /// before COM recalculated the working copy.
+    pub copied_formula_cells: usize,
 }
 
 #[cfg(windows)]
@@ -834,9 +873,11 @@ impl PythonExcelWorker {
             .to_owned())
     }
 
+    /// Ask the worker to recalculate one already-prepared working copy. The
+    /// template is not involved: its formulas were copied in by
+    /// [`ooxml_patch::copy_cell_region`] before this call.
     fn recalculate_named_validation_regions(
         &mut self,
-        template: &Path,
         source_copy: &Path,
         regions: &[NamedValidationRegionRequest],
     ) -> Result<NamedValidationCalculation> {
@@ -849,7 +890,6 @@ impl PythonExcelWorker {
         }
         let request = serde_json::json!({
             "op": "recalculate_named_validation",
-            "template": template.to_string_lossy(),
             "source_copy": source_copy.to_string_lossy(),
             "regions": regions,
         });
@@ -913,6 +953,7 @@ impl PythonExcelWorker {
         Ok(NamedValidationCalculation {
             application,
             cells,
+            copied_formula_cells: 0,
         })
     }
 }
