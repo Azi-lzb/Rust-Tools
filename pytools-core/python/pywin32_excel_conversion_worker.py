@@ -46,6 +46,56 @@ def _absolute(value: str) -> Path:
     return Path(value).expanduser().resolve()
 
 
+# Containers that are ZIP packages. A truncated/damaged package makes Excel
+# fail `Workbooks.Open` with the opaque "类 Workbooks 的 Open 方法无效"
+# (error 1004), so we check the container locally first and report the real
+# reason instead of an Excel-internal generic message.
+_ZIP_SPREADSHEET_SUFFIXES = (".xlsx", ".xlsm", ".xlsb", ".xltx", ".xltm")
+_ZIP_WORD_SUFFIXES = (".docx", ".docm", ".dotx", ".dotm")
+
+
+def _validate_container(path: Path, label: str) -> None:
+    """Reject an unreadable package before Excel/WPS sees it."""
+    import zipfile
+
+    if not path.is_file():
+        raise FileNotFoundError(f"{label}不存在：{path}")
+    size = path.stat().st_size
+    if size == 0:
+        raise ValueError(f"{label}是空文件（0 字节）：{path}")
+    suffix = path.suffix.lower()
+    if suffix not in _ZIP_SPREADSHEET_SUFFIXES + _ZIP_WORD_SUFFIXES:
+        return
+    with path.open("rb") as handle:
+        if handle.read(4) != b"PK\x03\x04":
+            raise ValueError(
+                f"{label}不是 OOXML/ZIP 包（扩展名 {suffix}，文件头不是 PK）；"
+                f"文件可能已损坏或只是被改名：{path}"
+            )
+    try:
+        with zipfile.ZipFile(path) as archive:
+            broken = archive.testzip()
+            if broken is not None:
+                raise ValueError(f"压缩包成员 {broken!r} 校验失败")
+            names = set(archive.namelist())
+    except zipfile.BadZipFile as error:
+        raise ValueError(
+            f"{label}的 OOXML 包已损坏（{error}）；文件大小 {size} 字节：{path}"
+        ) from error
+    # A ZIP can be intact yet still unusable: Excel then fails the same opaque
+    # way. Check the parts every OOXML Office package must carry.
+    required = ["[Content_Types].xml", "_rels/.rels"]
+    if suffix in _ZIP_WORD_SUFFIXES:
+        required.append("word/document.xml")
+    else:
+        required.append("xl/workbook.xml")
+    missing = [name for name in required if name not in names]
+    if missing:
+        raise ValueError(
+            f"{label}缺少 OOXML 必需部件 {missing}；文件可能未保存完整或被裁剪：{path}"
+        )
+
+
 def _force_recalc(application: Any) -> tuple[str | None, list[str]]:
     """Force every formula to be recalculated before SaveAs.
 
@@ -71,6 +121,22 @@ def _force_recalc(application: Any) -> tuple[str | None, list[str]]:
         except Exception as error:
             errors.append(f"{name}: {type(error).__name__}: {error}")
     return None, errors
+
+
+def _process_is_alive(process_id: int) -> bool:
+    """Whether a PID is still running, without requiring extra privileges."""
+    try:
+        import win32api
+        import win32con
+        import win32process
+
+        handle = win32api.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, process_id)
+        try:
+            return win32process.GetExitCodeProcess(handle) == win32con.STILL_ACTIVE
+        finally:
+            win32api.CloseHandle(handle)
+    except Exception:
+        return False
 
 
 def _matrix(value: Any, rows: int, columns: int) -> list[list[Any]]:
@@ -329,27 +395,62 @@ class ConversionSession:
                 errors.append(f"{prog_id}: 初始化空 COM 实例失败：{error}")
         raise RuntimeError("无法启动 Office/WPS COM：" + "；".join(errors))
 
+    def _quit_owned_instance(self, application: Any, process_id: int | None) -> None:
+        """Quit our own automation instance, terminating it by exact PID if
+        Quit leaves the process behind.
+
+        Automation hosts frequently ignore Quit (a modal state or a reference
+        we lost), and every leaked EXCEL.EXE keeps file handles and can make
+        the next `Workbooks.Open` fail. Only the PID recorded for the instance
+        this worker created is ever terminated - never a process picked by
+        image name, which could hit a user's open Excel.
+        """
+        try:
+            application.Quit()
+        except Exception:
+            pass
+        if process_id is None:
+            return
+        import time
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if not _process_is_alive(process_id):
+                return
+            time.sleep(0.1)
+        try:
+            import win32api
+            import win32con
+
+            handle = win32api.OpenProcess(
+                win32con.PROCESS_TERMINATE | win32con.PROCESS_QUERY_LIMITED_INFORMATION,
+                False,
+                process_id,
+            )
+            try:
+                win32api.TerminateProcess(handle, 0)
+            finally:
+                win32api.CloseHandle(handle)
+        except Exception:
+            pass
+
     def _reset_application(self) -> None:
         application = self._application
+        process_id = self._process_id
         self._application = None
         self._application_name = None
         self._process_id = None
         if application is not None:
-            try:
-                application.Quit()
-            except Exception:
-                pass
+            self._quit_owned_instance(application, process_id)
 
     def _reset_word_application(self) -> None:
         application = self._word_application
+        process_id = self._word_process_id
         self._word_application = None
         self._word_application_name = None
         self._word_process_id = None
         if application is not None:
-            try:
-                application.Quit()
-            except Exception:
-                pass
+            self._quit_owned_instance(application, process_id)
 
     def convert(self, source_text: str, output_text: str) -> dict[str, Any]:
         source = _absolute(source_text)
@@ -363,6 +464,8 @@ class ConversionSession:
                 raise FileNotFoundError(f"输入文件不存在：{source}")
             if output.exists():
                 raise FileExistsError(f"拒绝覆盖已存在的候选文件：{output}")
+            stage = "检查源文件容器"
+            _validate_container(source, "源工作簿")
             suffix = source.suffix.lower()
             # WPS-native spreadsheet formats must be opened by WPS itself.
             self._ensure_application(prefer_wps=suffix in WPS_SPREADSHEET_SUFFIXES)
@@ -450,6 +553,46 @@ class ConversionSession:
                 "traceback": traceback.format_exc(limit=6),
             }
 
+    def _open_validation_pair(
+        self, template_path: Path, source_copy_path: Path
+    ) -> tuple[Any, Any]:
+        """Open the template (read-only) and the writable copy in one host.
+
+        Excel may reject either Open with the same opaque 1004 error when the
+        automation instance is wedged, so on failure both workbooks are
+        discarded together and the instance is rebuilt before one retry -
+        reusing the template handle from a reset instance would be invalid.
+        """
+        first_error = None
+        for attempt in (1, 2):
+            assert self._application is not None
+            template_workbook = None
+            try:
+                template_workbook = self._application.Workbooks.Open(
+                    str(template_path), 0, True, AddToMru=False
+                )
+                source_workbook = self._application.Workbooks.Open(
+                    str(source_copy_path), 0, False, AddToMru=False
+                )
+                return template_workbook, source_workbook
+            except Exception as error:
+                if template_workbook is not None:
+                    try:
+                        template_workbook.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+                if attempt == 2:
+                    raise RuntimeError(
+                        f"无法打开校验模板或工作簿副本：\n"
+                        f"模板：{template_path}\n副本：{source_copy_path}\n"
+                        f"第一次错误：{type(first_error).__name__}: {first_error}\n"
+                        f"重建 Excel/WPS 实例后重试仍失败：{type(error).__name__}: {error}"
+                    ) from error
+                first_error = error
+                self._reset_application()
+                self._ensure_application()
+        raise AssertionError("unreachable")
+
     def recalculate_named_validation(
         self,
         template_text: str,
@@ -468,17 +611,19 @@ class ConversionSession:
                 raise FileNotFoundError(f"校验区域工作簿副本不存在：{source_copy_path}")
             if not regions:
                 raise ValueError("没有可复制的校验区域")
+            # Check both containers locally first: Excel reports damaged
+            # packages as an unhelpful "Workbooks.Open invalid" error.
+            stage = "检查校验模板与副本文件"
+            _validate_container(template_path, "校验区域模板")
+            _validate_container(source_copy_path, "校验工作簿副本")
             self._ensure_application()
             application = self._application
             if application is None:
                 raise RuntimeError("Excel/WPS COM 尚未启动")
 
             stage = "通过 COM 打开校验模板和工作簿副本"
-            template_workbook = application.Workbooks.Open(
-                str(template_path), 0, True, AddToMru=False
-            )
-            source_workbook = application.Workbooks.Open(
-                str(source_copy_path), 0, False, AddToMru=False
+            template_workbook, source_workbook = self._open_validation_pair(
+                template_path, source_copy_path
             )
 
             stage = "复制模板校验公式到工作簿副本"

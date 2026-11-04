@@ -29,3 +29,22 @@
 - 1-4 校验区域重算同用 `_force_recalc`，失败中止提取。
 - 验证：`cargo test -p pytools-core` 全绿；`stale.xls`（缓存 999）经 release exe 与
   重新打包的 ZIP 转换均得 `<v>34</v>`；`formula.xls` 得 `<v>27</v>`。
+
+补充（2026-11-04，1-4 COM 打开失败加固）：
+- 用户报告 1-4 批处理首个 .xlsx 源工作簿报
+  `com_error ... '类 Workbooks 的 Open 方法无效'`（错误 1004）。
+- 实测确认该报错对应多种互不相同的根因：截断的 OOXML 包、ZIP 合法但缺少
+  xl/workbook.xml 等必需部件、以及自动化宿主实例处于异常状态，都会给出同一条
+  通用信息；合法文件、建议只读、MOTW、只读属性、其他实例占用、长路径、
+  中文文件名均实测可正常打开。同一批 22 个真实业务文件在本机复跑两次全部
+  通过（各约 102 秒），说明不是稳定的算法缺陷。
+- 加固（`pywin32_excel_conversion_worker.py`）：
+  1. `_validate_container` 在交给 Excel 前本地校验 ZIP 完整性、PK 文件头、
+     空文件和必需部件（workbook.xml / word/document.xml 等），损坏时返回真实原因；
+  2. `_open_validation_pair` 把模板与副本成对打开，任一次失败就整体丢弃并重建
+     Excel/WPS 实例后重试一次，错误消息同时保留两次失败原因与路径；
+  3. `_quit_owned_instance` 在 Quit 无效时按本实例记录的 PID 精确终止
+     （5 秒宽限），不再遗留 /automation EXCEL.EXE；绝不再按进程名杀进程。
+- 验证：容器校验单测（完整/截断/空/改名 xls）通过；重试与双失败消息单测通过；
+  僵尸清理实测（Quit 被屏蔽后 5.0 秒内按 PID 终止）；真实 22 文件批次两次通过；
+  `cargo test -p pytools-core` 全绿。
