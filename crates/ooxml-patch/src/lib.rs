@@ -1896,12 +1896,9 @@ fn region_formulas(
     let (row1, col1, row2, col2) = parse_a1_range(address)?;
     let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
     let document = Document::parse(xml).context("parse template worksheet XML")?;
+    let shared = shared_formula_groups(&document)?;
     let mut formulas = BTreeMap::new();
-    for cell in document.descendants().filter(|node| {
-        node.is_element()
-            && node.tag_name().namespace() == Some(MAIN_NS)
-            && node.tag_name().name() == "c"
-    }) {
+    for cell in formula_cells(&document) {
         let Some(reference) = cell.attribute("r") else {
             continue;
         };
@@ -1912,29 +1909,259 @@ fn region_formulas(
         if row < row1 || row > row2 || column < col1 || column > col2 {
             continue;
         }
-        let formula = cell.children().find(|node| {
-            node.is_element()
-                && node.tag_name().namespace() == Some(MAIN_NS)
-                && node.tag_name().name() == "f"
-        });
-        let Some(formula) = formula else {
+        let Some(formula) = formula_node(cell) else {
             continue;
         };
-        // Relative references stay valid because the copy keeps the source
-        // coordinates; shared/array formulas would need translation we do not
-        // implement.
-        let attributes = formula
-            .attributes()
-            .filter(|attribute| attribute.name() != "xmlns")
-            .collect::<Vec<_>>();
-        ensure!(
-            attributes.is_empty(),
-            "校验区域公式 {reference} 使用了共享公式或数组公式（{attributes:?}），暂不支持复制"
-        );
-        let text = formula.text().unwrap_or_default().trim();
-        ensure!(!text.is_empty(), "校验区域公式 {reference} 缺少公式文本");
-        formulas.insert(reference.to_owned(), text.to_owned());    }
+        let text = effective_formula_text(formula, reference, (row, column), &shared)?;
+        formulas.insert(reference.to_owned(), text);
+    }
     Ok(formulas)
+}
+
+fn formula_cells<'a>(
+    document: &'a Document<'a>,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> + 'a {
+    document.descendants().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "c"
+    })
+}
+
+fn formula_node<'a>(cell: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    cell.children().find(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "f"
+    })
+}
+
+/// Anchor cell and formula text of every shared-formula master, keyed by `si`.
+///
+/// Excel stores one master with the formula and `t="shared" ref=… si=N`, and
+/// the remaining cells of the group carry only `t="shared" si=N`. Their formula
+/// is the master's with relative references shifted by the cell offset.
+fn shared_formula_groups(
+    document: &Document<'_>,
+) -> Result<BTreeMap<u32, ((u32, u32), String)>> {
+    let mut groups = BTreeMap::new();
+    for cell in formula_cells(document) {
+        let Some(reference) = cell.attribute("r") else {
+            continue;
+        };
+        let Some(formula) = formula_node(cell) else {
+            continue;
+        };
+        if formula.attribute("t") != Some("shared") {
+            continue;
+        }
+        let Some(si) = formula
+            .attribute("si")
+            .and_then(|value| value.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        // A dependent carries no text; only the master defines the group.
+        let text = formula.text().unwrap_or_default().trim();
+        if text.is_empty() {
+            continue;
+        }
+        let (row, column) = parse_a1_cell(reference)?;
+        groups.insert(si, ((row, column), text.to_owned()));
+    }
+    Ok(groups)
+}
+
+/// Resolve one cell's formula, expanding shared-formula dependents.
+fn effective_formula_text(
+    formula: roxmltree::Node<'_, '_>,
+    reference: &str,
+    position: (u32, u32),
+    shared: &BTreeMap<u32, ((u32, u32), String)>,
+) -> Result<String> {
+    match formula.attribute("t") {
+        None => {
+            let text = formula.text().unwrap_or_default().trim();
+            ensure!(!text.is_empty(), "校验区域公式 {reference} 缺少公式文本");
+            Ok(text.to_owned())
+        }
+        Some("shared") => {
+            let si = formula
+                .attribute("si")
+                .and_then(|value| value.parse::<u32>().ok())
+                .with_context(|| format!("校验区域共享公式 {reference} 缺少 si"))?;
+            let own = formula.text().unwrap_or_default().trim();
+            if !own.is_empty() {
+                // Master cell: its own text is already relative to itself.
+                return Ok(own.to_owned());
+            }
+            let (anchor, master_text) = shared.get(&si).with_context(|| {
+                format!(
+                    "校验区域公式 {reference} 引用了共享组 si={si}，\
+                     但模板中找不到该组的主公式"
+                )
+            })?;
+            translate_shared_formula(master_text, *anchor, position).with_context(|| {
+                format!("展开校验区域共享公式 {reference}（si={si}）失败")
+            })
+        }
+        Some(other) => bail!(
+            "校验区域公式 {reference} 的类型为 {other:?}（数组公式等），暂不支持复制；\
+             请在模板中把该公式改为普通公式后重试"
+        ),
+    }
+}
+
+/// Shift every relative A1 reference in `text` by the offset between two cells.
+fn translate_shared_formula(text: &str, from: (u32, u32), to: (u32, u32)) -> Result<String> {
+    let delta_row = i64::from(to.0) - i64::from(from.0);
+    let delta_col = i64::from(to.1) - i64::from(from.1);
+    if delta_row == 0 && delta_col == 0 {
+        return Ok(text.to_owned());
+    }
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut output = String::with_capacity(text.len());
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < characters.len() {
+        let current = characters[index];
+        if in_string {
+            output.push(current);
+            if current == '"' {
+                // `""` is an escaped quote inside a string literal.
+                if characters.get(index + 1) == Some(&'"') {
+                    output.push('"');
+                    index += 2;
+                    continue;
+                }
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if current == '"' {
+            in_string = true;
+            output.push(current);
+            index += 1;
+            continue;
+        }
+        if current == '$' || current.is_ascii_alphabetic() {
+            if let Some((consumed, replacement)) =
+                shift_a1_reference(&characters, index, delta_row, delta_col)?
+            {
+                output.push_str(&replacement);
+                index += consumed;
+                continue;
+            }
+        }
+        output.push(current);
+        index += 1;
+    }
+    Ok(output)
+}
+
+/// Match an A1 reference at `start` and return it shifted, with its length.
+fn shift_a1_reference(
+    characters: &[char],
+    start: usize,
+    delta_row: i64,
+    delta_col: i64,
+) -> Result<Option<(usize, String)>> {
+    // A reference must start at a token boundary so names such as `MyName1`
+    // or the digits in `LOG10` are never rewritten.
+    if start > 0 {
+        let previous = characters[start - 1];
+        if previous.is_ascii_alphanumeric() || previous == '_' || previous == '.' {
+            return Ok(None);
+        }
+    }
+    let mut index = start;
+    let column_absolute = characters.get(index) == Some(&'$');
+    if column_absolute {
+        index += 1;
+    }
+    let column_start = index;
+    while characters
+        .get(index)
+        .is_some_and(|character| character.is_ascii_alphabetic())
+        && index - column_start < 4
+    {
+        index += 1;
+    }
+    let column_end = index;
+    let column_letters = column_end - column_start;
+    if column_letters == 0 || column_letters > 3 {
+        return Ok(None);
+    }
+    let row_absolute = characters.get(index) == Some(&'$');
+    if row_absolute {
+        index += 1;
+    }
+    let row_start = index;
+    while characters
+        .get(index)
+        .is_some_and(|character| character.is_ascii_digit())
+        && index - row_start < 8
+    {
+        index += 1;
+    }
+    if index == row_start {
+        return Ok(None);
+    }
+    // A following `(` means the letters are a function name, not a cell.
+    if characters.get(index) == Some(&'(') {
+        return Ok(None);
+    }
+    if characters
+        .get(index)
+        .is_some_and(|character| character.is_ascii_alphanumeric() || *character == '_')
+    {
+        return Ok(None);
+    }
+
+    let letters = characters[column_start..column_end]
+        .iter()
+        .collect::<String>();
+    let mut column = 0i64;
+    for byte in letters.bytes() {
+        column = column * 26 + i64::from(byte.to_ascii_uppercase() - b'A' + 1);
+    }
+    let row = characters[row_start..index]
+        .iter()
+        .collect::<String>()
+        .parse::<i64>()
+        .context("shared formula row number overflows")?;
+    let new_column = if column_absolute {
+        column
+    } else {
+        column + delta_col
+    };
+    let new_row = if row_absolute { row } else { row + delta_row };
+    ensure!(
+        new_column >= 1 && new_row >= 1,
+        "共享公式的引用平移后越界（列 {new_column}，行 {new_row}）"
+    );
+    let mut replacement = String::new();
+    if column_absolute {
+        replacement.push('$');
+    }
+    replacement.push_str(&column_letters_of(new_column as u32)?);
+    if row_absolute {
+        replacement.push('$');
+    }
+    replacement.push_str(&new_row.to_string());
+    Ok(Some((index - start, replacement)))
+}
+
+fn column_letters_of(mut column: u32) -> Result<String> {
+    ensure!(column > 0, "column index is 1-based");
+    let mut letters = String::new();
+    while column > 0 {
+        let remainder = ((column - 1) % 26) as u8;
+        letters.insert(0, (b'A' + remainder) as char);
+        column = (column - 1) / 26;
+    }
+    Ok(letters)
 }
 
 /// Replace the formulas inside `address` on one sheet.
@@ -2018,28 +2245,39 @@ fn apply_region_formulas(
         let (row, _column) = parse_a1_cell(reference)?;
         new_by_row.entry(row).or_default().push(reference);
     }
-    // Rows that already exist get their cells appended in place. Rows that do
-    // not exist are created together at the end of `sheetData`, in row order -
-    // inserting them one by one at the same offset would interleave and
-    // produce nested rows.
+    // Rows that already exist get their cells inserted at the right column
+    // position. Rows that do not exist are created together at the end of
+    // `sheetData`, in row order - inserting them one by one at the same offset
+    // would interleave and produce nested rows.
     let mut appended_rows = String::new();
     for (row, references) in &new_by_row {
-        let cells = references
-            .iter()
-            .map(|reference| {
-                format!(
-                    "<c r=\"{reference}\"><f>{}</f></c>",
-                    escape_xml_text(
-                        formulas
-                            .get(*reference)
-                            .expect("missing cell has a formula")
-                    )
+        // Cells are inserted one at a time, each resolved against the row as it
+        // existed originally. Several inserts into one row therefore all get
+        // the same anchor offset only when they are adjacent; when the row has
+        // larger existing columns the anchor differs per cell, and edits are
+        // spliced from the end so earlier offsets stay valid.
+        let mut inserted_here = false;
+        let mut row_cells = String::new();
+        for reference in references {
+            let cell = format!(
+                "<c r=\"{reference}\"><f>{}</f></c>",
+                escape_xml_text(
+                    formulas
+                        .get(*reference)
+                        .expect("missing cell has a formula")
                 )
-            })
-            .collect::<String>();
-        match row_insert_offset(&document, *row)? {
-            Some(offset) => edits.push((offset..offset, cells.into_bytes())),
-            None => appended_rows.push_str(&format!("<row r=\"{row}\">{cells}</row>")),
+            );
+            let (_, column) = parse_a1_cell(reference)?;
+            match row_insert_offset(&document, *row, &[column])? {
+                Some(offset) => {
+                    edits.push((offset..offset, cell.into_bytes()));
+                    inserted_here = true;
+                }
+                None => row_cells.push_str(&cell),
+            }
+        }
+        if !row_cells.is_empty() && !inserted_here {
+            appended_rows.push_str(&format!("<row r=\"{row}\">{row_cells}</row>"));
         }
     }
     if !appended_rows.is_empty() {
@@ -2100,9 +2338,17 @@ fn sheet_data_insert(document: &Document<'_>) -> Result<SheetDataInsert> {
     Ok(SheetDataInsert::ReplaceSelfClosing(range.start + slash))
 }
 
-/// Byte offset just before `</row>` of `row`, or the end of the sheet data when
+/// Byte offset where cells for `columns` belong inside `row`, or `None` when
 /// the row element does not exist.
-fn row_insert_offset(document: &Document<'_>, row: u32) -> Result<Option<usize>> {
+///
+/// Excel requires `<c>` elements in a row to be sorted by column; appending new
+/// cells at `</row>` produced packages Excel refuses to open. New cells are
+/// placed before the first existing cell whose column is greater.
+fn row_insert_offset(
+    document: &Document<'_>,
+    row: u32,
+    columns: &[u32],
+) -> Result<Option<usize>> {
     let sheet_data = document.descendants().find(|node| {
         node.is_element()
             && node.tag_name().namespace() == Some(MAIN_NS)
@@ -2122,7 +2368,21 @@ fn row_insert_offset(document: &Document<'_>, row: u32) -> Result<Option<usize>>
             let close = fragment
                 .rfind("</row>")
                 .context("row element has no closing tag")?;
-            return Ok(Some(range.start + close));
+            let smallest = columns.iter().copied().min().unwrap_or(u32::MAX);
+            let offset = row_node
+                .children()
+                .filter(|node| {
+                    node.is_element()
+                        && node.tag_name().namespace() == Some(MAIN_NS)
+                        && node.tag_name().name() == "c"
+                })
+                .filter_map(|cell| {
+                    let (_, column) = parse_a1_cell(cell.attribute("r")?).ok()?;
+                    (column > smallest).then(|| cell.range().start - range.start)
+                })
+                .min()
+                .unwrap_or(close);
+            return Ok(Some(range.start + offset));
         }
     }
     Ok(None)
@@ -4146,6 +4406,65 @@ mod cell_region_copy_tests {
 
         let _ = fs::remove_file(&template);
         let _ = fs::remove_file(&target);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod shared_formula_translation_tests {
+    use super::translate_shared_formula;
+
+    #[test]
+    fn shifts_relative_references_and_keeps_absolute_ones() -> anyhow::Result<()> {
+        // Real master from a bank template: K6 = "+B6" over K6:K37.
+        assert_eq!(
+            translate_shared_formula("+B6", (6, 11), (7, 11))?,
+            "+B7"
+        );
+        // SUM(C6) over L6:L25.
+        assert_eq!(
+            translate_shared_formula("SUM(C6)", (6, 12), (10, 12))?,
+            "SUM(C10)"
+        );
+        // Absolute references must not move.
+        assert_eq!(
+            translate_shared_formula("$B$6+$B6+B$6", (6, 12), (9, 12))?,
+            "$B$6+$B9+B$6"
+        );
+        // Horizontal move only shifts the column.
+        assert_eq!(translate_shared_formula("A5", (5, 1), (5, 3))?, "C5");
+        Ok(())
+    }
+
+    #[test]
+    fn leaves_text_literals_function_names_and_names_alone() -> anyhow::Result<()> {
+        // String literals are not references.
+        assert_eq!(
+            translate_shared_formula(r#"IF(A1=0,"B2","")"#, (1, 1), (2, 1))?,
+            r#"IF(A2=0,"B2","")"#
+        );
+        // Function names with digits must not be rewritten.
+        assert_eq!(
+            translate_shared_formula("LOG10(A1)", (1, 1), (3, 1))?,
+            "LOG10(A3)"
+        );
+        // Defined names that look like references stay intact.
+        assert_eq!(
+            translate_shared_formula("MyName1+A1", (1, 1), (2, 1))?,
+            "MyName1+A2"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn translates_real_indirect_formula_from_a_bank_template() -> anyhow::Result<()> {
+        // N6 master = SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(ROW(E6),COLUMN(C6))))
+        let master = r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(ROW(E6),COLUMN(C6))))"#;
+        let translated = translate_shared_formula(master, (6, 14), (9, 14))?;
+        assert_eq!(
+            translated,
+            r#"SUM(INDIRECT("单位贷款发生额信息!"&ADDRESS(ROW(E9),COLUMN(C9))))"#
+        );
         Ok(())
     }
 }
