@@ -250,6 +250,40 @@ pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: 
 }
 
 impl ConversionRuntime {
+    pub(crate) fn rename_sheets_in_candidate(
+        &mut self,
+        candidate: &Path,
+        changes: &[(String, String)],
+    ) -> Result<()> {
+        ensure!(
+            std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none(),
+            "工作表改名需要启用随包 openpyxl 引擎；当前已禁用外部引擎"
+        );
+        #[cfg(windows)]
+        {
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            let changes = changes.iter().map(|(old_name, new_name)| {
+                serde_json::json!({"old_name": old_name, "new_name": new_name})
+            }).collect::<Vec<_>>();
+            let response = self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({"op": "rename_sheets", "candidate": candidate.to_string_lossy(), "changes": changes}),
+                "工作表改名",
+            )?;
+            ensure!(
+                response["validation"]["verified"].as_bool() == Some(true),
+                "工作表改名未通过回读校验"
+            );
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, changes);
+            bail!("工作表改名及公式依赖更新依赖随包 openpyxl worker；该运行时目前只在 Windows 构建中提供")
+        }
+    }
+
     /// Copy template validation formulas into a disposable source-workbook copy,
     /// recalculate it through the packaged Office/WPS COM worker, and return
     /// matching formula results. One runtime reuses the same COM session for

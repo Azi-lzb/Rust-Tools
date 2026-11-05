@@ -10,7 +10,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use excel_editor::{
     inspect_xlsx_profile, EditExecutionReport, EditOperation, ExcelEditPlan,
-    PreservationRequirement, WorkbookFormat,
+    PreservationRequirement, WorkbookFeature, WorkbookFormat,
 };
 use excel_reader::read_workbook;
 use serde::Serialize;
@@ -172,7 +172,26 @@ pub fn run_batch_sheet_rename_candidate(
     capability_path: &Path,
     platform: &str,
 ) -> Result<SheetRenameRunReport> {
+    run_batch_sheet_rename_impl(config, inputs, recursive, Some((capability_path, platform)))
+}
+
+/// Use the bundled openpyxl worker without inventing a capability record.
+pub fn run_batch_sheet_rename_openpyxl(
+    config: &Path,
+    inputs: &[PathBuf],
+    recursive: bool,
+) -> Result<SheetRenameRunReport> {
+    run_batch_sheet_rename_impl(config, inputs, recursive, None)
+}
+
+fn run_batch_sheet_rename_impl(
+    config: &Path,
+    inputs: &[PathBuf],
+    recursive: bool,
+    capability: Option<(&Path, &str)>,
+) -> Result<SheetRenameRunReport> {
     let started = Instant::now();
+    let mut excel_runtime = crate::conversion_engine::ConversionRuntime::default();
     let mapping = load_mapping(config)?;
     anyhow::ensure!(!mapping.is_empty(), "重命名配置 缺少原表名/新表名映射。");
     let files = collect_inputs(inputs, recursive)?;
@@ -234,11 +253,60 @@ pub fn run_batch_sheet_rename_candidate(
             continue;
         };
 
-        let result = (|| -> Result<(EditExecutionReport, TargetCommitReport, u128)> {
+        let mut candidate_owned = capability.is_some();
+        let result = (|| -> Result<(Option<EditExecutionReport>, TargetCommitReport, u128)> {
             verify_planning_snapshot(&input, Some(&input_hash))?;
             let editing_started = Instant::now();
-            let execution = apply_plan_with_capability_file(&plan, capability_path, platform)
-                .with_context(|| format!("execute sheet-rename plan for {}", input.display()))?;
+            let execution = if let Some((capability_path, platform)) = capability {
+                anyhow::ensure!(
+                    !plan.workbook.features_present.contains(&WorkbookFeature::Formulas)
+                        && !plan.workbook.features_present.contains(&WorkbookFeature::DefinedNames),
+                    "原有 capability 改名路径不能保证公式和命名区域引用更新；请使用默认 openpyxl 改名路径（省略 --capabilities）"
+                );
+                Some(
+                    apply_plan_with_capability_file(&plan, capability_path, platform)
+                        .with_context(|| {
+                            format!("execute sheet-rename plan for {}", input.display())
+                        })?,
+                )
+            } else {
+                anyhow::ensure!(
+                    plan.workbook.inventory_complete,
+                    "工作簿包含未识别的结构，拒绝覆盖源文件"
+                );
+                anyhow::ensure!(
+                    !plan.workbook.features_present.iter().any(|feature| matches!(
+                        feature,
+                        WorkbookFeature::DigitalSignatures | WorkbookFeature::ActiveX | WorkbookFeature::ExternalLinks | WorkbookFeature::Macros
+                    )),
+                    "工作簿包含数字签名、ActiveX、外部链接或宏，当前 openpyxl 改名路径未验证，拒绝覆盖源文件"
+                );
+                let changes = plan
+                    .operations
+                    .iter()
+                    .filter_map(|operation| match operation {
+                        EditOperation::RenameSheet { old_name, new_name } => {
+                            Some((old_name.clone(), new_name.clone()))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let mut original = fs::File::open(&input)
+                    .with_context(|| format!("读取源工作簿失败：{}", input.display()))?;
+                let mut temporary = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&candidate)
+                    .with_context(|| format!("创建改名临时候选失败：{}", candidate.display()))?;
+                candidate_owned = true;
+                std::io::copy(&mut original, &mut temporary)?;
+                temporary.sync_all()?;
+                drop(temporary);
+                excel_runtime
+                    .rename_sheets_in_candidate(&candidate, &changes)
+                    .with_context(|| format!("Excel 工作表改名失败：{}", input.display()))?;
+                None
+            };
             let editing_ms = editing_started.elapsed().as_millis();
             let commit_started = Instant::now();
             verify_planning_snapshot(&input, Some(&input_hash))?;
@@ -256,10 +324,14 @@ pub fn run_batch_sheet_rename_candidate(
             commit.elapsed_ms = commit_started.elapsed().as_millis();
             Ok((execution, commit, editing_ms))
         })();
-        let cleanup = match fs::remove_file(&candidate) {
-            Ok(()) => None,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => Some(format!("temporary candidate cleanup failed: {error}")),
+        let cleanup = if candidate_owned {
+            match fs::remove_file(&candidate) {
+                Ok(()) => None,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => Some(format!("temporary candidate cleanup failed: {error}")),
+            }
+        } else {
+            None
         };
         let (execution, mut commit, editing_ms) = match result {
             Ok(result) => result,
@@ -288,7 +360,7 @@ pub fn run_batch_sheet_rename_candidate(
             editing_ms,
             commit_ms: commit.elapsed_ms,
             elapsed_ms: file_started.elapsed().as_millis(),
-            execution: Some(execution),
+            execution,
             commit: Some(commit),
         });
     }

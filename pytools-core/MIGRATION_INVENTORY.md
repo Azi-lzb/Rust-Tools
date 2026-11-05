@@ -62,7 +62,7 @@
   同日：Windows XLS→XLSX 表格转换改为 Rust `windows` COM，在专用 STA 线程中按批次复用自行创建的 Excel/WPS 实例；每次转换使用源文件临时副本，先检查进程与空工作簿，只有确认由本次任务新建的实例才会在任务结束时退出。转换结果继续校验工作表、值和公式。PowerShell COM 仍用于 DOC→DOCX；LibreOffice 路径未变。Windows 合成测试覆盖 V2 菜单批量 Excel、Excel 批次实例复用及异常后恢复、WPS 正向转换与实例复用、伪装 ET 的拒绝和源文件保护。当前机器的 WPS 生成样本未能证明 `FileFormat=65521` 的原生 ET 正向路径，故严格 ET 校验保留且该路径仍待真实原生 ET 样本；未更新 Release EXE，真实业务样本人工验收及 Linux/deb 验证未进行。计时明细见 `probe/reports/com_conversion_benchmark_20261030.json`。
 
   2026-11-02：旧 Rust COM 对三个真实 `.xls` 样本的转换在 Calamine 读取阶段报告公式数量不一致。用 Excel COM 将源文件临时副本另存为 XLSX 后，按工作表顺序、公式地址/文本及非公式单元格值进行批量比较，三份样本均一致；原始文件未改动。新增 Windows 随包 CPython 3.12.10 + pywin32 312 Worker，并在批次内复用独立 Excel/WPS COM 会话；Windows 自动 `.xls/.xlsb/.xlsm→.xlsx` 改走此 Worker，其他格式继续使用既有路由。Worker 通过 Excel/WPS 回读验证后，Rust 仍确认候选可读且非空。Worker 在临时样本上验证通过；Rust 集成未编译/测试，Release EXE 与 ZIP 未更新，待用户人工验收；原生 ET 和 Linux/deb 状态不变。
-- 4-5 按配置修改 Sheet 名：**部分实现或存在已知限制**。历史记录表明缺少匹配的生产 `RenameSheet` capability 时不能执行，源文件保持不变。
+- 4-5 按配置修改 Sheet 名：**已实现，待人工验收**。默认路径不再依赖 ExcelModifier capability：复制源工作簿到临时候选后，由随包 worker 用 openpyxl 改名，并在同一遍里按改名映射改写跨表公式与命名区域引用（旧实现会留下指向旧表名的失效引用）。改名后重新读取校验：工作表顺序/名称、公式单元格集合、非公式值、新增 `#REF!`/`#NAME?`。源文件在提交前有 SHA-256 快照校验，通过后以候选替换；数字签名/ActiveX/外部链接/宏工作簿仍拒绝覆盖。旧的 `--capabilities` 路径保留但会拒绝含公式或命名区域的工作簿。临时候选文件会短暂出现在源目录，成功或失败都会清理。
 - 4-6 机构提交完整性检查：**已实现，待人工验收**。
 - 4-7/4-8 [临时] umya / openpyxl 区域回写格式探针：**临时诊断入口**（2026-10-28 经用户要求添加，`pytools-core/src/format_probe.rs` + 文件处理菜单 7/8）。用于人工对比两引擎“整簿读入→保留区域→删除区域外行列→另存副本”的格式保留效果；openpyxl 按钮依赖本机 python+openpyxl（可用 `PYTOOLS_OPENPYXL_PYTHON` 指定解释器）。**用户对比得出结论后应移除**，不进入迁移清单正式子功能。
 

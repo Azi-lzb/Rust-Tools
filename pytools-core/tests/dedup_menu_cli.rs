@@ -112,7 +112,10 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
     assert!(delete_stdout.contains("执行成功"), "{delete_stdout}");
     assert!(delete_stdout.contains("删除重复行数：1"), "{delete_stdout}");
-    assert!(delete_stdout.contains("已更新并保存源工作簿"), "{delete_stdout}");
+    assert!(
+        delete_stdout.contains("已更新并保存源工作簿"),
+        "{delete_stdout}"
+    );
     assert!(
         !delete_stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -278,7 +281,10 @@ fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
     let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("执行成功") && stdout.contains("删除重复行数：1"), "{stdout}");
+    assert!(
+        stdout.contains("执行成功") && stdout.contains("删除重复行数：1"),
+        "{stdout}"
+    );
     assert!(stdout.contains("已更新并保存源工作簿"), "{stdout}");
     assert!(
         !stdout.contains("\"execution\""),

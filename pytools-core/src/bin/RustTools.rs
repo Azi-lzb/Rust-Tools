@@ -51,7 +51,9 @@ use pytools_core::print_ops::{
 use pytools_core::quick::{open_config, open_latest_output, open_output_directory};
 use pytools_core::region_sum::{run_region_sum_check_with_progress, RegionSumRunEvent};
 use pytools_core::sheet_extract::{is_full_sheet_task, run_extract_sheets_candidate_with_progress};
-use pytools_core::sheet_rename::{build_sheet_rename_plan, run_batch_sheet_rename_candidate};
+use pytools_core::sheet_rename::{
+    build_sheet_rename_plan, run_batch_sheet_rename_candidate, run_batch_sheet_rename_openpyxl,
+};
 use pytools_core::source_discovery::discover_configured_source_files;
 use pytools_core::submission_check::{
     run_submission_check, run_submission_check_with_progress, SubmissionCheckProgressEvent,
@@ -5778,11 +5780,14 @@ where
                 run_convert_batch_menu(arguments, false, output)?;
             }
             "files.rename_sheets" => {
-                let execute = if capabilities.is_some() && platform.is_some() {
+                let execute = {
                     writeln!(
                         output,
-                        "[确认] 将把改名后的副本保存到源文件旁的 PyTools_Sheet改名结果 文件夹；源文件保持不变。"
+                        "[确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。"
                     )?;
+                    if capabilities.is_none() {
+                        writeln!(output, "[引擎] 使用 openpyxl 修改工作表名称，并同步改写跨表公式与命名区域引用。")?;
+                    }
                     read_menu_choice(
                         input,
                         output,
@@ -5794,23 +5799,18 @@ where
                             "y" | "yes" | "是"
                         )
                     })
-                } else {
-                    writeln!(
-                        output,
-                        "[无法执行] 缺少已验收的 ExcelModifier capability/platform；本次不生成计划或输出文件。"
-                    )?;
-                    false
                 };
                 if execute {
-                    let (Some(capabilities), Some(platform)) = (capabilities, platform) else {
-                        unreachable!("sheet rename execution requires both capability options")
-                    };
                     let mut arguments = config_cli_arguments(config_path);
+                    if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
+                        arguments.extend([
+                            "--capabilities".to_owned(),
+                            capabilities.to_string_lossy().into_owned(),
+                            "--platform".to_owned(),
+                            platform.to_owned(),
+                        ]);
+                    }
                     arguments.extend([
-                        "--capabilities".to_owned(),
-                        capabilities.to_string_lossy().into_owned(),
-                        "--platform".to_owned(),
-                        platform.to_owned(),
                         "--log-dir".to_owned(),
                         global.log_dir.to_string_lossy().into_owned(),
                         "--log-view".to_owned(),
@@ -5824,14 +5824,14 @@ where
                     match run_rename_sheets(arguments, true) {
                         Ok(()) => writeln!(
                             output,
-                            "[完成] 改名副本已保存到源文件同目录的 PyTools_Sheet改名结果 文件夹；原文件未覆盖。"
+                            "[完成] 已处理所选源工作簿，具体改名及跳过情况见上方汇总。"
                         )?,
                         Err(error) => writeln!(
                             output,
-                            "[失败] 未能生成改名副本；源文件保持不变。错误：{error:#}"
+                            "[失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：{error:#}"
                         )?,
                     }
-                } else if capabilities.is_some() {
+                } else {
                     writeln!(output, "[已取消] 未执行改名，也未生成计划或输出文件。")?;
                 }
             }
@@ -12156,21 +12156,26 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         matches!(log_view, "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
     );
-    let capabilities = required_path(&options, "capabilities")?;
-    let platform = options
-        .values
-        .get("platform")
-        .context("--platform is required when executing sheet renames")?;
+    let capabilities = options.values.get("capabilities").map(PathBuf::from);
+    let platform = options.values.get("platform");
+    anyhow::ensure!(
+        capabilities.is_some() == platform.is_some(),
+        "--capabilities 和 --platform 必须同时指定"
+    );
     let mut unified =
         UnifiedRunSession::new(&log_dir, "PT-4-5", "按配置修改 Sheet 名", log_view, None);
     unified.set_inputs(&options.positional, None);
-    let report = match run_batch_sheet_rename_candidate(
-        &config,
-        &options.positional,
-        recursive,
-        &capabilities,
-        platform,
-    ) {
+    let result = match (&capabilities, platform) {
+        (Some(capabilities), Some(platform)) => run_batch_sheet_rename_candidate(
+            &config,
+            &options.positional,
+            recursive,
+            capabilities,
+            platform,
+        ),
+        _ => run_batch_sheet_rename_openpyxl(&config, &options.positional, recursive),
+    };
+    let report = match result {
         Ok(report) => report,
         Err(error) => {
             unified.mark_inputs_unavailable();
@@ -21451,7 +21456,7 @@ fn print_usage() {
          fx-header <xlsx>... [--output-dir <dir>] [--log-dir <dir>] [--plan-dir <dir>] [--view user|developer|off] [--commit-target --capabilities <json> --platform <id>]\n\
          fx-header-plan --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          rename-sheets-plan --config <config.xlsx> --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
-         rename-sheets --config <config.xlsx> --capabilities <json> --platform <id> [--recursive] <file-or-directory>...\n\
+         rename-sheets --config <config.xlsx> [--capabilities <json> --platform <id>] [--recursive] <file-or-directory>... (默认用 openpyxl 改名并改写公式/命名区域引用)\n\
          submission-check --config <config.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file-or-directory>...\n\
          archive-date-preview --target-root <dir> [--config <config.xlsx>] [--output-dir <dir>] <file-or-directory>...\n\
          archive-type-preview --config <config.xlsx> --target-root <dir> [--output-dir <dir>] <file-or-directory>...\n\

@@ -1389,7 +1389,9 @@ mod tests {
         });
 
         let lines = format_terminal_summary(&summary, 8).join("\n");
-        assert!(lines.contains("[EXCEL_READ_FAILED] 机构甲.xlsx / 资产（阶段 workbook_read）：工作簿无法打开"));
+        assert!(lines.contains(
+            "[EXCEL_READ_FAILED] 机构甲.xlsx / 资产（阶段 workbook_read）：工作簿无法打开"
+        ));
     }
 
     #[test]

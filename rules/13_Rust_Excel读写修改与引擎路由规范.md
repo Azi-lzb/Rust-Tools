@@ -177,7 +177,7 @@ Rust 业务规则、统计和结果判定始终由 Rust 承担。Rust 项目未�
 | Excelize worker | 当前没有 Go module/worker/IPC | 当前 unsupported（未实现）；达到 §4.3 门槛后再立项。 |
 | openpyxl worker | `crates/excel-editor/python/openpyxl_worker.py` + Rust `OpenpyxlXlsxBackend`；pytools capability dispatcher 已注册；支持有限 XLSX EditPlan 批处理 | 已实现并通过合成 worker/进程集成测试；Rust 独立读回覆盖已测样本的样式语义、显式行高列宽、填充色、页面设置和 OOXML Print_Area。真实项目模板、操作级 capability、Windows 原生 Rust、glibc 2.28 隔离 runtime、deb 打包和目标机均未验证。无生产 capability JSON、无默认路由；不支持行插删与 ImportRange 尺寸复制，非空公式缓存/未知 parts 写前拒绝。 |
 | `pytools-core/src/conversion_engine.rs` / LibreOffice | 当前 Rust 转换运行时可按路由批量启动 `soffice`，并在批次阶段复用进程/配置；现有测试含模拟进程验证 | 属于格式转换路由，不代表通用公式计算已实现。当前 Windows 环境无 LibreOffice；目标 Linux 运行时、业务公式语义和发布依赖仍须按功能验证。 |
-| `pytools-core/python/pywin32_excel_conversion_worker.py` | 随包 CPython + pywin32 Worker 调用 Excel/WPS COM；当前用于指定格式转换，并为 1-4 提供命名校验区域专用重算；批次内复用宿主会话 | 只证明这些具体路径已实现。不能据此声明通用 ExcelCalculator 或 ExcelModifier；公式/格式、Office 版本和保留契约仍按实际测试范围记录。 |
+| `pytools-core/python/pywin32_excel_conversion_worker.py` | 随包 CPython + pywin32 Worker；COM 用于指定格式转换与 1-4 命名校验区域重算；4-5 工作表改名在 worker 内用 openpyxl 完成并改写跨表公式/命名区域引用（不走 COM）；批次内复用宿主会话 | 只证明这些具体路径已实现。不能据此声明通用 ExcelCalculator 或 ExcelModifier；公式/格式、Office 版本和保留契约仍按实际测试范围记录。 |
 | ExcelModifier 的 Excel COM / WPS COM 编辑后端 | 当前未实现通用既有工作簿 COM 修改路由 | 未来候选；分别登记 Windows-only Microsoft Excel 与 WPS capability，不得展示为当前可用的通用编辑选项或进入 Linux 依赖。 |
 | ExcelCalculator | 尚未形成通用公共计算接口；1-4 有专用命名校验重算路径 | 通用能力仍为未来独立设计；Windows Excel COM、Linux LibreOffice Calc 等候选须按后端/公式/平台验收，不改变当前读写修改默认。 |
 

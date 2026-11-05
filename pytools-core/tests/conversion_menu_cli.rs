@@ -137,8 +137,10 @@ fn v2_file_menu_routes_supported_workflows() -> Result<()> {
         "sheet rename capability check failed: {}",
         stderr(&sheet_rename)
     );
+    // 默认路径不再要求预先提供 capability JSON；未确认时不执行改名。
     assert!(String::from_utf8_lossy(&sheet_rename.stdout)
-        .contains("[无法执行] 缺少已验收的 ExcelModifier capability/platform"));
+        .contains("[确认] 将直接修改所选源工作簿的工作表名称"));
+    assert!(String::from_utf8_lossy(&sheet_rename.stdout).contains("[已取消]"));
     assert!(sheet_source.is_file());
     let plan_files = find_files_with_extension(&root.path().join("output"), "json")?;
     assert!(plan_files.is_empty());
@@ -724,8 +726,7 @@ fn sheet_rename_menu_executes_only_after_capability_and_confirmation() -> Result
         "menu execution failed: {}",
         stderr(&result)
     );
-    assert!(String::from_utf8_lossy(&result.stdout)
-        .contains("副本保存到源文件旁的 PyTools_Sheet改名结果"));
+    assert!(String::from_utf8_lossy(&result.stdout).contains("将直接修改所选源工作簿"));
     let report = menu_object_json(&result)?;
     assert_eq!(report["rename_ok"], 1);
     assert_eq!(report["files"][0]["status"], "renamed");
@@ -795,7 +796,7 @@ fn sheet_rename_menu_decline_keeps_the_source_and_writes_no_plan_or_copy() -> Re
 }
 
 #[test]
-fn sheet_rename_menu_without_capability_reports_blocker_and_writes_no_plans() -> Result<()> {
+fn sheet_rename_menu_without_capability_can_be_cancelled() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let input = root.path().join("rename-no-capability.xlsx");
@@ -805,11 +806,101 @@ fn sheet_rename_menu_without_capability_reports_blocker_and_writes_no_plans() ->
     let result = run_menu(&config, &format!("4\n5\n1\n{}\n0\n0\n", input.display()))?;
     assert!(result.status.success(), "menu failed: {}", stderr(&result));
     let stdout = String::from_utf8_lossy(&result.stdout);
-    assert!(stdout.contains("[无法执行] 缺少已验收的 ExcelModifier capability/platform"));
+    assert!(stdout.contains("[已取消] 未执行改名"));
     assert!(!stdout.contains("Sheet 改名计划="));
     assert_eq!(fs::read(&input)?, original);
     assert!(find_files_with_extension(&root.path().join("output"), "json")?.is_empty());
     assert!(!root.path().join("PyTools_Sheet改名结果").exists());
+    Ok(())
+}
+
+#[test]
+fn sheet_rename_menu_reports_unavailable_excel_without_changing_source() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let input = root.path().join("rename-engine-disabled.xlsx");
+    create_source_workbook(&input, "OldSheet")?;
+    let original = fs::read(&input)?;
+    let mut child = menu_command(&config);
+    child.env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1");
+    let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
+    assert!(result.status.success());
+    assert!(String::from_utf8_lossy(&result.stdout).contains("已禁用外部引擎"));
+    assert_eq!(fs::read(&input)?, original);
+    assert!(!root.path().join("PyTools_Sheet改名结果").exists());
+    Ok(())
+}
+
+#[test]
+fn sheet_rename_legacy_capability_rejects_formula_workbook() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let input = root.path().join("rename-legacy-formula.xlsx");
+    let capability = root.path().join("capability.json");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    book.add_worksheet()
+        .set_name("OldSheet")?
+        .write_number(0, 0, 42.0)?;
+    book.add_worksheet()
+        .set_name("Data")?
+        .write_formula(0, 0, "=OldSheet!A1")?;
+    book.save(&input)?;
+    write_sheet_rename_capability(&config, &input, &capability)?;
+    let original = fs::read(&input)?;
+    let result = run_sheet_rename_menu(&config, &capability, &input, "y")?;
+    assert!(String::from_utf8_lossy(&result.stdout).contains("不能保证公式和命名区域引用更新"));
+    assert_eq!(fs::read(&input)?, original);
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn sheet_rename_menu_excel_updates_cross_sheet_formula() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let input = root.path().join("rename-excel.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    book.add_worksheet()
+        .set_name("OldSheet")?
+        .write_number(0, 0, 42.0)?;
+    let data = book.add_worksheet();
+    data.set_name("Data")?;
+    data.write_formula(0, 0, "=OldSheet!A1")?;
+    book.define_name("SampleName", "=OldSheet!$A$1")?;
+    book.save(&input)?;
+    let source_before = fs::read(&input)?;
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut child = menu_command(&config);
+    child.env(
+        "PYTOOLS_COM_WORKER",
+        manifest.join("python/pywin32_excel_conversion_worker.py"),
+    );
+    child.env(
+        "PYTOOLS_COM_PYTHON",
+        manifest.parent().unwrap().join("dist/python/python.exe"),
+    );
+    let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
+    assert!(result.status.success(), "{}", stderr(&result));
+    assert!(
+        fs::read(&input)? != source_before,
+        "source not updated; stdout={} stderr={}",
+        String::from_utf8_lossy(&result.stdout),
+        stderr(&result)
+    );
+    let workbook = read_workbook(&input)?;
+    assert_eq!(
+        workbook
+            .sheets
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["NewSheet", "Data"]
+    );
+    assert!(workbook.sheets[1].formulas["A1"].contains("NewSheet"));
+    let names = excel_reader::read_defined_names(&input)?;
+    assert!(names
+        .iter()
+        .any(|name| name.name == "SampleName" && name.raw_reference.contains("NewSheet")));
     Ok(())
 }
 
@@ -826,7 +917,6 @@ fn file_sort_menu_supports_user_developer_and_off_progress_views() -> Result<()>
     let user = run_action_with_log_view(&config, 9, 1, &user_source, "user")?;
     assert!(user.status.success(), "user view failed: {}", stderr(&user));
     assert!(sources.join("1_sort-user-payload.txt").is_file());
-    let user_stderr = stderr(&user);
     let user_stderr = stderr(&user);
     assert!(user_stderr.contains("正在读取文件排序配置"));
     assert!(user_stderr.contains("已处理 1/1 个文件"));
@@ -920,10 +1010,7 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     let user_stderr = String::from_utf8_lossy(&user.stderr);
     // user 视图：分组摘要在 stderr，stdout 只保留菜单文本，不输出 JSON。
-    assert!(
-        user_stderr.contains("实际改名数：1"),
-        "{user_stderr}"
-    );
+    assert!(user_stderr.contains("实际改名数：1"), "{user_stderr}");
     assert!(
         !user_stdout.contains("\"ok\""),
         "user view must not print JSON: {user_stdout}"

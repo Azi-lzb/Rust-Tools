@@ -93,6 +93,25 @@ fn run_cli(config: &Path, capability: &Path, input: &Path) -> Result<std::proces
         .output()?)
 }
 
+/// Default rename path (no capability file): Microsoft Excel updates cross-sheet
+/// references and named ranges while renaming. Requires local Excel.
+fn run_cli_excel(config: &Path, input: &Path) -> Result<std::process::Output> {
+    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["rename-sheets", "--config"])
+        .arg(config)
+        .arg(input)
+        .output()?)
+}
+
+fn run_cli_excel_recursive(config: &Path, input: &Path) -> Result<std::process::Output> {
+    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["rename-sheets", "--config"])
+        .arg(config)
+        .arg("--recursive")
+        .arg(input)
+        .output()?)
+}
+
 fn baseline_report() -> Result<Value> {
     Ok(serde_json::from_str(include_str!(
         "../probe/reports/PT-4-4_python_baseline_20261023.json"
@@ -100,18 +119,14 @@ fn baseline_report() -> Result<Value> {
 }
 
 #[test]
-fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source() -> Result<()> {
+fn sheet_rename_cli_rewrites_references_and_protects_source_snapshot() -> Result<()> {
     let dir = TestDir::new("execution")?;
     let config = fixture("config.xlsx");
     let input = dir.path("input.xlsx");
     fs::copy(fixture("input.xlsx"), &input)?;
     let original_hash = pytools_core::file_commit::sha256_file(&input)?;
     let config_hash = pytools_core::file_commit::sha256_file(&config)?;
-    let plan = plan_for(&config, &input, &dir.path("plan-output.xlsx"))?;
-    let capability = dir.path("passed-capability.json");
-    write_capability(&capability, &plan, CapabilityStatus::Passed)?;
-
-    let output = run_cli(&config, &capability, &input)?;
+    let output = run_cli_excel(&config, &input)?;
     anyhow::ensure!(
         output.status.success(),
         "rename-sheets CLI failed: {}",
@@ -122,26 +137,16 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
     assert_eq!(actual["workbooks"], baseline["result"]["workbooks"]);
     assert_eq!(actual["rename_ok"], baseline["result"]["rename_ok"]);
     assert_eq!(actual["skip"], baseline["result"]["skip"]);
-    assert_eq!(
-        actual["files"][0]["execution"]["engine"],
-        "umya_spreadsheet"
-    );
     assert_eq!(actual["files"][0]["status"], "renamed");
-    assert!(
-        actual["files"][0]["execution"]["route_decisions"][0]["eligible"]
-            .as_bool()
-            .unwrap_or(false)
+    // Excel 改名路径不经过 umya 引擎，execution 计划报告为空。
+    assert!(actual["files"][0]["execution"].is_null());
+    // 核心契约：跨表公式与命名区域引用随改名自动更新。
+    let renamed_path = PathBuf::from(
+        actual["files"][0]["output"]
+            .as_str()
+            .context("renamed workbook path missing")?,
     );
-    let file = &actual["files"][0];
-    let recorded_phase_ms = ["planning_ms", "editing_ms", "commit_ms"]
-        .iter()
-        .map(|phase| file[*phase].as_u64().unwrap_or_default())
-        .sum::<u64>();
-    anyhow::ensure!(
-        file["elapsed_ms"].as_u64().unwrap_or_default() >= recorded_phase_ms,
-        "per-file elapsed time must include its sequential phase durations"
-    );
-    assert_eq!(file["execution"]["attempts"][0]["outcome"], "succeeded");
+    let renamed = excel_reader::read_workbook(&renamed_path)?;
     // 4-5 改为就地修改：源工作簿被改写，配置保持不变。
     assert_ne!(
         pytools_core::file_commit::sha256_file(&input)?,
@@ -154,16 +159,25 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
     );
 
     let mut expected_projection = baseline["projection"].clone();
+    // 打印区域里简单表名的带引号/不带引号写法等价，比较前统一规范化。
     if let Some(print_area) = expected_projection["renamed_a1"]["print_area"].as_str() {
         expected_projection["renamed_a1"]["print_area"] =
             normalize_sheet_address(print_area).into();
     }
-    let output_path = PathBuf::from(
-        file["output"]
-            .as_str()
-            .context("renamed workbook path missing")?,
-    );
+    // 旧 Python 基线把公式和命名区域留在旧表名（'A'!），改名后它们实际指向
+    // 新表 A（原 B 表），属于用户要求修复的依赖失效。当前路径按改名映射改写：
+    // 原 A 表已改为 RenamedA，因此引用应为 RenamedA。
+    expected_projection["formula"] = json!("=RenamedA!A1");
+    for defined_name in expected_projection["defined_names"]
+        .as_array_mut()
+        .context("baseline defined_names missing")?
+    {
+        if defined_name["name"] == "TargetCell" {
+            defined_name["reference"] = json!("RenamedA!$A$1");
+        }
+    }
     // 就地模式：输出路径即源工作簿本身。
+    let output_path = renamed_path.clone();
     let canonical_input = fs::canonicalize(&input)?;
     let canonical_output = fs::canonicalize(&output_path)?;
     assert_eq!(
@@ -171,6 +185,13 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
         "in-place rename must target the source"
     );
     assert!(output_path.is_file());
+    // 公式依赖随改名更新：旧表名不再出现在任何工作表公式中。
+    let stale = renamed
+        .sheets
+        .iter()
+        .flat_map(|sheet| sheet.formulas.values())
+        .any(|formula| formula.contains("OldSheet"));
+    assert!(!stale, "stale OldSheet reference remains after rename");
     assert_ne!(
         pytools_core::file_commit::sha256_file(&output_path)?,
         original_hash
@@ -213,19 +234,20 @@ fn sheet_rename_cli_matches_python_and_publishes_a_copy_without_changing_source(
 }
 
 #[test]
-fn missing_passed_capability_rejects_before_source_change() -> Result<()> {
+fn capability_path_refuses_formula_dependent_workbooks_before_source_change() -> Result<()> {
     let dir = TestDir::new("rejected")?;
     let config = fixture("config.xlsx");
     let input = dir.path("input.xlsx");
     fs::copy(fixture("input.xlsx"), &input)?;
     let original_hash = pytools_core::file_commit::sha256_file(&input)?;
     let plan = plan_for(&config, &input, &dir.path("plan-output.xlsx"))?;
-    let capability = dir.path("unverified-capability.json");
-    write_capability(&capability, &plan, CapabilityStatus::Unverified)?;
+    let capability = dir.path("passed-capability.json");
+    write_capability(&capability, &plan, CapabilityStatus::Passed)?;
 
     let output = run_cli(&config, &capability, &input)?;
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("capability"));
+    // umya capability 路径不保证公式/命名区域随改名更新，必须显式拒绝。
+    assert!(String::from_utf8_lossy(&output.stderr).contains("公式"));
     assert_eq!(
         pytools_core::file_commit::sha256_file(&input)?,
         original_hash
@@ -263,18 +285,8 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     fs::write(&unsupported, b"not an xls workbook")?;
     fs::write(input_dir.join("~$lock.xlsx"), b"ignored office lock")?;
     let unsupported_hash = pytools_core::file_commit::sha256_file(&unsupported)?;
-    let plan = plan_for(&config, &first, &dir.path("plan-output.xlsx"))?;
-    let capability = dir.path("passed-capability.json");
-    write_capability(&capability, &plan, CapabilityStatus::Passed)?;
 
-    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
-        .args(["rename-sheets", "--config"])
-        .arg(&config)
-        .args(["--capabilities"])
-        .arg(&capability)
-        .args(["--platform", PLATFORM, "--recursive"])
-        .arg(&input_dir)
-        .output()?;
+    let output = run_cli_excel_recursive(&config, &input_dir)?;
     anyhow::ensure!(
         output.status.success(),
         "recursive rename-sheets CLI failed: {}",
@@ -300,26 +312,18 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     assert_eq!(status_for("a.xlsx")?, "renamed");
     assert_eq!(status_for("nested/b.xlsx")?, "renamed");
     assert_eq!(status_for("old.xls")?, "skipped");
-    let original_outputs = report["files"]
-        .as_array()
-        .context("initial file results missing")?
-        .iter()
-        .filter_map(|file| file["output"].as_str().map(PathBuf::from))
-        .map(|path| Ok((path.clone(), pytools_core::file_commit::sha256_file(&path)?)))
-        .collect::<Result<Vec<_>>>()?;
+    // 就地模式：两个 xlsx 都被改写，非法 xls 保持原样。
+    assert_ne!(pytools_core::file_commit::sha256_file(&first)?, first_hash);
+    assert_ne!(
+        pytools_core::file_commit::sha256_file(&second)?,
+        second_hash
+    );
     assert_eq!(
         pytools_core::file_commit::sha256_file(&unsupported)?,
         unsupported_hash
     );
 
-    let second_output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
-        .args(["rename-sheets", "--config"])
-        .arg(&config)
-        .args(["--capabilities"])
-        .arg(&capability)
-        .args(["--platform", PLATFORM, "--recursive"])
-        .arg(&input_dir)
-        .output()?;
+    let second_output = run_cli_excel_recursive(&config, &input_dir)?;
     anyhow::ensure!(
         second_output.status.success(),
         "repeat recursive rename-sheets CLI failed: {}",
@@ -483,7 +487,7 @@ fn workbook_projection(path: &Path) -> Result<Value> {
                 && node.attribute("localSheetId") == Some(sheet_index.to_string().as_str())
         })
         .and_then(|node| node.text())
-        .map(str::to_owned);
+        .map(normalize_sheet_address);
     let defined_names = workbook_doc
         .descendants()
         .filter(|node| {

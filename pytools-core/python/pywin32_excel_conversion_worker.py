@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import math
+import re
 import shutil
 import sys
 import tempfile
@@ -574,6 +575,104 @@ class ConversionSession:
                 self._ensure_application()
         raise AssertionError("unreachable")
 
+    def rename_sheets(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
+        """复用 pytools 的 openpyxl 改名方案，并改写跨表引用与命名区域。
+
+        openpyxl 的 title 赋值不会改写公式字符串，因此这里在同一遍里把
+        「'旧表'!」与「旧表!」两种引用形式替换为新表名；字符串字面量
+        （双引号内）不改写。不经过 COM，无需本机 Excel。
+        """
+        # COM/文件接口都会拒绝 Windows 扩展长度路径，先剥掉前缀。
+        if candidate_text.startswith("\\\\?\\UNC\\"):
+            candidate_text = "\\\\" + candidate_text[8:]
+        elif candidate_text.startswith("\\\\?\\"):
+            candidate_text = candidate_text[4:]
+        candidate = _absolute(candidate_text)
+        stage = "检查改名候选工作簿"
+        try:
+            _validate_container(candidate, "改名候选工作簿")
+            if candidate.suffix.lower() != ".xlsx" or not changes:
+                raise ValueError("工作表改名仅接受非空改名计划和 XLSX 临时候选")
+            stage = "读取候选工作簿"
+            import openpyxl
+
+            workbook = openpyxl.load_workbook(candidate)
+            stage = "校验改名计划"
+            renames = {}
+            sheetnames = list(workbook.sheetnames)
+            # 按计划顺序逐个放行：A→RenamedA、B→A 这类链式/换名在 Excel 里
+            # 合法，只要目标名在轮到它时已经空出来。不能拿原始表名集一次性
+            # 判重，否则会把旧 pytools 能处理的计划误判为重名。
+            seen = set(sheetnames)
+            for change in changes:
+                old, new = str(change["old_name"]), str(change["new_name"])
+                if old not in sheetnames:
+                    raise ValueError(f"工作表 {old!r} 不存在")
+                if re.search(r"[:\\/?*\[\]]", new) or len(new) > 31:
+                    raise ValueError(f"新表名 {new!r} 含非法字符或超过 31 字符")
+                if old == new:
+                    continue
+                names_without_old = {name for name in seen if name != old}
+                if any(name.lower() == new.lower() for name in names_without_old):
+                    raise ValueError(f"新表名 {new!r} 与现有工作表重名")
+                seen.discard(old)
+                seen.add(new)
+                renames[old] = new
+            if not renames:
+                raise ValueError("改名计划中没有实际改名")
+            stage = "读取改名前快照"
+            before = _openpyxl_snapshot(workbook)
+            stage = "执行改名并改写引用"
+            for old, new in renames.items():
+                workbook[old].title = new
+            for ws in workbook.worksheets:
+                for row in ws.iter_rows():
+                    for cell in row:
+                        value = cell.value
+                        if isinstance(value, str) and value.startswith("="):
+                            cell.value = "=" + _rewrite_sheet_refs(value[1:], renames)
+            for names in [workbook.defined_names] + [
+                ws.defined_names for ws in workbook.worksheets
+            ]:
+                for name in list(names):
+                    defined = names[name]
+                    defined.attr_text = _rewrite_sheet_refs(defined.attr_text or "", renames)
+            stage = "保存改名候选"
+            workbook.save(candidate)
+            workbook = None
+            stage = "重新读取并校验"
+            reloaded = openpyxl.load_workbook(candidate)
+            after = _openpyxl_snapshot(reloaded)
+            expected_names = [
+                renames.get(name, name) for name in [sheet["name"] for sheet in before]
+            ]
+            if [sheet["name"] for sheet in after] != expected_names:
+                raise ValueError("改名后工作表顺序或名称与计划不一致")
+            for source, result in zip(before, after):
+                if set(source["formulas"]) != set(result["formulas"]):
+                    raise ValueError(f"工作表 {source['name']!r} 的公式单元格发生增删")
+                for address, formula in source["formulas"].items():
+                    expected = "=" + _rewrite_sheet_refs(formula, renames)
+                    if result["formulas"].get(address) != expected[1:]:
+                        raise ValueError(
+                            f"工作表 {source['name']!r} 公式 {address} 引用改写不一致"
+                        )
+                for address, value in source["values"].items():
+                    if result["values"].get(address) != value:
+                        raise ValueError(
+                            f"工作表 {source['name']!r} 非公式单元格 {address} 发生变化"
+                        )
+            if _count_ref_errors(after) > _count_ref_errors(before):
+                raise ValueError("改名后出现新的 #REF! 公式引用")
+            validation = {
+                "verified": True,
+                "level": "openpyxl_rename_with_reference_rewrite",
+                "renamed_sheets": len(renames),
+            }
+            return {"ok": True, "validation": validation}
+        except Exception as error:
+            return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
+
     def _open_validation_pair(
         self, template_path: Path, source_copy_path: Path
     ) -> tuple[Any, Any]:
@@ -910,6 +1009,107 @@ class ConversionSession:
             pass
 
 
+def _needs_quote(name: str) -> bool:
+    return bool(re.search(r"[\s:\/?*\[\]]", name)) or name[:1].isdigit()
+
+
+_QUOTED_SHEET_REF = re.compile(r"'((?:[^']|'')*)'!")
+_BARE_SHEET_REF = re.compile(r"([^\W\d][\w.]*)!")
+
+
+def _split_string_literals(text: str):
+    """把公式切成「字符串字面量 / 其他」交替片段。
+
+    公式里的双引号文本（含 "" 转义）不是引用，改写必须跳过。
+    """
+    segments = []
+    start = 0
+    i = 0
+    length = len(text)
+    while i < length:
+        if text[i] != '"':
+            i += 1
+            continue
+        segments.append((False, text[start:i]))
+        j = i + 1
+        while j < length:
+            if text[j] == '"':
+                if text[j + 1 : j + 2] == '"':
+                    j += 2
+                    continue
+                break
+            j += 1
+        segments.append((True, text[i : j + 1]))
+        i = j + 1
+        start = i
+    segments.append((False, text[start:]))
+    return segments
+
+
+def _apply_sheet_rename(text: str, renames: dict) -> str:
+    def quoted(match):
+        name = match.group(1).replace("''", "'")
+        new = renames.get(name)
+        if new is None:
+            return match.group(0)
+        rendered = ("'" + new.replace("'", "''") + "'") if _needs_quote(new) else new
+        return rendered + "!"
+
+    def bare(match):
+        # [1]Sheet! 是外部工作簿引用，不属于当前工作簿改名范围。
+        if match.start() > 0 and text[match.start() - 1] == "]":
+            return match.group(0)
+        name = match.group(1)
+        new = renames.get(name)
+        if new is None:
+            return match.group(0)
+        rendered = ("'" + new.replace("'", "''") + "'") if _needs_quote(new) else new
+        return rendered + "!"
+
+    text = _QUOTED_SHEET_REF.sub(quoted, text)
+    return _BARE_SHEET_REF.sub(bare, text)
+
+
+def _rewrite_sheet_refs(text: str, renames: dict) -> str:
+    """改写公式/命名区域引用中的旧表名（引号、裸名、Unicode 表名）。"""
+    if not renames:
+        return text
+    rewritten = [
+        piece
+        if is_literal
+        else _apply_sheet_rename(piece, renames)
+        for is_literal, piece in _split_string_literals(text)
+    ]
+    return "".join(rewritten)
+
+
+def _openpyxl_snapshot(workbook):
+    sheets = []
+    for ws in workbook.worksheets:
+        formulas = {}
+        values = {}
+        for row in ws.iter_rows():
+            for cell in row:
+                value = cell.value
+                if value is None:
+                    continue
+                address = cell.coordinate
+                if isinstance(value, str) and value.startswith("="):
+                    formulas[address] = value[1:]
+                else:
+                    values[address] = value
+        sheets.append({"name": ws.title, "formulas": formulas, "values": values})
+    return sheets
+
+
+def _count_ref_errors(sheets) -> int:
+    total = 0
+    for sheet in sheets:
+        for formula in sheet["formulas"].values():
+            total += formula.upper().count("#REF!") + formula.upper().count("#NAME?")
+    return total
+
+
 def _serve() -> int:
     try:
         session = ConversionSession()
@@ -925,6 +1125,9 @@ def _serve() -> int:
                 if operation == "shutdown":
                     _write_json({"ok": True})
                     break
+                if operation == "rename_sheets":
+                    _write_json(session.rename_sheets(str(request["candidate"]), request["changes"]))
+                    continue
                 if operation == "recalculate_named_validation":
                     _write_json(
                         session.recalculate_named_validation(

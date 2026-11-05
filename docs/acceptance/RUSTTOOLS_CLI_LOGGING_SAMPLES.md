@@ -162,3 +162,7 @@
 ### 4-4 输出写入失败场景说明
 
 两轮探测（输出目录只读、目标文件独占锁）均被现有流程吸收（同名去重 `_1` 后缀、COM 写入路径），未触发真实写入失败；不做人为伪造样例。失败定位能力由以下真实证据承载：region-sum-100 的 broken.xlsx（文件 + 阶段 + 去重原因）与自动化测试的 `refusing to overwrite existing output` 路径。
+
+### 4-5 按配置修改 Sheet 名（openpyxl 改名 + 引用改写）
+
+[sheet-rename-openpyxl-round4.terminal.txt](captures/sheet-rename-openpyxl-round4.terminal.txt)：Release EXE 默认路径（无 capability）。源工作簿「旧数据表 / 汇总」，`汇总!B1` 为 `=旧数据表!A1*3`，命名区域 `旧范围` 指向 `旧数据表!$A$1:$A$2`。改名后回读为 `=新数据表!A1*3` 与 `新数据表!$A$1:$A$2`，`rename_ok: 1`；源文件经 SHA-256 快照校验后由候选替换（`operation: replaced`）。另有一次带中文表名的实测：`sheets: ['新数据表','汇总']`、`B1: =新数据表!A1*3`、`旧范围: 新数据表!$A$1:$A$2`。

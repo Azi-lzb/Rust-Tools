@@ -1,0 +1,36 @@
+$ dist/RustTools.exe rename-sheets --config %TEMP%\r45-final2\config.xlsx --log-view user %TEMP%\r45-final2\source.xlsx
+45-final2\config.xlsx --log-view user %TEMP%
+45-final2\source.xlsx
+{
+  "elapsed_ms": 448,
+  "files": [
+    {
+      "commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 21,
+        "operation": "replaced",
+        "sha256_after": "31e308c6993770121ee5dc3fa48cc6a709006c446a3c29257a7a08104b068961",
+        "sha256_before": "cf1b8d66a3445ebe6d1a401fb29bce2812f5317bcce17b161862f1c8d6ef3951",
+        "target": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\r45-final2\\source.xlsx"
+      },
+      "commit_ms": 21,
+      "editing_ms": 408,
+      "elapsed_ms": 439,
+      "execution": null,
+      "input": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\r45-final2\\source.xlsx",
+      "output": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\r45-final2\\source.xlsx",
+      "planning_ms": 9,
+      "reason": null,
+      "renamed": 1,
+      "skipped": 0,
+      "status": "renamed"
+    }
+  ],
+  "files_scanned": 1,
+  "rename_ok": 1,
+  "run_id": "pytools-pt-4-5-23780-1793858360108353200-0",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\PT-4-5_pytools-pt-4-5-23780-1793858360108353200-0.run.json",
+  "skip": 0,
+  "workbooks": 1
+}

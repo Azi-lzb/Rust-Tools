@@ -148,14 +148,14 @@
 | 4-2 | 排序前缀添加/清理 | `tests/file_sort_prefix_parity.rs`、`file_sort_prefix_operation_parity.rs`（操作 49）、`file_sort_prefix_remove_parity.rs`（操作 410，含空输入） | `tests/fixtures/file_sort_prefix_*` | Python 基线 | 否 | 已通过 |
 | 4-3 | 按内容重命名 | `tests/content_rename_46_parity.rs`、`content_unrename_47_parity.rs`、`local_filename_map_48_parity.rs`（XLS 浮点文本、冲突与跳过） | `tests/fixtures/content_*_cases.json` | Python 基线 | 否 | 已通过 |
 | 4-4 | XLS/ET/DOC 格式转换 | `tests/conversion_menu_cli.rs`（路由、伪造 ET 拒绝、进度脱敏）；`sidecar/lo-convert/tests/`（需 LibreOffice） | `tests/fixtures/timeline/*.xls` + `testdata/manual-menu/input/files/待转换/` | Python/手工断言 | **是（LibreOffice/Office）** | 已通过；WPS COM 伪标 ET 拒绝已实测通过（真实 WPS 在环）；**原生 ET 正向样本待用户提供**（WPS COM 无法写出原生 ET，见下） |
-| 4-5 | 按配置修改 Sheet 名 | `tests/sheet_rename_execution.rs`（发布副本不改源、能力门控、递归批量） | 运行时生成 + `testdata/manual-menu/input/files/工作表重命名/` | Python 基线 | 否 | 已通过 |
+| 4-5 | 按配置修改 Sheet 名 | `tests/sheet_rename_execution.rs`（就地改名 + 公式/命名区域引用改写、递归批量、capability 路径拒绝公式簿）；`tests/conversion_menu_cli.rs`（菜单确认、引擎禁用保护、跨表公式与命名区域回读） | 运行时生成 + `testdata/manual-menu/input/files/工作表重命名/` | Python 语义断言 + 引用改写 | 否（随包 openpyxl） | 已通过 |
 | 4-6 | 报送完整性检查 | `tests/submission_check_parity.rs`（AND/OR 别名语义、日期关键字、报告统计） | `tests/fixtures/` + `testdata/manual-menu/input/files/报送检查/` | Python 基线 | 否 | 已通过 |
 
 ## 第 5 类：一二批专用报表处理
 
 | 编号 | 业务名称 | 自动化测试 | 测试数据 | 预期结果 | 外部引擎 | 状态 |
 |---|---|---|---|---|---|---|
-| 5-1 | 拆分村镇银行数据 | `tests/batch_tools_menu_cli.rs`（village_split_*：校验副本不改目标、legacy 浮点文本、能力提交） | 运行时生成 | Python 语义断言 | 否 | 已通过 |
+| 5-1 | 拆分村镇银行数据 | `tests/batch_tools_menu_cli.rs`（village_split_*：就地改写目标、legacy 浮点文本、金额全精度、能力提交） | 运行时生成 | Python 语义断言 | 否 | 已通过 |
 | 5-2 | 机构名称规范化 | `tests/institution_normalize_plan_parity.rs`、`institution_normalize_batch_cli.rs`（重复键取末值、空映射、浮点科学计数） | `tests/fixtures/institution_normalize*` | Python 基线 | 否 | 已通过 |
 | 5-3 | 删除分机构表外资行 | `tests/foreign_bank_batch_execution.rs`（planned_deleted_rows/deleted_rows 按行计数、跨表公式与定义名称跟随、动态引用拒绝）——**行级删除，非删表** | 运行时生成 + `testdata/manual-menu/input/special/分机构报表.xlsx` | 测试内断言 | 否 | 已通过 |
 | 5-4 | 修改外汇页眉单位 | `tests/fx_header_parity.rs`（与 Python 一致且保持未修改内容、无匹配不产计划）、`fx_header_menu_cli.rs`（默认仅计划、能力后才提交）——**仅标签修正，无数值换算** | `tests/fixtures/fx_header/source.xlsx` + manual kit | Python 基线 | 否 | 已通过 |

@@ -1198,7 +1198,14 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
     if !result_path.is_file() {
         // user 视图摘要可能只显示文件名；按配置的输出目录定位。
         let output_dir = root.path().join("app").join("output");
-        result_path = find_output(&output_dir, result_path.file_name().context("output file name missing")?.to_string_lossy().as_ref())?;
+        result_path = find_output(
+            &output_dir,
+            result_path
+                .file_name()
+                .context("output file name missing")?
+                .to_string_lossy()
+                .as_ref(),
+        )?;
     }
     let workbook = read_workbook(result_path)?;
     let summary = workbook
@@ -2454,8 +2461,8 @@ fn latest_timeline_compare_report(output: &Output) -> Result<Value> {
             })
         })
     });
-    let report_path =
-        report_path.with_context(|| "interactive menu did not print a timeline comparison report")?;
+    let report_path = report_path
+        .with_context(|| "interactive menu did not print a timeline comparison report")?;
     Ok(serde_json::json!({ "output": report_path }))
 }
 

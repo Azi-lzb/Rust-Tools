@@ -270,7 +270,10 @@ fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Resul
     let stdout = String::from_utf8_lossy(&output.stdout);
     let printed = target.clone();
     if printed.is_file() {
-        assert!(stdout.contains("按配置生成静态打印文件：执行成功"), "{stdout}");
+        assert!(
+            stdout.contains("按配置生成静态打印文件：执行成功"),
+            "{stdout}"
+        );
         let dump = read_workbook(&printed)?;
         assert_eq!(dump.sheets[0].name, "Printed");
         assert_eq!(dump.sheets[0].values["B3"]["value"], 0.0001);
