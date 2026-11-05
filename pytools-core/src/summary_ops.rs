@@ -963,6 +963,8 @@ struct NamedSummaryField {
 struct NamedValidationOutputRow {
     workbook: String,
     worksheet: String,
+    route: String,
+    template: String,
     address: String,
     error_type: String,
     texts: [String; 3],
@@ -1972,9 +1974,6 @@ fn extract_named_validation_regions_inner(
         .filter(|spec| spec.template_sheet != "兜底模板")
         .cloned()
         .collect::<Vec<_>>();
-    let template_fallback = direct_validation_specs
-        .iter()
-        .any(|spec| spec.template_sheet == "模板");
     let configured_regions = validation_specs
         .iter()
         .flat_map(|spec| {
@@ -2131,14 +2130,15 @@ fn extract_named_validation_regions_inner(
 
         let route_started = Instant::now();
         let mut file_requests = Vec::<NamedValidationRegionRequest>::new();
+        let mut file_routes = BTreeMap::<String, (String, String)>::new();
         let mut skipped_sheet_reasons = BTreeMap::<String, BTreeSet<String>>::new();
         for source_sheet in &source_dump.sheets {
             progress.current_sheet = Some(source_sheet.name.clone());
             progress.sheets_discovered += 1;
             progress.sheets_attempted += 1;
-            let direct_spec = direct_validation_specs
-                .iter()
-                .find(|spec| spec.template_sheet.eq_ignore_ascii_case(&source_sheet.name));
+            let direct_spec = direct_validation_specs.iter().find(|spec| {
+                named_direct_template_matches(&spec.template_sheet, &source_sheet.name)
+            });
             let fallback_spec = audit_fallbacks.first();
             let mut routes = Vec::<(&NamedValidationSheetSpec, bool)>::new();
             if let Some(spec) = direct_spec {
@@ -2146,14 +2146,6 @@ fn extract_named_validation_regions_inner(
             }
             if let Some(spec) = fallback_spec {
                 routes.push((spec, true));
-            }
-            if routes.is_empty() && template_fallback {
-                if let Some(spec) = direct_validation_specs
-                    .iter()
-                    .find(|spec| spec.template_sheet == "模板")
-                {
-                    routes.push((spec, false));
-                }
             }
             if routes.is_empty() {
                 skipped_sheet_reasons
@@ -2233,6 +2225,13 @@ fn extract_named_validation_regions_inner(
                 {
                     route_failures.insert(format!("模板「{}」：{reason}", spec.template_sheet));
                     continue;
+                }
+                if !spec.validation_regions.is_empty() {
+                    let route = named_validation_route_kind(*is_fallback);
+                    file_routes.insert(
+                        source_sheet.name.clone(),
+                        (route.to_owned(), spec.template_sheet.clone()),
+                    );
                 }
                 for bounds in &spec.validation_regions {
                     let request = NamedValidationRegionRequest {
@@ -2505,8 +2504,17 @@ fn extract_named_validation_regions_inner(
                     &cell.address,
                     &cell.value,
                 )
+                .map(|row| (cell, row))
             })
-            .collect::<Vec<_>>();
+            .map(|(cell, mut row)| {
+                let (route, template) = file_routes
+                    .get(&cell.sheet)
+                    .with_context(|| format!("校验结果工作表 {:?} 缺少模板路由记录", cell.sheet))?;
+                row.route = route.clone();
+                row.template = template.clone();
+                Ok(row)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let hit_count = matched.len();
         output_rows.extend(matched);
         progress.completed_files += 1;
@@ -2588,6 +2596,8 @@ fn extract_named_validation_regions_inner(
     let headers = [
         "工作簿名",
         "工作表名",
+        "路由方式",
+        "使用的模板",
         "定位单元格",
         "错误类型",
         "文本1",
@@ -2604,6 +2614,8 @@ fn extract_named_validation_regions_inner(
         let values = [
             &row.workbook,
             &row.worksheet,
+            &row.route,
+            &row.template,
             &row.address,
             &row.error_type,
             &row.texts[0],
@@ -2617,7 +2629,7 @@ fn extract_named_validation_regions_inner(
             sheet.write_string((row_index + 1) as u32, column as u16, value)?;
         }
     }
-    sheet.autofilter(0, 0, output_rows.len() as u32, 9)?;
+    sheet.autofilter(0, 0, output_rows.len() as u32, 11)?;
     emitter.emit(
         "output_workbook",
         "succeeded",
@@ -2747,6 +2759,8 @@ fn validate_named_validation_output(
     let headers = [
         "工作簿名",
         "工作表名",
+        "路由方式",
+        "使用的模板",
         "定位单元格",
         "错误类型",
         "文本1",
@@ -2770,6 +2784,8 @@ fn validate_named_validation_output(
         let values = [
             &row.workbook,
             &row.worksheet,
+            &row.route,
+            &row.template,
             &row.address,
             &row.error_type,
             &row.texts[0],
@@ -2983,11 +2999,6 @@ fn summarize_by_named_ranges_inner(
         );
         sheet_specs.retain(|spec| spec.template_sheet != "兜底模板");
     }
-    let spec_names = sheet_specs
-        .iter()
-        .map(|spec| spec.template_sheet.clone())
-        .collect::<BTreeSet<_>>();
-    let template_fallback = spec_names.contains("模板");
     let skipped_template_message = if skipped_template_sheets.is_empty() {
         String::new()
     } else {
@@ -3173,7 +3184,7 @@ fn summarize_by_named_ranges_inner(
                 .iter()
                 .filter(|spec| {
                     !spec.fallback_output
-                        && spec.template_sheet.eq_ignore_ascii_case(&source_sheet.name)
+                        && named_direct_template_matches(&spec.template_sheet, &source_sheet.name)
                 })
                 .cloned()
                 .collect::<Vec<_>>();
@@ -3186,15 +3197,6 @@ fn summarize_by_named_ranges_inner(
                 // Check the explicit fallback after a direct route fails too.
                 // Selection happens after both routes have been preflighted.
                 specs.push((fallback.clone(), true));
-            }
-            if specs.is_empty() && template_fallback {
-                specs.extend(
-                    sheet_specs
-                        .iter()
-                        .filter(|spec| !spec.fallback_output && spec.template_sheet == "模板")
-                        .cloned()
-                        .map(|spec| (spec, false)),
-                );
             }
             if specs.is_empty() {
                 let reason = "未找到同名模板工作表，也未配置可用兜底模板".to_owned();
@@ -3353,10 +3355,8 @@ fn summarize_by_named_ranges_inner(
                         .len();
                     let route_description = if is_fallback {
                         "兜底模板".to_owned()
-                    } else if is_direct_route {
-                        format!("直接模板「{template_name}」")
                     } else {
-                        format!("通用模板「{template_name}」")
+                        format!("直接模板「{template_name}」")
                     };
                     let route_message = if structure_count == 0 {
                         format!(
@@ -4167,6 +4167,18 @@ fn named_region_address(bounds: NamedRegionBounds) -> String {
     )
 }
 
+fn named_direct_template_matches(template: &str, source_sheet: &str) -> bool {
+    template != "兜底模板" && template.eq_ignore_ascii_case(source_sheet)
+}
+
+fn named_validation_route_kind(is_fallback: bool) -> &'static str {
+    if is_fallback {
+        "兜底模板"
+    } else {
+        "直接模板"
+    }
+}
+
 fn parse_named_validation_result(
     workbook: &str,
     worksheet: &str,
@@ -4216,6 +4228,8 @@ fn parse_named_validation_result(
     Some(NamedValidationOutputRow {
         workbook: workbook.to_owned(),
         worksheet: worksheet.to_owned(),
+        route: String::new(),
+        template: String::new(),
         address: address.to_owned(),
         error_type: error_type.to_owned(),
         texts: [field(0), field(1), field(2)],
@@ -6963,6 +6977,15 @@ mod named_range_spec_tests {
             Some((NamedRegionKind::Header, "first".to_owned()))
         );
         Ok(())
+    }
+
+    #[test]
+    fn validation_route_kind_identifies_template_source() {
+        assert_eq!(named_validation_route_kind(false), "直接模板");
+        assert_eq!(named_validation_route_kind(true), "兜底模板");
+        assert!(!named_direct_template_matches("模板", "1人民币"));
+        assert!(named_direct_template_matches("模板", "模板"));
+        assert!(!named_direct_template_matches("兜底模板", "兜底模板"));
     }
 
     #[test]

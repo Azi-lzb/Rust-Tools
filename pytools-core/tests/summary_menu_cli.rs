@@ -590,6 +590,56 @@ fn named_summary_adds_global_and_local_single_cell_fields() -> Result<()> {
 }
 
 #[test]
+fn named_template_sheet_only_routes_to_a_matching_source_sheet() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let template = root.path().join("template.xlsx");
+    let unmatched = root.path().join("unmatched.xlsx");
+    let matched = root.path().join("matched.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    let sheet = book.add_worksheet();
+    sheet.set_name("模板")?;
+    sheet.write_string(0, 0, "指标")?;
+    book.define_name("表头区域", "'模板'!$A$1")?;
+    book.define_name("固定行汇总区域", "'模板'!$A$2")?;
+    book.define_name("校验区域", "'模板'!$A$3")?;
+    book.save(&template)?;
+
+    for (path, name) in [(&unmatched, "数据"), (&matched, "模板")] {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name(name)?;
+        sheet.write_string(0, 0, "指标")?;
+        sheet.write_number(1, 0, 42.0)?;
+        book.save(path)?;
+    }
+    let before = fs::read(&unmatched)?;
+    let error = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template,
+        &[unmatched.clone()],
+        &root.path().join("unmatched-output"),
+    )
+    .expect_err("a sheet named 模板 must not serve as a generic fallback");
+    assert!(format!("{error:#}").contains("没有可汇总的源工作簿"));
+    let error = pytools_core::summary_ops::extract_named_validation_regions_with_progress(
+        &template,
+        &[unmatched.clone()],
+        &root.path().join("validation-output"),
+        |_| {},
+    )
+    .expect_err("validation must not use 模板 as a generic fallback");
+    assert!(format!("{error:#}").contains("没有源工作簿匹配模板校验区域"));
+    assert_eq!(fs::read(&unmatched)?, before);
+
+    let result = pytools_core::summary_ops::summarize_by_named_ranges(
+        &template,
+        &[matched],
+        &root.path().join("matched-output"),
+    )?;
+    assert_eq!(result.rows, 1);
+    Ok(())
+}
+
+#[test]
 fn named_summary_fallback_merges_source_sheets_and_modes_into_one_tab() -> Result<()> {
     let root = TestDirectory::new()?;
     let template = root.path().join("fallback.xlsx");

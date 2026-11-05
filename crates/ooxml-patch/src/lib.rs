@@ -2804,6 +2804,7 @@ fn apply_region_formulas(
     // `sheetData`, in row order - inserting them one by one at the same offset
     // would interleave and produce nested rows.
     let mut appended_rows = String::new();
+    let mut cell_insertions: BTreeMap<usize, String> = BTreeMap::new();
     for (row, references) in &new_by_row {
         // Cells are inserted one at a time, each resolved against the row as it
         // existed originally. Several inserts into one row therefore all get
@@ -2824,7 +2825,9 @@ fn apply_region_formulas(
             let (_, column) = parse_a1_cell(reference)?;
             match row_insert_offset(&document, *row, &[column])? {
                 Some(offset) => {
-                    edits.push((offset..offset, cell.into_bytes()));
+                    // Cells sharing an anchor must be inserted together: separate
+                    // splices at the same offset reverse their column order.
+                    cell_insertions.entry(offset).or_default().push_str(&cell);
                     inserted_here = true;
                 }
                 None => row_cells.push_str(&cell),
@@ -2833,6 +2836,9 @@ fn apply_region_formulas(
         if !row_cells.is_empty() && !inserted_here {
             appended_rows.push_str(&format!("<row r=\"{row}\">{row_cells}</row>"));
         }
+    }
+    for (offset, cells) in cell_insertions {
+        edits.push((offset..offset, cells.into_bytes()));
     }
     if !appended_rows.is_empty() {
         // A source sheet can be almost empty (a bank that fills only the
@@ -4842,6 +4848,24 @@ mod cell_region_copy_tests {
         path::PathBuf,
     };
     use zip::{write::SimpleFileOptions, ZipWriter};
+
+    #[test]
+    fn missing_cells_sharing_anchor_keep_column_order() -> Result<()> {
+        let sheet = format!(
+            r#"<worksheet xmlns="{MAIN_NS}"><sheetData><row r="5"><c r="E5"/></row></sheetData></worksheet>"#
+        );
+        let formulas = [
+            ("F5".to_owned(), "1".to_owned()),
+            ("G5".to_owned(), "2".to_owned()),
+        ]
+        .into_iter()
+        .collect();
+        let (patched, _, _) = super::apply_region_formulas(sheet.as_bytes(), "F5:G5", &formulas)?;
+        let xml = String::from_utf8(patched)?;
+        assert!(xml.find("r=\"E5\"").unwrap() < xml.find("r=\"F5\"").unwrap());
+        assert!(xml.find("r=\"F5\"").unwrap() < xml.find("r=\"G5\"").unwrap());
+        Ok(())
+    }
 
     fn temp_path(label: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()
