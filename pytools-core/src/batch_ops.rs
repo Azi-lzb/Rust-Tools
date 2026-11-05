@@ -451,11 +451,11 @@ fn village_matrix(
             let prev_dep = village_numeric(&cell_value(prev, *row, 3));
             let curr_loan = village_numeric(&cell_value(cur, *row, 87));
             let prev_loan = village_numeric(&cell_value(prev, *row, 87));
-            matrix[target][0] = CellValue::Decimal(decimal_text(curr_dep));
+            matrix[target][0] = CellValue::Decimal(exact_decimal_text(curr_dep));
             matrix[target][1] = value_for_cell(&cell_value(cur, *row, 4));
             matrix[target][2] = value_for_cell(&cell_value(cur, *row, 5));
             matrix[target][3] = yoy(curr_dep, prev_dep);
-            matrix[target][4] = CellValue::Decimal(decimal_text(curr_loan));
+            matrix[target][4] = CellValue::Decimal(exact_decimal_text(curr_loan));
             matrix[target][5] = value_for_cell(&cell_value(cur, *row, 88));
             matrix[target][6] = value_for_cell(&cell_value(cur, *row, 89));
             matrix[target][7] = yoy(curr_loan, prev_loan);
@@ -714,6 +714,8 @@ fn yoy(current: f64, previous: f64) -> CellValue {
             CellValue::Text("∞".into())
         }
     } else {
+        // 同比是两位小数的百分比指标，沿用旧 pytools 的 round(..., 2)；
+        // 存款/贷款金额本身按原值写入，不能在这里被截断。
         CellValue::Decimal(decimal_text(((current / previous) - 1.0) * 100.0))
     }
 }

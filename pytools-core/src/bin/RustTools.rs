@@ -2888,8 +2888,7 @@ where
                     pytools_core::run_logging::Level::Info,
                     &format!(
                         "正在写入目标工作簿（追加 {} 行，过滤重复 {} 行）",
-                        plan.appended_rows,
-                        plan.duplicate_rows_filtered
+                        plan.appended_rows, plan.duplicate_rows_filtered
                     )
                 )
             )?;
@@ -6093,7 +6092,7 @@ where
         match feature_id {
             "PT-7-1" => {
                 let Some(current) = choose_single_xlsx_workbook(
-                    "选择本期村镇银行数据工作簿",
+                    "选择 本期商业银行共享一批",
                     input,
                     output,
                     allow_native_dialog,
@@ -6103,17 +6102,17 @@ where
                     return Ok(());
                 };
                 let Some(previous) = choose_single_xlsx_workbook(
-                    "选择去年同期村镇银行数据工作簿",
+                    "选择 去年同期商业银行共享一批",
                     input,
                     output,
                     allow_native_dialog,
                 )?
                 else {
-                    writeln!(output, "[已取消] 未选择上期工作簿。")?;
+                    writeln!(output, "[已取消] 未选择去年同期商业银行共享一批。")?;
                     return Ok(());
                 };
                 let Some(selected) = choose_source_files_or_folders(
-                    "选择需要拆分村镇银行数据的目标工作簿",
+                    "选择 本外币、人民币、外币、外发用文件（修改分机构表）",
                     NativeFileFilter::XlsxOnly,
                     input,
                     output,

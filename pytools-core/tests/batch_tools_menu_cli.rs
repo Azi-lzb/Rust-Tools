@@ -445,8 +445,7 @@ fn interactive_village_split_menu_creates_validated_copy_without_modifying_targe
 }
 
 #[test]
-#[ignore = "5-1 已改为就地修改；本用例仍断言副本语义，待人工验收后改写"]
-fn village_split_numeric_text_matches_legacy_python_float_conversion() -> Result<()> {
+fn village_split_keeps_full_precision_and_matches_legacy_numeric_conversion() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let current = root.path().join("current.xlsx");
@@ -457,8 +456,10 @@ fn village_split_numeric_text_matches_legacy_python_float_conversion() -> Result
         let mut workbook = Workbook::new();
         let sheet = workbook.add_worksheet();
         sheet.set_name("村镇银行本外币")?;
-        sheet.write_string(4, 2, "1,000")?;
-        sheet.write_number(4, 86, 200.0)?;
+        // 金额超过两位小数：必须按原值复制，不能写成 1234.57。
+        sheet.write_number(4, 2, 1234.567_89)?;
+        // 带千分位的文本按旧 pytools 的 float() 语义解析失败 → 0。
+        sheet.write_string(4, 86, "1,000")?;
         workbook.save(&current)?;
         fs::read(&current)?
     };
@@ -466,13 +467,12 @@ fn village_split_numeric_text_matches_legacy_python_float_conversion() -> Result
         let mut workbook = Workbook::new();
         let sheet = workbook.add_worksheet();
         sheet.set_name("村镇银行本外币")?;
-        sheet.write_number(4, 2, 500.0)?;
+        sheet.write_number(4, 2, 1000.0)?;
         sheet.write_number(4, 86, 100.0)?;
         workbook.save(&previous)?;
         fs::read(&previous)?
     };
     make_village_target(&target)?;
-    let target_bytes = fs::read(&target)?;
 
     let output = run_menu(&config, &village_menu_input(&current, &previous, &target))?;
     assert!(
@@ -480,29 +480,23 @@ fn village_split_numeric_text_matches_legacy_python_float_conversion() -> Result
         "village split menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).contains(r#""created_copies": 1"#),
-        "village output: {}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let output_copy = root
-        .path()
-        .join("PyTools_专用报表处理结果")
-        .join("target.xlsx");
-    let workbook = read_workbook(&output_copy)?;
+    let workbook = read_workbook(&target)?;
     let branch = workbook
         .sheets
         .iter()
         .find(|sheet| sheet.name == "广东分机构本外币")
         .context("village split result sheet missing")?;
-    assert_eq!(branch.values["B3"]["value"].as_f64(), Some(0.0));
-    assert_eq!(branch.values["E3"]["value"].as_f64(), Some(-100.0));
-    assert!(find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none());
+    assert_eq!(
+        branch.values["B3"]["value"].as_f64(),
+        Some(1234.567_89),
+        "存款金额必须保留完整精度"
+    );
+    assert_eq!(branch.values["E3"]["value"].as_f64(), Some(23.46));
+    assert_eq!(branch.values["F3"]["value"].as_f64(), Some(0.0));
+    assert_eq!(branch.values["I3"]["value"].as_f64(), Some(-100.0));
 
     assert_eq!(fs::read(&current)?, current_bytes);
     assert_eq!(fs::read(&previous)?, previous_bytes);
-    assert_eq!(fs::read(&target)?, target_bytes);
     Ok(())
 }
 
