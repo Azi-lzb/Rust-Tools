@@ -1321,6 +1321,21 @@ fn escape_xml_text(text: &str) -> String {
     escaped
 }
 
+/// Element-content escaping for formula text: only `&`, `<` and `>` are
+/// required there, so quoted sheet names keep their literal apostrophes.
+fn escape_formula_text(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
 fn replace_header_xml(
     sheet_name: &str,
     part: &str,
@@ -1937,7 +1952,21 @@ pub fn copy_cell_region(
             } else {
                 writer.start_file(&name, options)?;
                 written.insert(name.clone());
-                if let Some(bytes) = replacements.get(&name) {
+                if is_worksheet_part(&name) {
+                    // The working copy is disposable: normalize every
+                    // worksheet's formulas so Excel can parse sheet references
+                    // written unquoted (copied template sheets included). The
+                    // caller's own file is never touched.
+                    let bytes = match replacements.get(&name) {
+                        Some(bytes) => bytes.clone(),
+                        None => {
+                            let mut bytes = Vec::new();
+                            entry.read_to_end(&mut bytes)?;
+                            bytes
+                        }
+                    };
+                    writer.write_all(&normalize_worksheet_formula_references(&bytes)?)?;
+                } else if let Some(bytes) = replacements.get(&name) {
                     writer.write_all(bytes)?;
                 } else {
                     std::io::copy(&mut entry, &mut writer)?;
@@ -1950,7 +1979,11 @@ pub fn copy_cell_region(
                 continue;
             }
             writer.start_file(name, SimpleFileOptions::default())?;
-            writer.write_all(bytes)?;
+            if is_worksheet_part(name) {
+                writer.write_all(&normalize_worksheet_formula_references(bytes)?)?;
+            } else {
+                writer.write_all(bytes)?;
+            }
         }
         writer.finish()?;
         Ok(())
@@ -1985,6 +2018,10 @@ fn collect_referenced_sheets(
 
 fn is_external_sheet_reference(name: &str) -> bool {
     name.contains('[') || name.contains(']')
+}
+
+fn is_worksheet_part(name: &str) -> bool {
+    name.starts_with("xl/worksheets/") && name.ends_with(".xml") && !name.contains("/_rels/")
 }
 
 /// Extract `Sheet!` prefixes from a formula, honouring quoted names.
@@ -2378,6 +2415,11 @@ fn plan_missing_template_sheets(
         .with_context(|| format!("copy template sheet {name:?} with its dependencies"))?;
         changes.insert(new_part.clone(), sheet_xml);
         for (extra_name, bytes) in extra_parts {
+            // Every copied part must be declared in [Content_Types].xml. A
+            // source without any comments never declared the comments/vml
+            // content types, so silently adding those parts produced a
+            // package Excel rejects while WPS opens it anyway.
+            content_types = append_copied_part_content_type(&content_types, &extra_name)?;
             changes.insert(extra_name, bytes);
         }
 
@@ -2549,6 +2591,32 @@ fn append_content_type_override(content_types: &[u8], part: &str) -> Result<Vec<
     Ok(patched.into_bytes())
 }
 
+/// Content-type override for the non-worksheet parts that travel with a
+/// copied template sheet (comments, VML comment drawings). Their relationship
+/// parts (`_rels/*.rels`) are covered by the package-wide `rels` Default.
+fn append_copied_part_content_type(content_types: &[u8], part: &str) -> Result<Vec<u8>> {
+    let xml = std::str::from_utf8(content_types)?;
+    let content_type = match part {
+        name if name.starts_with("xl/comments") && name.ends_with(".xml") => {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"
+        }
+        name if name.starts_with("xl/drawings/") && name.ends_with(".vml") => {
+            "application/vnd.openxmlformats-officedocument.vmlDrawing"
+        }
+        name if name.contains("/_rels/") && name.ends_with(".rels") => {
+            return Ok(content_types.to_owned());
+        }
+        _ => anyhow::bail!("copied template part {part:?} has no known content type"),
+    };
+    let anchor = xml
+        .rfind("</Types>")
+        .context("[Content_Types].xml has no closing tag")?;
+    let entry = format!(r#"<Override PartName="/{part}" ContentType="{content_type}"/>"#);
+    let mut patched = xml.to_owned();
+    patched.insert_str(anchor, &entry);
+    Ok(patched.into_bytes())
+}
+
 /// Formula text for every cell the template defines inside `address`.
 fn region_formulas(sheet_xml: &[u8], address: &str) -> Result<BTreeMap<String, String>> {
     let (row1, col1, row2, col2) = parse_a1_range(address)?;
@@ -2571,9 +2639,127 @@ fn region_formulas(sheet_xml: &[u8], address: &str) -> Result<BTreeMap<String, S
             continue;
         };
         let text = effective_formula_text(formula, reference, (row, column), &shared)?;
-        formulas.insert(reference.to_owned(), text);
+        formulas.insert(reference.to_owned(), quote_unquoted_sheet_references(&text));
     }
     Ok(formulas)
+}
+
+/// Wrap bare sheet-name references whose names contain characters Microsoft
+/// Excel refuses to parse unquoted (here: full-width parentheses) in single
+/// quotes. Quoting is semantically neutral and always accepted; WPS tolerates
+/// the unquoted form, Excel rejects the whole workbook at `Workbooks.Open`.
+/// String literals, already-quoted names and external `[n]Sheet!` prefixes are
+/// left untouched. The transformation is idempotent.
+fn quote_unquoted_sheet_references(text: &str) -> String {
+    let characters: Vec<char> = text.chars().collect();
+    let is_name_char = |c: char| c.is_alphanumeric() || c == '_' || c == '.' || c as u32 > 0x7F;
+    let needs_quotes = |name: &str| {
+        name.chars()
+            .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < characters.len() {
+        let current = characters[index];
+        if in_string {
+            out.push(current);
+            if current == '"' {
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if current == '"' {
+            in_string = true;
+            out.push(current);
+            index += 1;
+            continue;
+        }
+        if current == '\'' {
+            // Already-quoted name: copy through the closing quote, plus the
+            // trailing `!` when this is a sheet reference.
+            out.push(current);
+            index += 1;
+            while index < characters.len() {
+                out.push(characters[index]);
+                if characters[index] == '\'' {
+                    index += 1;
+                    break;
+                }
+                index += 1;
+            }
+            if index < characters.len() && characters[index] == '!' {
+                out.push('!');
+                index += 1;
+            }
+            continue;
+        }
+        if !is_name_char(current) {
+            out.push(current);
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < characters.len() && is_name_char(characters[index]) {
+            index += 1;
+        }
+        let name: String = characters[start..index].iter().collect();
+        if characters.get(index) == Some(&'!') {
+            // External workbook references ([1]Sheet!) are never renamed here;
+            // the `[` belongs to a preceding token and the name itself stays.
+            let preceded_by_bracket = out.ends_with(']');
+            if !preceded_by_bracket && needs_quotes(&name) {
+                out.push('\'');
+                out.push_str(&name);
+                out.push('\'');
+                out.push('!');
+                index += 1;
+                continue;
+            }
+        }
+        out.push_str(&name);
+    }
+    out
+}
+
+/// Normalize every formula's sheet references in a worksheet part so that
+/// Microsoft Excel accepts the workbook. Used on the disposable working copy
+/// the validation flow hands to COM; the caller's own file is never edited.
+fn normalize_worksheet_formula_references(sheet_xml: &[u8]) -> Result<Vec<u8>> {
+    let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
+    let Some(document) = Document::parse(xml).ok() else {
+        return Ok(sheet_xml.to_vec());
+    };
+    let mut edits: Vec<(std::ops::Range<usize>, Vec<u8>)> = Vec::new();
+    for node in document.descendants().filter(|node| {
+        node.is_element()
+            && node.tag_name().namespace() == Some(MAIN_NS)
+            && node.tag_name().name() == "f"
+    }) {
+        let Some(original) = node.text() else {
+            continue;
+        };
+        let rewritten = quote_unquoted_sheet_references(original);
+        if rewritten == original {
+            continue;
+        }
+        let range = node.range();
+        let open_end = xml[range.clone()]
+            .find('>')
+            .context("formula element has no closing angle bracket")?;
+        let open_tag = xml[range.start..range.start + open_end + 1].to_owned();
+        let replacement = format!("{open_tag}{}</f>", escape_formula_text(&rewritten));
+        edits.push((range, replacement.into_bytes()));
+    }
+    if edits.is_empty() {
+        return Ok(sheet_xml.to_vec());
+    }
+    let mut result = xml.as_bytes().to_vec();
+    for (range, replacement) in edits.into_iter().rev() {
+        result.splice(range, replacement);
+    }
+    Ok(result)
 }
 
 fn formula_cells<'a>(
@@ -2869,7 +3055,10 @@ fn apply_region_formulas(
             open_tag.replace_range(position..end, "");
         }
         let replacement = match formula {
-            Some(text) => format!("{open_tag}><f>{text}</f></c>", text = escape_xml_text(text)),
+            Some(text) => format!(
+                "{open_tag}><f>{text}</f></c>",
+                text = escape_formula_text(text)
+            ),
             None => format!("{open_tag}/>"),
         };
         let _ = (style, self_closing);
@@ -2914,7 +3103,7 @@ fn apply_region_formulas(
         for reference in references {
             let cell = format!(
                 "<c r=\"{reference}\"><f>{}</f></c>",
-                escape_xml_text(
+                escape_formula_text(
                     formulas
                         .get(*reference)
                         .expect("missing cell has a formula")
@@ -4938,7 +5127,10 @@ mod formula_cache_recalculation_tests {
 
 #[cfg(test)]
 mod cell_region_copy_tests {
-    use super::{copy_cell_region, CellRegionCopyRequest, MAIN_NS, PACKAGE_REL_NS, REL_NS};
+    use super::{
+        copy_cell_region, quote_unquoted_sheet_references, CellRegionCopyRequest, MAIN_NS,
+        PACKAGE_REL_NS, REL_NS,
+    };
     use anyhow::Result;
     use std::{
         fs::{self, File},
@@ -4946,6 +5138,46 @@ mod cell_region_copy_tests {
         path::PathBuf,
     };
     use zip::{write::SimpleFileOptions, ZipWriter};
+
+    #[test]
+    fn full_width_paren_sheet_names_get_quoted() {
+        let formula =
+            "IF(ISBLANK(存量单位贷款信息!C5),0,单位贷款发生额信息（隐藏发放）!C5+单位贷款发生额信息（隐藏回收）!C5)";
+        let rewritten = quote_unquoted_sheet_references(formula);
+        assert!(rewritten.contains("'存量单位贷款信息'!C5"), "{rewritten}");
+        assert!(
+            rewritten.contains("'单位贷款发生额信息（隐藏发放）'!C5"),
+            "{rewritten}"
+        );
+        assert!(!rewritten.contains("（隐藏发放）!"), "{rewritten}");
+        // Idempotent.
+        assert_eq!(quote_unquoted_sheet_references(&rewritten), rewritten);
+    }
+
+    #[test]
+    fn string_literals_and_quoted_names_stay_untouched() {
+        let formula = "SUM(INDIRECT(\"单位贷款发生额信息!\"&ADDRESS(1,1)))+('存量单位贷款信息'!B5)+[1]外簿!C6+SUM('她''s'!D1)";
+        let rewritten = quote_unquoted_sheet_references(formula);
+        assert!(
+            rewritten.contains("INDIRECT(\"单位贷款发生额信息!\""),
+            "{rewritten}"
+        );
+        assert!(rewritten.contains("('存量单位贷款信息'!B5)"), "{rewritten}");
+        assert!(rewritten.contains("[1]外簿!C6"), "{rewritten}");
+        assert!(rewritten.contains("'她''s'!D1"), "{rewritten}");
+    }
+
+    #[test]
+    fn worksheet_parts_normalize_formulas_in_place() -> Result<()> {
+        let xml = format!(
+            r#"<worksheet xmlns="{MAIN_NS}"><sheetData><row r="5"><c r="A5"><f>存量单位贷款信息!C5</f></c><c r="B5"><f>'存量单位贷款信息'!C6</f></c></row></sheetData></worksheet>"#
+        );
+        let normalized = super::normalize_worksheet_formula_references(xml.as_bytes())?;
+        let text = String::from_utf8(normalized)?;
+        assert!(text.contains("<f>'存量单位贷款信息'!C5</f>"), "{text}");
+        assert!(text.contains("<f>'存量单位贷款信息'!C6</f>"), "{text}");
+        Ok(())
+    }
 
     #[test]
     fn missing_cells_sharing_anchor_keep_column_order() -> Result<()> {
@@ -5039,10 +5271,7 @@ mod cell_region_copy_tests {
                 .read_to_string(&mut xml)?;
         }
         // Formula copied, template cache not carried over, target style kept.
-        assert!(
-            xml.contains("<f>IF(B5=0,&quot;&quot;,&quot;错&quot;)</f>"),
-            "{xml}"
-        );
+        assert!(xml.contains("<f>IF(B5=0,\"\",\"错\")</f>"), "{xml}");
         assert!(xml.contains(r#"<c r="F5" s="3">"#), "{xml}");
         assert!(!xml.contains("模板缓存"), "{xml}");
         // A cell the template does not define is blanked but retained.
@@ -5164,8 +5393,8 @@ mod cell_region_copy_tests {
             })
             .collect::<Result<Vec<_>>>()?
             .join("\n");
-        assert!(all_parts.contains("参照表!D2"), "{all_parts}");
-        assert!(all_parts.contains("基础参数!A1*2"), "{all_parts}");
+        assert!(all_parts.contains("'参照表'!D2"), "{all_parts}");
+        assert!(all_parts.contains("'基础参数'!A1*2"), "{all_parts}");
 
         let _ = fs::remove_file(&template);
         let _ = fs::remove_file(&target);
