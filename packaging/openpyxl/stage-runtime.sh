@@ -114,5 +114,6 @@ mv -T -- "$temporary" "$destination"
 trap - EXIT
 echo "staged openpyxl worker for $product_id at $destination"
 echo "runtime version: $actual_python_version"
-echo "openpyxl version: $("$python" -I -c 'import openpyxl; print(openpyxl.__version__)')"
+# mv 之后 $temporary 已不存在，改用落位后的解释器打印版本。
+echo "openpyxl version: $("${destination}/runtime/bin/python3" -I -c 'import openpyxl; print(openpyxl.__version__)')"
 echo "Check GLIBC symbol versions and test this staged tree on glibc 2.28 and 2.31 before publishing a deb."

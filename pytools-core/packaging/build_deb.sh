@@ -69,6 +69,7 @@ install -m 0755 "$binary" "$APP_ROOT/RustTools"
 # 根 —— 正好命中 Rust 侧 ZIP 布局解析的 exe_dir/python + python/runtime/bin。
 mv "$STAGING/usr/libexec/pytools/openpyxl" "$APP_ROOT/python"
 mv "$APP_ROOT/python/worker/openpyxl_worker.py" "$APP_ROOT/python/openpyxl_worker.py"
+mv "$APP_ROOT/python/worker/libreoffice_calc_worker.py" "$APP_ROOT/python/libreoffice_calc_worker.py"
 rmdir "$APP_ROOT/python/worker"
 
 # 默认配置：优先项目根的真实 config（与 Windows 包同源）；缺失时用二进制
