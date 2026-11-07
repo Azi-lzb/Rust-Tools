@@ -156,6 +156,7 @@
 
 | 编号 | 业务名称 | 自动化测试 | 测试数据 | 预期结果 | 外部引擎 | 状态 |
 |---|---|---|---|---|---|---|
+| xls COM 路由（2-1/2-2/5-3/5-4） | `tests/xls_com_routes.rs`（Excel 在环：.xls 标记/删行/外资行副本/外汇页眉，无运行时跳过） | 运行时生成（Excel COM SaveAs 56 真实 .xls） | 测试内断言 | 是（仅 Windows Excel/WPS） | 已通过（Windows Excel 在环） |
 | 5-1 | 拆分村镇银行数据 | `tests/batch_tools_menu_cli.rs`（village_split_*：就地改写目标、legacy 浮点文本、金额全精度、能力提交） | 运行时生成 | Python 语义断言 | 否 | 已通过 |
 | 5-2 | 机构名称规范化 | `tests/institution_normalize_plan_parity.rs`、`institution_normalize_batch_cli.rs`（重复键取末值、空映射、浮点科学计数） | `tests/fixtures/institution_normalize*` | Python 基线 | 否 | 已通过 |
 | 5-3 | 删除分机构表外资行 | `tests/foreign_bank_batch_execution.rs`（planned_deleted_rows/deleted_rows 按行计数、跨表公式与定义名称跟随、动态引用拒绝）——**行级删除，非删表** | 运行时生成 + `testdata/manual-menu/input/special/分机构报表.xlsx` | 测试内断言 | 否 | 已通过 |

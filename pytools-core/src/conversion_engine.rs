@@ -544,6 +544,116 @@ impl ConversionRuntime {
         }
     }
 
+    /// Apply Rust-planned 2-1 red-fill duplicate marks to an isolated legacy
+    /// `.xls` candidate through Excel/WPS COM.
+    pub fn duplicate_mark_com(
+        &mut self,
+        candidate: &Path,
+        marks: &[(String, String)],
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
+                "2-1 COM 路由要求 .xls 候选"
+            );
+            ensure!(!marks.is_empty(), "2-1 COM 路由没有重复标记");
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            let marks = marks
+                .iter()
+                .map(|(sheet, cell)| serde_json::json!({"sheet": sheet, "cell": cell}))
+                .collect::<Vec<_>>();
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "duplicate_mark_com",
+                    "candidate": candidate,
+                    "marks": marks,
+                }),
+                "2-1 Excel/WPS COM 重复标记",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, marks);
+            bail!("2-1 的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
+    /// Delete Rust-planned whole rows on an isolated legacy `.xls` candidate
+    /// through Excel/WPS COM. Shared by 2-2 (duplicate deletion) and 5-3
+    /// (foreign-bank row removal).
+    pub fn delete_rows_com(
+        &mut self,
+        candidate: &Path,
+        deletions: &[(String, u32, u32)],
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
+                "删行 COM 路由要求 .xls 候选"
+            );
+            ensure!(!deletions.is_empty(), "删行 COM 路由没有删行计划");
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            let deletions = deletions
+                .iter()
+                .map(|(sheet, first_row, count)| {
+                    serde_json::json!({"sheet": sheet, "first_row": first_row, "count": count})
+                })
+                .collect::<Vec<_>>();
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "delete_rows_com",
+                    "candidate": candidate,
+                    "deletions": deletions,
+                }),
+                "Excel/WPS COM 删行",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, deletions);
+            bail!("删行的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
+    /// Apply PyCode's 5-4 COM header algorithm to an isolated legacy `.xls`
+    /// candidate through Excel/WPS COM.
+    pub fn fx_header_com(&mut self, candidate: &Path) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
+                "5-4 COM 路由要求 .xls 候选"
+            );
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({"op": "fx_header_com", "candidate": candidate}),
+                "5-4 Excel/WPS COM 外汇页眉",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = candidate;
+            bail!("5-4 的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
     pub(crate) fn rename_sheets_in_candidate(
         &mut self,
         candidate: &Path,

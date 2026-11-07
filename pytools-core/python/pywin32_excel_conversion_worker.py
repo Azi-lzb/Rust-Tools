@@ -1037,6 +1037,261 @@ class ConversionSession:
                         pass
             return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
 
+    def duplicate_mark_com(
+        self, candidate_text: str, marks: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """Apply Rust-planned 2-1 red-fill marks to an isolated `.xls` copy."""
+        stage = "检查 2-1 COM 候选"
+        candidate = self._legacy_xls_path(candidate_text, "标记候选工作簿")
+        workbook = None
+        try:
+            if not marks:
+                raise ValueError("没有可写入的重复标记")
+            self._ensure_application()
+            if self._application is not None:
+                try:
+                    self._application.Calculation = -4135  # xlCalculationManual
+                except Exception:
+                    pass
+            stage = "通过 Excel/WPS 打开 2-1 候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="标记候选工作簿")
+            sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
+            stage = "写入重复行红色标记"
+            verified_marks = []
+            for mark in marks:
+                sheet_name = str(mark.get("sheet", ""))
+                address = str(mark.get("cell", "")).upper()
+                if not sheet_name or not address:
+                    raise ValueError("重复标记缺少工作表或单元格")
+                if sheet_name not in sheets:
+                    raise ValueError(f"候选工作簿缺少工作表：{sheet_name}")
+                target = sheets[sheet_name].Range(address)
+                target.Interior.Color = 255  # RGB(255, 0, 0)
+                verified_marks.append((sheet_name, address))
+            stage = "保存 2-1 COM 候选工作簿"
+            workbook.Save()
+            stage = "核对 2-1 COM 标记结果"
+            applied = 0
+            mismatches: list[str] = []
+            for sheet_name, address in verified_marks:
+                color = sheets[sheet_name].Range(address).Interior.Color
+                if color == 255:
+                    applied += 1
+                else:
+                    mismatches.append(f"{sheet_name}!{address} color={color}")
+            if mismatches:
+                raise ValueError("标记回读不一致：" + "、".join(mismatches[:5]))
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            return {
+                "ok": True,
+                "operation": "duplicate_mark_com",
+                "candidate": str(candidate),
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "applied_count": applied,
+                "verified": True,
+            }
+        except Exception as error:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
+    def delete_rows_com(
+        self, candidate_text: str, deletions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Delete Rust-planned whole rows on an isolated `.xls` copy (2-2/5-3)."""
+        stage = "检查删行 COM 候选"
+        candidate = self._legacy_xls_path(candidate_text, "删行候选工作簿")
+        workbook = None
+        try:
+            if not deletions:
+                raise ValueError("没有可执行的删行计划")
+            self._ensure_application()
+            if self._application is not None:
+                try:
+                    self._application.Calculation = -4135  # xlCalculationManual
+                except Exception:
+                    pass
+            stage = "通过 Excel/WPS 打开删行候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="删行候选工作簿")
+            sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
+
+            def used_rows(sheet: Any) -> int:
+                used = sheet.UsedRange
+                return int(used.Row) + int(used.Rows.Count) - 1
+
+            stage = "记录删行前行数"
+            before_rows = {name: used_rows(sheet) for name, sheet in sheets.items()}
+            expected: dict[str, int] = {}
+            grouped: dict[str, list[tuple[int, int]]] = {}
+            for deletion in deletions:
+                sheet_name = str(deletion.get("sheet", ""))
+                first_row = int(deletion.get("first_row", 0))
+                count = int(deletion.get("count", 0))
+                if not sheet_name or first_row < 1 or count < 1:
+                    raise ValueError("删行计划缺少工作表、起始行或行数")
+                if sheet_name not in sheets:
+                    raise ValueError(f"候选工作簿缺少工作表：{sheet_name}")
+                grouped.setdefault(sheet_name, []).append((first_row, count))
+            stage = "按工作表倒序删除整行"
+            deleted_rows = 0
+            for sheet_name, runs in grouped.items():
+                sheet = sheets[sheet_name]
+                # 倒序删除，保持 Rust 计划里的原始行号语义。
+                for first_row, count in sorted(runs, key=lambda item: item[0], reverse=True):
+                    sheet.Rows(f"{first_row}:{first_row + count - 1}").Delete()
+                    deleted_rows += count
+                expected[sheet_name] = (
+                    before_rows[sheet_name]
+                    - sum(count for _, count in grouped[sheet_name])
+                )
+            stage = "保存删行候选工作簿"
+            workbook.Save()
+            stage = "核对删行后行数"
+            mismatches = []
+            for sheet_name, expect in expected.items():
+                actual = used_rows(sheets[sheet_name])
+                if actual != expect:
+                    mismatches.append(f"{sheet_name}: 行数 {actual} ≠ 预期 {expect}")
+            if mismatches:
+                raise ValueError("删行后行数校验不一致：" + "；".join(mismatches[:5]))
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            return {
+                "ok": True,
+                "operation": "delete_rows_com",
+                "candidate": str(candidate),
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "deleted_rows": deleted_rows,
+                "verified": True,
+            }
+        except Exception as error:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
+    def fx_header_com(self, candidate_text: str) -> dict[str, Any]:
+        """Apply PyCode's 5-4 COM algorithm to an isolated `.xls` copy."""
+        stage = "检查 5-4 COM 候选"
+        candidate = self._legacy_xls_path(candidate_text, "外汇页眉候选工作簿")
+        workbook = None
+        old_unit = "万元"
+        new_unit = "万美元"
+
+        def replace_in_default(ps) -> bool:
+            changed = False
+            for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
+                try:
+                    text = getattr(ps, attr) or ""
+                    if old_unit in text:
+                        setattr(ps, attr, text.replace(old_unit, new_unit))
+                        changed = True
+                except Exception:
+                    pass
+            return changed
+
+        def replace_in_subpage(sub_obj) -> bool:
+            changed = False
+            if sub_obj is None:
+                return False
+            for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
+                try:
+                    hf = getattr(sub_obj, attr)
+                    if hf is None:
+                        continue
+                    text = hf.Text or ""
+                    if old_unit in text:
+                        hf.Text = text.replace(old_unit, new_unit)
+                        changed = True
+                except Exception:
+                    pass
+            return changed
+
+        try:
+            self._ensure_application()
+            if self._application is None:
+                raise RuntimeError("Excel/WPS COM 尚未启动")
+            stage = "通过 Excel/WPS 打开 5-4 候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="外汇页眉候选工作簿")
+            fx_sheets = 0
+            modified_sheets = 0
+            for sheet in workbook.Worksheets:
+                if "外汇" not in str(sheet.Name):
+                    continue
+                fx_sheets += 1
+                ps = sheet.PageSetup
+                changed = replace_in_default(ps)
+                try:
+                    if ps.OddAndEvenPagesHeaderFooter:
+                        if replace_in_subpage(ps.EvenPage):
+                            changed = True
+                except Exception:
+                    pass
+                try:
+                    if ps.DifferentFirstPageHeaderFooter:
+                        if replace_in_subpage(ps.FirstPage):
+                            changed = True
+                except Exception:
+                    pass
+                if changed:
+                    modified_sheets += 1
+            if modified_sheets:
+                stage = "保存 5-4 COM 候选工作簿"
+                workbook.Save()
+            stage = "核对 5-4 COM 页眉结果"
+            residual = []
+            for sheet in workbook.Worksheets:
+                if "外汇" not in str(sheet.Name):
+                    continue
+                for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
+                    text = getattr(sheet.PageSetup, attr) or ""
+                    if old_unit in text:
+                        residual.append(f"{sheet.Name}.{attr}")
+            if residual:
+                raise ValueError("外汇表页眉仍残留旧单位：" + "、".join(residual[:5]))
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            return {
+                "ok": True,
+                "operation": "fx_header_com",
+                "candidate": str(candidate),
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "fx_sheets": fx_sheets,
+                "modified_sheets": modified_sheets,
+                "verified": True,
+            }
+        except Exception as error:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
     def rename_sheets(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
         """复用 pytools 的 openpyxl 改名方案，并改写跨表引用与命名区域。
 
@@ -2179,6 +2434,17 @@ def _serve() -> int:
                             str(request["previous"]),
                         )
                     )
+                    continue
+                if operation == "duplicate_mark_com":
+                    _write_json(session.duplicate_mark_com(
+                        str(request["candidate"]), request["marks"]))
+                    continue
+                if operation == "delete_rows_com":
+                    _write_json(session.delete_rows_com(
+                        str(request["candidate"]), request["deletions"]))
+                    continue
+                if operation == "fx_header_com":
+                    _write_json(session.fx_header_com(str(request["candidate"])))
                     continue
                 if operation == "convert_word":
                     _write_json(

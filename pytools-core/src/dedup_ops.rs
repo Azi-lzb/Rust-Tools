@@ -1,7 +1,7 @@
 //! Duplicate detection and edit-plan construction for menu 2.
 
 use crate::config::DedupTask;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use excel_editor::{
     inspect_xlsx_profile, CellValue, EditOperation, ExcelEditPlan, OutputValidator,
     PreservationRequirement, WorkbookFeature, WorkbookFormat,
@@ -2654,6 +2654,19 @@ where
             .and_then(|ext| ext.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
+        if extension == "xls" {
+            #[cfg(windows)]
+            handle_legacy_xls_duplicate_delete(&path, &group, &mut run);
+            #[cfg(not(windows))]
+            {
+                run.task_skipped += group.len();
+                run.issues.push(format!(
+                    "{}：.xls 的就地删除需要 Windows Excel/WPS COM",
+                    path.display()
+                ));
+            }
+            continue;
+        }
         if extension != "xlsx" {
             run.task_skipped += group.len();
             let message = if extension == "xlsm" {
@@ -2904,7 +2917,7 @@ where
                 ) {
                     Ok(_) => {
                         changed = true;
-                        run.saved_books.push(path.clone());
+                        run.saved_books.push(path.to_path_buf());
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
                                 "openpyxl",
@@ -2982,6 +2995,335 @@ where
     Ok(run)
 }
 
+/// 2-2 的 .xls 路由：Calamine 规划删行 → 隔离 .xls 候选 → Excel/WPS COM
+/// 删行 → 快照校验后原子替换源文件。多任务沿用 xlsx 路径的顺序语义
+/// （后一个任务看到前一个任务删除后的行布局）。
+#[cfg(windows)]
+fn handle_legacy_xls_duplicate_delete(
+    path: &Path,
+    group: &[&DedupTask],
+    run: &mut DeleteDuplicatesRun,
+) {
+    if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+        run.task_skipped += group.len();
+        run.issues.push(format!(
+            "{}：已禁用外部引擎（PYTOOLS_CONVERT_ENGINES_DISABLED），.xls 就地删除跳过",
+            path.display()
+        ));
+        return;
+    }
+    let original_hash = match crate::file_commit::sha256_file(path) {
+        Ok(hash) => hash,
+        Err(error) => {
+            run.task_failed += group.len();
+            run.issues.push(format!(
+                "{}：读取源工作簿快照失败：{error:#}",
+                path.display()
+            ));
+            return;
+        }
+    };
+    let dump = match read_workbook(path) {
+        Ok(dump) => dump,
+        Err(error) => {
+            run.task_failed += group.len();
+            run.issues.push(format!(
+                "{}：calamine 读取源工作簿失败：{error:#}",
+                path.display()
+            ));
+            return;
+        }
+    };
+    let mut surviving_by_sheet: std::collections::BTreeMap<String, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    let mut operations = Vec::new();
+    let mut task_duplicate_rows = Vec::new();
+    let mut task_failures = 0usize;
+    for task in group {
+        let Some(sheet) = dump
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == task.source_ws)
+        else {
+            task_failures += 1;
+            run.issues.push(format!(
+                "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                task.row_no,
+                path.display(),
+                task.source_ws
+            ));
+            continue;
+        };
+        let key_cols = if task.key_cols.is_empty() {
+            (1..=used_column_count(sheet)).collect::<Vec<_>>()
+        } else {
+            task.key_cols.clone()
+        };
+        let last_row = used_row_count(sheet);
+        let surviving = surviving_by_sheet
+            .entry(sheet.name.clone())
+            .or_insert_with(|| (1..=last_row).collect());
+        let duplicate =
+            duplicate_rows_for_surviving_rows(sheet, &key_cols, surviving, &DateIsoMap::new());
+        append_duplicate_operations(
+            &mut operations,
+            sheet,
+            duplicate.clone(),
+            DuplicateAction::Delete,
+        );
+        let duplicate_positions: std::collections::BTreeSet<usize> =
+            duplicate.into_iter().collect();
+        let mut current_row = 1usize;
+        surviving.retain(|_| {
+            let keep = !duplicate_positions.contains(&current_row);
+            current_row += 1;
+            keep
+        });
+        task_duplicate_rows.push((task.row_no, sheet.name.clone(), duplicate_positions.len()));
+    }
+    let deletions: Vec<(String, u32, u32)> = operations
+        .iter()
+        .filter_map(|operation| match operation {
+            EditOperation::DeleteRows {
+                sheet,
+                first_row,
+                count,
+            } => Some((sheet.clone(), *first_row, *count)),
+            _ => None,
+        })
+        .collect();
+    let deleted_rows: usize = deletions.iter().map(|(_, _, count)| *count as usize).sum();
+    let mut changed = false;
+    if !deletions.is_empty() {
+        let candidate = match legacy_xls_candidate_path(path) {
+            Ok(candidate) => candidate,
+            Err(error) => {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.issues
+                    .push(format!("{}：创建 .xls 候选失败：{error:#}", path.display()));
+                return;
+            }
+        };
+        let copy_result = (|| -> Result<()> {
+            fs::copy(path, &candidate)
+                .with_context(|| format!("复制 .xls 候选 {}", candidate.display()))?;
+            crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
+            let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+            let result = runtime.delete_rows_com(&candidate, &deletions)?;
+            ensure!(
+                result["verified"].as_bool() == Some(true),
+                "Excel/WPS COM 删行未通过校验"
+            );
+            crate::file_commit::replace_target_from_candidate(&candidate, path, &original_hash)?;
+            Ok(())
+        })();
+        match copy_result {
+            Ok(()) => {
+                changed = true;
+                run.saved_books.push(path.to_path_buf());
+            }
+            Err(error) => {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.issues.push(format!(
+                    "{}：.xls COM 就地删除失败：{error:#}",
+                    path.display()
+                ));
+            }
+        }
+        let _ = fs::remove_file(&candidate);
+    }
+    run.task_ok += task_duplicate_rows.len();
+    run.deleted_rows += deleted_rows;
+    for (row_no, sheet, duplicate_count) in task_duplicate_rows {
+        run.events.push(
+            crate::engine_diag::DiagEvent::new(
+                if changed { "excel_com" } else { "calamine" },
+                crate::engine_diag::DiagStage::ModifyWorkbook,
+                crate::engine_diag::DiagOutcome::Ok,
+            )
+            .with_row(row_no)
+            .with_file(path.to_string_lossy().into_owned())
+            .with_sheet(sheet)
+            .with_message(format!(
+                "发现重复行 {duplicate_count} 行{}",
+                if changed {
+                    "，已通过 Excel/WPS COM 就地删除"
+                } else {
+                    "，未修改工作簿"
+                }
+            )),
+        );
+    }
+}
+
+/// 2-1 的 .xls 路由：Calamine 规划红色标记 → 隔离 .xls 候选 → Excel/WPS COM
+/// 填充 → 快照校验后原子替换源文件。
+#[cfg(windows)]
+fn handle_legacy_xls_duplicate_mark(
+    path: &Path,
+    group: &[&DedupTask],
+    run: &mut MarkDuplicatesRun,
+) {
+    if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+        run.task_skipped += group.len();
+        run.issues.push(format!(
+            "{}：已禁用外部引擎（PYTOOLS_CONVERT_ENGINES_DISABLED），.xls 就地标记跳过",
+            path.display()
+        ));
+        return;
+    }
+    let original_hash = match crate::file_commit::sha256_file(path) {
+        Ok(hash) => hash,
+        Err(error) => {
+            run.task_failed += group.len();
+            run.issues.push(format!(
+                "{}：读取源工作簿快照失败：{error:#}",
+                path.display()
+            ));
+            return;
+        }
+    };
+    let dump = match read_workbook(path) {
+        Ok(dump) => dump,
+        Err(error) => {
+            run.task_failed += group.len();
+            run.issues.push(format!(
+                "{}：calamine 读取源工作簿失败：{error:#}",
+                path.display()
+            ));
+            return;
+        }
+    };
+    let mut operations = Vec::new();
+    let mut task_duplicate_rows = Vec::new();
+    let mut task_failures = 0usize;
+    for task in group {
+        let Some(sheet) = dump
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == task.source_ws)
+        else {
+            task_failures += 1;
+            run.issues.push(format!(
+                "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                task.row_no,
+                path.display(),
+                task.source_ws
+            ));
+            continue;
+        };
+        let key_cols = if task.key_cols.is_empty() {
+            (1..=used_column_count(sheet)).collect::<Vec<_>>()
+        } else {
+            task.key_cols.clone()
+        };
+        let duplicate = duplicate_rows_for_sheet(sheet, &key_cols, &DateIsoMap::new());
+        let marked = duplicate.len();
+        append_duplicate_operations(&mut operations, sheet, duplicate, DuplicateAction::Check);
+        task_duplicate_rows.push((task.row_no, sheet.name.clone(), marked));
+    }
+    let marks: Vec<(String, String)> = operations
+        .iter()
+        .filter_map(|operation| match operation {
+            EditOperation::SetCellFillColor { sheet, cell, .. } => {
+                Some((sheet.clone(), cell.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+    let mut changed = false;
+    let mut applied = 0usize;
+    if !marks.is_empty() {
+        let candidate = match legacy_xls_candidate_path(path) {
+            Ok(candidate) => candidate,
+            Err(error) => {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.issues
+                    .push(format!("{}：创建 .xls 候选失败：{error:#}", path.display()));
+                return;
+            }
+        };
+        let copy_result = (|| -> Result<()> {
+            fs::copy(path, &candidate)
+                .with_context(|| format!("复制 .xls 候选 {}", candidate.display()))?;
+            crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
+            let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+            let result = runtime.duplicate_mark_com(&candidate, &marks)?;
+            ensure!(
+                result["verified"].as_bool() == Some(true),
+                "Excel/WPS COM 标记未通过校验"
+            );
+            applied = result["applied_count"].as_u64().unwrap_or_default() as usize;
+            crate::file_commit::replace_target_from_candidate(&candidate, path, &original_hash)?;
+            Ok(())
+        })();
+        match copy_result {
+            Ok(()) => {
+                changed = true;
+                run.saved_books.push(path.to_path_buf());
+            }
+            Err(error) => {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.issues.push(format!(
+                    "{}：.xls COM 就地标记失败：{error:#}",
+                    path.display()
+                ));
+            }
+        }
+        let _ = fs::remove_file(&candidate);
+    }
+    run.task_ok += task_duplicate_rows.len();
+    run.marked_rows += if changed { applied } else { 0 };
+    for (row_no, sheet, duplicate_count) in task_duplicate_rows {
+        run.events.push(
+            crate::engine_diag::DiagEvent::new(
+                if changed { "excel_com" } else { "calamine" },
+                crate::engine_diag::DiagStage::ModifyWorkbook,
+                crate::engine_diag::DiagOutcome::Ok,
+            )
+            .with_row(row_no)
+            .with_file(path.to_string_lossy().into_owned())
+            .with_sheet(sheet)
+            .with_message(format!(
+                "发现重复行 {duplicate_count} 行{}",
+                if changed {
+                    "，已通过 Excel/WPS COM 就地标记"
+                } else {
+                    "，未修改工作簿"
+                }
+            )),
+        );
+    }
+}
+
+fn date_iso_empty() -> std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>
+{
+    std::collections::BTreeMap::new()
+}
+
+/// 与 xlsx 路径的 append_candidate_path 对应，但保留 .xls 扩展名。
+fn legacy_xls_candidate_path(target: &Path) -> Result<PathBuf> {
+    let parent = target.parent().context("源工作簿没有父目录")?;
+    let stem = target.file_stem().unwrap_or_default().to_string_lossy();
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    target.hash(&mut hasher);
+    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let mut candidate = parent.join(format!(
+        "{stem}_xls_com_candidate_{stamp}_{:08x}.xls",
+        hasher.finish()
+    ));
+    let mut suffix = 1usize;
+    while candidate.exists() {
+        candidate = parent.join(format!(
+            "{stem}_xls_com_candidate_{stamp}_{:08x}_{suffix}.xls",
+            hasher.finish()
+        ));
+        suffix += 1;
+    }
+    Ok(candidate)
+}
+
 /// 2-1 按配置检查重复：在源工作簿上就地标记重复行（整行红色填充）。
 /// 语义对齐旧 PyTools `dedup_311.py::_mark_duplicates`：首次出现不标记，
 /// 后续重复行从第 1 列标到已用列；标识列全部为空的行跳过；标记后保存回源文件。
@@ -3044,6 +3386,19 @@ where
             .and_then(|ext| ext.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
+        if extension == "xls" {
+            #[cfg(windows)]
+            handle_legacy_xls_duplicate_mark(&path, &group, &mut run);
+            #[cfg(not(windows))]
+            {
+                run.task_skipped += group.len();
+                run.issues.push(format!(
+                    "{}：.xls 的就地标记需要 Windows Excel/WPS COM",
+                    path.display()
+                ));
+            }
+            continue;
+        }
         if extension != "xlsx" {
             run.task_skipped += group.len();
             let message = if extension == "xlsm" {
@@ -3283,7 +3638,7 @@ where
                 ) {
                     Ok(_) => {
                         changed = true;
-                        run.saved_books.push(path.clone());
+                        run.saved_books.push(path.to_path_buf());
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
                                 "openpyxl",

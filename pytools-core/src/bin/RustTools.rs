@@ -8849,7 +8849,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 } else {
                     "candidate_created"
                 },
-                "matched_sheets": report.matched_sheets,
+                "matched_sheets": matched_sheets,
                 "changed_cells": report.changed_cells,
                 "warnings": report.warnings,
                 "execution": execution,
@@ -9329,6 +9329,209 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|value| value.eq_ignore_ascii_case("xlsx"));
+            let extension_is_xls = input
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case("xls"));
+            if extension_is_xls {
+                // .xls：Calamine 规划删行 → 隔离 .xls 候选经 Excel/WPS COM 删行
+                // → 发布 (金融局).xls 副本；原始 .xls 保持不变。
+                #[cfg(windows)]
+                {
+                    let item = (|| -> anyhow::Result<serde_json::Value> {
+                        if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+                            anyhow::bail!(
+                                "已禁用外部引擎（PYTOOLS_CONVERT_ENGINES_DISABLED）；.xls 外资行删除不可用"
+                            );
+                        }
+                        if !create_copy {
+                            anyhow::bail!("5-3 的 .xls 路径仅支持生成 (金融局) 副本模式");
+                        }
+                        let plan_started = Instant::now();
+                        // .xls 无法走 ExcelEditPlan（其 profile 检查仅支持
+                        // .xlsx），改为 Calamine 直读规划删行，语义与
+                        // build_remove_foreign_plan 一致：分机构表按 A 列
+                        // 归一化匹配外资行，整段倒序删行。
+                        let dump = excel_reader::read_workbook(&input).with_context(|| {
+                            format!("读取 .xls 工作簿 {}", display_path_for_user(&input))
+                        })?;
+                        let mut matched_sheets = 0usize;
+                        let mut deletions: Vec<(String, u32, u32)> = Vec::new();
+                        let column_name = |mut col: usize| -> String {
+                            let mut letters = Vec::new();
+                            while col > 0 {
+                                letters.push((b'A' + ((col - 1) % 26) as u8) as char);
+                                col = (col - 1) / 26;
+                            }
+                            letters.reverse();
+                            letters.into_iter().collect()
+                        };
+                        for sheet in dump
+                            .sheets
+                            .iter()
+                            .filter(|sheet| sheet.name.contains("分机构"))
+                        {
+                            matched_sheets += 1;
+                            let max_row = sheet
+                                .values
+                                .keys()
+                                .filter_map(|address| {
+                                    let digits = address.rfind(|c: char| c.is_ascii_digit())?;
+                                    let row: usize = address[digits..].parse().ok()?;
+                                    Some(row)
+                                })
+                                .max()
+                                .unwrap_or(0);
+                            let mut foreign_rows = Vec::new();
+                            for row in 1..=max_row {
+                                let mut col = 1usize;
+                                let mut cell_text = String::new();
+                                loop {
+                                    let address = format!("{}{}", column_name(col), row);
+                                    match sheet.values.get(&address) {
+                                        Some(value) => match value.get("value") {
+                                            Some(serde_json::Value::String(text)) => {
+                                                cell_text = text.clone();
+                                            }
+                                            _ => {}
+                                        },
+                                        None => {}
+                                    }
+                                    if cell_text.is_empty() && col < 3 {
+                                        col += 1;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                                let normalized = cell_text
+                                    .chars()
+                                    .map(|c| {
+                                        if matches!(c, '\r' | '\n' | '\t' | '\u{3000}' | '\u{00a0}')
+                                        {
+                                            ' '
+                                        } else {
+                                            c
+                                        }
+                                    })
+                                    .collect::<String>()
+                                    .split_whitespace()
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                if foreign.contains(&normalized) {
+                                    foreign_rows.push(row);
+                                }
+                            }
+                            foreign_rows.sort_unstable();
+                            let mut runs: Vec<(u32, u32)> = Vec::new();
+                            let mut iter = foreign_rows.iter().rev().peekable();
+                            while let Some(end) = iter.next() {
+                                let mut start = *end;
+                                while iter.peek().is_some_and(|next| *next + 1 == start) {
+                                    start = *iter.next().expect("peeked foreign row");
+                                }
+                                runs.push((start as u32, *end as u32));
+                            }
+                            for (first, last) in runs {
+                                deletions.push((sheet.name.clone(), first, last - first + 1));
+                            }
+                        }
+                        if deletions.is_empty() {
+                            copy_workbook_to_new_target(&input, &output).map(|copied| {
+                                serde_json::json!({
+                                    "engine": "file_copy",
+                                    "execution": "created_unchanged_workbook_copy",
+                                    "output": output,
+                                    "sha256": copied.sha256_after,
+                                })
+                            })?;
+                            return Ok(serde_json::json!({
+                                "input": input,
+                                "output": output,
+                                "status": "written",
+                                "branch_sheets": matched_sheets,
+                                "deleted_rows": 0,
+                                "execution": {"engine": "file_copy"},
+                                "elapsed_ms": started.elapsed().as_millis(),
+                            }));
+                        }
+                        let expected_source_hash = sha256_file(&input)?;
+                        let xls_candidate = unique_workbook_candidate_preserving_extension(
+                            &input,
+                            &output_dir,
+                            "foreign_bank_xls",
+                        );
+                        let exec = (|| -> Result<serde_json::Value> {
+                            fs::copy(&input, &xls_candidate).with_context(|| {
+                                format!("复制 .xls 候选 {}", display_path_for_user(&xls_candidate))
+                            })?;
+                            verify_planning_snapshot(&input, Some(expected_source_hash.as_str()))?;
+                            let mut com_runtime =
+                                pytools_core::conversion_engine::ConversionRuntime::default();
+                            let com = com_runtime.delete_rows_com(&xls_candidate, &deletions)?;
+                            anyhow::ensure!(
+                                com["verified"].as_bool() == Some(true),
+                                "Excel/WPS COM 删行未通过校验"
+                            );
+                            create_target_from_candidate(&xls_candidate, &output)?;
+                            Ok(serde_json::json!({
+                                "engine": "excel_com",
+                                "execution": "created_and_validated_workbook_copy",
+                                "output": output,
+                                "operation_count": deletions.len(),
+                            }))
+                        })();
+                        let cleanup = remove_regular_candidate(&xls_candidate);
+                        let execution = match (exec, cleanup) {
+                            (Ok(report), Ok(())) => Ok(report),
+                            (Ok(_), Err(error)) => {
+                                Err(error.context("clean temporary foreign-bank candidate"))
+                            }
+                            (Err(error), Ok(())) => Err(error),
+                            (Err(error), Err(cleanup_error)) => Err(error.context(format!(
+                                "temporary candidate cleanup also failed: {cleanup_error:#}"
+                            ))),
+                        }?;
+                        result["ok_files"] =
+                            serde_json::json!(result["ok_files"].as_u64().unwrap_or_default() + 1);
+                        result["branch_sheets"] = serde_json::json!(
+                            result["branch_sheets"].as_u64().unwrap_or_default()
+                                + matched_sheets as u64
+                        );
+                        result["deleted_rows"] = serde_json::json!(
+                            result["deleted_rows"].as_u64().unwrap_or_default()
+                                + deletions.len() as u64
+                        );
+                        emit_foreign_bank_event(
+                            &mut events,
+                            view,
+                            run_started,
+                            "engine_execution",
+                            "completed",
+                            "已通过 Excel/WPS COM 删行并生成 (金融局) .xls 副本",
+                            &progress,
+                            Some(plan_started.elapsed().as_millis()),
+                            &["pytools-core", "excel-com"],
+                            Some("excel_com"),
+                            None,
+                        );
+                        return Ok(serde_json::json!({
+                            "input": input,
+                            "output": output,
+                            "status": "written",
+                            "branch_sheets": matched_sheets,
+                            "deleted_rows": deletions.len(),
+                            "execution": execution,
+                            "elapsed_ms": started.elapsed().as_millis(),
+                        }));
+                    })()?;
+                    result["items"].as_array_mut().unwrap().push(item);
+                    continue;
+                }
+                #[cfg(not(windows))]
+                {
+                    anyhow::bail!("5-3 的 .xls 处理需要 Windows Excel/WPS COM");
+                }
+            }
             if !extension_is_xlsx {
                 result["failed_files"] =
                     serde_json::json!(result["failed_files"].as_u64().unwrap_or_default() + 1);
@@ -11803,6 +12006,77 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                         .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
                     "PT-7-4 currently accepts .xlsx only"
                 );
+            }
+            // .xls 就地修改：随包 worker 以 Excel/WPS COM 改页眉（万元→万美元），
+            // 语义对齐 PyCode feature_1_4_fx_header_com；候选+快照保护原件。
+            if input
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xls"))
+                && in_place.is_some()
+            {
+                #[cfg(windows)]
+                {
+                    if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+                        anyhow::bail!(
+                            "已禁用外部引擎（PYTOOLS_CONVERT_ENGINES_DISABLED）；.xls 页眉修改不可用"
+                        );
+                    }
+                    let expected_target_hash = sha256_file(input)?;
+                    let xls_candidate = unique_workbook_candidate_preserving_extension(
+                        input,
+                        &output_dir,
+                        "fx_header_xls",
+                    );
+                    let result = (|| -> Result<serde_json::Value> {
+                        fs::copy(input, &xls_candidate).with_context(|| {
+                            format!("复制 .xls 候选 {}", display_path_for_user(&xls_candidate))
+                        })?;
+                        verify_planning_snapshot(input, Some(expected_target_hash.as_str()))?;
+                        let mut com_runtime =
+                            pytools_core::conversion_engine::ConversionRuntime::default();
+                        let com = com_runtime.fx_header_com(&xls_candidate)?;
+                        anyhow::ensure!(
+                            com["verified"].as_bool() == Some(true),
+                            "Excel/WPS COM 页眉修改未通过校验"
+                        );
+                        let commit = replace_target_from_candidate(
+                            &xls_candidate,
+                            input,
+                            expected_target_hash.as_str(),
+                        )?;
+                        Ok(serde_json::json!({
+                            "input": input,
+                            "output_copy": null,
+                            "plan_file": null,
+                            "status": "committed",
+                            "fx_sheets": com["fx_sheets"].as_u64().unwrap_or_default(),
+                            "modified_sheets": com["modified_sheets"].as_u64().unwrap_or_default(),
+                            "execution": {
+                                "engine": "excel_com",
+                                "application": com["application"],
+                                "fx_sheets": com["fx_sheets"],
+                                "modified_sheets": com["modified_sheets"],
+                            },
+                            "target_commit": serde_json::to_value(commit)?,
+                            "elapsed_ms": file_started.elapsed().as_millis(),
+                        }))
+                    })();
+                    let legacy_result = match (result, remove_regular_candidate(&xls_candidate)) {
+                        (Ok(item), Ok(())) => Ok(item),
+                        (Ok(item), Err(error)) => {
+                            Err(error.context("clean .xls fx-header candidate"))
+                        }
+                        (Err(error), Ok(())) => Err(error),
+                        (Err(error), Err(cleanup_error)) => Err(error).context(format!(
+                            "temporary candidate cleanup also failed: {cleanup_error:#}"
+                        )),
+                    };
+                    return legacy_result;
+                }
+                #[cfg(not(windows))]
+                {
+                    anyhow::bail!("5-4 的 .xls 页眉修改需要 Windows Excel/WPS COM");
+                }
             }
             let metadata = fs::symlink_metadata(input).with_context(|| {
                 format!("inspect input workbook {}", display_path_for_user(&input))
