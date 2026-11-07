@@ -645,19 +645,18 @@ where
         emitter.progress.current_input_index = Some(index + 1);
         emitter.progress.current_sheet = None;
         emitter.progress.current_config_row = None;
-        if !source_path
+        let ext_lower = source_path
             .extension()
             .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| {
-                extension.eq_ignore_ascii_case("xlsx") || extension.eq_ignore_ascii_case("xlsm")
-            })
-        {
+            .map(|extension| extension.to_ascii_lowercase())
+            .unwrap_or_default();
+        if !matches!(ext_lower.as_str(), "xlsx" | "xlsm" | "xls") {
             let file_name = source_path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| source_path.display().to_string());
             let message = format!(
-                "工作表区域提取仅接受 .xlsx/.xlsm；整表样式导入仍仅接受 .xlsx：{file_name}"
+                "工作表区域提取仅接受 .xlsx/.xlsm；整表样式导入仅接受 .xlsx（.xls 先经 4-4 转换）：{file_name}"
             );
             emitter.emit(
                 "input_filter",

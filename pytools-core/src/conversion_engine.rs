@@ -654,6 +654,46 @@ impl ConversionRuntime {
         }
     }
 
+    /// Append typed 2-D rows to a sheet in an isolated legacy `.xls` target
+    /// candidate through Excel/WPS COM (2-3 append to .xls target).
+    pub fn append_rows_com(
+        &mut self,
+        candidate: &Path,
+        sheet: &str,
+        start_row: u32,
+        rows: &[Vec<serde_json::Value>],
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
+                "追加 COM 路由要求 .xls 候选"
+            );
+            ensure!(!rows.is_empty(), "追加 COM 路由没有数据行");
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "append_rows_com",
+                    "candidate": candidate,
+                    "sheet": sheet,
+                    "start_row": start_row,
+                    "rows": rows,
+                }),
+                "2-3 Excel/WPS COM 去重追加",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, sheet, start_row, rows);
+            bail!("2-3 的 .xls 目标追加需要 Windows Excel/WPS COM")
+        }
+    }
+
     pub(crate) fn rename_sheets_in_candidate(
         &mut self,
         candidate: &Path,

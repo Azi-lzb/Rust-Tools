@@ -73,6 +73,10 @@ pub struct AppendTargetPlan {
     /// imports these into an existing target while preserving other sheets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replacement_workbook: Option<NewAppendWorkbook>,
+    /// .xls 目标的 COM 追加操作（SetCellValue 序列化值）；
+    /// .xlsx 目标为 None（走 edit_plan openpyxl 路径）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xls_operations: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -867,12 +871,7 @@ pub fn precheck_dedup_tasks(tasks: &[DedupTask]) -> DuplicatePrecheck {
                 input.display()
             ));
         }
-        if !is_xlsx(input) {
-            errors.push(format!(
-                "only .xlsx is currently routed to the Rust edit candidate: {}",
-                input.display()
-            ));
-        }
+        // .xlsx 与 .xls 源均支持（Calamine 直读）；目标格式另行限制。
         if task.source_ws.trim().is_empty() {
             errors.push("source worksheet is empty".to_owned());
         }
@@ -972,12 +971,14 @@ pub fn build_append_by_config_plans(
 
     let mut reports = Vec::new();
     for (target, target_tasks) in grouped {
+        let target_ext = target
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default();
         anyhow::ensure!(
-            target
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsx")),
-            "2-5 Rust append targets must be .xlsx: {}",
+            matches!(target_ext.as_str(), "xlsx" | "xls"),
+            "2-5 Rust append targets accept .xlsx or .xls: {}",
             target.display()
         );
         let target_existed = target.is_file();
@@ -1000,6 +1001,7 @@ pub fn build_append_by_config_plans(
         } else {
             None
         };
+        let is_xls_target = target_ext == "xls";
         let target_date_values = match target_dump.as_ref() {
             Some(dump) => date_iso_map(&target, &dump.sheets)?,
             None => DateIsoMap::default(),
@@ -1027,6 +1029,7 @@ pub fn build_append_by_config_plans(
             edit_plan: None,
             new_workbook: None,
             replacement_workbook: None,
+            xls_operations: None,
         };
 
         for task in target_tasks {
@@ -1265,7 +1268,16 @@ pub fn build_append_by_config_plans(
             report.task_ok += 1;
         }
 
-        if target_existed && !operations.is_empty() {
+        if target_existed && target_ext == "xls" && !operations.is_empty() {
+            // .xls 目标：跳过 EditPlan（inspect_xlsx_profile 仅支持 .xlsx），
+            // 操作序列化后由 COM 追加（append_rows_com）执行。
+            report.xls_operations = Some(
+                operations
+                    .iter()
+                    .map(|op| serde_json::to_value(op).unwrap_or(serde_json::Value::Null))
+                    .collect(),
+            );
+        } else if target_existed && !operations.is_empty() {
             let profile = inspect_xlsx_profile(&target)?;
             // Object-model writers may reserialize known OOXML parts. Require
             // semantic preservation of the listed workbook features rather

@@ -678,6 +678,7 @@ fn build_timeline_target_append_plan(
         edit_plan: None,
         new_workbook: None,
         replacement_workbook: None,
+        xls_operations: None,
     };
 
     let (target_dump, target_values) = if target_existed {

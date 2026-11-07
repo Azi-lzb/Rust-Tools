@@ -2752,6 +2752,7 @@ pub fn build_wide_target_append_plans(
             edit_plan: None,
             new_workbook: None,
             replacement_workbook: None,
+            xls_operations: None,
         };
         if target.exists() && !target.is_file() {
             report.task_skipped = target_rules.len();

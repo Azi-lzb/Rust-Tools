@@ -1292,6 +1292,94 @@ class ConversionSession:
                 "traceback": traceback.format_exc(limit=6),
             }
 
+    def append_rows_com(
+        self,
+        candidate_text: str,
+        sheet_name: str,
+        start_row: int,
+        rows: list[list[Any]],
+    ) -> dict[str, Any]:
+        """Append typed 2-D rows to a sheet in an isolated `.xls` target copy.
+
+        `rows` is a list of lists; each inner value may be a str (text),
+        int/float (number), bool, or None (blank). Written in bulk via
+        `Range.Resize` for speed; the Rust caller owns dedup filtering.
+        """
+        stage = "检查追加 COM 候选"
+        candidate = self._legacy_xls_path(candidate_text, "追加候选工作簿")
+        workbook = None
+        try:
+            if not rows:
+                raise ValueError("没有可追加的数据行")
+            self._ensure_application()
+            if self._application is not None:
+                try:
+                    self._application.Calculation = -4135
+                except Exception:
+                    pass
+            stage = "通过 Excel/WPS 打开追加候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="追加候选工作簿")
+            sheet_names = [str(s.Name) for s in workbook.Worksheets]
+            if sheet_name in sheet_names:
+                sheet = workbook.Worksheets(sheet_names.index(sheet_name) + 1)
+            else:
+                sheet = workbook.Worksheets.Add(After=workbook.Worksheets(workbook.Worksheets.Count))
+                sheet.Name = sheet_name
+            stage = "写入追加数据行"
+            num_rows = len(rows)
+            num_cols = max(len(r) for r in rows) if rows else 0
+            # COM Range.Value 接受 2-D tuple；None → Empty。
+            range_obj = sheet.Range(
+                sheet.Cells(start_row, 1),
+                sheet.Cells(start_row + num_rows - 1, num_cols),
+            )
+            range_obj.Value = tuple(
+                tuple(v if v is not None else "" for v in row) for row in rows
+            )
+            stage = "保存追加候选工作簿"
+            workbook.Save()
+            stage = "核对追加结果"
+            spot_checks = min(num_rows, 3)
+            for i in range(spot_checks):
+                row_idx = start_row + i
+                col_idx = 1
+                for expected in rows[i]:
+                    actual = sheet.Cells(row_idx, col_idx).Value
+                    expected_str = str(expected) if expected is not None else ""
+                    actual_str = str(actual) if actual is not None else ""
+                    if expected is not None and expected_str != actual_str \
+                        and str(float(expected)) != str(float(actual_str or 0)):
+                        raise ValueError(
+                            f"追加回读不一致：{sheet_name}!{row_idx},{col_idx} "
+                            f"预期 {expected!r}，实际 {actual!r}"
+                        )
+                    col_idx += 1
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            return {
+                "ok": True,
+                "operation": "append_rows_com",
+                "candidate": str(candidate),
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "appended_rows": num_rows,
+                "start_row": start_row,
+                "sheet": sheet_name,
+                "verified": True,
+            }
+        except Exception as error:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
     def rename_sheets(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
         """复用 pytools 的 openpyxl 改名方案，并改写跨表引用与命名区域。
 
@@ -2445,6 +2533,14 @@ def _serve() -> int:
                     continue
                 if operation == "fx_header_com":
                     _write_json(session.fx_header_com(str(request["candidate"])))
+                    continue
+                if operation == "append_rows_com":
+                    _write_json(session.append_rows_com(
+                        str(request["candidate"]),
+                        str(request["sheet"]),
+                        int(request["start_row"]),
+                        request["rows"],
+                    ))
                     continue
                 if operation == "convert_word":
                     _write_json(
