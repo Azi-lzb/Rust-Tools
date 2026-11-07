@@ -785,7 +785,38 @@ fn config_path_base(config_path: &Path) -> Result<PathBuf> {
     } else {
         std::env::current_dir()?.join(base)
     };
-    Ok(std::fs::canonicalize(&absolute).unwrap_or(absolute))
+    Ok(canonicalize_displayable(&absolute))
+}
+
+/// Canonicalize but keep the user-facing form: on Windows `fs::canonicalize`
+/// returns the verbatim `\\?\C:\...` (or `\\?\UNC\server\share`) prefix, which
+/// leaks into machine JSON and user messages, and which Office COM rejects.
+/// Strip it whenever the result stays comfortably below the legacy MAX_PATH
+/// limit; genuinely long paths keep the verbatim form so they keep working.
+fn canonicalize_displayable(path: &Path) -> PathBuf {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    strip_verbatim_prefix(&canonical)
+}
+
+fn strip_verbatim_prefix(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if text.len() >= 240 {
+        // Long path: the verbatim prefix is what makes it usable at all.
+        return path.to_path_buf();
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        let mut characters = rest.chars();
+        if matches!(
+            (characters.next(), characters.next()),
+            (Some(drive), Some(':')) if drive.is_ascii_alphabetic()
+        ) {
+            return PathBuf::from(rest.to_owned());
+        }
+    }
+    path.to_path_buf()
 }
 
 fn resolve_optional_task_path(base: &Path, path_text: &str) -> Option<PathBuf> {
@@ -953,7 +984,7 @@ fn resolve_config_path(base: &Path, configured: &str, default: &str) -> PathBuf 
             other => normalized.push(other.as_os_str()),
         }
     }
-    std::fs::canonicalize(&normalized).unwrap_or(normalized)
+    canonicalize_displayable(&normalized)
 }
 
 fn resolve_log_dir(base: &Path, configured: Option<&str>) -> PathBuf {
@@ -973,6 +1004,21 @@ mod tests {
             .strip_prefix(base)
             .unwrap_or_else(|_| panic!("{} is not under {}", path.display(), base.display()));
         format!("$BASE/{}", relative.to_string_lossy().replace('\\', "/"))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_prefixes_are_stripped_while_long_paths_keep_them() {
+        let drive = strip_verbatim_prefix(Path::new(r"\\?\C:\业务\output"));
+        assert_eq!(drive, PathBuf::from(r"C:\业务\output"));
+        let unc = strip_verbatim_prefix(Path::new(r"\\?\UNC\server\share\output"));
+        assert_eq!(unc, PathBuf::from(r"\\server\share\output"));
+        // 长路径保留 verbatim 前缀，越界可打开性不受影响。
+        let long = PathBuf::from(format!(r"\\?\C:\{}", "长".repeat(120)));
+        assert_eq!(strip_verbatim_prefix(&long), long);
+        // 非驱动器形式的 verbatim 路径不动。
+        let device = Path::new(r"\\?\.\physicaldrive0");
+        assert_eq!(strip_verbatim_prefix(device), device.to_path_buf());
     }
 
     #[test]

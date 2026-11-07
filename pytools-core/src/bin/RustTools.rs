@@ -7247,7 +7247,12 @@ fn run_quick_cli(arguments: Vec<String>, action: &str) -> Result<()> {
         )?,
         "latest" => {
             let path = open_latest_output(&global.output_dir)?;
-            println!("{}", serde_json::json!({"latest":path}));
+            // 机器 JSON 也不泄漏 verbatim 前缀；防御性兜底，正常情况下
+            // config 解析已返回可读形式。
+            println!(
+                "{}",
+                serde_json::json!({"latest": path.as_ref().map(|p| display_path_for_user(p))})
+            );
         }
         "output" => open_output_directory(&global.output_dir)?,
         _ => unreachable!(),
