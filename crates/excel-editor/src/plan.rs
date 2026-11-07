@@ -63,6 +63,7 @@ pub enum WorkbookFeature {
     HeadersFooters,
     FreezePanes,
     AutoFilter,
+    CellMetadata,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]

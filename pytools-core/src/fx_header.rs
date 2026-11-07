@@ -1,7 +1,8 @@
-//! Candidate plan builder for PyCode's ordinary FX header unit correction.
+//! Candidate plan builder for PyCode's ordinary FX header/footer unit correction.
 //!
-//! The module only describes the business operation. Existing-workbook edits
-//! are executed by the shared ExcelModifier and an evidence-qualified backend.
+//! The module only describes the business operation. The specialized-report
+//! menu executes the plan through the bundled openpyxl worker and validates the
+//! candidate before replacing the source workbook.
 
 use anyhow::{bail, Result};
 use excel_editor::{
@@ -28,8 +29,8 @@ pub struct FxHeaderInspection {
 /// Builds a modification plan for every worksheet whose name contains 外汇.
 ///
 /// The caller must supply a complete workbook feature inventory. The
-/// candidate currently accepts only XLSX; XLSM/VBA preservation has not been
-/// validated and must remain on the source implementation.
+/// candidate currently accepts only XLSX; XLSM/VBA preservation remains
+/// unsupported by this edit-plan route.
 pub fn build_fx_header_plan(
     input: impl AsRef<Path>,
     output: impl AsRef<Path>,

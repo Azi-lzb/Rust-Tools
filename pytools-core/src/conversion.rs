@@ -1,6 +1,6 @@
-//! Explicit same-category conversion requests. Fidelity conversions run the
-//! in-process engine (`conversion_engine`): Office/WPS COM on Windows, a
-//! local LibreOffice `soffice` CLI elsewhere; no external sidecar executable.
+//! Explicit same-category conversion requests. Excel workbook fidelity
+//! conversions use Office/WPS COM through pywin32 on Windows. LibreOffice
+//! conversion is paused for Office files; Linux conversion is unavailable.
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Local;
@@ -196,18 +196,45 @@ pub(crate) fn convert_one_with_runtime(
         matches!(target.as_str(), "xlsx" | "docx"),
         "only .xlsx and .docx conversion targets are supported"
     );
+    let xlsx_save_as_normalization = source_ext == "xlsx" && target == "xlsx";
     anyhow::ensure!(
-        source_ext != target,
+        source_ext != target || xlsx_save_as_normalization,
         "input is already in the requested format: .{target}"
     );
     anyhow::ensure!(
         matches!(engine, "auto" | "lo" | "com" | "pywin32" | "native"),
         "--engine must be auto, lo, com, pywin32 or native"
     );
+    anyhow::ensure!(
+        engine != "lo",
+        "LibreOffice conversion is paused; Office format conversion requires Windows pywin32 with Microsoft Excel or WPS COM"
+    );
+    anyhow::ensure!(
+        !xlsx_save_as_normalization || engine != "native",
+        "same-extension .xlsx normalization requires Excel/WPS COM SaveAs; native conversion cannot normalize the file container"
+    );
+    anyhow::ensure!(
+        engine != "native"
+            || !matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "xlsx" | "et" | "ett"),
+        "Excel workbook format conversion requires pywin32 with Microsoft Excel or WPS COM; native value-only conversion is not allowed for workbook formats"
+    );
     if is_wps_native_spreadsheet(&source_ext) {
         anyhow::ensure!(
             !is_ooxml_spreadsheet_package(input)?,
             "unsupported format: input content is an OOXML Excel workbook with an .{source_ext} extension; refusing extension-only conversion"
+        );
+    }
+    // An .xlsx suffix does not prove that the file is an OOXML ZIP package.
+    // A common legacy case is a BIFF .xls file renamed to .xlsx; stage it as
+    // .xls so Excel/WPS opens the actual container and performs a real SaveAs.
+    // Only recognize the OLE Compound File signature here. A malformed ZIP or
+    // an unrelated non-ZIP file must fail with a clear error instead of being
+    // guessed as an Excel workbook.
+    let renamed_legacy_xls = source_ext == "xlsx" && !is_ooxml_spreadsheet_package(input)?;
+    if renamed_legacy_xls {
+        anyhow::ensure!(
+            is_ole_compound_file(input)?,
+            "unsupported .xlsx input: file content is not an OOXML workbook or a legacy OLE/BIFF Excel workbook"
         );
     }
     if engine == "native" {
@@ -220,14 +247,23 @@ pub(crate) fn convert_one_with_runtime(
         }
         return convert_native_excel_values(input, output, &source_ext);
     }
-    let (staged_input, _staging_guard) = stage_sidecar_input(input, output, &source_ext)?;
-    let staged_output = if is_wps_native_spreadsheet(&source_ext) {
+    let (staged_input, _staging_guard) = if renamed_legacy_xls {
+        stage_input_with_extension(input, output, "xls")?
+    } else {
+        stage_sidecar_input(input, output, &source_ext)?
+    };
+    let staged_output = if is_wps_native_spreadsheet(&source_ext) || renamed_legacy_xls {
         staged_input.with_extension(&target)
     } else {
         output.to_path_buf()
     };
     let detail =
         invoke_engine_with_runtime(&staged_input, &staged_output, &target, engine, runtime)?;
+    if renamed_legacy_xls {
+        ensure_legacy_xls_source_format(&detail)?;
+        crate::file_commit::create_target_from_candidate(&staged_output, output)
+            .context("publish a renamed .xlsx only after verifying its legacy Excel container")?;
+    }
     if is_wps_native_spreadsheet(&source_ext) {
         ensure_wps_source_format_verified(&detail, &source_ext)?;
         crate::file_commit::create_target_from_candidate(&staged_output, output).context(
@@ -277,7 +313,7 @@ fn ensure_wps_source_format_verified(detail: &str, source_ext: &str) -> Result<(
     Ok(())
 }
 
-fn is_ooxml_spreadsheet_package(path: &Path) -> Result<bool> {
+pub(crate) fn is_ooxml_spreadsheet_package(path: &Path) -> Result<bool> {
     let file = fs::File::open(path)
         .with_context(|| format!("open .et input for format validation: {}", path.display()))?;
     let mut archive = match zip::ZipArchive::new(file) {
@@ -311,6 +347,39 @@ fn is_ooxml_spreadsheet_package(path: &Path) -> Result<bool> {
 
     Ok((has_workbook_xml && xml_spreadsheet_type)
         || (has_workbook_binary && binary_spreadsheet_type))
+}
+
+fn is_ole_compound_file(path: &Path) -> Result<bool> {
+    const OLE_COMPOUND_FILE_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+    let mut file = fs::File::open(path)
+        .with_context(|| format!("open workbook container header: {}", path.display()))?;
+    let mut signature = [0; OLE_COMPOUND_FILE_SIGNATURE.len()];
+    match file.read_exact(&mut signature) {
+        Ok(()) => Ok(signature == OLE_COMPOUND_FILE_SIGNATURE),
+        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(error) => Err(error)
+            .with_context(|| format!("read workbook container header: {}", path.display())),
+    }
+}
+
+fn ensure_legacy_xls_source_format(detail: &str) -> Result<()> {
+    let report: serde_json::Value = serde_json::from_str(detail)
+        .context("decode COM report for a legacy XLS container renamed to .xlsx")?;
+    let validation = report.get("validation");
+    let file_format = validation
+        .and_then(|value| value.get("source_file_format"))
+        .and_then(serde_json::Value::as_i64);
+    anyhow::ensure!(
+        report.get("status").and_then(serde_json::Value::as_str) == Some("converted")
+            && report.get("engine").and_then(serde_json::Value::as_str) == Some("pywin32")
+            && validation
+                .and_then(|value| value.get("verified"))
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+            && matches!(file_format, Some(39 | 43 | 56)),
+        "COM did not verify the renamed .xlsx input as a supported legacy Excel BIFF workbook (FileFormat={file_format:?}); output was not published"
+    );
+    Ok(())
 }
 
 /// 请求 Excel/WPS 在下次打开转出文件时全量重算。
@@ -347,28 +416,36 @@ fn stage_sidecar_input(
         return Ok((input.to_path_buf(), None));
     }
 
+    stage_input_with_extension(input, output, source_ext)
+}
+
+fn stage_input_with_extension(
+    input: &Path,
+    output: &Path,
+    staged_extension: &str,
+) -> Result<(PathBuf, Option<TempDirGuard>)> {
     let output_parent = output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(output_parent).with_context(|| {
         format!(
-            "create WPS-native conversion staging parent {}",
+            "create conversion staging parent {}",
             output_parent.display()
         )
     })?;
-    let staging_dir = unique_sidecar_input_temp_dir(output_parent)?;
+    let staging_dir = unique_conversion_input_temp_dir(output_parent)?;
     let guard = TempDirGuard(staging_dir.clone());
     let file_name = input
         .file_name()
-        .context("WPS-native conversion input has no file name")?;
-    let staged_input = staging_dir.join(file_name);
-    fs::copy(input, &staged_input).with_context(|| {
-        format!(
-            "stage WPS-native source {} for external conversion",
-            input.display()
-        )
-    })?;
+        .context("conversion input has no file name")?;
+    let staged_name = Path::new(file_name)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "source".to_owned());
+    let staged_input = staging_dir.join(format!("{staged_name}.{staged_extension}"));
+    fs::copy(input, &staged_input)
+        .with_context(|| format!("stage source {} for external conversion", input.display()))?;
 
     Ok((staged_input, Some(guard)))
 }
@@ -475,10 +552,8 @@ where
         format!("已发现 {} 个待处理文件。", inputs.len()),
     );
     let mut runtime = crate::conversion_engine::ConversionRuntime::default();
-    // One LibreOffice session serves the whole batch: stage and convert all
-    // LO-routed files up front (single shared profile, one soffice process
-    // per stage) so the per-file loop never starts a process. Windows auto
-    // routes to COM and never creates a session.
+    // Keep the legacy batch hook for compatibility, but current production
+    // routing never schedules LibreOffice conversion jobs.
     if engine != "native" && std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none() {
         let requests = inputs
             .iter()
@@ -487,7 +562,7 @@ where
                     return false;
                 };
                 let ext = ext.to_ascii_lowercase();
-                ext != target
+                (ext != target || (ext == "xlsx" && target == "xlsx"))
                     && crate::conversion_engine::libreoffice_batch_request(&ext, &target, engine)
             })
             .cloned()
@@ -623,7 +698,9 @@ where
             i += 1;
         }
         let components = conversion_components(&ext, &target, engine);
-        let result = if ext == target {
+        let same_format_copy = ext == target && !(ext == "xlsx" && target == "xlsx");
+        let xlsx_save_as_normalization = ext == "xlsx" && target == "xlsx";
+        let result = if same_format_copy {
             fs::copy(input, &output)
                 .map(|_| "same-format copy; source bytes retained".to_owned())
                 .map_err(anyhow::Error::from)
@@ -633,7 +710,7 @@ where
         let (actual_engine, error_type, user_message, event_status) = match result {
             Ok(detail) => {
                 run.converted += 1;
-                let actual_engine = if ext == target {
+                let actual_engine = if same_format_copy {
                     Some("Rust std::fs::copy".to_owned())
                 } else if engine == "native" {
                     Some(if ext == "csv" {
@@ -647,7 +724,7 @@ where
                 run.items.push(ConversionItem {
                     input: input.clone(),
                     output: Some(output),
-                    status: if ext == target {
+                    status: if same_format_copy {
                         "copied".into()
                     } else {
                         "converted".into()
@@ -657,9 +734,15 @@ where
                 (
                     actual_engine,
                     None,
-                    if ext == target {
+                    if same_format_copy {
                         format!(
                             "第 {input_index}/{} 个文件{}格式相同，已复制到目标目录。",
+                            inputs.len(),
+                            conversion_file_suffix(input)
+                        )
+                    } else if xlsx_save_as_normalization {
+                        format!(
+                            "第 {input_index}/{} 个文件{}已通过 Office/WPS 另存为 .xlsx，以校正实际文件格式。",
                             inputs.len(),
                             conversion_file_suffix(input)
                         )
@@ -805,7 +888,7 @@ fn emit_conversion_event<F>(
 }
 
 fn conversion_components(ext: &str, target: &str, engine: &str) -> Vec<String> {
-    if ext == target {
+    if ext == target && !(ext == "xlsx" && target == "xlsx") {
         return vec!["Rust".to_owned(), "std::fs::copy".to_owned()];
     }
     if engine == "native" {
@@ -1479,12 +1562,12 @@ fn unique_native_temp_dir(parent: &Path) -> Result<PathBuf> {
     bail!("cannot allocate native conversion temporary directory")
 }
 
-fn unique_sidecar_input_temp_dir(parent: &Path) -> Result<PathBuf> {
+fn unique_conversion_input_temp_dir(parent: &Path) -> Result<PathBuf> {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     for index in 0..100 {
         let path = parent.join(format!(
-            ".pytools-et-convert-input-{}-{nanos}-{index}",
+            ".pytools-convert-input-{}-{nanos}-{index}",
             std::process::id()
         ));
         match fs::create_dir(&path) {
@@ -1493,7 +1576,7 @@ fn unique_sidecar_input_temp_dir(parent: &Path) -> Result<PathBuf> {
             Err(error) => return Err(error.into()),
         }
     }
-    bail!("cannot allocate ET sidecar input staging directory")
+    bail!("cannot allocate conversion input staging directory")
 }
 
 struct TempDirGuard(PathBuf);
@@ -1507,9 +1590,10 @@ impl Drop for TempDirGuard {
 #[cfg(test)]
 mod tests {
     use super::{
-        convert_excel_files_in_source_folders, convert_one, ensure_wps_source_format_verified,
-        explain_engine_failure, fidelity_engine, invoke_engine, native_values_equal,
-        stage_sidecar_input, validate_native_source_values,
+        convert_excel_files_in_source_folders, convert_one, ensure_legacy_xls_source_format,
+        ensure_wps_source_format_verified, explain_engine_failure, fidelity_engine, invoke_engine,
+        is_ole_compound_file, native_values_equal, stage_input_with_extension, stage_sidecar_input,
+        validate_native_source_values,
     };
     use excel_reader::{read_workbook, SheetDump, WorkbookDump};
     use excel_writer::Workbook;
@@ -1590,6 +1674,64 @@ mod tests {
     }
 
     #[test]
+    fn legacy_xls_content_with_xlsx_suffix_is_staged_as_xls_without_touching_source() {
+        let root = TempDir::new("renamed-xls-stage");
+        let input = root.0.join("renamed-report.xlsx");
+        let output = root.0.join("out/normalized.xlsx");
+        let mut ole_xls = vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        ole_xls.extend_from_slice(b"legacy workbook payload");
+        fs::write(&input, &ole_xls).unwrap();
+
+        assert!(is_ole_compound_file(&input).unwrap());
+        let (staged, guard) = stage_input_with_extension(&input, &output, "xls").unwrap();
+        assert_eq!(
+            staged.extension().and_then(|value| value.to_str()),
+            Some("xls")
+        );
+        assert_ne!(staged, input);
+        assert_eq!(fs::read(&staged).unwrap(), ole_xls);
+        assert_eq!(fs::read(&input).unwrap(), ole_xls);
+        drop(guard);
+        assert!(!staged.exists());
+        assert_eq!(fs::read(&input).unwrap(), ole_xls);
+    }
+
+    #[test]
+    fn renamed_xlsx_requires_verified_legacy_excel_file_format() {
+        for file_format in [39, 43, 56] {
+            let detail = format!(
+                r#"{{"status":"converted","engine":"pywin32","validation":{{"verified":true,"source_file_format":{file_format}}}}}"#
+            );
+            ensure_legacy_xls_source_format(&detail).unwrap();
+        }
+        for file_format in [50, 51, 52, 65521] {
+            let detail = format!(
+                r#"{{"status":"converted","engine":"pywin32","validation":{{"verified":true,"source_file_format":{file_format}}}}}"#
+            );
+            assert!(ensure_legacy_xls_source_format(&detail).is_err());
+        }
+        let unverified = r#"{"status":"converted","engine":"pywin32","validation":{"verified":false,"source_file_format":56}}"#;
+        assert!(ensure_legacy_xls_source_format(unverified).is_err());
+    }
+
+    #[test]
+    fn same_extension_xlsx_rejects_unknown_non_zip_containers_before_com() {
+        let root = TempDir::new("unknown-xlsx-container");
+        let input = root.0.join("not-a-workbook.xlsx");
+        let output = root.0.join("normalized.xlsx");
+        fs::write(&input, b"plain text with an .xlsx suffix").unwrap();
+
+        let error = convert_one(&input, &output, "xlsx", "pywin32")
+            .expect_err("unknown non-ZIP containers must not be guessed as Excel workbooks");
+        assert!(error.to_string().contains("not an OOXML workbook"));
+        assert!(!output.exists());
+        assert_eq!(
+            fs::read(&input).unwrap(),
+            b"plain text with an .xlsx suffix"
+        );
+    }
+
+    #[test]
     fn wps_native_sidecar_must_explicitly_verify_native_source_format() {
         let verified = r#"{"status":"converted","engine":"pywin32","validation":{"level":"excel_com_sheet_order_formula_text_and_cell_values","source_extension":"et","source_format_verified":true,"source_file_format":65521,"verified":true}}"#;
         ensure_wps_source_format_verified(verified, "et")
@@ -1648,7 +1790,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_native_conversion_preserves_sheet_data_and_formula_text() {
+    fn native_value_rebuild_is_rejected_for_excel_workbook_conversion() {
         let root = TempDir::new("native-values");
         let source_xlsx = root.0.join("source.xlsx");
         let source_xlsm = root.0.join("source.xlsm");
@@ -1666,27 +1808,16 @@ mod tests {
         fs::copy(&source_xlsx, &source_xlsm).unwrap();
         let original_bytes = fs::read(&source_xlsm).unwrap();
 
-        let detail = convert_one(&source_xlsm, &output, "xlsx", "native").unwrap();
-        assert!(detail.contains("value-only conversion validated"));
-        assert!(detail.contains("macros are not preserved"));
+        let error = convert_one(&source_xlsm, &output, "xlsx", "native")
+            .expect_err("Excel workbooks must use COM SaveAs rather than Rust value rebuilding");
+        let message = format!("{error:#}");
+        assert!(message.contains("requires pywin32"), "{message}");
+        assert!(
+            message.contains("native value-only conversion is not allowed"),
+            "{message}"
+        );
         assert_eq!(fs::read(&source_xlsm).unwrap(), original_bytes);
-
-        let converted = read_workbook(&output).unwrap();
-        assert_eq!(
-            converted
-                .sheets
-                .iter()
-                .map(|sheet| sheet.name.as_str())
-                .collect::<Vec<_>>(),
-            vec!["数据", "空工作表"]
-        );
-        assert_eq!(converted.sheets[0].values["A1"]["value"], "代码");
-        assert_eq!(converted.sheets[0].values["B1"]["value"], 123.25);
-        assert_eq!(converted.sheets[0].values["C1"]["value"], true);
-        assert_eq!(
-            converted.sheets[0].formulas["D1"].trim_start_matches('='),
-            "B1*2"
-        );
+        assert!(!output.exists());
     }
 
     #[test]
@@ -1739,7 +1870,10 @@ mod tests {
         fs::write(&input, b"not an OOXML workbook").unwrap();
         let error = convert_one(&input, &output, "xlsx", "native")
             .expect_err("native value-only reader must reject ET");
-        assert!(error.to_string().contains("cannot read .et"));
+        assert!(error.to_string().contains("requires pywin32"));
+        assert!(error
+            .to_string()
+            .contains("native value-only conversion is not allowed"));
         assert!(!output.exists());
     }
 
@@ -1770,7 +1904,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_conversion_matches_source_format_folder_and_copies_same_format() {
+    fn batch_conversion_never_copies_same_extension_xlsx_without_save_as() {
         let root = TempDir::new("source-folder-layout");
         let input = root.0.join("report.xlsx");
         let output = root.0.join("xlsx/report.xlsx");
@@ -1782,12 +1916,15 @@ mod tests {
         workbook.save(&input).unwrap();
         let source_bytes = fs::read(&input).unwrap();
 
-        let result = convert_excel_files_in_source_folders(&[input.clone()], "xlsx", "lo").unwrap();
-        assert_eq!(result.converted, 1);
+        let result =
+            convert_excel_files_in_source_folders(&[input.clone()], "xlsx", "native").unwrap();
+        assert_eq!(result.converted, 0);
         assert_eq!(result.skipped, 0);
-        assert_eq!(result.failed, 0);
-        assert_eq!(result.items[0].status, "copied");
-        assert_eq!(result.items[0].output.as_deref(), Some(output.as_path()));
-        assert_eq!(fs::read(&output).unwrap(), source_bytes);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.items[0].status, "failed");
+        assert!(result.items[0].detail.contains("SaveAs"));
+        assert_eq!(result.items[0].output, None);
+        assert!(!output.exists(), "same-extension xlsx must never be copied");
+        assert_eq!(fs::read(&input).unwrap(), source_bytes);
     }
 }

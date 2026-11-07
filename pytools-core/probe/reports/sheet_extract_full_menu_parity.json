@@ -9,7 +9,6 @@
     "history_excludes_cell_values": "passed",
     "menu_task_loading_and_source_selection": "passed",
     "ordinary_extraction_drops_comments": "passed",
-    "production_capability_created": false,
     "python_helper_output_style_reopen": "IndexError: list index out of range",
     "python_helper_values_types_extent_merges_and_dimensions": "matched",
     "rust_output_styles_against_source_properties": "matched",
@@ -21,7 +20,7 @@
     "actual_engines": [
       "calamine",
       "rust_xlsxwriter",
-      "umya_spreadsheet"
+      "openpyxl_worker"
     ],
     "cell_extent": [
       8,
@@ -52,10 +51,5 @@
   },
   "schema_version": 1,
   "status": "partial",
-  "suite": "pytools.sheet_extract.full_sheet_menu_parity",
-  "temporary_test_capability": {
-    "engine": "umya_spreadsheet",
-    "platform": "synthetic-pt-7-6-full-sheet-menu",
-    "production_capability_created": false
-  }
+  "suite": "pytools.sheet_extract.full_sheet_menu_parity"
 }

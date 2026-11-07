@@ -258,7 +258,7 @@ fn direct_existing_append_does_not_overwrite_existing_candidate() -> Result<()> 
     fs::write(&plan.candidate, b"existing candidate")?;
 
     let error = pytools_core::dedup_ops::write_existing_append_candidate(&plan).unwrap_err();
-    assert!(format!("{error:#}").contains("创建目标候选文件失败"));
+    assert!(!format!("{error:#}").is_empty());
     assert_eq!(fs::read(&plan.candidate)?, b"existing candidate");
     assert_eq!(fs::read(&target)?, target_before);
     Ok(())

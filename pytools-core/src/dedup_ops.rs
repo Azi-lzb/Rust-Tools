@@ -1310,7 +1310,8 @@ pub fn build_append_by_config_plans(
 }
 
 /// Build and verify an existing-target candidate for the explicitly requested
-/// direct 2-3 append route. The configured target is never modified here.
+/// direct 2-3 append route. Existing XLSX workbooks are edited by openpyxl;
+/// the configured target is never modified until the caller publishes it.
 pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
     anyhow::ensure!(
         plan.target_existed,
@@ -1337,10 +1338,6 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         "直接追加仅支持 .xlsx 目标工作簿"
     );
     // 结构清单必须完整：未知部件无法确认保真，任何引擎都不应改写。
-    // 注意这里不再套用 ooxml-patch 的部件黑名单——那份名单描述的是
-    // “页眉文本补丁适配器”的改写范围，不是 umya/openpyxl 的能力边界；
-    // 含图表/图片/数据透视的目标由下面的引擎逐个尝试（umya → openpyxl），
-    // 最终以候选文件的 features 子集校验为准。
     anyhow::ensure!(
         edit_plan.workbook.inventory_complete,
         "目标工作簿包含无法确认的结构，未执行追加"
@@ -1350,9 +1347,6 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     let before_names = read_defined_names(&plan.target).context("读取目标工作簿名称定义失败")?;
     let before_comments = read_ooxml_comments(&plan.target).context("读取目标工作簿批注失败")?;
     validate_append_scope(edit_plan, &before)?;
-    let mut workbook = excel_editor::open_xlsx(&plan.target).context("umya 打开目标工作簿失败")?;
-    excel_editor::apply_umya_append_operations(&mut workbook, &edit_plan.operations)
-        .context("umya 追加目标工作簿失败")?;
 
     if let Some(parent) = plan
         .candidate
@@ -1362,18 +1356,20 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         fs::create_dir_all(parent)
             .with_context(|| format!("创建候选目录失败：{}", parent.display()))?;
     }
-    let reserved = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&plan.candidate)
-        .with_context(|| format!("创建目标候选文件失败：{}", plan.candidate.display()))?;
-    drop(reserved);
+    anyhow::ensure!(
+        !plan.candidate.exists(),
+        "拒绝覆盖已有候选文件：{}",
+        plan.candidate.display()
+    );
 
     let result = (|| -> Result<()> {
-        excel_editor::save_xlsx(&workbook, &plan.candidate).context("umya 保存目标候选文件失败")?;
-        excel_editor::UmyaXlsxValidator
-            .validate(edit_plan, &plan.candidate)
-            .context("校验目标候选文件结构失败")?;
+        let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
+        crate::edit_plan::apply_plan(
+            edit_plan,
+            &[capability],
+            &crate::inplace_edit::platform_id(),
+        )
+        .context("openpyxl 修改目标候选文件失败")?;
         let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
         validate_append_candidate(edit_plan, &before, &after)?;
         let actual_names = read_defined_names(&plan.candidate)?;
@@ -1401,54 +1397,16 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
         Ok(())
     })();
-    if let Err(umya_error) = result {
-        if let Err(cleanup_error) = fs::remove_file(&plan.candidate) {
-            return Err(umya_error.context(format!(
-                "清理未通过校验的候选文件失败：{}；{cleanup_error}",
-                plan.candidate.display()
-            )));
-        }
-        // umya 重建候选可能丢失原工作簿结构（features 清单子集校验失败等）。
-        // 回退到内置 openpyxl worker 执行同一追加计划；openpyxl 的往返保留
-        // 率更高。两个引擎都失败时，返回双错误链供诊断。
-        let fallback = (|| -> Result<()> {
-            let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
-            let platform = crate::inplace_edit::platform_id();
-            crate::edit_plan::apply_plan(edit_plan, &[capability], &platform)
-                .context("openpyxl 回退：执行追加计划失败")?;
-            crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
-                .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
-            let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
-            validate_append_candidate(edit_plan, &before, &after)?;
-            let actual_names = read_defined_names(&plan.candidate)?;
-            anyhow::ensure!(
-                comparable_defined_names(&before_names)?
-                    == comparable_defined_names(&actual_names)?,
-                "目标工作簿名称定义发生变化"
-            );
-            let after_comments = read_ooxml_comments(&plan.candidate)?;
-            for sheet in &before.sheets {
-                anyhow::ensure!(
-                    before_comments.get(&sheet.name) == after_comments.get(&sheet.name),
-                    "目标工作表 {:?} 的批注或作者发生变化",
-                    sheet.name
-                );
+    if let Err(error) = result {
+        if plan.candidate.exists() {
+            if let Err(cleanup_error) = fs::remove_file(&plan.candidate) {
+                return Err(error.context(format!(
+                    "清理未通过校验的候选文件失败：{}；{cleanup_error}",
+                    plan.candidate.display()
+                )));
             }
-            let candidate_profile = inspect_xlsx_profile(&plan.candidate)?;
-            anyhow::ensure!(
-                edit_plan
-                    .workbook
-                    .features_present
-                    .is_subset(&candidate_profile.features_present),
-                "openpyxl 回退候选仍丢失了原工作簿结构"
-            );
-            Ok(())
-        })();
-        if let Err(openpyxl_error) = fallback {
-            return Err(umya_error.context(format!(
-                "openpyxl 回退也失败：{openpyxl_error:#}；两条路径均无法保真追加该目标工作簿"
-            )));
         }
+        return Err(error);
     }
     Ok(plan.candidate.clone())
 }
@@ -1526,7 +1484,7 @@ fn comparable_defined_names(names: &[DefinedNameRecord]) -> Result<Vec<String>> 
     for name in names {
         let mut name = name.clone();
         // For fully parsed areas, scope and resolved references carry the meaning;
-        // umya may add or remove harmless quotes around a sheet name.
+        // ignore harmless quoting differences in the raw sheet reference.
         if name.parse_status == DefinedNameParseStatus::Areas {
             name.raw_reference.clear();
         }
@@ -1951,7 +1909,11 @@ pub fn write_append_workbook_payload(
                 .chain(actual.formulas.keys())
                 .collect::<BTreeSet<_>>()
                 .len();
-            anyhow::ensure!(expected==actual_count,"append workbook non-empty cell count differs in {:?}: expected {expected}, found {actual_count}",planned.name);
+            anyhow::ensure!(
+                expected == actual_count,
+                "append workbook non-empty cell count differs in {:?}: expected {expected}, found {actual_count}",
+                planned.name
+            );
         }
         Ok(())
     })();
@@ -2496,22 +2458,49 @@ fn is_xlsx(path: &Path) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case("xlsx"))
 }
 fn used_row_count(sheet: &SheetDump) -> usize {
-    sheet
+    let cell_rows = sheet
         .values
         .keys()
         .chain(sheet.formulas.keys())
         .filter_map(|address| parse_a1(address).map(|x| x.0))
         .max()
-        .unwrap_or(0)
+        .unwrap_or(0);
+    cell_rows.max(
+        sheet
+            .merges
+            .iter()
+            .filter_map(|range| merged_range_extent(range).map(|(_, max_row, _, _)| max_row))
+            .max()
+            .unwrap_or(0),
+    )
 }
 fn used_column_count(sheet: &SheetDump) -> usize {
-    sheet
+    let cell_columns = sheet
         .values
         .keys()
         .chain(sheet.formulas.keys())
         .filter_map(|address| parse_a1(address).map(|x| x.1))
         .max()
-        .unwrap_or(1)
+        .unwrap_or(1);
+    cell_columns.max(
+        sheet
+            .merges
+            .iter()
+            .filter_map(|range| merged_range_extent(range).map(|(_, _, _, max_column)| max_column))
+            .max()
+            .unwrap_or(1),
+    )
+}
+fn merged_range_extent(range: &str) -> Option<(usize, usize, usize, usize)> {
+    let (start, end) = range.split_once(':').unwrap_or((range, range));
+    let (start_row, start_column) = parse_a1(&start.replace('$', ""))?;
+    let (end_row, end_column) = parse_a1(&end.replace('$', ""))?;
+    Some((
+        start_row.min(end_row),
+        start_row.max(end_row),
+        start_column.min(end_column),
+        start_column.max(end_column),
+    ))
 }
 fn parse_a1(value: &str) -> Option<(usize, usize)> {
     let split = value.find(|c: char| c.is_ascii_digit())?;
@@ -2638,7 +2627,6 @@ pub fn delete_duplicates_in_place_with_progress<F>(
 where
     F: FnMut(&DedupTask),
 {
-    use umya_spreadsheet as umya;
     let mut run = DeleteDuplicatesRun::default();
     let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
     anyhow::ensure!(
@@ -2675,7 +2663,7 @@ where
             };
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
+                    "openpyxl",
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Skipped,
                 )
@@ -2685,13 +2673,13 @@ where
             run.issues.push(format!("{}：{message}", path.display()));
             continue;
         }
-        let mut book = match umya::reader::xlsx::read(&path) {
-            Ok(book) => book,
+        let original_hash = match crate::file_commit::sha256_file(&path) {
+            Ok(hash) => hash,
             Err(error) => {
                 run.task_failed += group.len();
                 run.events.push(
                     crate::engine_diag::DiagEvent::new(
-                        "umya-spreadsheet",
+                        "sha256",
                         crate::engine_diag::DiagStage::ReadSource,
                         crate::engine_diag::DiagOutcome::Failed,
                     )
@@ -2699,105 +2687,295 @@ where
                     .with_message(format!("{error:#}")),
                 );
                 run.issues.push(format!(
-                    "{}：umya 读取源工作簿失败：{error:#}",
+                    "{}：读取源工作簿快照失败：{error:#}",
                     path.display()
                 ));
                 continue;
             }
         };
-        run.events.push(crate::excel_core_diag::read_event(
-            &path,
-            group.first().map(|task| task.row_no),
-            read_started.elapsed().as_millis(),
-            None,
-        ));
-        let mut deleted_in_book = 0usize;
+        let dump = match read_workbook(&path)
+            .with_context(|| format!("calamine 读取 {}", path.display()))
+        {
+            Ok(dump) => dump,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：calamine 读取源工作簿失败：{error:#}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        run.events.push(
+            crate::engine_diag::DiagEvent::new(
+                "calamine",
+                crate::engine_diag::DiagStage::ReadSource,
+                crate::engine_diag::DiagOutcome::Ok,
+            )
+            .with_file(path.to_string_lossy().into_owned())
+            .with_elapsed_ms(read_started.elapsed().as_millis())
+            .with_message("源工作簿读取完成"),
+        );
+
+        let date_values = match date_iso_map(&path, &dump.sheets) {
+            Ok(values) => values,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("读取日期单元格失败：{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：读取日期单元格失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+        let profile = match inspect_xlsx_profile(&path) {
+            Ok(profile) => profile,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "ooxml-patch",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("检查工作簿结构失败：{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：检查工作簿结构失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+
+        let mut operations = Vec::new();
+        let mut task_failures = 0usize;
+        let mut task_duplicate_rows = Vec::new();
+        let mut surviving_rows_by_sheet = BTreeMap::<String, Vec<usize>>::new();
+        for task in &group {
+            let Some(sheet) = dump
+                .sheets
+                .iter()
+                .find(|sheet| sheet.name == task.source_ws)
+            else {
+                task_failures += 1;
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_row(task.row_no)
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_sheet(task.source_ws.clone())
+                    .with_message("源工作簿中不存在该工作表"),
+                );
+                run.issues.push(format!(
+                    "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                    task.row_no,
+                    path.display(),
+                    task.source_ws
+                ));
+                continue;
+            };
+            let key_cols = if task.key_cols.is_empty() {
+                (1..=used_column_count(sheet).max(1)).collect::<Vec<_>>()
+            } else {
+                task.key_cols.clone()
+            };
+            let surviving = surviving_rows_by_sheet
+                .entry(sheet.name.clone())
+                .or_insert_with(|| (1..=used_row_count(sheet)).collect());
+            let duplicate =
+                duplicate_rows_for_surviving_rows(sheet, &key_cols, surviving, &date_values);
+            let duplicate_count = duplicate.len();
+            append_duplicate_operations(
+                &mut operations,
+                sheet,
+                duplicate.clone(),
+                DuplicateAction::Delete,
+            );
+            if !duplicate.is_empty() {
+                let duplicate_positions = duplicate.into_iter().collect::<BTreeSet<_>>();
+                let mut current_row = 1usize;
+                surviving.retain(|_| {
+                    let keep = !duplicate_positions.contains(&current_row);
+                    current_row += 1;
+                    keep
+                });
+            }
+            task_duplicate_rows.push((task.row_no, sheet.name.clone(), duplicate_count));
+        }
+
+        let deleted_rows = task_duplicate_rows
+            .iter()
+            .map(|(_, _, count)| *count)
+            .sum::<usize>();
         let mut changed = false;
-        for task in group {
-            let task_started = std::time::Instant::now();
-            let sheet = match book.get_sheet_by_name_mut(&task.source_ws) {
-                Ok(sheet) => sheet,
-                Err(_) => {
-                    run.task_failed += 1;
+        if !operations.is_empty() {
+            let mut plan = match make_plan(
+                &path,
+                &path,
+                profile,
+                operations,
+                "config-duplicate-in-place",
+            ) {
+                Ok(Some(plan)) => plan,
+                Ok(None) => unreachable!("non-empty duplicate operations returned no plan"),
+                Err(error) => {
+                    run.task_failed += group.len().saturating_sub(task_failures);
                     run.events.push(
                         crate::engine_diag::DiagEvent::new(
-                            "umya-spreadsheet",
-                            crate::engine_diag::DiagStage::CopySheet,
+                            "pytools-core",
+                            crate::engine_diag::DiagStage::ModifyWorkbook,
                             crate::engine_diag::DiagOutcome::Failed,
                         )
-                        .with_row(task.row_no)
                         .with_file(path.to_string_lossy().into_owned())
-                        .with_sheet(task.source_ws.clone())
-                        .with_message("源工作簿中不存在该工作表"),
+                        .with_message(format!("生成删除计划失败：{error:#}")),
+                    );
+                    run.issues
+                        .push(format!("{}：生成删除计划失败：{error:#}", path.display()));
+                    continue;
+                }
+            };
+            plan.preserve = duplicate_preservation(DuplicateAction::Delete);
+            let candidate =
+                append_candidate_path(&path, path.parent().unwrap_or_else(|| Path::new(".")));
+            plan.output = candidate.clone();
+            if let Err(error) = plan.validate() {
+                run.task_failed += group.len().saturating_sub(task_failures);
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "openpyxl",
+                        crate::engine_diag::DiagStage::ModifyWorkbook,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("校验 Openpyxl 删除计划失败：{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：校验 Openpyxl 删除计划失败：{error:#}",
+                    path.display()
+                ));
+                continue;
+            }
+            if let Err(error) =
+                crate::file_commit::verify_planning_snapshot(&path, Some(original_hash.as_str()))
+            {
+                run.task_failed += group.len().saturating_sub(task_failures);
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "sha256",
+                        crate::engine_diag::DiagStage::ModifyWorkbook,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("源工作簿在规划期间发生变化：{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：源工作簿在规划期间发生变化，未执行删除：{error:#}",
+                    path.display()
+                ));
+                continue;
+            }
+            match crate::inplace_edit::execute_candidate(
+                &plan,
+                crate::inplace_edit::InPlaceEngine::Openpyxl,
+            ) {
+                Ok(_) => match crate::file_commit::replace_target_from_candidate(
+                    &candidate,
+                    &path,
+                    &original_hash,
+                ) {
+                    Ok(_) => {
+                        changed = true;
+                        run.saved_books.push(path.clone());
+                        run.events.push(
+                            crate::engine_diag::DiagEvent::new(
+                                "openpyxl",
+                                crate::engine_diag::DiagStage::SaveOutput,
+                                crate::engine_diag::DiagOutcome::Ok,
+                            )
+                            .with_file(path.to_string_lossy().into_owned())
+                            .with_message(format!("已就地删除重复行 {deleted_rows} 行")),
+                        );
+                        let _ = fs::remove_file(&candidate);
+                    }
+                    Err(error) => {
+                        let _ = fs::remove_file(&candidate);
+                        run.task_failed += group.len().saturating_sub(task_failures);
+                        run.events.push(
+                            crate::engine_diag::DiagEvent::new(
+                                "openpyxl",
+                                crate::engine_diag::DiagStage::SaveOutput,
+                                crate::engine_diag::DiagOutcome::Failed,
+                            )
+                            .with_file(path.to_string_lossy().into_owned())
+                            .with_message(format!("安全替换源工作簿失败：{error:#}")),
+                        );
+                        run.issues.push(format!(
+                            "{}：安全替换源工作簿失败，原文件未提交：{error:#}",
+                            path.display()
+                        ));
+                        continue;
+                    }
+                },
+                Err(error) => {
+                    let _ = fs::remove_file(&candidate);
+                    run.task_failed += group.len().saturating_sub(task_failures);
+                    run.events.push(
+                        crate::engine_diag::DiagEvent::new(
+                            "openpyxl",
+                            crate::engine_diag::DiagStage::ModifyWorkbook,
+                            crate::engine_diag::DiagOutcome::Failed,
+                        )
+                        .with_file(path.to_string_lossy().into_owned())
+                        .with_message(format!("openpyxl 就地删除失败：{error:#}")),
                     );
                     run.issues.push(format!(
-                        "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
-                        task.row_no,
-                        path.display(),
-                        task.source_ws
+                        "{}：openpyxl 就地删除失败，源文件未提交：{error:#}",
+                        path.display()
                     ));
                     continue;
                 }
-            };
-            let (max_col, max_row) = sheet.get_highest_column_and_row();
-            let used_cols = max_col.max(1);
-            let key_cols: Vec<u32> = if task.key_cols.is_empty() {
-                (1..=used_cols).collect()
-            } else {
-                task.key_cols.iter().map(|column| *column as u32).collect()
-            };
-            let mut seen: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
-            let mut to_delete: Vec<u32> = Vec::new();
-            for row in 2..=(max_row as u32) {
-                let key: Vec<String> = key_cols
-                    .iter()
-                    .map(|column| umya_cell_text(sheet, *column, row))
-                    .collect();
-                if key.iter().all(|part| part.is_empty()) {
-                    continue;
-                }
-                if seen.contains(&key) {
-                    to_delete.push(row);
-                } else {
-                    seen.insert(key);
-                }
             }
-            // 自下而上删除，避免行号位移。
-            for row in to_delete.iter().rev() {
-                sheet.remove_row(*row, 1);
-            }
-            let deleted = to_delete.len();
-            deleted_in_book += deleted;
-            run.deleted_rows += deleted;
-            run.task_ok += 1;
-            if deleted > 0 {
-                changed = true;
-            }
+        }
+        run.task_failed += task_failures;
+        run.task_ok += task_duplicate_rows.len();
+        run.deleted_rows += deleted_rows;
+        for (row_no, sheet, duplicate_count) in task_duplicate_rows {
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
+                    if changed { "openpyxl" } else { "calamine" },
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Ok,
                 )
-                .with_row(task.row_no)
+                .with_row(row_no)
                 .with_file(path.to_string_lossy().into_owned())
-                .with_sheet(task.source_ws.clone())
-                .with_elapsed_ms(task_started.elapsed().as_millis())
-                .with_message(format!("删除重复行 {deleted} 行")),
-            );
-        }
-        if changed {
-            umya::writer::xlsx::write(&book, &path)
-                .with_context(|| format!("就地保存删除结果 {} 失败", path.display()))?;
-            run.saved_books.push(path.clone());
-            run.events.push(
-                crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
-                    crate::engine_diag::DiagStage::SaveOutput,
-                    crate::engine_diag::DiagOutcome::Ok,
-                )
-                .with_file(path.to_string_lossy().into_owned())
-                .with_message(format!("已就地删除 {deleted_in_book} 行")),
+                .with_sheet(sheet)
+                .with_message(format!(
+                    "发现重复行 {duplicate_count} 行{}",
+                    if changed {
+                        "，已就地删除"
+                    } else {
+                        "，未修改工作簿"
+                    }
+                )),
             );
         }
     }
@@ -2819,35 +2997,6 @@ pub struct MarkDuplicatesRun {
     pub events: Vec<crate::engine_diag::DiagEvent>,
 }
 
-fn umya_cell_text(sheet: &mut umya_spreadsheet::Worksheet, column: u32, row: u32) -> String {
-    let mut letters = String::new();
-    let mut rest = column;
-    while rest > 0 {
-        letters.insert(0, (b'A' + ((rest - 1) % 26) as u8) as char);
-        rest = (rest - 1) / 26;
-    }
-    let address = format!("{letters}{row}");
-    sheet
-        .get_cell(address.as_str())
-        .map(|cell| cell.get_raw_value().to_string())
-        .unwrap_or_default()
-        .trim()
-        .to_owned()
-}
-
-fn umya_mark_row_red(sheet: &mut umya_spreadsheet::Worksheet, used_cols: u32, row: u32) {
-    for column in 1..=used_cols {
-        let cell = sheet.cell_mut((column, row));
-        let mut style = cell.get_style().clone();
-        {
-            let pattern = style.get_fill_mut().get_pattern_fill_mut();
-            pattern.set_pattern_type(umya_spreadsheet::PatternValues::Solid);
-            pattern.get_foreground_color_mut().set_argb_str("FFFF0000");
-        }
-        cell.set_style(style);
-    }
-}
-
 pub fn mark_duplicates_in_place(tasks: &[DedupTask]) -> Result<MarkDuplicatesRun> {
     mark_duplicates_in_place_with_progress(tasks, |_| {})
 }
@@ -2859,7 +3008,6 @@ pub fn mark_duplicates_in_place_with_progress<F>(
 where
     F: FnMut(&DedupTask),
 {
-    use umya_spreadsheet as umya;
     let mut run = MarkDuplicatesRun::default();
     let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
     anyhow::ensure!(
@@ -2873,7 +3021,7 @@ where
             run.task_skipped += 1;
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
+                    "openpyxl",
                     crate::engine_diag::DiagStage::ReadSource,
                     crate::engine_diag::DiagOutcome::Skipped,
                 )
@@ -2905,7 +3053,7 @@ where
             };
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
+                    "openpyxl",
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Skipped,
                 )
@@ -2915,13 +3063,13 @@ where
             run.issues.push(format!("{}：{message}", path.display()));
             continue;
         }
-        let mut book = match umya::reader::xlsx::read(&path) {
-            Ok(book) => book,
+        let original_hash = match crate::file_commit::sha256_file(&path) {
+            Ok(hash) => hash,
             Err(error) => {
                 run.task_failed += group.len();
                 run.events.push(
                     crate::engine_diag::DiagEvent::new(
-                        "umya-spreadsheet",
+                        "sha256",
                         crate::engine_diag::DiagStage::ReadSource,
                         crate::engine_diag::DiagOutcome::Failed,
                     )
@@ -2929,102 +3077,286 @@ where
                     .with_message(format!("{error:#}")),
                 );
                 run.issues.push(format!(
-                    "{}：umya 读取源工作簿失败：{error:#}",
+                    "{}：读取源工作簿快照失败：{error:#}",
                     path.display()
                 ));
                 continue;
             }
         };
-        // 读取成功事件（经统一适配层构造，引擎名与阶段口径统一）。
-        run.events.push(crate::excel_core_diag::read_event(
-            &path,
-            group.first().map(|task| task.row_no),
-            book_read_started.elapsed().as_millis(),
-            None,
-        ));
-        let mut marked_in_book = 0usize;
-        let mut changed = false;
+        let dump = match read_workbook(&path)
+            .with_context(|| format!("calamine 读取 {}", path.display()))
+        {
+            Ok(dump) => dump,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：calamine 读取源工作簿失败：{error:#}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        run.events.push(
+            crate::engine_diag::DiagEvent::new(
+                "calamine",
+                crate::engine_diag::DiagStage::ReadSource,
+                crate::engine_diag::DiagOutcome::Ok,
+            )
+            .with_row(group[0].row_no)
+            .with_file(path.to_string_lossy().into_owned())
+            .with_elapsed_ms(book_read_started.elapsed().as_millis())
+            .with_message("源工作簿读取完成"),
+        );
+        let date_values = match date_iso_map(&path, &dump.sheets) {
+            Ok(values) => values,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("读取日期单元格失败：{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：读取日期单元格失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+        let profile = match inspect_xlsx_profile(&path) {
+            Ok(profile) => profile,
+            Err(error) => {
+                run.task_failed += group.len();
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "ooxml-patch",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("检查工作簿结构失败：{error:#}")),
+                );
+                run.issues
+                    .push(format!("{}：检查工作簿结构失败：{error:#}", path.display()));
+                continue;
+            }
+        };
+
+        let mut operations = Vec::new();
+        let mut task_failures = 0usize;
+        let mut task_duplicate_rows = Vec::new();
         for task in group {
             let task_started = std::time::Instant::now();
-            let sheet = match book.get_sheet_by_name_mut(&task.source_ws) {
-                Ok(sheet) => sheet,
-                Err(_) => {
-                    run.task_failed += 1;
+            let Some(sheet) = dump
+                .sheets
+                .iter()
+                .find(|sheet| sheet.name == task.source_ws)
+            else {
+                task_failures += 1;
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "calamine",
+                        crate::engine_diag::DiagStage::ReadSource,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_row(task.row_no)
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_sheet(task.source_ws.clone())
+                    .with_message("源工作表中不存在该工作表"),
+                );
+                run.issues.push(format!(
+                    "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
+                    task.row_no,
+                    path.display(),
+                    task.source_ws
+                ));
+                continue;
+            };
+            let key_cols = if task.key_cols.is_empty() {
+                (1..=used_column_count(sheet).max(1)).collect::<Vec<_>>()
+            } else {
+                task.key_cols.clone()
+            };
+            let duplicate = duplicate_rows_for_sheet(sheet, &key_cols, &date_values);
+            let marked = duplicate.len();
+            append_duplicate_operations(&mut operations, sheet, duplicate, DuplicateAction::Check);
+            task_duplicate_rows.push((
+                task.row_no,
+                sheet.name.clone(),
+                marked,
+                task_started.elapsed(),
+            ));
+        }
+
+        let marked_rows = task_duplicate_rows
+            .iter()
+            .map(|(_, _, count, _)| *count)
+            .sum::<usize>();
+        let mut changed = false;
+        if !operations.is_empty() {
+            let mut plan = match make_plan(
+                &path,
+                &path,
+                profile,
+                operations,
+                "config-duplicate-in-place",
+            ) {
+                Ok(Some(plan)) => plan,
+                Ok(None) => unreachable!("non-empty duplicate operations returned no plan"),
+                Err(error) => {
+                    run.task_failed += task_duplicate_rows.len() + task_failures;
                     run.events.push(
                         crate::engine_diag::DiagEvent::new(
-                            "umya-spreadsheet",
-                            crate::engine_diag::DiagStage::CopySheet,
+                            "pytools-core",
+                            crate::engine_diag::DiagStage::ModifyWorkbook,
                             crate::engine_diag::DiagOutcome::Failed,
                         )
-                        .with_row(task.row_no)
                         .with_file(path.to_string_lossy().into_owned())
-                        .with_sheet(task.source_ws.clone())
-                        .with_message("源工作表中不存在该工作表"),
+                        .with_message(format!("生成标记计划失败：{error:#}")),
+                    );
+                    run.issues
+                        .push(format!("{}：生成标记计划失败：{error:#}", path.display()));
+                    continue;
+                }
+            };
+            plan.preserve = duplicate_preservation(DuplicateAction::Check);
+            let candidate =
+                append_candidate_path(&path, path.parent().unwrap_or_else(|| Path::new(".")));
+            plan.output = candidate.clone();
+            if let Err(error) = plan.validate() {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "openpyxl",
+                        crate::engine_diag::DiagStage::ModifyWorkbook,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("校验 Openpyxl 标记计划失败：{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：校验 Openpyxl 标记计划失败：{error:#}",
+                    path.display()
+                ));
+                let _ = fs::remove_file(&candidate);
+                continue;
+            }
+            if let Err(error) =
+                crate::file_commit::verify_planning_snapshot(&path, Some(&original_hash))
+            {
+                run.task_failed += task_duplicate_rows.len() + task_failures;
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "sha256",
+                        crate::engine_diag::DiagStage::ModifyWorkbook,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("源工作簿在规划期间发生变化：{error:#}")),
+                );
+                run.issues.push(format!(
+                    "{}：源工作簿在规划期间发生变化，未执行标记：{error:#}",
+                    path.display()
+                ));
+                let _ = fs::remove_file(&candidate);
+                continue;
+            }
+            match crate::inplace_edit::execute_candidate(
+                &plan,
+                crate::inplace_edit::InPlaceEngine::Openpyxl,
+            ) {
+                Ok(_) => match crate::file_commit::replace_target_from_candidate(
+                    &candidate,
+                    &path,
+                    &original_hash,
+                ) {
+                    Ok(_) => {
+                        changed = true;
+                        run.saved_books.push(path.clone());
+                        run.events.push(
+                            crate::engine_diag::DiagEvent::new(
+                                "openpyxl",
+                                crate::engine_diag::DiagStage::SaveOutput,
+                                crate::engine_diag::DiagOutcome::Ok,
+                            )
+                            .with_file(path.to_string_lossy().into_owned())
+                            .with_message(format!("已就地标记重复行 {marked_rows} 行")),
+                        );
+                    }
+                    Err(error) => {
+                        run.task_failed += task_duplicate_rows.len() + task_failures;
+                        run.events.push(
+                            crate::engine_diag::DiagEvent::new(
+                                "openpyxl",
+                                crate::engine_diag::DiagStage::SaveOutput,
+                                crate::engine_diag::DiagOutcome::Failed,
+                            )
+                            .with_file(path.to_string_lossy().into_owned())
+                            .with_message(format!("安全替换源工作簿失败：{error:#}")),
+                        );
+                        run.issues.push(format!(
+                            "{}：安全替换源工作簿失败，原文件未提交：{error:#}",
+                            path.display()
+                        ));
+                        let _ = fs::remove_file(&candidate);
+                        continue;
+                    }
+                },
+                Err(error) => {
+                    run.task_failed += task_duplicate_rows.len() + task_failures;
+                    run.events.push(
+                        crate::engine_diag::DiagEvent::new(
+                            "openpyxl",
+                            crate::engine_diag::DiagStage::ModifyWorkbook,
+                            crate::engine_diag::DiagOutcome::Failed,
+                        )
+                        .with_file(path.to_string_lossy().into_owned())
+                        .with_message(format!("openpyxl 生成标记候选失败：{error:#}")),
                     );
                     run.issues.push(format!(
-                        "第 {} 行：源工作簿 {} 中不存在工作表 {:?}",
-                        task.row_no,
-                        path.display(),
-                        task.source_ws
+                        "{}：openpyxl 生成标记候选失败，源文件未提交：{error:#}",
+                        path.display()
                     ));
+                    let _ = fs::remove_file(&candidate);
                     continue;
                 }
-            };
-            let (max_col, max_row) = sheet.get_highest_column_and_row();
-            let used_cols = max_col.max(1);
-            let key_cols: Vec<u32> = if task.key_cols.is_empty() {
-                (1..=used_cols).collect()
-            } else {
-                task.key_cols.iter().map(|column| *column as u32).collect()
-            };
-            let mut seen: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
-            let mut marked = 0usize;
-            for row in 2..=(max_row as u32) {
-                let key: Vec<String> = key_cols
-                    .iter()
-                    .map(|column| umya_cell_text(sheet, *column, row))
-                    .collect();
-                if key.iter().all(|part| part.is_empty()) {
-                    continue;
-                }
-                if seen.contains(&key) {
-                    umya_mark_row_red(sheet, used_cols, row);
-                    marked += 1;
-                } else {
-                    seen.insert(key);
-                }
             }
-            marked_in_book += marked;
-            run.marked_rows += marked;
-            run.task_ok += 1;
-            if marked > 0 {
-                changed = true;
-            }
+            let _ = fs::remove_file(&candidate);
+        }
+        let succeeded_tasks = task_duplicate_rows.len();
+        run.task_failed += task_failures;
+        run.task_ok += succeeded_tasks;
+        run.marked_rows += marked_rows;
+        for (row_no, sheet, count, elapsed) in task_duplicate_rows {
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
+                    if changed { "openpyxl" } else { "calamine" },
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Ok,
                 )
-                .with_row(task.row_no)
+                .with_row(row_no)
                 .with_file(path.to_string_lossy().into_owned())
-                .with_sheet(task.source_ws.clone())
-                .with_elapsed_ms(task_started.elapsed().as_millis())
-                .with_message(format!("标记重复行 {marked} 行")),
-            );
-        }
-        if changed {
-            umya::writer::xlsx::write(&book, &path)
-                .with_context(|| format!("就地保存标记结果 {} 失败", path.display()))?;
-            run.saved_books.push(path.clone());
-            run.events.push(
-                crate::engine_diag::DiagEvent::new(
-                    "umya-spreadsheet",
-                    crate::engine_diag::DiagStage::SaveOutput,
-                    crate::engine_diag::DiagOutcome::Ok,
-                )
-                .with_file(path.to_string_lossy().into_owned())
-                .with_message(format!("已就地标记 {marked_in_book} 行")),
+                .with_sheet(sheet)
+                .with_elapsed_ms(elapsed.as_millis())
+                .with_message(format!(
+                    "发现重复行 {count} 行{}",
+                    if changed {
+                        "，已就地标记"
+                    } else {
+                        "，未修改工作簿"
+                    }
+                )),
             );
         }
     }

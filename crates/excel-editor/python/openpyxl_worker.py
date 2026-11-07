@@ -18,18 +18,30 @@ import time
 import traceback
 import zipfile
 from copy import copy
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.etree import ElementTree
 from xml.parsers import expat
+from xml.sax.saxutils import escape as xml_escape
 
 SCHEMA_VERSION = 1
 # 与 Rust 侧 openpyxl_backend.rs 的 OpenpyxlWorkerConfig::PROTOCOL_VERSION
 # 必须保持一致；修改任一侧时必须同步修改另一侧。
 WORKER_PROTOCOL_VERSION = 1
+# These two legacy PyCode features are explicitly Openpyxl-based after the
+# user confirmed that their outputs are opened in Excel/WPS for recalculation.
+# Preserve their cached results in the candidate and request a full recalc on
+# open, but do not block the write on the generic formula-dependency proof.
+PYC_CODE_OPENPYXL_PARITY_REQUESTS = {
+    "pytools-split-village-bank",
+    "pytools-adjust-rural-loan",
+}
 SUPPORTED_OPERATIONS = {
     "set_cell_value",
     "set_formula_text",
+    "delete_rows",
+    "insert_rows",
     "set_comment",
     "set_column_width",
     "set_row_height",
@@ -127,9 +139,11 @@ def _range_write_covers_cell(sheet: str, address: str, operation: Dict[str, Any]
     if operation.get("target_sheet") != sheet:
         return False
     # `_copy_cells` skips blank source cells unless materialize_blank_cells is
-    # set. Requiring both flags means even blank source cells explicitly clear
-    # the destination formula/cache; style/comment copying alone is insufficient.
-    if not operation.get("copy_values") or not operation.get("materialize_blank_cells"):
+    # set. Formula copies also replace an existing cached result when present.
+    # Style/comment-only copies do not replace formula values.
+    if not operation.get("materialize_blank_cells") or not (
+        operation.get("copy_values") or operation.get("copy_formulas")
+    ):
         return False
     try:
         from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
@@ -147,32 +161,1615 @@ def _range_write_covers_cell(sheet: str, address: str, operation: Dict[str, Any]
     return target_row <= row <= target_max_row and target_col <= column <= target_max_col
 
 
-def _formula_cache_is_explicitly_replaced(
+def _parse_cell_address(address: str) -> Tuple[int, int]:
+    normalized = address.replace("$", "").upper()
+    match = re.fullmatch(r"([A-Z]+)([1-9][0-9]*)", normalized)
+    if not match:
+        raise WorkerError(
+            "unsupported_workbook_structure",
+            "invalid formula-cache coordinate " + address,
+            unsupported=True,
+        )
+    column = 0
+    for character in match.group(1):
+        column = column * 26 + ord(character) - ord("A") + 1
+    return int(match.group(2)), column
+
+
+def _format_cell_address(row: int, column: int) -> str:
+    letters = ""
+    while column:
+        column, remainder = divmod(column - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters + str(row)
+
+
+def _formula_cache_destination(
     sheet: str, address: str, operations: List[Dict[str, Any]]
-) -> bool:
+) -> Optional[Tuple[str, str]]:
+    """Map a saved formula cache through the plan, or omit it if overwritten/deleted."""
     current_sheet = sheet
+    row, column = _parse_cell_address(address)
     for operation in operations:
         kind = operation.get("operation")
         if kind == "delete_sheet" and operation.get("name") == current_sheet:
-            return True
+            return None
         if kind == "rename_sheet" and operation.get("old_name") == current_sheet:
             current_sheet = operation.get("new_name", current_sheet)
             continue
+        if kind in ("delete_rows", "insert_rows") and operation.get("sheet") == current_sheet:
+            first_row = int(operation.get("first_row", 0))
+            count = int(operation.get("count", 0))
+            if first_row < 1 or count < 1:
+                raise WorkerError(
+                    "invalid_operation", "invalid row operation while preserving formula caches"
+                )
+            if kind == "delete_rows":
+                last_deleted = first_row + count - 1
+                if first_row <= row <= last_deleted:
+                    return None
+                if row > last_deleted:
+                    row -= count
+            elif row >= first_row:
+                row += count
         if kind in ("set_cell_value", "set_formula_text"):
-            target = operation.get("cell", "").replace("$", "").upper()
-            if operation.get("sheet") == current_sheet and target == address:
-                return True
-        elif _range_write_covers_cell(current_sheet, address, operation):
-            return True
-    return False
+            if operation.get("sheet") == current_sheet:
+                target_row, target_column = _parse_cell_address(operation.get("cell", ""))
+                if (target_row, target_column) == (row, column):
+                    return None
+        elif _range_write_covers_cell(
+            current_sheet, _format_cell_address(row, column), operation
+        ):
+            return None
+    return current_sheet, _format_cell_address(row, column)
 
 
 def _uncovered_formula_cache_cells(path: Path, operations: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
     return [
         (sheet, address)
         for sheet, address in _formula_cache_cells(path)
-        if not _formula_cache_is_explicitly_replaced(sheet, address, operations)
+        if _formula_cache_destination(sheet, address, operations) is not None
     ]
+
+
+def _is_add_new_sheets_only_plan(operations: List[Dict[str, Any]]) -> bool:
+    """Whether the plan only creates sheets and imports values into those sheets.
+
+    This narrow plan shape cannot invalidate cached formulas in the input
+    workbook. We can therefore restore those caches after openpyxl saves.
+    """
+    created_sheets = set()
+    saw_import = False
+    for operation in operations:
+        kind = operation.get("operation")
+        if kind in ("create_sheet", "create_sheet_at"):
+            name = operation.get("name")
+            if not isinstance(name, str) or not name:
+                return False
+            created_sheets.add(name)
+        elif kind == "import_range":
+            target = operation.get("target_sheet")
+            if (
+                target not in created_sheets
+                or not operation.get("copy_values")
+                or operation.get("copy_formulas")
+            ):
+                return False
+            saw_import = True
+        else:
+            return False
+    return bool(created_sheets) and saw_import
+
+
+def _formula_cache_values(path: Path) -> Dict[Tuple[str, str], Tuple[Optional[str], str]]:
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(str(path), "r") as package:
+        title_to_part = _worksheet_parts_by_title(package)
+        values = {}
+        for title, part in title_to_part.items():
+            if part not in package.namelist():
+                continue
+            root = ElementTree.fromstring(package.read(part))
+            for cell in root.iter("{%s}c" % main_ns):
+                if cell.find("{%s}f" % main_ns) is None:
+                    continue
+                cached = cell.find("{%s}v" % main_ns)
+                address = cell.attrib.get("r")
+                if cached is None or cached.text in (None, "") or not address:
+                    continue
+                values[(title, address.replace("$", "").upper())] = (
+                    cell.attrib.get("t"),
+                    cached.text,
+                )
+        return values
+
+
+def _formula_cache_formulas(path: Path) -> Dict[Tuple[str, str], str]:
+    """Read formula text for cells whose saved result is non-empty."""
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(str(path), "r") as package:
+        values = {}
+        for title, part in _worksheet_parts_by_title(package).items():
+            if part not in package.namelist():
+                continue
+            root = ElementTree.fromstring(package.read(part))
+            for cell in root.iter("{%s}c" % main_ns):
+                formula = cell.find("{%s}f" % main_ns)
+                cached = cell.find("{%s}v" % main_ns)
+                address = cell.attrib.get("r")
+                if formula is None or cached is None or cached.text in (None, "") or not address:
+                    continue
+                values[(title, address.replace("$", "").upper())] = formula.text or ""
+        return values
+
+
+def _all_formula_texts(path: Path) -> Dict[Tuple[str, str], str]:
+    """Read every formula cell, including cells without a saved result."""
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(str(path), "r") as package:
+        values = {}
+        for title, part in _worksheet_parts_by_title(package).items():
+            if part not in package.namelist():
+                continue
+            root = ElementTree.fromstring(package.read(part))
+            for cell in root.iter("{%s}c" % main_ns):
+                formula = cell.find("{%s}f" % main_ns)
+                address = cell.attrib.get("r")
+                if formula is None or not address:
+                    continue
+                values[(title, address.replace("$", "").upper())] = formula.text or ""
+        return values
+
+
+def _parse_formula_reference(value: str, formula_sheet: str) -> Optional[Tuple[str, int, int, int, int]]:
+    """Parse one local A1 reference token into (sheet, rows, columns).
+
+    A name, external link, 3-D reference, or other non-A1 expression returns
+    None so the caller can keep the cache-preservation decision conservative.
+    """
+    from openpyxl.utils.cell import range_boundaries
+
+    reference = value.strip()
+    sheet = formula_sheet
+    if "!" in reference:
+        qualifier, reference = reference.rsplit("!", 1)
+        qualifier = qualifier.strip()
+        if qualifier.startswith("'") and qualifier.endswith("'"):
+            qualifier = qualifier[1:-1].replace("''", "'")
+        elif qualifier.startswith("[") or "[" in qualifier or "]" in qualifier:
+            return None
+        if not qualifier or ":" in qualifier:
+            return None
+        sheet = qualifier
+    if "[" in reference or "]" in reference:
+        return None
+    try:
+        min_col, min_row, max_col, max_row = range_boundaries(reference)
+    except (TypeError, ValueError):
+        return None
+    if min_col is None or max_col is None:
+        return None
+    # Whole-column/whole-row references are valid A1 references. Expand only
+    # the missing axis to Excel's documented sheet limits.
+    if min_row is None:
+        min_row, max_row = 1, 1_048_576
+    if max_row is None:
+        max_row = 1_048_576
+    if min_col is None:
+        min_col, max_col = 1, 16_384
+    if max_col is None:
+        max_col = 16_384
+    return sheet, min_row, max_row, min_col, max_col
+
+
+def _formula_dependencies(
+    formula_sheet: str,
+    formula_address: str,
+    formula: str,
+    cached_workbook: Any,
+) -> Optional[List[Tuple[str, int, int, int, int]]]:
+    """Resolve supported formula references; None means dependencies unknown.
+
+    Direct A1 references are parsed with openpyxl's formula tokenizer. The
+    two INDIRECT patterns used by existing Excel workbooks are resolved from
+    the saved selector cell and the formula cell's own address. Other dynamic
+    references remain unsupported for cache-preserving value edits.
+    """
+    from openpyxl.formula import Tokenizer
+    from openpyxl.utils.cell import coordinate_to_tuple
+
+    compact = re.sub(r"\s+", "", formula or "")
+    upper = compact.upper()
+    indirect_references = None
+    selector = None
+    selector_reference = None
+    direct = re.fullmatch(
+        r'INDIRECT\((\$?[A-Z]{1,3}\$?[1-9][0-9]*)&"(![A-Z]{1,3}[1-9][0-9]*)"\)',
+        compact,
+        flags=re.IGNORECASE,
+    )
+    address_fixed = re.fullmatch(
+        r'INDIRECT\((\$?[A-Z]{1,3}\$?[1-9][0-9]*)&"!"&ADDRESS\(([1-9][0-9]*),([1-9][0-9]*)\)\)',
+        compact,
+        flags=re.IGNORECASE,
+    )
+    address_self = re.fullmatch(
+        r'INDIRECT\((\$?[A-Z]{1,3}\$?[1-9][0-9]*)&"!"&ADDRESS\(ROW\(\),COLUMN\(\)\)\)',
+        compact,
+        flags=re.IGNORECASE,
+    )
+    if direct or address_fixed or address_self:
+        match = direct or address_fixed or address_self
+        selector_reference = match.group(1).replace("$", "").upper()
+        if direct:
+            target_address = direct.group(2)[1:]
+        elif address_fixed:
+            target_row, target_column = int(address_fixed.group(2)), int(address_fixed.group(3))
+            from openpyxl.utils.cell import get_column_letter
+            target_address = get_column_letter(target_column) + str(target_row)
+        else:
+            target_address = formula_address.replace("$", "").upper()
+        if formula_sheet not in cached_workbook.sheetnames:
+            return None
+        selector = cached_workbook[formula_sheet][selector_reference].value
+        if not isinstance(selector, str) or selector not in cached_workbook.sheetnames:
+            return None
+        formula_row, formula_column = coordinate_to_tuple(formula_address.replace("$", "").upper())
+        target = _parse_formula_reference(
+            "{}!{}".format(selector, target_address), formula_sheet
+        )
+        selector_dep = _parse_formula_reference(selector_reference, formula_sheet)
+        if target is None or selector_dep is None:
+            return None
+        indirect_references = [selector_dep, target]
+    elif "INDIRECT(" in upper or "OFFSET(" in upper:
+        return None
+
+    try:
+        tokens = Tokenizer("=" + (formula or "")).items
+    except Exception:
+        return None
+    references: List[Tuple[str, int, int, int, int]] = []
+    for token in tokens:
+        if token.type == "FUNC" and token.subtype == "OPEN":
+            name = token.value[:-1].upper()
+            if name in ("INDIRECT", "OFFSET"):
+                if indirect_references is None:
+                    return None
+        if token.type == "OPERAND" and token.subtype == "RANGE":
+            # The selector in a supported INDIRECT expression was already
+            # handled above; the tokenizer also exposes it as a direct range.
+            parsed = _parse_formula_reference(token.value, formula_sheet)
+            if parsed is None:
+                return None
+            if indirect_references is None or token.value.replace("$", "").upper() != selector_reference:
+                references.append(parsed)
+    if indirect_references is not None:
+        references.extend(indirect_references)
+    return references
+
+
+def _formula_cache_write_conflict(
+    path: Path, operations: List[Dict[str, Any]], request_id: Optional[str] = None
+) -> Optional[str]:
+    """Return why cached results cannot be proven safe for this write plan."""
+    if request_id in PYC_CODE_OPENPYXL_PARITY_REQUESTS:
+        # Match the selected PyCode Openpyxl route. The worker still restores
+        # saved caches and marks the workbook for a full calculation on open;
+        # users may also invoke 4-4 when they need an immediate recalculation.
+        return None
+    from openpyxl.utils.cell import coordinate_to_tuple
+
+    formulas = _formula_cache_formulas(path)
+    formula_sensitive = any(
+        operation.get("operation")
+        in ("set_cell_value", "set_formula_text", "delete_rows", "insert_rows", "copy_range", "import_range")
+        for operation in operations
+    )
+    if not formula_sensitive or _is_add_new_sheets_only_plan(operations):
+        return None
+
+    row_delete_only = bool(operations) and all(
+        operation.get("operation") == "delete_rows" for operation in operations
+    )
+    if row_delete_only:
+        conflict = _row_delete_formula_dependency_conflict(path, operations)
+        if conflict:
+            return conflict
+        # The dependency check proves the formulas do not refer to a modified
+        # sheet. Formula caches on every other sheet retain their coordinates;
+        # the normal cache restoration path can therefore preserve them.
+        return None
+
+    if not formulas:
+        return None
+
+    if any(
+        operation.get("operation") not in ("set_cell_value", "set_formula_text")
+        for operation in operations
+        if operation.get("operation")
+        in ("set_cell_value", "set_formula_text", "delete_rows", "insert_rows", "copy_range", "import_range")
+    ):
+        remaining = _uncovered_formula_cache_cells(path, operations)
+        if remaining:
+            return "formula-sensitive row/range operations cannot be proven independent of {} saved formula cache(s)".format(
+                len(remaining)
+            )
+        return None
+
+    writes = []
+    for operation in operations:
+        if operation.get("operation") not in ("set_cell_value", "set_formula_text"):
+            continue
+        sheet = operation.get("sheet")
+        address = operation.get("cell")
+        if not isinstance(sheet, str) or not isinstance(address, str):
+            return "a formula-sensitive cell write has no valid sheet/cell location"
+        try:
+            row, column = coordinate_to_tuple(address.replace("$", "").upper())
+        except ValueError:
+            return "a formula-sensitive cell write has an invalid address: " + address
+        writes.append((sheet, row, column))
+
+    needs_dynamic_values = any(
+        "INDIRECT(" in formula.upper() or "OFFSET(" in formula.upper()
+        for formula in formulas.values()
+    )
+    cached_workbook = None
+    if needs_dynamic_values:
+        try:
+            import openpyxl
+            cached_workbook = openpyxl.load_workbook(
+                str(path), read_only=True, data_only=True, keep_links=True
+            )
+        except Exception as error:
+            return "could not inspect saved values used by dynamic formula references: " + str(error)
+    try:
+        for (formula_sheet, formula_address), formula in formulas.items():
+            if _formula_cache_destination(formula_sheet, formula_address, operations) is None:
+                continue
+            if cached_workbook is None:
+                # Pass a sentinel for formulas that contain no supported dynamic
+                # reference; the direct-reference tokenizer does not use it.
+                class EmptyWorkbook:
+                    sheetnames: List[str] = []
+                dependency_context: Any = EmptyWorkbook()
+            else:
+                dependency_context = cached_workbook
+            dependencies = _formula_dependencies(
+                formula_sheet, formula_address, formula, dependency_context
+            )
+            if dependencies is None:
+                return "cannot prove whether cached formula {}!{} depends on the planned writes".format(
+                    formula_sheet, formula_address
+                )
+            for write_sheet, write_row, write_column in writes:
+                for dependency_sheet, min_row, max_row, min_column, max_column in dependencies:
+                    if (
+                        write_sheet == dependency_sheet
+                        and min_row <= write_row <= max_row
+                        and min_column <= write_column <= max_column
+                    ):
+                        return "cached formula {}!{} depends on planned write {}!{}".format(
+                            formula_sheet,
+                            formula_address,
+                            write_sheet,
+                            _format_cell_address(write_row, write_column),
+                        )
+    finally:
+        if cached_workbook is not None:
+            cached_workbook.close()
+    return None
+
+
+def _row_delete_formula_dependency_conflict(
+    path: Path, operations: List[Dict[str, Any]]
+) -> Optional[str]:
+    """Allow row deletion only when all formula/name dependencies are provably unrelated.
+
+    Openpyxl does not rewrite arbitrary formulas and defined names when rows are
+    deleted. This narrow path therefore rejects formulas on edited sheets,
+    cross-sheet references into edited sheets, dynamic/unknown references, and
+    names whose dependencies cannot be resolved. Unrelated formula caches can
+    then be restored at their original coordinates after the save.
+    """
+    modified_sheets = set()
+    for operation in operations:
+        sheet = operation.get("sheet")
+        if not isinstance(sheet, str) or not sheet:
+            return "a row deletion has no valid worksheet name"
+        modified_sheets.add(sheet.casefold())
+
+    formula_texts = _all_formula_texts(path)
+    if any(sheet.casefold() in modified_sheets for sheet, _ in formula_texts):
+        return "row deletion is not allowed on a worksheet that contains formulas"
+
+    class EmptyWorkbook:
+        sheetnames: List[str] = []
+
+    for (formula_sheet, address), formula in formula_texts.items():
+        upper = formula.upper()
+        if "INDIRECT(" in upper or "OFFSET(" in upper:
+            return "cannot prove row deletion is independent of a dynamic formula reference"
+        if not formula.strip():
+            return "cannot resolve a shared or empty formula while checking row-deletion dependencies"
+        dependencies = _formula_dependencies(
+            formula_sheet, address, formula, EmptyWorkbook()
+        )
+        if dependencies is None:
+            return "cannot prove whether formula {}!{} depends on a worksheet being edited".format(
+                formula_sheet, address
+            )
+        for dependency in dependencies:
+            if dependency[0].casefold() in modified_sheets:
+                return "formula {}!{} depends on a worksheet being edited".format(
+                    formula_sheet, address
+                )
+
+    try:
+        import openpyxl
+        workbook = openpyxl.load_workbook(
+            str(path), read_only=True, data_only=True, keep_links=True
+        )
+    except Exception as error:
+        return "could not inspect defined names before row deletion: " + str(error)
+    try:
+        for defined_name in workbook.defined_names.values():
+            reference = getattr(defined_name, "attr_text", None)
+            if not isinstance(reference, str) or not reference.strip():
+                continue
+            scope_index = getattr(defined_name, "localSheetId", None)
+            if isinstance(scope_index, int) and 0 <= scope_index < len(workbook.sheetnames):
+                formula_sheet = workbook.sheetnames[scope_index]
+            elif workbook.sheetnames:
+                formula_sheet = workbook.sheetnames[0]
+            else:
+                return "cannot resolve the scope of a defined name before row deletion"
+            if "INDIRECT(" in reference.upper() or "OFFSET(" in reference.upper():
+                return "cannot prove row deletion is independent of a dynamic defined name"
+            dependencies = _formula_dependencies(
+                formula_sheet, "A1", reference.lstrip("="), EmptyWorkbook()
+            )
+            if dependencies is None:
+                return "cannot prove whether defined name {!r} depends on a worksheet being edited".format(
+                    getattr(defined_name, "name", "<unnamed>")
+                )
+            for dependency in dependencies:
+                if dependency[0].casefold() in modified_sheets:
+                    return "defined name {!r} depends on a worksheet being edited".format(
+                        getattr(defined_name, "name", "<unnamed>")
+                    )
+    finally:
+        workbook.close()
+    return None
+
+
+def _restore_formula_cache_cell(
+    worksheet_xml: bytes, address: str, cell_type: Optional[str], cached_value: str
+) -> bytes:
+    escaped_address = re.escape(address.encode("ascii"))
+    cell_pattern = re.compile(
+        rb"<c\b(?=[^>]*\br=[\"']" + escaped_address + rb"[\"'])[^>]*>.*?</c>",
+        re.DOTALL,
+    )
+    matches = list(cell_pattern.finditer(worksheet_xml))
+    if len(matches) != 1:
+        raise WorkerError(
+            "formula_cache_restore_failed",
+            "could not uniquely locate formula cache cell " + address,
+        )
+    match = matches[0]
+    cell_xml = match.group(0)
+    if re.search(rb"<f(?:\s|>)", cell_xml) is None:
+        raise WorkerError(
+            "formula_cache_restore_failed",
+            "formula cell is missing after openpyxl save: " + address,
+        )
+    opening = re.match(rb"<c\b[^>]*>", cell_xml)
+    if opening is None:
+        raise WorkerError("formula_cache_restore_failed", "invalid formula cell " + address)
+    start_tag = opening.group(0)
+    type_pattern = re.compile(rb'\s+t="[^"]*"')
+    if cell_type is None:
+        start_tag = type_pattern.sub(b"", start_tag)
+    elif type_pattern.search(start_tag):
+        start_tag = type_pattern.sub(b' t="' + cell_type.encode("ascii") + b'"', start_tag, count=1)
+    else:
+        start_tag = start_tag[:-1] + b' t="' + cell_type.encode("ascii") + b'">'
+    cell_xml = start_tag + cell_xml[opening.end():]
+
+    from xml.sax.saxutils import escape
+
+    escaped_value = escape(cached_value).encode("utf-8")
+    value_pattern = re.compile(rb"<v(?:\s[^>]*)?>(.*?)</v>", re.DOTALL)
+    if value_pattern.search(cell_xml):
+        cell_xml = value_pattern.sub(
+            lambda value_match: value_match.group(0)[: value_match.start(1) - value_match.start(0)]
+            + escaped_value
+            + value_match.group(0)[value_match.end(1) - value_match.start(0) :],
+            cell_xml,
+            count=1,
+        )
+    else:
+        empty_value_pattern = re.compile(rb"<v(?:\s[^>]*)?\s*/>")
+        if empty_value_pattern.search(cell_xml):
+            cell_xml = empty_value_pattern.sub(b"<v>" + escaped_value + b"</v>", cell_xml, count=1)
+        else:
+            closing = cell_xml.rfind(b"</c>")
+            if closing < 0:
+                raise WorkerError(
+                    "formula_cache_restore_failed",
+                    "formula cell has no closing tag: " + address,
+                )
+            cell_xml = cell_xml[:closing] + b"<v>" + escaped_value + b"</v>" + cell_xml[closing:]
+    return worksheet_xml[: match.start()] + cell_xml + worksheet_xml[match.end() :]
+
+
+def _preserve_formula_caches(input_path: Path, output_path: Path, operations: List[Dict[str, Any]]) -> None:
+    cached_values = {}
+    for key, value in _formula_cache_values(input_path).items():
+        destination = _formula_cache_destination(key[0], key[1], operations)
+        if destination is not None:
+            if destination in cached_values:
+                raise WorkerError(
+                    "formula_cache_restore_failed",
+                    "multiple input formula caches map to "
+                    + destination[0]
+                    + "!"
+                    + destination[1],
+                )
+            cached_values[destination] = value
+    if not cached_values:
+        return
+    replacement = output_path.with_name(output_path.name + ".formula-cache.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "formula-cache temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as package:
+            title_to_part = _worksheet_parts_by_title(package)
+            updated_parts: Dict[str, bytes] = {}
+            for (title, address), (cell_type, cached_value) in cached_values.items():
+                part = title_to_part.get(title)
+                if not part or part not in package.namelist():
+                    raise WorkerError(
+                        "formula_cache_restore_failed",
+                        "worksheet is missing after openpyxl save: " + title,
+                    )
+                worksheet_xml = updated_parts.get(part, package.read(part))
+                updated_parts[part] = _restore_formula_cache_cell(
+                    worksheet_xml, address, cell_type, cached_value
+                )
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                target.writestr(item, updated_parts.get(item.filename, source.read(item.filename)))
+        os.replace(str(replacement), str(output_path))
+    except WorkerError:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError("save_failed", "could not preserve formula caches: " + str(error))
+
+
+def _column_dimensions_modified(
+    source_sheet: str, operations: List[Dict[str, Any]]
+) -> Tuple[Optional[str], bool]:
+    """Map a source sheet through the edit plan and report planned width edits."""
+    current_sheet = source_sheet
+    for operation in operations:
+        kind = operation.get("operation")
+        if kind == "delete_sheet" and operation.get("name") == current_sheet:
+            return None, False
+        if kind == "rename_sheet" and operation.get("old_name") == current_sheet:
+            current_sheet = operation.get("new_name", current_sheet)
+            continue
+        if kind == "set_column_width" and operation.get("sheet") == current_sheet:
+            return current_sheet, True
+        if (
+            kind == "import_range"
+            and operation.get("target_sheet") == current_sheet
+            and (operation.get("copy_column_widths") or operation.get("copy_all_column_dimensions"))
+        ):
+            return current_sheet, True
+    return current_sheet, False
+
+
+def _column_dimension_fragment(data: bytes) -> Optional[bytes]:
+    prefix = rb"(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)"
+    paired = re.search(
+        rb"<" + prefix + rb"cols\b[^>]*>.*?</(?P=prefix)cols\s*>",
+        data,
+        re.DOTALL,
+    )
+    if paired:
+        return paired.group(0)
+    empty = re.search(rb"<" + prefix + rb"cols\b[^>]*/\s*>", data)
+    return empty.group(0) if empty else None
+
+
+def _restore_unmodified_column_dimensions(
+    input_path: Path, output_path: Path, operations: List[Dict[str, Any]]
+) -> None:
+    """Restore exact OOXML column records where the edit plan does not change widths.
+
+    Openpyxl can serialize a style-less ``<col>`` as an explicit default style
+    index. That changes the source column semantics and can also introduce a
+    style reference unrelated to the requested cell edit. Keep the original
+    ``<cols>`` fragment byte-for-byte on untouched sheets; planned width edits
+    remain under Openpyxl's normal serializer and Rust readback validation.
+    """
+    with zipfile.ZipFile(str(input_path), "r") as original, zipfile.ZipFile(
+        str(output_path), "r"
+    ) as candidate:
+        original_parts = _worksheet_parts_by_title(original)
+        candidate_parts = _worksheet_parts_by_title(candidate)
+        updates: Dict[str, bytes] = {}
+        expectations: Dict[str, Optional[bytes]] = {}
+        for source_sheet, source_part in original_parts.items():
+            output_sheet, modified = _column_dimensions_modified(source_sheet, operations)
+            if output_sheet is None or modified:
+                continue
+            output_part = candidate_parts.get(output_sheet)
+            if not output_part or output_part not in candidate.namelist():
+                raise WorkerError(
+                    "column_dimension_restore_failed",
+                    "worksheet is missing after openpyxl save: " + output_sheet,
+                )
+            original_xml = original.read(source_part)
+            output_xml = candidate.read(output_part)
+            expected = _column_dimension_fragment(original_xml)
+            actual = _column_dimension_fragment(output_xml)
+            if expected == actual:
+                continue
+            if actual is not None:
+                match = re.search(
+                    rb"<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)cols\b[^>]*>.*?</(?P=prefix)cols\s*>",
+                    output_xml,
+                    re.DOTALL,
+                )
+                if match is None:
+                    match = re.search(
+                        rb"<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)cols\b[^>]*/\s*>",
+                        output_xml,
+                    )
+                if match is None:
+                    raise WorkerError(
+                        "column_dimension_restore_failed",
+                        "could not locate serialized column dimensions on worksheet " + output_sheet,
+                    )
+                if expected is None:
+                    restored_xml = output_xml[: match.start()] + output_xml[match.end() :]
+                else:
+                    restored_xml = output_xml[: match.start()] + expected + output_xml[match.end() :]
+            elif expected is not None:
+                sheet_data = re.search(
+                    rb"<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheetData\b",
+                    output_xml,
+                )
+                if sheet_data is None:
+                    raise WorkerError(
+                        "column_dimension_restore_failed",
+                        "could not locate sheetData on worksheet " + output_sheet,
+                    )
+                restored_xml = output_xml[: sheet_data.start()] + expected + output_xml[sheet_data.start() :]
+            else:
+                continue
+            updates[output_part] = restored_xml
+            expectations[output_part] = expected
+
+    if not updates:
+        return
+    replacement = output_path.with_name(output_path.name + ".column-dimensions.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "column-dimension temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                target.writestr(item, updates.get(item.filename, source.read(item.filename)))
+        os.replace(str(replacement), str(output_path))
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError("save_failed", "could not restore column dimensions: " + str(error))
+
+    with zipfile.ZipFile(str(output_path), "r") as result:
+        for part, expected in expectations.items():
+            if _column_dimension_fragment(result.read(part)) != expected:
+                raise WorkerError(
+                    "column_dimension_restore_failed",
+                    "column dimensions did not survive package rewrite in " + part,
+                )
+
+
+def _header_footer_fragment(data: bytes) -> Optional[bytes]:
+    prefix = rb"(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)"
+    paired = re.search(
+        rb"<" + prefix + rb"headerFooter\b[^>]*>.*?</(?P=prefix)headerFooter\s*>",
+        data,
+        re.DOTALL,
+    )
+    if paired:
+        return paired.group(0)
+    empty = re.search(rb"<" + prefix + rb"headerFooter\b[^>]*/\s*>", data)
+    return empty.group(0) if empty else None
+
+
+def _header_footer_target(
+    source_sheet: str, operations: List[Dict[str, Any]]
+) -> Tuple[Optional[str], List[Tuple[str, str]]]:
+    """Resolve a source sheet through the edit plan and collect its text edits."""
+    current_sheet = source_sheet
+    replacements: List[Tuple[str, str]] = []
+    for operation in operations:
+        kind = operation.get("operation")
+        if kind == "rename_sheet" and operation.get("old_name") == current_sheet:
+            current_sheet = operation.get("new_name", current_sheet)
+        elif kind == "delete_sheet" and operation.get("name") == current_sheet:
+            return None, []
+        elif (
+            kind == "set_page_settings"
+            and operation.get("sheet") == current_sheet
+            and operation.get("settings", {}).get("footer") is not None
+        ):
+            # This operation explicitly replaces the odd footer through
+            # Openpyxl; keep its requested value instead of restoring source XML.
+            return None, []
+        elif kind == "replace_header_text" and operation.get("sheet") == current_sheet:
+            replacements.append((operation.get("search", ""), operation.get("replacement", "")))
+    return current_sheet, replacements
+
+
+def _replace_header_footer_fragment(
+    worksheet_xml: bytes,
+    fragment: Optional[bytes],
+    output_sheet: str,
+) -> bytes:
+    prefix = rb"(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)"
+    match = re.search(
+        rb"<" + prefix + rb"headerFooter\b[^>]*>.*?</(?P=prefix)headerFooter\s*>",
+        worksheet_xml,
+        re.DOTALL,
+    )
+    if match is None:
+        match = re.search(rb"<" + prefix + rb"headerFooter\b[^>]*/\s*>", worksheet_xml)
+    if match is not None:
+        if fragment is None:
+            return worksheet_xml[: match.start()] + worksheet_xml[match.end() :]
+        return worksheet_xml[: match.start()] + fragment + worksheet_xml[match.end() :]
+    if fragment is None:
+        return worksheet_xml
+
+    # In SpreadsheetML headerFooter follows page settings and precedes row/column
+    # breaks and extension records. Insert before the first later optional part.
+    insertion = re.search(
+        rb"<(?:[A-Za-z_][\w.-]*:)?(?:rowBreaks|colBreaks|extLst)\b",
+        worksheet_xml,
+    )
+    if insertion is None:
+        closing = re.search(rb"</(?:[A-Za-z_][\w.-]*:)?worksheet\s*>", worksheet_xml)
+        if closing is None:
+            raise WorkerError(
+                "header_footer_restore_failed",
+                "could not locate worksheet end for " + output_sheet,
+            )
+        position = closing.start()
+    else:
+        position = insertion.start()
+    return worksheet_xml[:position] + fragment + worksheet_xml[position:]
+
+
+def _replace_header_text_in_fragment(
+    fragment: bytes, search: str, replacement: str
+) -> bytes:
+    """Replace a phrase in odd/even/first headers, leaving all footers intact."""
+    if not search:
+        return fragment
+    pattern = re.compile(
+        rb"(?P<open><(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)"
+        rb"(?P<tag>oddHeader|evenHeader|firstHeader)\b[^>]*>)"
+        rb"(?P<text>.*?)"
+        rb"(?P<close></(?P=prefix)(?P=tag)\s*>)",
+        re.DOTALL,
+    )
+
+    def xml_character_pattern(character: str) -> bytes:
+        """Match a character in literal or numeric-reference XML form."""
+        literal = re.escape(xml_escape(character).encode("utf-8"))
+        decimal = b"&#0*" + str(ord(character)).encode("ascii") + b";"
+        hexadecimal = "".join(
+            "[{}{}]".format(digit.lower(), digit.upper())
+            if digit.isalpha()
+            else digit
+            for digit in format(ord(character), "x")
+        ).encode("ascii")
+        hexadecimal = b"&#[xX]0*" + hexadecimal + b";"
+        return b"(?:" + literal + b"|" + decimal + b"|" + hexadecimal + b")"
+
+    search_pattern = re.compile(
+        b"".join(xml_character_pattern(character) for character in search),
+        re.DOTALL,
+    )
+    replacement_bytes = xml_escape(replacement).encode("utf-8")
+
+    def replace_match(match: "re.Match[bytes]") -> bytes:
+        return (
+            match.group("open")
+            + search_pattern.sub(lambda _: replacement_bytes, match.group("text"))
+            + match.group("close")
+        )
+
+    return pattern.sub(replace_match, fragment)
+
+
+def _restore_header_footer_settings(
+    input_path: Path, output_path: Path, operations: List[Dict[str, Any]]
+) -> None:
+    """Restore exact header/footer OOXML, applying only planned text replacements.
+
+    Openpyxl encodes line feeds differently and materializes empty even/first
+    headers and footers. Keep the source markup (including whitespace and
+    xml:space) and patch only requested text, so unrelated worksheet headers
+    and footers remain intact.
+    """
+    with zipfile.ZipFile(str(input_path), "r") as original, zipfile.ZipFile(
+        str(output_path), "r"
+    ) as candidate:
+        original_parts = _worksheet_parts_by_title(original)
+        candidate_parts = _worksheet_parts_by_title(candidate)
+        updates: Dict[str, bytes] = {}
+        expectations: Dict[str, Optional[bytes]] = {}
+        for source_sheet, source_part in original_parts.items():
+            output_sheet, replacements = _header_footer_target(source_sheet, operations)
+            if output_sheet is None:
+                continue
+            output_part = candidate_parts.get(output_sheet)
+            if not output_part or output_part not in candidate.namelist():
+                raise WorkerError(
+                    "header_footer_restore_failed",
+                    "worksheet is missing after openpyxl save: " + output_sheet,
+                )
+            source_xml = original.read(source_part)
+            output_xml = candidate.read(output_part)
+            expected = _header_footer_fragment(source_xml)
+            if expected is not None:
+                for search, replacement in replacements:
+                    expected = _replace_header_text_in_fragment(expected, search, replacement)
+            restored_xml = _replace_header_footer_fragment(output_xml, expected, output_sheet)
+            if restored_xml != output_xml:
+                updates[output_part] = restored_xml
+                expectations[output_part] = expected
+
+    if not updates:
+        return
+    replacement = output_path.with_name(output_path.name + ".header-footers.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "header/footer temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                target.writestr(item, updates.get(item.filename, source.read(item.filename)))
+        os.replace(str(replacement), str(output_path))
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        if isinstance(error, WorkerError):
+            raise
+        raise WorkerError("save_failed", "could not restore header/footer settings: " + str(error))
+
+    with zipfile.ZipFile(str(output_path), "r") as result:
+        for part, expected in expectations.items():
+            if _header_footer_fragment(result.read(part)) != expected:
+                raise WorkerError(
+                    "header_footer_restore_failed",
+                    "header/footer settings did not survive package rewrite in " + part,
+                )
+
+
+def _restore_calculation_chain(
+    input_path: Path, output_path: Path, operations: List[Dict[str, Any]]
+) -> None:
+    """Keep calcChain only when edits cannot stale formula results or dependencies.
+
+    Any cell-value write may affect formula precedents, so Openpyxl's removed
+    calculation chain must stay removed for those plans.
+    """
+    safe_operations = {
+        "set_comment",
+        "set_column_width",
+        "set_row_height",
+        "set_cell_fill_color",
+        "set_page_settings",
+        "set_freeze_panes",
+        "set_auto_filter",
+        "replace_header_text",
+        "set_workbook_calculation_properties",
+    }
+    if any(operation.get("operation") not in safe_operations for operation in operations):
+        return
+    formula_cells = set()
+    with zipfile.ZipFile(str(input_path), "r") as original:
+        for title, part in _worksheet_parts_by_title(original).items():
+            if part not in original.namelist():
+                continue
+            worksheet = ElementTree.fromstring(original.read(part))
+            for cell in worksheet.iter(
+                "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c"
+            ):
+                address = cell.attrib.get("r")
+                if address and cell.find(
+                    "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}f"
+                ) is not None:
+                    formula_cells.add((title, address.replace("$", "").upper()))
+    for operation in operations:
+        if operation.get("operation") == "set_cell_value":
+            address = operation.get("cell", "").replace("$", "").upper()
+            if (operation.get("sheet", ""), address) in formula_cells:
+                return
+
+    relationship_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    content_types_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+    calc_chain_type = (
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"
+    )
+    with zipfile.ZipFile(str(input_path), "r") as original:
+        names = set(original.namelist())
+        if "xl/_rels/workbook.xml.rels" not in names or "[Content_Types].xml" not in names:
+            return
+        original_relationships_xml = original.read("xl/_rels/workbook.xml.rels")
+        original_relationships = ElementTree.fromstring(original_relationships_xml)
+        source_relationships = [
+            relationship
+            for relationship in original_relationships.findall(
+                "{%s}Relationship" % relationship_ns
+            )
+            if relationship.attrib.get("Type") == calc_chain_type
+        ]
+        if not source_relationships:
+            return
+        if len(source_relationships) != 1:
+            raise WorkerError(
+                "calculation_chain_restore_failed",
+                "source workbook has multiple calculation-chain relationships",
+            )
+        source_relationship = source_relationships[0]
+        target = source_relationship.attrib.get("Target", "")
+        calc_chain_part = posixpath.normpath(
+            target.lstrip("/") if target.startswith("/") else posixpath.join("xl", target)
+        )
+        if calc_chain_part not in names:
+            raise WorkerError(
+                "calculation_chain_restore_failed",
+                "calculation-chain relationship points to a missing package part",
+            )
+        calc_chain_xml = original.read(calc_chain_part)
+        original_content_types = ElementTree.fromstring(original.read("[Content_Types].xml"))
+        source_overrides = [
+            override
+            for override in original_content_types.findall("{%s}Override" % content_types_ns)
+            if override.attrib.get("PartName") == "/" + calc_chain_part
+        ]
+        if len(source_overrides) != 1:
+            raise WorkerError(
+                "calculation_chain_restore_failed",
+                "calculation-chain package part has no unique content type override",
+            )
+        source_content_type = source_overrides[0]
+
+    updates: Dict[str, bytes] = {calc_chain_part: calc_chain_xml}
+    additions: Dict[str, bytes] = {}
+    with zipfile.ZipFile(str(output_path), "r") as candidate:
+        output_names = set(candidate.namelist())
+        output_relationships = ElementTree.fromstring(candidate.read("xl/_rels/workbook.xml.rels"))
+        existing_calc_chain = [
+            relationship
+            for relationship in output_relationships.findall(
+                "{%s}Relationship" % relationship_ns
+            )
+            if relationship.attrib.get("Type") == calc_chain_type
+        ]
+        if existing_calc_chain:
+            if len(existing_calc_chain) != 1 or existing_calc_chain[0].attrib.get("Target") != target:
+                raise WorkerError(
+                    "calculation_chain_restore_failed",
+                    "saved calculation-chain relationship conflicts with the source package",
+                )
+        else:
+            source_id = source_relationship.attrib.get("Id", "")
+            if not source_id or any(
+                relationship.attrib.get("Id") == source_id
+                for relationship in output_relationships.findall(
+                    "{%s}Relationship" % relationship_ns
+                )
+            ):
+                raise WorkerError(
+                    "calculation_chain_restore_failed",
+                    "source calculation-chain relationship id is already in use",
+                )
+            relationship = ElementTree.Element("{%s}Relationship" % relationship_ns)
+            relationship.attrib.update(source_relationship.attrib)
+            output_relationships.append(relationship)
+        ElementTree.register_namespace("", relationship_ns)
+        updates["xl/_rels/workbook.xml.rels"] = ElementTree.tostring(
+            output_relationships, encoding="utf-8", xml_declaration=True
+        )
+
+        output_content_types = ElementTree.fromstring(candidate.read("[Content_Types].xml"))
+        existing_overrides = [
+            override
+            for override in output_content_types.findall("{%s}Override" % content_types_ns)
+            if override.attrib.get("PartName") == "/" + calc_chain_part
+        ]
+        if existing_overrides:
+            if len(existing_overrides) != 1 or existing_overrides[0].attrib.get("ContentType") != source_content_type.attrib.get("ContentType"):
+                raise WorkerError(
+                    "calculation_chain_restore_failed",
+                    "saved calculation-chain content type conflicts with the source package",
+                )
+        else:
+            override = ElementTree.Element("{%s}Override" % content_types_ns)
+            override.attrib.update(source_content_type.attrib)
+            output_content_types.append(override)
+        ElementTree.register_namespace("", content_types_ns)
+        updates["[Content_Types].xml"] = ElementTree.tostring(
+            output_content_types, encoding="utf-8", xml_declaration=True
+        )
+        if calc_chain_part in output_names:
+            if candidate.read(calc_chain_part) != calc_chain_xml:
+                updates[calc_chain_part] = calc_chain_xml
+        else:
+            additions[calc_chain_part] = calc_chain_xml
+
+    replacement = output_path.with_name(output_path.name + ".calc-chain.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "calculation-chain temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target_package:
+            for item in source.infolist():
+                target_package.writestr(
+                    item, updates.get(item.filename, source.read(item.filename))
+                )
+            for part_name, data in additions.items():
+                target_package.writestr(part_name, data, compress_type=zipfile.ZIP_DEFLATED)
+        os.replace(str(replacement), str(output_path))
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError("save_failed", "could not restore calculation chain: " + str(error))
+
+    with zipfile.ZipFile(str(output_path), "r") as result:
+        relationships = ElementTree.fromstring(result.read("xl/_rels/workbook.xml.rels"))
+        if not any(
+            relationship.attrib.get("Type") == calc_chain_type
+            and relationship.attrib.get("Target") == target
+            for relationship in relationships.findall("{%s}Relationship" % relationship_ns)
+        ):
+            raise WorkerError(
+                "calculation_chain_restore_failed",
+                "calculation-chain relationship did not survive package rewrite",
+            )
+        if result.read(calc_chain_part) != calc_chain_xml:
+            raise WorkerError(
+                "calculation_chain_restore_failed",
+                "calculation-chain XML did not survive package rewrite",
+            )
+
+
+def _restore_planned_empty_strings(
+    output_path: Path,
+    operations: List[Dict[str, Any]],
+) -> None:
+    """Keep explicit empty text writes as inline strings after Openpyxl saves.
+
+    Openpyxl reloads an empty inline string as ``None``. The OOXML marker still
+    distinguishes an explicit empty string from a truly blank cell, which can
+    matter to formulas such as COUNTA and ISBLANK.
+    """
+    cells: Dict[Tuple[str, str], bool] = {}
+    for operation in operations:
+        kind = operation.get("operation")
+        if kind in ("delete_rows", "insert_rows", "copy_range", "import_range"):
+            # These operations can move or replace cell coordinates. Leave the
+            # package under the normal operation verifier instead of restoring
+            # an empty-string marker at a potentially stale address.
+            return
+        if kind == "set_cell_value":
+            value = operation.get("value", {})
+            key = (
+                operation.get("sheet", ""),
+                operation.get("cell", "").replace("$", "").upper(),
+            )
+            cells[key] = value.get("type") == "text" and value.get("value") == ""
+        elif kind == "set_formula_text":
+            cells.pop(
+                (
+                    operation.get("sheet", ""),
+                    operation.get("cell", "").replace("$", "").upper(),
+                ),
+                None,
+            )
+        elif kind == "rename_sheet":
+            old_name = operation.get("old_name", "")
+            new_name = operation.get("new_name", "")
+            renamed = {
+                (new_name if sheet == old_name else sheet, address): empty
+                for (sheet, address), empty in cells.items()
+            }
+            cells = renamed
+        elif kind == "delete_sheet":
+            deleted_name = operation.get("name", "")
+            cells = {
+                key: empty for key, empty in cells.items() if key[0] != deleted_name
+            }
+    targets: Dict[str, Set[str]] = {}
+    for (sheet, address), is_empty in cells.items():
+        if is_empty:
+            targets.setdefault(sheet, set()).add(address)
+    if not targets:
+        return
+
+    def set_empty_inline_string(xml_data: bytes, address: str) -> bytes:
+        coordinate = re.escape(address.encode("ascii"))
+        pattern = re.compile(
+            rb"<c\b(?=[^>]*\br=(?:\""
+            + coordinate
+            + rb"\"|'"
+            + coordinate
+            + rb"'))[^>]*?(?:/>|>.*?</(?:[A-Za-z_][\w.-]*:)?c>)",
+            re.DOTALL,
+        )
+        matches = list(pattern.finditer(xml_data))
+        if len(matches) != 1:
+            raise WorkerError(
+                "empty_string_restore_failed",
+                "could not uniquely locate empty-text cell " + address,
+            )
+        match = matches[0]
+        element = match.group(0)
+        opening_end = element.find(b">") + 1
+        if opening_end == 0:
+            raise WorkerError(
+                "empty_string_restore_failed", "invalid cell XML at " + address
+            )
+        opening = element[:opening_end]
+        self_closing = opening.rstrip().endswith(b"/>")
+        if self_closing:
+            opening = opening.rstrip()[:-2] + b">"
+        opening = re.sub(
+            rb"\s+t=(?:\"[^\"]*\"|'[^']*')", b"", opening, count=1
+        )
+        opening = opening[:-1] + b' t="inlineStr">'
+        tag_match = re.match(rb"<(?P<tag>(?:[A-Za-z_][\w.-]*:)?c)\b", opening)
+        if tag_match is None:
+            raise WorkerError(
+                "empty_string_restore_failed", "invalid cell element at " + address
+            )
+        closing_tag = b"</" + tag_match.group("tag") + b">"
+        content = b"" if self_closing else element[opening_end:]
+        if not self_closing:
+            closing_start = content.rfind(closing_tag)
+            if closing_start < 0:
+                raise WorkerError(
+                    "empty_string_restore_failed",
+                    "cell closing tag is missing at " + address,
+                )
+            content = content[:closing_start]
+            content = re.sub(
+                rb"<(?:[A-Za-z_][\w.-]*:)?(?:is|v)\b[^>]*/>|"
+                rb"<(?:[A-Za-z_][\w.-]*:)?(?:is|v)\b[^>]*>.*?</(?:[A-Za-z_][\w.-]*:)?(?:is|v)\s*>",
+                b"",
+                content,
+                flags=re.DOTALL,
+            )
+        replacement = opening + b"<is><t></t></is>" + closing_tag
+        return xml_data[:match.start()] + replacement + xml_data[match.end():]
+
+    replacement = output_path.with_name(output_path.name + ".empty-strings.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "empty-string temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as source:
+            title_to_part = _worksheet_parts_by_title(source)
+            updates: Dict[str, bytes] = {}
+            for sheet, addresses in targets.items():
+                part = title_to_part.get(sheet)
+                if part is None or part not in source.namelist():
+                    raise WorkerError(
+                        "empty_string_restore_failed",
+                        "worksheet is missing for empty-text writes: " + sheet,
+                    )
+                xml_data = source.read(part)
+                for address in addresses:
+                    xml_data = set_empty_inline_string(xml_data, address)
+                updates[part] = xml_data
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                target.writestr(item, updates.get(item.filename, source.read(item.filename)))
+        os.replace(str(replacement), str(output_path))
+    except WorkerError:
+        raise
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError(
+            "save_failed", "could not restore explicit empty strings: " + str(error)
+        )
+
+    with zipfile.ZipFile(str(output_path), "r") as result:
+        for sheet, addresses in targets.items():
+            part = _worksheet_parts_by_title(result).get(sheet)
+            if part is None:
+                raise WorkerError(
+                    "empty_string_restore_failed",
+                    "worksheet disappeared while restoring empty text: " + sheet,
+                )
+            root = ElementTree.fromstring(result.read(part))
+            cells_by_address = {
+                cell.attrib.get("r", "").replace("$", "").upper(): cell
+                for cell in root.iter(
+                    "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c"
+                )
+            }
+            for address in addresses:
+                cell = cells_by_address.get(address)
+                if cell is None or cell.attrib.get("t") != "inlineStr":
+                    raise WorkerError(
+                        "empty_string_restore_failed",
+                        "explicit empty-string marker did not survive at "
+                        + sheet
+                        + "!"
+                        + address,
+                    )
+
+
+def _metadata_cell_attributes(path: Path) -> Dict[Tuple[str, str], Dict[str, str]]:
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(str(path), "r") as package:
+        result: Dict[Tuple[str, str], Dict[str, str]] = {}
+        for title, part in _worksheet_parts_by_title(package).items():
+            if part not in package.namelist():
+                continue
+            root = ElementTree.fromstring(package.read(part))
+            for cell in root.iter("{%s}c" % main_ns):
+                attributes = {
+                    name: cell.attrib[name]
+                    for name in ("cm", "vm", "ph")
+                    if name in cell.attrib
+                }
+                address = cell.attrib.get("r")
+                if address and attributes:
+                    result[(title, address.replace("$", "").upper())] = attributes
+        return result
+
+
+def _workbook_root_extension(data: bytes) -> Optional[bytes]:
+    match = re.search(
+        rb"<(?P<name>(?:[A-Za-z_][\w.-]*:)?extLst)\b.*?</(?P=name)\s*>",
+        data,
+        re.DOTALL,
+    )
+    return match.group(0) if match else None
+
+
+def _restore_workbook_root_extensions(original: bytes, output: bytes) -> bytes:
+    original_root = re.search(rb"<workbook\b[^>]*>", original)
+    output_root = re.search(rb"<workbook\b[^>]*>", output)
+    if original_root is None or output_root is None:
+        raise WorkerError("metadata_restore_failed", "could not locate workbook XML root")
+
+    original_attrs = re.findall(
+        rb"\s+(?P<name>xmlns(?::[A-Za-z_][\w.-]*)?|mc:Ignorable)=(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+        original_root.group(0),
+    )
+    root_text = output_root.group(0)
+    additions = []
+    for name, _quote, value in original_attrs:
+        name_pattern = re.escape(name) + rb"=(?:[\"'])(.*?)(?:[\"'])"
+        existing = re.search(name_pattern, root_text)
+        if existing:
+            current_value = existing.group(1)
+            if name == b"mc:Ignorable":
+                merged = list(dict.fromkeys(current_value.split() + value.split()))
+                replacement = b" ".join(merged)
+                if replacement != current_value:
+                    root_text = re.sub(
+                        name_pattern,
+                        name + b'="' + replacement + b'"',
+                        root_text,
+                        count=1,
+                    )
+            elif current_value != value:
+                raise WorkerError(
+                    "metadata_restore_failed",
+                    "workbook namespace prefix conflicts with the source package: " + name.decode("ascii"),
+                )
+        else:
+            additions.append(b" " + name + b'="' + value + b'"')
+    if additions:
+        root_text = root_text[:-1] + b"".join(additions) + b">"
+    output = output[: output_root.start()] + root_text + output[output_root.end() :]
+
+    original_extension = _workbook_root_extension(original)
+    output_extension_match = re.search(
+        rb"<(?P<name>(?:[A-Za-z_][\w.-]*:)?extLst)\b.*?</(?P=name)\s*>",
+        output,
+        re.DOTALL,
+    )
+    if output_extension_match:
+        output = (
+            output[: output_extension_match.start()]
+            + (original_extension or b"")
+            + output[output_extension_match.end() :]
+        )
+    elif original_extension:
+        closing = re.search(rb"</workbook\s*>", output)
+        if closing is None:
+            raise WorkerError("metadata_restore_failed", "could not locate workbook XML closing tag")
+        output = output[: closing.start()] + original_extension + output[closing.start() :]
+    return output
+
+
+def _restore_cell_metadata_attributes(data: bytes, address: str, attributes: Dict[str, str]) -> bytes:
+    encoded_address = re.escape(address.encode("ascii"))
+    pattern = re.compile(
+        rb"<c\b(?=[^>]*\br=[\"']" + encoded_address + rb"[\"'])[^>]*>",
+        re.DOTALL,
+    )
+    matches = list(pattern.finditer(data))
+    if len(matches) != 1:
+        raise WorkerError(
+            "metadata_restore_failed",
+            "could not uniquely locate cell-metadata cell " + address,
+        )
+    match = matches[0]
+    start_tag = match.group(0)
+    for name, value in attributes.items():
+        if not value.isdigit():
+            raise WorkerError("metadata_restore_failed", "cell metadata index is not numeric")
+        attribute = name.encode("ascii")
+        attribute_pattern = re.compile(rb"\s+" + attribute + rb"=[\"'][^\"']*[\"']")
+        replacement = b" " + attribute + b'="' + value.encode("ascii") + b'"'
+        if attribute_pattern.search(start_tag):
+            start_tag = attribute_pattern.sub(replacement, start_tag, count=1)
+        else:
+            insertion = start_tag.rfind(b"/>")
+            if insertion < 0:
+                insertion = start_tag.rfind(b">")
+            if insertion < 0:
+                raise WorkerError("metadata_restore_failed", "invalid cell XML start tag")
+            start_tag = start_tag[:insertion] + replacement + start_tag[insertion:]
+    return data[: match.start()] + start_tag + data[match.end() :]
+
+
+def _restore_cell_metadata_package_parts(
+    input_path: Path,
+    output_path: Path,
+    operations: List[Dict[str, Any]],
+) -> None:
+    metadata_part = "xl/metadata.xml"
+    workbook_part = "xl/workbook.xml"
+    relationships_part = "xl/_rels/workbook.xml.rels"
+    content_types_part = "[Content_Types].xml"
+    relationship_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    content_types_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+    sheet_metadata_type = (
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"
+    )
+    sheet_metadata_content_type = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"
+    )
+
+    with zipfile.ZipFile(str(input_path), "r") as original:
+        original_names = set(original.namelist())
+        if metadata_part not in original_names:
+            return
+        metadata_bytes = original.read(metadata_part)
+        original_workbook_xml = original.read(workbook_part)
+        original_relationships_xml = original.read(relationships_part)
+        original_content_types_xml = original.read(content_types_part)
+        original_relationships = ElementTree.fromstring(original_relationships_xml)
+        original_metadata_relationships = [
+            relationship
+            for relationship in original_relationships.findall("{%s}Relationship" % relationship_ns)
+            if relationship.attrib.get("Type") == sheet_metadata_type
+        ]
+        if len(original_metadata_relationships) != 1:
+            raise WorkerError(
+                "metadata_restore_failed",
+                "cell metadata part does not have exactly one workbook relationship",
+            )
+        original_metadata_relationship = original_metadata_relationships[0]
+        target = original_metadata_relationship.attrib.get("Target", "")
+        resolved_target = posixpath.normpath(
+            target.lstrip("/") if target.startswith("/") else posixpath.join("xl", target)
+        )
+        if resolved_target != metadata_part:
+            raise WorkerError(
+                "metadata_restore_failed",
+                "unsupported cell metadata package target: " + target,
+                unsupported=True,
+            )
+
+        original_content_types = ElementTree.fromstring(original_content_types_xml)
+        metadata_overrides = [
+            item
+            for item in original_content_types.findall("{%s}Override" % content_types_ns)
+            if item.attrib.get("PartName") == "/xl/metadata.xml"
+        ]
+        if len(metadata_overrides) != 1 or metadata_overrides[0].attrib.get("ContentType") != sheet_metadata_content_type:
+            raise WorkerError(
+                "metadata_restore_failed",
+                "cell metadata part has an unexpected content type",
+            )
+        expected_cell_attributes = _metadata_cell_attributes(input_path)
+
+    updates: Dict[str, bytes] = {}
+    additions: Dict[str, bytes] = {}
+    with zipfile.ZipFile(str(output_path), "r") as candidate:
+        output_names = set(candidate.namelist())
+        output_sheet_parts = _worksheet_parts_by_title(candidate)
+        output_relationships = ElementTree.fromstring(candidate.read(relationships_part))
+        existing_metadata_relationship = next(
+            (
+                relationship
+                for relationship in output_relationships.findall("{%s}Relationship" % relationship_ns)
+                if relationship.attrib.get("Type") == sheet_metadata_type
+            ),
+            None,
+        )
+        if existing_metadata_relationship is None:
+            source_relationship = original_metadata_relationship
+            used_ids = {
+                relationship.attrib.get("Id", "")
+                for relationship in output_relationships.findall("{%s}Relationship" % relationship_ns)
+            }
+            source_id = source_relationship.attrib.get("Id", "")
+            if source_id and source_id not in used_ids:
+                relationship_id = source_id
+            else:
+                sequence = 1
+                while "rId{}".format(sequence) in used_ids:
+                    sequence += 1
+                relationship_id = "rId{}".format(sequence)
+            relationship = ElementTree.Element("{%s}Relationship" % relationship_ns)
+            relationship.attrib.update(source_relationship.attrib)
+            relationship.attrib["Id"] = relationship_id
+            output_relationships.append(relationship)
+        ElementTree.register_namespace("", relationship_ns)
+        updates[relationships_part] = ElementTree.tostring(
+            output_relationships, encoding="utf-8", xml_declaration=True
+        )
+
+        output_content_types = ElementTree.fromstring(candidate.read(content_types_part))
+        if not any(
+            item.attrib.get("PartName") == "/xl/metadata.xml"
+            for item in output_content_types.findall("{%s}Override" % content_types_ns)
+        ):
+            source_override = metadata_overrides[0]
+            override = ElementTree.Element("{%s}Override" % content_types_ns)
+            override.attrib.update(source_override.attrib)
+            output_content_types.append(override)
+        ElementTree.register_namespace("", content_types_ns)
+        updates[content_types_part] = ElementTree.tostring(
+            output_content_types, encoding="utf-8", xml_declaration=True
+        )
+
+        updates[workbook_part] = _restore_workbook_root_extensions(
+            original_workbook_xml, candidate.read(workbook_part)
+        )
+        for (sheet, address), attributes in expected_cell_attributes.items():
+            destination = _formula_cache_destination(sheet, address, operations)
+            if destination is None:
+                continue
+            output_sheet, output_address = destination
+            output_sheet_part = output_sheet_parts.get(output_sheet)
+            if not output_sheet_part or output_sheet_part not in output_names:
+                raise WorkerError(
+                    "metadata_restore_failed",
+                    "worksheet with cell metadata is missing after save: " + output_sheet,
+                )
+            worksheet_xml = updates.get(output_sheet_part, candidate.read(output_sheet_part))
+            updates[output_sheet_part] = _restore_cell_metadata_attributes(
+                worksheet_xml, output_address, attributes
+            )
+        if metadata_part in output_names:
+            updates[metadata_part] = metadata_bytes
+        else:
+            additions[metadata_part] = metadata_bytes
+
+    replacement = output_path.with_name(output_path.name + ".metadata.tmp")
+    if replacement.exists():
+        raise WorkerError("save_failed", "cell-metadata temporary output already exists")
+    try:
+        with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
+            str(replacement), "w"
+        ) as target:
+            for item in source.infolist():
+                target.writestr(item, updates.get(item.filename, source.read(item.filename)))
+            for part_name, data in additions.items():
+                target.writestr(part_name, data, compress_type=zipfile.ZIP_DEFLATED)
+        os.replace(str(replacement), str(output_path))
+    except WorkerError:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise
+    except Exception as error:
+        try:
+            replacement.unlink()
+        except OSError:
+            pass
+        raise WorkerError("save_failed", "could not preserve cell metadata: " + str(error))
+
+    with zipfile.ZipFile(str(output_path), "r") as result:
+        names = set(result.namelist())
+        if metadata_part not in names or result.read(metadata_part) != metadata_bytes:
+            raise WorkerError("metadata_restore_failed", "cell metadata part differs after restore")
+        relationships = ElementTree.fromstring(result.read(relationships_part))
+        if not any(
+            item.attrib.get("Type") == sheet_metadata_type
+            and posixpath.normpath(
+                item.attrib.get("Target", "").lstrip("/")
+                if item.attrib.get("Target", "").startswith("/")
+                else posixpath.join("xl", item.attrib.get("Target", ""))
+            ) == metadata_part
+            for item in relationships.findall("{%s}Relationship" % relationship_ns)
+        ):
+            raise WorkerError("metadata_restore_failed", "cell metadata relationship is missing")
+        content_types = ElementTree.fromstring(result.read(content_types_part))
+        if not any(
+            item.attrib.get("PartName") == "/xl/metadata.xml"
+            and item.attrib.get("ContentType") == sheet_metadata_content_type
+            for item in content_types.findall("{%s}Override" % content_types_ns)
+        ):
+            raise WorkerError("metadata_restore_failed", "cell metadata content type is missing")
+        output_sheet_parts = _worksheet_parts_by_title(result)
+        for (sheet, address), attributes in expected_cell_attributes.items():
+            destination = _formula_cache_destination(sheet, address, operations)
+            if destination is None:
+                continue
+            output_part = output_sheet_parts.get(destination[0])
+            if not output_part or output_part not in names:
+                raise WorkerError("metadata_restore_failed", "cell-metadata worksheet is missing")
+            xml = ElementTree.fromstring(result.read(output_part))
+            cell = xml.find(
+                ".//{%s}c[@r='%s']" % (
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                    destination[1],
+                )
+            )
+            if cell is None or any(cell.attrib.get(name) != value for name, value in attributes.items()):
+                raise WorkerError(
+                    "metadata_restore_failed",
+                    "cell metadata readback mismatch for {}!{}".format(*destination),
+                )
+        original_extension = _workbook_root_extension(original_workbook_xml)
+        if original_extension and original_extension not in result.read(workbook_part):
+            raise WorkerError("metadata_restore_failed", "workbook extension metadata was not restored")
 
 
 def _preflight(request: Dict[str, Any]) -> Tuple[Path, Path, List[Dict[str, Any]]]:
@@ -212,16 +1809,28 @@ def _preflight(request: Dict[str, Any]) -> Tuple[Path, Path, List[Dict[str, Any]
             "openpyxl worker does not support the complete batch: " + ", ".join(unsupported),
             unsupported=True,
         )
+    has_row_shift = any(
+        operation["operation"] in ("delete_rows", "insert_rows")
+        for operation in operations
+    )
+    has_range_copy = any(
+        operation["operation"] in ("copy_range", "import_range")
+        for operation in operations
+    )
+    if has_row_shift and has_range_copy:
+        raise WorkerError(
+            "unsupported_operation",
+            "openpyxl worker cannot combine row insertion/deletion with range copy in one plan",
+            unsupported=True,
+        )
     workbook = plan.get("workbook") or {}
     if not workbook.get("inventory_complete", False):
         raise WorkerError("unknown_package_parts", "OOXML inventory is incomplete", unsupported=True)
-    uncovered_formula_caches = _uncovered_formula_cache_cells(input_path, operations)
-    if uncovered_formula_caches:
+    formula_cache_conflict = _formula_cache_write_conflict(input_path, operations, request_id)
+    if formula_cache_conflict:
         raise WorkerError(
             "formula_cache_not_preserved",
-            "openpyxl would discard {} non-empty formula cache(s) outside explicit value-write operations; use an engine with matching cache evidence".format(
-                len(uncovered_formula_caches)
-            ),
+            formula_cache_conflict,
             unsupported=True,
         )
     for operation in operations:
@@ -239,7 +1848,6 @@ def _cell_value(value: Dict[str, Any]) -> Any:
     if kind == "text":
         return content
     if kind == "decimal":
-        from decimal import Decimal
         return Decimal(str(content))
     if kind == "date_time":
         return Decimal(str(content["serial"]))
@@ -542,7 +2150,15 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
 
     kind = operation["operation"]
     payload = operation
-    if kind == "set_cell_value":
+    if kind == "delete_rows":
+        workbook[payload["sheet"]].delete_rows(
+            int(payload["first_row"]), int(payload["count"])
+        )
+    elif kind == "insert_rows":
+        workbook[payload["sheet"]].insert_rows(
+            int(payload["first_row"]), amount=int(payload["count"])
+        )
+    elif kind == "set_cell_value":
         cell = workbook[payload["sheet"]][payload["cell"]]
         value = _cell_value(payload["value"])
         cell.value = value
@@ -660,8 +2276,7 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
     elif kind == "replace_header_text":
         sheet = workbook[payload["sheet"]]
         search, replacement = payload["search"], payload["replacement"]
-        for collection in (sheet.oddHeader, sheet.evenHeader, sheet.firstHeader,
-                           sheet.oddFooter, sheet.evenFooter, sheet.firstFooter):
+        for collection in (sheet.oddHeader, sheet.evenHeader, sheet.firstHeader):
             for section in (collection.left, collection.center, collection.right):
                 if section.text:
                     section.text = section.text.replace(search, replacement)
@@ -901,6 +2516,44 @@ def _worksheet_parts_by_title(package: zipfile.ZipFile) -> Dict[str, str]:
     return mapping
 
 
+def _raw_numeric_cell_values(
+    path: Path, coordinates: Iterable[Tuple[str, str]]
+) -> Dict[Tuple[str, str], str]:
+    """Read exact numeric OOXML values for cells formatted as dates.
+
+    openpyxl converts a numeric cell with a date number format to a Python
+    datetime when reopening a saved workbook. Comparing that object to the
+    planned Excel serial falsely rejects valid date writes; converting the
+    datetime back can also hide sub-millisecond changes. Compare the stored
+    `<v>` text instead.
+    """
+    requested: Dict[str, Set[str]] = {}
+    for sheet, address in coordinates:
+        requested.setdefault(sheet, set()).add(address.replace("$", "").upper())
+    result: Dict[Tuple[str, str], str] = {}
+    if not requested:
+        return result
+
+    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    with zipfile.ZipFile(str(path), "r") as package:
+        parts = _worksheet_parts_by_title(package)
+        for sheet, addresses in requested.items():
+            part = parts.get(sheet)
+            if part is None or part not in package.namelist():
+                continue
+            root = ElementTree.fromstring(package.read(part))
+            for cell in root.iter("{%s}c" % main_ns):
+                address = cell.attrib.get("r", "").replace("$", "").upper()
+                if address not in addresses:
+                    continue
+                if cell.attrib.get("t") not in (None, "n"):
+                    continue
+                value = cell.find("{%s}v" % main_ns)
+                if value is not None and value.text is not None:
+                    result[(sheet, address)] = value.text
+    return result
+
+
 def _ensure_cells_present(xml_text: str, wanted: Set[str]) -> str:
     """Insert `<c r="..." s="0"/>` elements for tracked coordinates that
     openpyxl's writer skipped (empty value + default style).
@@ -1108,6 +2761,15 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         raise WorkerError("workbook_open_failed", str(error))
     try:
         initial_sheet_names = list(workbook.sheetnames)
+        if _formula_cache_values(input_path) and any(
+            operation.get("operation")
+            in ("set_cell_value", "set_formula_text", "delete_rows", "insert_rows", "copy_range", "import_range")
+            for operation in operations
+        ):
+            # The exact existing caches are restored after save. Also ask
+            # Excel/WPS to refresh formulas whose inputs may have changed.
+            workbook.calculation.fullCalcOnLoad = True
+            workbook.calculation.forceFullCalc = True
         materialized_by_sheet: Dict[int, Set[str]] = {}
         for operation in operations:
             try:
@@ -1135,6 +2797,12 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
     _preserve_significant_string_whitespace(output_path)
     _materialize_tracked_cells(output_path, tracked_cells)
     _materialize_explicit_style_attributes(output_path)
+    _preserve_formula_caches(input_path, output_path, operations)
+    _restore_cell_metadata_package_parts(input_path, output_path, operations)
+    _restore_unmodified_column_dimensions(input_path, output_path, operations)
+    _restore_header_footer_settings(input_path, output_path, operations)
+    _restore_calculation_chain(input_path, output_path, operations)
+    _restore_planned_empty_strings(output_path, operations)
     after_hash = _sha256(input_path)
     if after_hash != before_hash:
         raise WorkerError("source_changed", "worker input changed while applying the edit plan")
@@ -1145,7 +2813,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         verification = openpyxl.load_workbook(str(output_path), read_only=False, data_only=False, keep_links=True)
         if not verification.worksheets:
             raise WorkerError("output_reopen_failed", "saved workbook has no worksheets")
-        _verify_plan(verification, operations, initial_sheet_names)
+        _verify_plan(verification, operations, initial_sheet_names, output_path)
         verification.close()
     except WorkerError:
         raise
@@ -1205,14 +2873,127 @@ def _final_sheet_names(initial_names: List[str], operations: List[Dict[str, Any]
     return expected
 
 
+def _verify_import_dimensions(workbook: Any, operation: Dict[str, Any]) -> None:
+    """Verify the row/column dimensions copied by an ImportRange operation."""
+    if not any(
+        operation.get(key)
+        for key in (
+            "copy_row_heights",
+            "copy_row_hidden",
+            "copy_column_widths",
+            "copy_column_hidden",
+        )
+    ):
+        return
+
+    import openpyxl
+    from openpyxl.utils.cell import (
+        column_index_from_string,
+        coordinate_to_tuple,
+        get_column_letter,
+        range_boundaries,
+    )
+
+    source_book = openpyxl.load_workbook(
+        str(operation["source_workbook"]),
+        data_only=False,
+        keep_links=True,
+        read_only=False,
+    )
+    try:
+        source = source_book[operation["source_sheet"]]
+        target = workbook[operation["target_sheet"]]
+        min_col, min_row, max_col, max_row = range_boundaries(operation["source_range"])
+        target_row, target_col = coordinate_to_tuple(
+            operation["target_start"].replace("$", "")
+        )
+        row_offset = target_row - min_row
+        col_offset = target_col - min_col
+
+        row_fields = []
+        if operation.get("copy_row_heights"):
+            row_fields.append("height")
+        if operation.get("copy_row_hidden"):
+            row_fields.append("hidden")
+        if operation.get("copy_outline_levels") and row_fields:
+            row_fields.append("outlineLevel")
+        if row_fields:
+            for source_index, source_dimension in source.row_dimensions.items():
+                if not operation.get("copy_all_row_dimensions") and not min_row <= source_index <= max_row:
+                    continue
+                target_index = source_index + row_offset
+                target_dimension = target.row_dimensions[target_index]
+                for field in row_fields:
+                    expected = getattr(source_dimension, field)
+                    actual = getattr(target_dimension, field)
+                    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+                        matches = abs(float(expected) - float(actual)) <= 1e-10
+                    else:
+                        matches = expected == actual
+                    if not matches:
+                        raise WorkerError(
+                            "output_verification_failed",
+                            "ImportRange row dimension mismatch at row {} ({})".format(
+                                target_index, field
+                            ),
+                        )
+
+        column_fields = []
+        if operation.get("copy_column_widths"):
+            column_fields.append("width")
+        if operation.get("copy_column_hidden"):
+            column_fields.append("hidden")
+        if operation.get("copy_outline_levels") and column_fields:
+            column_fields.append("outlineLevel")
+        if column_fields:
+            for key, source_dimension in source.column_dimensions.items():
+                first = source_dimension.min or column_index_from_string(key)
+                last = source_dimension.max or first
+                if not operation.get("copy_all_column_dimensions"):
+                    if last < min_col or first > max_col:
+                        continue
+                    first = max(first, min_col)
+                    last = min(last, max_col)
+                for source_index in range(first, last + 1):
+                    target_index = source_index + col_offset
+                    target_dimension = target.column_dimensions[
+                        get_column_letter(target_index)
+                    ]
+                    for field in column_fields:
+                        expected = getattr(source_dimension, field)
+                        actual = getattr(target_dimension, field)
+                        if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+                            matches = abs(float(expected) - float(actual)) <= 1e-10
+                        else:
+                            matches = expected == actual
+                        if not matches:
+                            raise WorkerError(
+                                "output_verification_failed",
+                                "ImportRange column dimension mismatch at column {} ({})".format(
+                                    get_column_letter(target_index), field
+                                ),
+                            )
+    finally:
+        source_book.close()
+
+
 def _verify_plan(
     workbook: Any,
     operations: List[Dict[str, Any]],
     initial_sheet_names: List[str],
+    output_path: Path,
 ) -> None:
     """Read back simple edits with openpyxl; Rust separately reopens the file."""
     from decimal import Decimal
     from openpyxl.utils.cell import get_column_letter
+
+    date_time_cells = [
+        (operation["sheet"], operation["cell"])
+        for operation in operations
+        if operation.get("operation") == "set_cell_value"
+        and operation.get("value", {}).get("type") == "date_time"
+    ]
+    raw_date_time_values = _raw_numeric_cell_values(output_path, date_time_cells)
 
     expected_sheet_names = _final_sheet_names(initial_sheet_names, operations)
     if workbook.sheetnames != expected_sheet_names:
@@ -1228,8 +3009,37 @@ def _verify_plan(
             cell = workbook[payload["sheet"]][payload["cell"]]
             expected = _cell_value(payload["value"])
             if isinstance(expected, Decimal):
-                if cell.value is None or Decimal(str(cell.value)) != expected:
+                try:
+                    # Match openpyxl's own XLSX numeric serialization
+                    # (compat.strings.safe_string uses %.16g for numbers).
+                    from openpyxl.compat.strings import safe_string
+
+                    serialized_expected = float(safe_string(expected))
+                    if payload["value"].get("type") == "date_time":
+                        raw_value = raw_date_time_values.get(
+                            (payload["sheet"], payload["cell"].replace("$", "").upper())
+                        )
+                        numeric_matches = (
+                            raw_value is not None
+                            and float(raw_value) == serialized_expected
+                        )
+                    else:
+                        numeric_matches = (
+                            cell.value is not None
+                            and float(cell.value) == serialized_expected
+                        )
+                except (TypeError, ValueError, OverflowError):
+                    numeric_matches = False
+                if not numeric_matches:
                     raise WorkerError("output_verification_failed", "numeric value readback mismatch at {}!{}".format(payload["sheet"], payload["cell"]))
+            elif (
+                expected == ""
+                and cell.value is None
+                and cell.data_type == "inlineStr"
+            ):
+                # Openpyxl reads explicit empty inline strings as None, but
+                # _restore_planned_empty_strings has retained their OOXML type.
+                pass
             elif cell.value != expected:
                 raise WorkerError("output_verification_failed", "value readback mismatch at {}!{}".format(payload["sheet"], payload["cell"]))
             if payload["value"].get("type") == "date_time" and cell.number_format != payload["value"]["value"]["number_format"]:
@@ -1305,6 +3115,8 @@ def _verify_plan(
             # These operations receive independent range/metadata checks in the
             # Rust validator and dedicated fixture tests; opening the saved
             # package here still verifies it can be deserialized.
+            if kind == "import_range":
+                _verify_import_dimensions(workbook, payload)
             continue
 
 

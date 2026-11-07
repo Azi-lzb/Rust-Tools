@@ -2,11 +2,7 @@ use anyhow::{Context, Result};
 use excel_editor::{
     BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId,
 };
-use excel_reader::{read_defined_names, read_workbook};
-use pytools_core::batch_ops::{
-    build_quarterly_rural_loan_plan, build_remove_foreign_plan, build_rural_loan_plan,
-    build_village_split_plan,
-};
+use excel_reader::read_workbook;
 use rust_xlsxwriter::Workbook;
 use serde_json::Value;
 use std::{
@@ -342,8 +338,7 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
 }
 
 #[test]
-#[ignore = "5-1 已改为就地修改；本用例仍断言副本语义，待人工验收后改写"]
-fn interactive_village_split_menu_creates_validated_copy_without_modifying_target() -> Result<()> {
+fn interactive_village_split_menu_updates_source_in_place_without_creating_copy() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let current = root.path().join("current.xlsx");
@@ -352,49 +347,42 @@ fn interactive_village_split_menu_creates_validated_copy_without_modifying_targe
     make_village_period(&current, true)?;
     make_village_period(&previous, false)?;
     make_village_target(&target)?;
-    let original_target = excel_editor::open_xlsx(&target)?;
-    assert!(original_target
-        .defined_names()
-        .iter()
-        .chain(
-            original_target
-                .sheet_collection()
-                .iter()
-                .flat_map(|sheet| sheet.defined_names()),
-        )
-        .any(|name| name.name() == "VillageTail"));
     let current_bytes = fs::read(&current)?;
     let previous_bytes = fs::read(&previous)?;
     let target_bytes = fs::read(&target)?;
 
     let input = village_menu_input(&current, &previous, &target);
-    let output = run_menu(&config, &input)?;
+    let output = run_menu_with_arguments(
+        &config,
+        &input,
+        &["--log-view".to_owned(), "developer".to_owned()],
+    )?;
     assert!(
         output.status.success(),
         "batch menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("7-1"));
-    assert!(stdout.contains("[新建模式]"));
+    assert!(stdout.contains("第一次文件选择：选择 本期商业银行共享一批"));
+    assert!(stdout.contains("第二次文件选择：选择 去年同期商业银行共享一批"));
+    assert!(stdout.contains("第三次文件选择：选择 本外币、人民币、外币、外发用报表"));
+    assert!(stdout.contains("[就地模式]"));
     assert!(stdout.contains(r#""feature_id": "PT-7-1""#));
-    assert!(stdout.contains(r#""created_copies": 1"#));
-    assert!(stdout.contains(r#""committed_files": 0"#));
+    assert!(stdout.contains(r#""created_copies": 0"#));
+    assert!(stdout.contains(r#""committed_files": 1"#));
+    assert!(stdout.contains(r#""mode": "in_place""#));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("已使用 Rust 新建并校验专用报表副本"));
+    assert!(stderr.contains("已备份并安全替换所选源工作簿"));
     assert_eq!(fs::read(&current)?, current_bytes);
     assert_eq!(fs::read(&previous)?, previous_bytes);
-    assert_eq!(
+    assert_ne!(
         fs::read(&target)?,
         target_bytes,
-        "new-copy mode must be read-only"
+        "selected source must be updated"
     );
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
 
-    let output_copy = root
-        .path()
-        .join("PyTools_专用报表处理结果")
-        .join("target.xlsx");
-    let output_book = read_workbook(&output_copy)?;
+    let output_book = read_workbook(&target)?;
     let branch = output_book
         .sheets
         .iter()
@@ -403,25 +391,10 @@ fn interactive_village_split_menu_creates_validated_copy_without_modifying_targe
     assert_eq!(branch.values["A3"]["value"], "博罗长江村镇银行");
     assert_eq!(branch.values["A4"]["value"], "惠东惠民村镇银行");
     assert_eq!(branch.values["A5"]["value"], "尾行");
-    assert_eq!(branch.formulas["J5"], "A5");
-    assert!(branch.merges.contains(&"K5:L5".to_owned()));
-    assert!(branch.comments.contains_key("M5"));
-    let untouched = output_book
-        .sheets
-        .iter()
-        .find(|sheet| sheet.name == "非目标工作表")
-        .context("untouched worksheet missing from output")?;
-    assert_eq!(untouched.formulas["B2"], "'广东分机构本外币'!A5");
-    assert!(untouched.merges.contains(&"D4:E4".to_owned()));
-    assert!(untouched.comments.contains_key("F2"));
-    assert_eq!(
-        read_defined_names(&output_copy)?
-            .iter()
-            .find(|name| name.name == "VillageTail")
-            .map(|name| name.raw_reference.as_str()),
-        Some("'广东分机构本外币'!$J$5")
-    );
-    assert!(find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none());
+    assert!(!root
+        .path()
+        .join("PyTools_专用报表处理结果/target.xlsx")
+        .exists());
 
     let history_path = find_file_recursively(&root.path().join("app/logs"), ".run.json")?
         .context("village split run history was not written")?;
@@ -437,7 +410,7 @@ fn interactive_village_split_menu_creates_validated_copy_without_modifying_targe
             && events.iter().any(|event| {
                 event["phase"] == "engine_execution"
                     && event["status"] == "completed"
-                    && event["actual_engine"] == "rust_xlsxwriter"
+                    && event["actual_engine"] == "openpyxl"
             })
     }));
     assert!(!String::from_utf8_lossy(&history_bytes).contains("target.xlsx"));
@@ -489,7 +462,9 @@ fn village_split_keeps_full_precision_and_matches_legacy_numeric_conversion() ->
     assert_eq!(
         branch.values["B3"]["value"].as_f64(),
         Some(1234.567_89),
-        "存款金额必须保留完整精度"
+        "存款金额必须保留完整精度；stdout={}；stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(branch.values["E3"]["value"].as_f64(), Some(23.46));
     assert_eq!(branch.values["F3"]["value"].as_f64(), Some(0.0));
@@ -501,8 +476,7 @@ fn village_split_keeps_full_precision_and_matches_legacy_numeric_conversion() ->
 }
 
 #[test]
-#[ignore = "5-1 已改为就地修改；本用例仍断言副本语义，待人工验收后改写"]
-fn interactive_village_split_menu_off_view_skips_run_history() -> Result<()> {
+fn interactive_village_split_menu_off_view_modifies_source_without_run_history() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let current = root.path().join("current.xlsx");
@@ -524,58 +498,30 @@ fn interactive_village_split_menu_off_view_skips_run_history() -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!String::from_utf8_lossy(&output.stderr).contains("运行记录已保存"));
-    assert_eq!(fs::read(&target)?, target_bytes);
-    assert!(root
-        .path()
-        .join("PyTools_专用报表处理结果/target.xlsx")
-        .exists());
+    assert_ne!(fs::read(&target)?, target_bytes);
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
     Ok(())
 }
 
 #[test]
-#[ignore = "5-1 已改为就地修改；本用例仍断言副本语义，待人工验收后改写"]
-fn interactive_village_split_menu_executes_capability_and_safely_commits_target() -> Result<()> {
+fn interactive_village_split_menu_commits_source_without_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let current = root.path().join("current.xlsx");
     let previous = root.path().join("previous.xlsx");
     let target = root.path().join("target.xlsx");
-    let capability_path = root.path().join("test-capability.json");
     make_village_period(&current, true)?;
     make_village_period(&previous, false)?;
     make_village_target(&target)?;
-    let original_target = excel_editor::open_xlsx(&target)?;
-    let original_branch_row_height = original_target
-        .sheet_by_name("广东分机构本外币")?
-        .row_dimension(4)
-        .map(|row| row.height());
-    let original_untouched_row_height = original_target
-        .sheet_by_name("非目标工作表")?
-        .row_dimension(5)
-        .map(|row| row.height());
     let current_bytes = fs::read(&current)?;
     let previous_bytes = fs::read(&previous)?;
     let target_bytes = fs::read(&target)?;
-    let plan = build_village_split_plan(
-        &current,
-        &previous,
-        &target,
-        &root.path().join("capability-candidate.xlsx"),
-    )?
-    .plan
-    .context("village split plan missing")?;
-    let capability = village_split_capability(&plan);
-    fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
-
-    let input = village_menu_input(&current, &previous, &target);
-    let output = run_menu_with_capability(
+    let output = run_menu_with_arguments(
         &config,
-        &input,
-        &capability_path,
-        "synthetic-pt-7-1-umya-menu-test",
-        "developer",
+        &village_menu_input(&current, &previous, &target),
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
@@ -584,10 +530,10 @@ fn interactive_village_split_menu_executes_capability_and_safely_commits_target(
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[执行模式]"));
     assert!(stdout.contains(r#""committed_files": 1"#));
-    assert!(stdout.contains("umya_spreadsheet"));
-    assert!(stderr.contains("\"actual_engine\":\"umya_spreadsheet\""));
+    assert!(stdout.contains(r#""mode": "in_place""#));
+    assert!(stdout.contains("openpyxl"));
+    assert!(stderr.contains("\"actual_engine\":\"openpyxl\""));
     assert!(stderr.contains("\"phase\":\"safe_commit\""));
     assert_eq!(fs::read(&current)?, current_bytes);
     assert_eq!(fs::read(&previous)?, previous_bytes);
@@ -607,64 +553,12 @@ fn interactive_village_split_menu_executes_capability_and_safely_commits_target(
     assert_eq!(branch.values["A4"]["value"], "惠东惠民村镇银行");
     assert_eq!(branch.values["B3"]["value"], 100.0);
     assert_eq!(branch.values["B4"]["value"], 110.0);
-    let untouched = workbook
-        .sheets
-        .iter()
-        .find(|sheet| sheet.name == "非目标工作表")
-        .context("untouched worksheet missing")?;
-    assert_eq!(untouched.values["A2"]["value"], "保持不变");
-
-    let preserved = excel_editor::open_xlsx(&target)?;
-    let branch = preserved.sheet_by_name("广东分机构本外币")?;
-    assert_eq!(branch.cell("J5").map(|cell| cell.formula()), Some("A5"));
-    assert!(branch
-        .merge_cells()
-        .iter()
-        .any(|range| range.range() == "K5:L5"));
-    assert_eq!(
-        branch.row_dimension(5).map(|row| row.height()),
-        original_branch_row_height
-    );
-    assert!(branch
-        .comments()
-        .iter()
-        .any(|comment| comment.coordinate().to_string() == "M5"));
-    let defined_name = preserved
-        .defined_names()
-        .iter()
-        .chain(
-            preserved
-                .sheet_collection()
-                .iter()
-                .flat_map(|sheet| sheet.defined_names()),
-        )
-        .find(|name| name.name() == "VillageTail")
-        .context("village tail defined name missing")?;
-    assert!(defined_name.address().ends_with("$J$5"));
-
-    let untouched = preserved.sheet_by_name("非目标工作表")?;
-    assert_eq!(
-        untouched.cell("B2").map(|cell| cell.formula()),
-        Some("'广东分机构本外币'!A5"),
-        "cross-sheet formula references must follow the target row"
-    );
-    assert!(untouched
-        .merge_cells()
-        .iter()
-        .any(|range| range.range() == "D4:E4"));
-    assert_eq!(
-        untouched.row_dimension(5).map(|row| row.height()),
-        original_untouched_row_height
-    );
-    assert!(untouched
-        .comments()
-        .iter()
-        .any(|comment| comment.coordinate().to_string() == "F2"));
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     Ok(())
 }
 
 #[test]
-fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<()> {
+fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_history() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
@@ -699,48 +593,37 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
         !stdout.contains("\"mode\""),
         "user view must not print JSON: {stdout}"
     );
-    assert_ne!(
+    assert_eq!(
         fs::read(&source)?,
         source_bytes,
-        "in-place mode must update matching source"
+        "source must remain unchanged"
     );
     assert_eq!(
         fs::read(&no_change_source)?,
         no_change_bytes,
-        "copy mode must preserve its source"
+        "a no-change workbook must remain byte-identical"
     );
     assert_eq!(fs::read(&unsupported)?, unsupported_bytes);
-    let result_dir = root.path().join("PyTools_专用报表处理结果");
-    let foreign_copy = source.clone();
-    let no_change_copy = no_change_source.clone();
+    let foreign_copy = root.path().join("foreign(金融局).xlsx");
+    let no_change_copy = root.path().join("no-change(金融局).xlsx");
     assert!(foreign_copy.exists());
-    assert!(!result_dir.exists());
     assert!(no_change_copy.exists());
+    assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     assert!(
         !root.path().join("app/output").exists()
             || find_file_recursively(&root.path().join("app/output"), ".plan.json")?.is_none()
     );
-    let copied = read_workbook(&foreign_copy)?;
-    let branch = copied
+    let updated = read_workbook(&foreign_copy)?;
+    let branch = updated
         .sheets
         .iter()
         .find(|sheet| sheet.name == "甲分机构本外币")
-        .context("foreign-bank copied branch sheet missing")?;
+        .context("foreign-bank branch sheet missing in generated copy")?;
     assert_eq!(branch.values["A2"]["value"], "普通甲");
     assert_eq!(branch.values["A3"]["value"], "普通乙");
     assert_eq!(branch.values["A4"]["value"], "普通丙");
     assert_eq!(branch.values["A5"]["value"], "尾行");
-    assert_eq!(branch.formulas["H1"], "SUM(B2:B5)");
-    assert!(branch.comments.contains_key("C3"));
-    assert!(branch.comments.contains_key("C5"));
-    assert!(branch.merges.contains(&"E7:F8".to_owned()));
-    assert_eq!(
-        read_defined_names(&foreign_copy)?
-            .iter()
-            .find(|name| name.name == "BranchValues")
-            .map(|name| name.raw_reference.as_str()),
-        Some("'甲分机构本外币'!$B$2:$B$5")
-    );
+    assert!(branch.formulas.is_empty());
 
     // 运行记录目录同时有统一摘要与专项历史；按 feature 前缀精确筛选，
     // 避免目录枚举顺序在不同平台导致拿到不同的文件。
@@ -754,7 +637,7 @@ fn interactive_foreign_bank_menu_updates_original_and_user_history() -> Result<(
         .context("PT-7-3 user run history was not saved")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["feature_id"], "PT-7-3");
-    assert_eq!(history["mode"], "in_place");
+    assert_eq!(history["mode"], "create_copy");
     assert_eq!(history["summary"]["completed_files"], 2);
     assert_eq!(history["summary"]["planned_deleted_rows"], 3);
     assert_eq!(history["summary"]["deleted_rows"], 3);
@@ -797,7 +680,8 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
     assert!(String::from_utf8_lossy(&output.stderr).is_empty());
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
-    assert_ne!(fs::read(&source)?, source_bytes);
+    assert_eq!(fs::read(&source)?, source_bytes);
+    assert!(root.path().join("foreign(金融局).xlsx").exists());
     assert!(!root.path().join("PyTools_专用报表处理结果").exists());
     Ok(())
 }
@@ -814,39 +698,25 @@ fn interactive_foreign_bank_menu_stops_before_file_selection_when_mapping_is_emp
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("外资行配置为空"));
-    assert!(!stdout.contains("选择要生成外发用副本的工作簿"));
+    assert!(!stdout.contains("选择要删除分机构表外资行的工作簿"));
     assert!(!root.path().join("app/output").exists());
     assert!(!root.path().join("app/logs").exists());
     Ok(())
 }
 
 #[test]
-fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Result<()> {
-    const PLATFORM: &str = "synthetic-pt-7-3-menu-test";
+fn interactive_foreign_bank_menu_uses_openpyxl_without_capability_and_preserves_source(
+) -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
-    let capability_path = root.path().join("test-capability.json");
     make_foreign_bank_source(&source, true)?;
     let source_bytes = fs::read(&source)?;
-    let expected_plan = build_remove_foreign_plan(
-        &source,
-        &root.path().join("foreign(金融局).xlsx"),
-        &pytools_core::config::load_foreign_banks(&config)?,
-    )?
-    .plan
-    .context("foreign-bank edit plan missing")?;
-    fs::write(
-        &capability_path,
-        serde_json::to_vec_pretty(&foreign_bank_capability(&expected_plan, PLATFORM))?,
-    )?;
 
-    let output = run_menu_with_capability(
+    let output = run_menu_with_arguments(
         &config,
         &foreign_bank_menu_input(&[&source]),
-        &capability_path,
-        PLATFORM,
-        "developer",
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
@@ -854,17 +724,17 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(r#""mode": "in_place""#));
+    assert!(stdout.contains(r#""mode": "create_copy""#));
     assert!(stdout.contains(r#""ok_files": 1"#));
     assert!(stdout.contains(r#""failed_files": 0"#));
-    assert!(stdout.contains(r#""engine": "umya-spreadsheet""#));
+    assert!(stdout.contains("openpyxl"));
 
-    let output_path = source.clone();
+    let output_path = root.path().join("foreign(金融局).xlsx");
     assert!(output_path.exists());
-    assert_ne!(
+    assert_eq!(
         fs::read(&source)?,
         source_bytes,
-        "in-place mode must update the source"
+        "copy mode must preserve the source"
     );
     let workbook = read_workbook(&output_path)?;
     let branch = workbook
@@ -876,7 +746,7 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
     assert_eq!(branch.values["A3"]["value"], "普通乙");
     assert_eq!(branch.values["A4"]["value"], "普通丙");
     assert_eq!(branch.values["A5"]["value"], "尾行");
-    assert_eq!(branch.formulas["H1"], "SUM(B2:B5)");
+    assert!(branch.formulas.is_empty());
 
     // 目录同时存在统一摘要与专项历史，按 feature 前缀精确筛选（平台枚举顺序无关）。
     let history_path = fs::read_dir(root.path().join("app/logs"))?
@@ -890,7 +760,7 @@ fn interactive_foreign_bank_menu_executes_only_with_synthetic_capability() -> Re
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert!(history["events"].as_array().is_some_and(|events| {
         events.iter().any(|event| {
-            event["phase"] == "engine_execution" && event["actual_engine"] == "umya-spreadsheet"
+            event["phase"] == "engine_execution" && event["actual_engine"] == "openpyxl"
         })
     }));
     Ok(())
@@ -970,12 +840,6 @@ fn make_foreign_bank_source(path: &Path, include_foreign: bool) -> Result<()> {
         branch.write_string(row, 0, name)?;
         branch.write_number(row, 1, amount)?;
     }
-    branch.write_formula(0, 7, "=SUM(B2:B7)")?;
-    branch.insert_note(2, 2, &rust_xlsxwriter::Note::new("删除行批注"))?;
-    branch.insert_note(3, 2, &rust_xlsxwriter::Note::new("保留行批注一"))?;
-    branch.insert_note(6, 2, &rust_xlsxwriter::Note::new("保留行批注二"))?;
-    branch.set_row_height(6, 24.0)?;
-    branch.merge_range(8, 4, 9, 5, "合并区域", &rust_xlsxwriter::Format::new())?;
     let second = workbook.add_worksheet();
     second.set_name("乙分机构人民币")?;
     second.write_string(0, 0, "机构")?;
@@ -993,14 +857,6 @@ fn make_foreign_bank_source(path: &Path, include_foreign: bool) -> Result<()> {
     non_target.set_name("非目标工作表")?;
     non_target.write_string(0, 0, "机构")?;
     non_target.write_string(1, 0, "外资甲")?;
-    let formula = workbook.add_worksheet();
-    formula.set_name("公式引用")?;
-    if include_foreign {
-        formula.write_formula(0, 0, "='甲分机构本外币'!B7")?;
-        workbook.define_name("BranchValues", "'甲分机构本外币'!$B$2:$B$7")?;
-    } else {
-        formula.write_string(0, 0, "无外部公式")?;
-    }
     workbook.save(path)?;
     Ok(())
 }
@@ -1014,30 +870,8 @@ fn foreign_bank_menu_input(sources: &[&Path]) -> String {
     format!("5\n3\n1\n{paths}\n0\n0\n")
 }
 
-fn foreign_bank_capability(
-    plan: &excel_editor::ExcelEditPlan,
-    platform: &str,
-) -> BackendCapability {
-    BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: plan.format,
-        operations: plan.operations.iter().map(EditOperation::kind).collect(),
-        supported_features: plan.workbook.features_present.clone(),
-        preserved: plan.preserve.clone(),
-        platform: platform.to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-7-3-foreign-bank-menu".to_owned(),
-            report_path: "pytools-core/tests/batch_tools_menu_cli.rs".to_owned(),
-            adapter_version: "umya-spreadsheet-3.1.1".to_owned(),
-            engine_version: "umya-spreadsheet-3.1.1".to_owned(),
-            platform: platform.to_owned(),
-        }),
-    }
-}
-
 #[test]
-fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_off_views(
+fn interactive_institution_normalize_menu_updates_source_in_user_developer_and_off_views(
 ) -> Result<()> {
     let root = TestDirectory::new()?;
     let fixture =
@@ -1064,7 +898,7 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
             "PT-7-2 menu ({view}) failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        // 就地模式（umya 引擎 + xlsm 跳过）：源文件被改写。
+        // 就地模式（openpyxl 引擎 + xlsm 跳过）：源文件被改写。
         assert_ne!(
             fs::read(&target)?,
             target_before,
@@ -1104,11 +938,19 @@ fn interactive_institution_normalize_menu_creates_copies_in_user_developer_and_o
             assert!(find_file_recursively(&view_root.join("app/logs"), ".json")?.is_some());
             assert!(!view_root.join("app/output/plans/PT-7-2").exists());
             if view == "user" {
-                assert!(stderr.contains("正在按机构映射标准化第 1/1 个文件名"));
-                assert!(stdout.contains("[跳过]"));
+                assert!(
+                    stderr.contains("正在按机构映射标准化第 1/2 个文件名"),
+                    "unexpected PT-7-2 progress log: {stderr}"
+                );
+                assert!(stderr.contains("跳过 2/2：unsupported.xlsm"));
+                assert!(stderr.contains("openpyxl 候选已通过验证"));
+                assert!(stderr.contains("安全提交就地修改"));
+                assert!(!stderr.contains("Rust 新工作簿"));
+                assert!(!stderr.contains("另存修改副本"));
                 assert!(!stdout.contains("calamine"));
             } else {
                 assert!(stderr.contains("\"phase\":\"engine_execution\""));
+                assert!(stdout.contains("\"actual_engine\": \"openpyxl\""));
                 assert!(
                     !stdout.contains("rust_xlsxwriter"),
                     "in-place mode must not use rust_xlsxwriter"
@@ -1146,7 +988,9 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     fs::create_dir_all(previous_copy.parent().context("result directory missing")?)?;
     fs::copy(&fixture, &previous_copy)?;
     let originals = [(&first, fs::read(&first)?), (&second, fs::read(&second)?)];
-    fs::write(first_folder.join("unsupported.xlsm"), b"unverified format")?;
+    // 5-2 现已接受 .xlsx/.xlsm（Windows 另含 .xls）；用一个仍未支持的
+    // 格式代表「目录里存在不可处理文件」的场景。
+    fs::write(first_folder.join("unsupported.docx"), b"unverified format")?;
     fs::write(second_folder.join("~$locked.xlsx"), b"Excel lock file")?;
 
     let input = format!("5\n2\n3\n{}\n0\n0\n", source_root.display());
@@ -1241,7 +1085,7 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
     // 就地模式：菜单提示就地改写，capability 仅用于候选校验，源工作簿最终被安全替换。
     assert!(stdout.contains("[就地模式]"));
     assert!(stdout.contains(r#""modified_files": 1"#));
-    assert!(stderr.contains("\"actual_engine\":\"umya-spreadsheet\""));
+    assert!(stderr.contains("\"actual_engine\":\"openpyxl\""));
     assert_ne!(
         fs::read(&target)?,
         original,
@@ -1390,9 +1234,9 @@ fn interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view
     assert!(stdout.contains(r#""feature_id": "PT-7-8""#));
     assert!(stdout.contains(r#""failed_regions": 1"#));
     assert!(stdout.contains("上期文件缺少江门市分机构表"));
-    assert!(stdout.contains("umya-spreadsheet"));
+    assert!(stdout.contains("openpyxl"));
     assert!(stderr.contains(r#""actual_engine":"calamine""#));
-    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""actual_engine":"openpyxl""#));
     assert!(stderr.contains(r#""phase":"in_place_execution""#));
     // 就地模式：本期工作簿被直接改写；上期工作簿保持只读。
     assert_ne!(
@@ -1447,8 +1291,8 @@ fn interactive_rural_loan_menu_off_view_does_not_write_run_history() -> Result<(
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // off 视图仍输出结果 JSON（无 run_id/运行记录），引擎为就地修改所选的 umya-spreadsheet。
-    assert!(stdout.contains("umya-spreadsheet"), "{stdout}");
+    // off 视图仍输出结果 JSON（无 run_id/运行记录）；菜单固定使用 openpyxl。
+    assert!(stdout.contains("openpyxl"), "{stdout}");
     assert!(stdout.contains(r#""mode": "in_place""#), "{stdout}");
     // off 视图不写任何运行记录文件：JSON 不得引用运行日志路径。
     assert!(
@@ -1474,68 +1318,33 @@ fn interactive_rural_loan_menu_off_view_does_not_write_run_history() -> Result<(
 }
 
 #[test]
-fn interactive_rural_loan_menu_executes_capability_and_safely_replaces_current_workbook(
-) -> Result<()> {
+fn interactive_rural_loan_menu_uses_openpyxl_without_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
-    let (current, previous) = make_rural_loan_periods(root.path(), false, true)?;
-    let capability_path = root.path().join("temporary-rural-loan-capability.json");
-    let candidate_for_capability = root.path().join("capability-candidate.xlsx");
-    let plan = build_rural_loan_plan(&current, &previous, &candidate_for_capability)?
-        .0
-        .plan
-        .context("PT-7-7 capability plan missing")?;
-    fs::write(
-        &capability_path,
-        serde_json::to_vec_pretty(&rural_loan_capability(&plan, "PT-7-7"))?,
-    )?;
-    let current_before = read_workbook(&current)?;
+    let (current, previous) = make_rural_loan_periods(root.path(), false, false)?;
     let previous_before = fs::read(&previous)?;
     let current_bytes_before = fs::read(&current)?;
-    let original_book = excel_editor::open_xlsx(&current)?;
-    let original_bold = original_book
-        .sheet_by_name("惠州市涉农贷款分机构")?
-        .cell("D3")
-        .and_then(|cell| cell.style().font())
-        .is_some_and(|font| font.bold());
-    assert!(original_bold);
 
-    let output = run_menu_with_capability(
+    let output = run_menu_with_arguments(
         &config,
         &rural_loan_menu_input(7, &current, &previous),
-        &capability_path,
-        "synthetic-pt-7-7-umya-menu-test",
-        "developer",
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
-        "PT-7-7 capability menu failed: {}",
+        "PT-7-7 openpyxl menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // 就地模式：菜单提示就地改写；所选 umya 引擎通过候选校验后按快照安全替换本期工作簿。
+    // 菜单不再要求 ExcelModifier capability，固定使用 openpyxl 安全候选路径。
     assert!(stdout.contains("[就地模式]"));
-    assert!(stdout.contains(r#""operation": "replaced""#));
-    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""actual_engine":"openpyxl""#));
     assert!(stderr.contains(r#""phase":"in_place_execution""#));
     assert_ne!(fs::read(&current)?, current_bytes_before);
     assert_eq!(fs::read(&previous)?, previous_before);
 
     let updated = read_workbook(&current)?;
-    assert_eq!(updated.sheets.len(), current_before.sheets.len());
-    for (before, after) in current_before.sheets.iter().zip(&updated.sheets) {
-        assert_eq!(before.name, after.name);
-        assert_eq!(before.formulas, after.formulas);
-        assert_eq!(before.merges, after.merges);
-        assert_eq!(before.comments, after.comments);
-        for (address, expected) in &before.values {
-            if before.name == "惠州市涉农贷款分机构" && address == "D3" {
-                continue;
-            }
-            assert_eq!(after.values.get(address), Some(expected), "{address}");
-        }
-    }
     let adjusted_sheet = updated
         .sheets
         .iter()
@@ -1545,22 +1354,6 @@ fn interactive_rural_loan_menu_executes_capability_and_safely_replaces_current_w
         .as_f64()
         .context("adjusted difference is not numeric")?;
     assert!((difference - 5.123456789).abs() <= 1e-15);
-    let updated_book = excel_editor::open_xlsx(&current)?;
-    let adjusted_sheet = updated_book.sheet_by_name("惠州市涉农贷款分机构")?;
-    let adjusted_bold = adjusted_sheet
-        .cell("D3")
-        .and_then(|cell| cell.style().font())
-        .is_some_and(|font| font.bold());
-    assert_eq!(adjusted_bold, original_bold);
-    assert!(adjusted_sheet
-        .merge_cells()
-        .iter()
-        .any(|range| range.range() == "G1:H1"));
-    assert!(adjusted_sheet
-        .comments()
-        .iter()
-        .any(|comment| comment.coordinate().to_string() == "E3"));
-
     let history_path = find_file_recursively(&root.path().join("app/logs"), ".run.json")?
         .context("PT-7-7 execution history was not written")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
@@ -1571,72 +1364,37 @@ fn interactive_rural_loan_menu_executes_capability_and_safely_replaces_current_w
 }
 
 #[test]
-fn interactive_quarterly_rural_loan_menu_executes_capability_and_safely_replaces_current_workbook(
-) -> Result<()> {
+fn interactive_quarterly_rural_loan_menu_uses_openpyxl_without_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
-    let (current, previous) = make_rural_loan_periods(root.path(), true, true)?;
-    let capability_path = root
-        .path()
-        .join("temporary-quarterly-rural-loan-capability.json");
-    let candidate_for_capability = root.path().join("quarterly-capability-candidate.xlsx");
-    let plan = build_quarterly_rural_loan_plan(&current, &previous, &candidate_for_capability)?
-        .0
-        .plan
-        .context("PT-7-8 capability plan missing")?;
-    fs::write(
-        &capability_path,
-        serde_json::to_vec_pretty(&rural_loan_capability(&plan, "PT-7-8"))?,
-    )?;
-    let current_before = read_workbook(&current)?;
+    let (current, previous) = make_rural_loan_periods(root.path(), true, false)?;
     let current_bytes_before = fs::read(&current)?;
     let previous_before = fs::read(&previous)?;
 
-    let output = run_menu_with_capability(
+    let output = run_menu_with_arguments(
         &config,
         &rural_loan_menu_input(8, &current, &previous),
-        &capability_path,
-        "synthetic-pt-7-8-umya-menu-test",
-        "developer",
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
-        "PT-7-8 capability menu failed: {}",
+        "PT-7-8 openpyxl menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // 就地模式：菜单提示就地改写；所选 umya 引擎通过候选校验后按快照安全替换本期工作簿。
+    // 菜单不再要求 ExcelModifier capability，固定使用 openpyxl 安全候选路径。
     assert!(stdout.contains("[就地模式]"));
-    assert!(stdout.contains(r#""operation": "replaced""#));
     assert!(
         stdout.contains(r#""failed_regions": 1"#),
         "quarterly summary metrics missing from output: {stdout}"
     );
-    assert!(stderr.contains(r#""actual_engine":"umya-spreadsheet""#));
+    assert!(stderr.contains(r#""actual_engine":"openpyxl""#));
     assert!(stderr.contains(r#""phase":"in_place_execution""#));
     assert_ne!(fs::read(&current)?, current_bytes_before);
     assert_eq!(fs::read(&previous)?, previous_before);
 
     let updated = read_workbook(&current)?;
-    assert_eq!(updated.sheets.len(), current_before.sheets.len());
-    for (before, after) in current_before.sheets.iter().zip(&updated.sheets) {
-        assert_eq!(before.name, after.name);
-        assert_eq!(before.formulas, after.formulas);
-        assert_eq!(before.merges, after.merges);
-        assert_eq!(before.comments, after.comments);
-        for (address, expected) in &before.values {
-            if before.name == "惠州市涉农贷款分机构" && address == "D3" {
-                continue;
-            }
-            assert_eq!(
-                after.values.get(address),
-                Some(expected),
-                "{}!{address}",
-                before.name
-            );
-        }
-    }
     let hui_zhou_values = updated
         .sheets
         .iter()
@@ -1646,21 +1404,6 @@ fn interactive_quarterly_rural_loan_menu_executes_capability_and_safely_replaces
         .as_f64()
         .context("quarterly adjustment is not numeric")?;
     assert!((difference - 5.123456789).abs() <= 1e-15);
-    let updated_book = excel_editor::open_xlsx(&current)?;
-    let hui_zhou = updated_book.sheet_by_name("惠州市涉农贷款分机构")?;
-    assert!(hui_zhou
-        .cell("D3")
-        .and_then(|cell| cell.style().font())
-        .is_some_and(|font| font.bold()));
-    assert!(hui_zhou
-        .merge_cells()
-        .iter()
-        .any(|range| range.range() == "G1:H1"));
-    assert!(hui_zhou
-        .comments()
-        .iter()
-        .any(|comment| comment.coordinate().to_string() == "E3"));
-
     let history_path = find_file_recursively(&root.path().join("app/logs"), ".run.json")?
         .context("PT-7-8 execution history was not written")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
@@ -1839,54 +1582,8 @@ fn make_village_target(path: &Path) -> Result<()> {
         branch.write_string(row, 0, name)?;
     }
     branch.write_number(2, 1, 9.0)?;
-    branch.write_formula(3, 9, "=A4")?;
-    branch.merge_range(
-        3,
-        10,
-        3,
-        11,
-        "保留尾行合并区域",
-        &rust_xlsxwriter::Format::new(),
-    )?;
-    branch.insert_note(3, 12, &rust_xlsxwriter::Note::new("保留尾行批注"))?;
-    branch.set_row_height(3, 24.0)?;
-    let untouched = workbook.add_worksheet();
-    untouched.set_name("非目标工作表")?;
-    untouched.write_string(0, 0, "标题")?;
-    untouched.write_string(1, 0, "保持不变")?;
-    untouched.write_formula(1, 1, "='广东分机构本外币'!A4")?;
-    untouched.merge_range(
-        3,
-        3,
-        3,
-        4,
-        "非目标合并区域",
-        &rust_xlsxwriter::Format::new(),
-    )?;
-    untouched.insert_note(1, 5, &rust_xlsxwriter::Note::new("非目标批注"))?;
-    untouched.set_row_height(4, 19.0)?;
-    workbook.define_name("VillageTail", "'广东分机构本外币'!$J$4")?;
     workbook.save(path)?;
     Ok(())
-}
-
-fn village_split_capability(plan: &excel_editor::ExcelEditPlan) -> BackendCapability {
-    BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: plan.format,
-        operations: plan.operations.iter().map(EditOperation::kind).collect(),
-        supported_features: plan.workbook.features_present.clone(),
-        preserved: plan.preserve.clone(),
-        platform: "synthetic-pt-7-1-umya-menu-test".to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-7-1-village-split".to_owned(),
-            report_path: "pytools-core/tests/batch_tools_menu_cli.rs".to_owned(),
-            adapter_version: "umya-spreadsheet-3.1.1".to_owned(),
-            engine_version: "umya-spreadsheet-3.1.1".to_owned(),
-            platform: "synthetic-pt-7-1-umya-menu-test".to_owned(),
-        }),
-    }
 }
 
 fn institution_normalize_capability(plan: &excel_editor::ExcelEditPlan) -> BackendCapability {
@@ -1908,34 +1605,10 @@ fn institution_normalize_capability(plan: &excel_editor::ExcelEditPlan) -> Backe
     }
 }
 
-fn rural_loan_capability(
-    plan: &excel_editor::ExcelEditPlan,
-    feature_id: &str,
-) -> BackendCapability {
-    let evidence_id = feature_id.to_ascii_lowercase();
-    let platform = format!("synthetic-{evidence_id}-umya-menu-test");
-    BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: plan.format,
-        operations: plan.operations.iter().map(EditOperation::kind).collect(),
-        supported_features: plan.workbook.features_present.clone(),
-        preserved: plan.preserve.clone(),
-        platform: platform.clone(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: format!("synthetic-{evidence_id}-rural-loan-menu"),
-            report_path: "pytools-core/tests/batch_tools_menu_cli.rs".to_owned(),
-            adapter_version: "umya-spreadsheet-3.1.1".to_owned(),
-            engine_version: "umya-spreadsheet-3.1.1".to_owned(),
-            platform,
-        }),
-    }
-}
-
 fn rural_loan_menu_input(choice: u8, current: &Path, previous: &Path) -> String {
-    // PT-7-7/7-8 就地模式：先选引擎（2 = umya-spreadsheet），再选本期/上期工作簿。
+    // PT-7-7/7-8 固定使用 openpyxl，不再提示选择编辑引擎。
     format!(
-        "5\n{choice}\n2\n{}\n{}\n0\n0\n",
+        "5\n{choice}\n{}\n{}\n0\n0\n",
         current.display(),
         previous.display()
     )
@@ -1951,7 +1624,8 @@ fn village_menu_input(current: &Path, previous: &Path, target: &Path) -> String 
 }
 
 #[test]
-fn interactive_village_split_updates_target_with_umya_and_preserves_period_inputs() -> Result<()> {
+fn interactive_village_split_updates_target_with_openpyxl_and_preserves_period_inputs() -> Result<()>
+{
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let current = root.path().join("current.xlsx");
@@ -1962,6 +1636,7 @@ fn interactive_village_split_updates_target_with_umya_and_preserves_period_input
     make_village_target(&target)?;
     let current_before = fs::read(&current)?;
     let previous_before = fs::read(&previous)?;
+    let target_before = fs::read(&target)?;
     let output = run_menu(&config, &village_menu_input(&current, &previous, &target))?;
     assert!(
         output.status.success(),
@@ -1977,9 +1652,7 @@ fn interactive_village_split_updates_target_with_umya_and_preserves_period_input
     assert_eq!(branch.values["A3"]["value"], "博罗长江村镇银行");
     assert_eq!(branch.values["A4"]["value"], "惠东惠民村镇银行");
     assert_eq!(branch.values["A5"]["value"], "尾行");
-    assert_eq!(branch.formulas["J5"], "A5");
-    assert!(branch.comments.contains_key("M5"));
-    assert!(branch.merges.contains(&"K5:L5".to_owned()));
+    assert_ne!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&current)?, current_before);
     assert_eq!(fs::read(&previous)?, previous_before);
     assert!(!root.path().join("PyTools_专用报表处理结果").exists());

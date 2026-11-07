@@ -1,8 +1,4 @@
 use anyhow::{Context, Result};
-use excel_editor::{
-    BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId,
-    WorkbookFormat,
-};
 use excel_reader::{read_header_inventory, read_workbook, HeaderVariant};
 use rust_xlsxwriter::Workbook;
 use serde_json::Value;
@@ -15,7 +11,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const PLATFORM: &str = "synthetic-pt-7-4-menu-test";
 static NEXT_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
 
 struct TestDirectory(PathBuf);
@@ -96,7 +91,7 @@ fn fx_header_cli_command_defaults_to_plan_only() -> Result<()> {
 }
 
 #[test]
-fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls() -> Result<()> {
+fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let fixture =
@@ -120,7 +115,6 @@ fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls()
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("4  修改外汇工作表页眉单位"));
     assert!(stdout.contains("PT-7-4 当前仅验收 .xlsx"));
     assert!(stdout.contains("[就地模式]"));
@@ -128,7 +122,7 @@ fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls()
     assert_eq!(fs::read(&unsupported)?, unsupported_original);
 
     let result = parse_result(&stdout, "PT-7-4")?;
-    assert_eq!(result["mode"], "commit_target");
+    assert_eq!(result["mode"], "in_place");
     assert_eq!(result["files"], 1);
     assert_eq!(result["planned_files"], 0);
     assert_eq!(result["committed_files"], 1);
@@ -161,8 +155,7 @@ fn fx_header_menu_updates_original_without_capability_and_skips_unverified_xls()
 }
 
 #[test]
-fn fx_header_menu_commits_only_with_matching_capability_and_matches_python_baseline() -> Result<()>
-{
+fn fx_header_menu_matches_python_baseline_without_external_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let fixture =
@@ -170,47 +163,30 @@ fn fx_header_menu_commits_only_with_matching_capability_and_matches_python_basel
     let target = root.path().join("target.xlsx");
     fs::copy(&fixture, &target)?;
     let original = fs::read(&target)?;
-    let candidate = root.path().join("capability-candidate.xlsx");
-    let profile = excel_editor::inspect_xlsx_profile(&target)?;
-    let plan = pytools_core::fx_header::build_fx_header_plan(
-        &target,
-        &candidate,
-        profile,
-        "synthetic-pt-7-4-menu-capability",
-    )?
-    .plan
-    .context("FX header edit plan missing")?;
-    let capability_path = root.path().join("temporary-test-capability.json");
-    fs::write(
-        &capability_path,
-        serde_json::to_vec_pretty(&fx_header_capability(&plan))?,
-    )?;
-
     let output = run_menu(
         &config,
         &format!("5\n4\n{}\n0\n", target.display()),
-        &[
-            "--capabilities".to_owned(),
-            capability_path.to_string_lossy().into_owned(),
-            "--platform".to_owned(),
-            PLATFORM.to_owned(),
-            "--log-view".to_owned(),
-            "developer".to_owned(),
-        ],
+        &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
         output.status.success(),
-        "PT-7-4 capability menu failed: {}",
+        "PT-7-4 openpyxl menu failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("[就地模式]"));
-    assert!(stderr.contains("\"phase\":\"safe_commit\""));
-    assert!(stderr.contains("\"actual_engine\":\"ooxml_patch\""));
+    assert!(
+        stderr.contains("\"phase\":\"safe_commit\""),
+        "expected a safe-commit event; stderr={stderr}\nstdout={stdout}"
+    );
+    assert!(
+        stderr.contains("\"actual_engine\":\"ooxml_patch\""),
+        "expected OOXML primary execution; stderr={stderr}\nstdout={stdout}"
+    );
 
     let result = parse_result(&stdout, "PT-7-4")?;
-    assert_eq!(result["mode"], "commit_target");
+    assert_eq!(result["mode"], "in_place");
     assert_eq!(result["status"], "succeeded");
     assert_eq!(result["completed_files"], 1);
     assert_eq!(result["failed_files"], 0);
@@ -337,25 +313,6 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
     let log_dir = root.path().join("app/logs");
     assert!(!log_dir.exists() || fs::read_dir(log_dir)?.next().is_none());
     Ok(())
-}
-
-fn fx_header_capability(plan: &excel_editor::ExcelEditPlan) -> BackendCapability {
-    BackendCapability {
-        engine: EngineId::OoxmlPatch,
-        status: CapabilityStatus::Passed,
-        format: WorkbookFormat::Xlsx,
-        operations: plan.operations.iter().map(EditOperation::kind).collect(),
-        supported_features: plan.workbook.features_present.clone(),
-        preserved: plan.preserve.clone(),
-        platform: PLATFORM.to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-7-4-menu".to_owned(),
-            report_path: "pytools-core/tests/fx_header_menu_cli.rs".to_owned(),
-            adapter_version: "excel-editor/0.1.0 + ooxml-patch/0.1.0".to_owned(),
-            engine_version: "ooxml-patch/0.1.0 + zip/6".to_owned(),
-            platform: PLATFORM.to_owned(),
-        }),
-    }
 }
 
 fn create_config(root: &Path) -> Result<PathBuf> {

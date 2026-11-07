@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import math
+import os
 import re
 import shutil
 import sys
@@ -20,7 +21,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 XLSX_FILE_FORMAT = 51  # xlOpenXMLWorkbook
 # wdFormatXMLDocument. `wdFormatDocumentDefault` (16) is accepted by Microsoft
 # Word but WPS Writer ignores it and writes a binary .doc under a .docx name,
@@ -71,6 +72,12 @@ def _validate_container(path: Path, label: str) -> None:
         return
     with path.open("rb") as handle:
         if handle.read(4) != b"PK\x03\x04":
+            # 4-4 also normalizes legacy Excel files that were given an
+            # .xlsx suffix without being saved in OOXML format. Let Excel/WPS
+            # identify the real workbook type, then rely on the COM snapshot
+            # comparison after SaveAs before Rust publishes the candidate.
+            if suffix == ".xlsx":
+                return
             raise ValueError(
                 f"{label}不是 OOXML/ZIP 包（扩展名 {suffix}，文件头不是 PK）；"
                 f"文件可能已损坏或只是被改名：{path}"
@@ -172,6 +179,7 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
         formulas = _matrix(used.Formula, rows, columns)
         values = _matrix(used.Value2, rows, columns)
         formula_cells: dict[tuple[int, int], str] = {}
+        formula_values: dict[tuple[int, int], Any] = {}
         value_cells: dict[tuple[int, int], Any] = {}
 
         for row_offset in range(rows):
@@ -181,17 +189,18 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
                 value = values[row_offset][column_offset]
                 if isinstance(formula, str) and formula.startswith("="):
                     formula_cells[address] = formula
+                    formula_values[address] = value
                 elif value is not None:
                     value_cells[address] = value
 
-        sheets.append(
-            {
-                "name": str(worksheet.Name),
-                "formulas": formula_cells,
-                "values": value_cells,
-                "used_cells": rows * columns,
-            }
-        )
+        snapshot = {
+            "name": str(worksheet.Name),
+            "formulas": formula_cells,
+            "formula_values": formula_values,
+            "values": value_cells,
+            "used_cells": rows * columns,
+        }
+        sheets.append(snapshot)
     return sheets
 
 
@@ -265,6 +274,58 @@ def _compare(source: list[dict[str, Any]], output: list[dict[str, Any]]) -> dict
     }
 
 
+def _verify_institution_normalize_com_snapshots(
+    before: list[dict[str, Any]],
+    after: list[dict[str, Any]],
+    updates: dict[tuple[str, tuple[int, int]], str],
+) -> dict[str, int]:
+    before_names = [sheet["name"] for sheet in before]
+    after_names = [sheet["name"] for sheet in after]
+    if before_names != after_names:
+        raise ValueError("机构规范化保存后工作表数量、名称或顺序发生变化")
+    before_by_name = {sheet["name"]: sheet for sheet in before}
+    after_by_name = {sheet["name"]: sheet for sheet in after}
+    for name in before_names:
+        original = before_by_name[name]
+        saved = after_by_name[name]
+        if original["formulas"] != saved["formulas"]:
+            raise ValueError(f"工作表 {name!r} 的公式文本在 COM 保存后发生变化")
+        if set(original["formula_values"]) != set(saved["formula_values"]):
+            raise ValueError(f"工作表 {name!r} 的公式结果单元格在 COM 保存后发生变化")
+        for address, value in original["formula_values"].items():
+            if not _values_equal(value, saved["formula_values"][address]):
+                raise ValueError(
+                    f"工作表 {name!r} 的公式结果 {_cell_name(address)} 在 COM 保存后发生变化"
+                )
+        if original["used_cells"] != saved["used_cells"]:
+            raise ValueError(f"工作表 {name!r} 的使用区域尺寸在 COM 保存后发生变化")
+        expected_updates = {
+            address: value
+            for (sheet_name, address), value in updates.items()
+            if sheet_name == name
+        }
+        for address in set(original["values"]) | set(saved["values"]):
+            if address in expected_updates:
+                continue
+            if address not in original["values"] or address not in saved["values"]:
+                raise ValueError(
+                    f"工作表 {name!r} 的非目标单元格 {_cell_name(address)} 有增删"
+                )
+            if type(original["values"][address]) is not type(saved["values"][address]) or original["values"][address] != saved["values"][address]:
+                raise ValueError(
+                    f"工作表 {name!r} 的非目标单元格 {_cell_name(address)} 值发生变化"
+                )
+        for address, expected in expected_updates.items():
+            if saved["values"].get(address) != expected:
+                raise ValueError(
+                    f"工作表 {name!r} 的映射单元格 {_cell_name(address)} 未保存预期文本"
+                )
+    return {
+        "worksheet_count": len(before),
+        "formula_cells": sum(len(sheet["formulas"]) for sheet in before),
+    }
+
+
 class ConversionSession:
     def __init__(self) -> None:
         import pythoncom
@@ -303,7 +364,14 @@ class ConversionSession:
         name = (self._word_application_name or "").lower()
         return name.startswith("kwps.") or name.startswith("wps.")
 
-    def _ensure_application(self, prefer_wps: bool = False) -> None:
+    def _ensure_application(self, prefer_wps: bool | None = None) -> None:
+        if prefer_wps is None:
+            prefer_wps = os.environ.get("PYTOOLS_COM_PREFER_WPS", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "y",
+            }
         if self._application is not None:
             # A batch may mix .et with .xls; WPS-native files need a KET host,
             # so replace an already-created Excel host instead of reusing it.
@@ -462,6 +530,7 @@ class ConversionSession:
         workbook: Any | None = None
         reopened: Any | None = None
         source_file_format: int | None = None
+        source_link_sources: list[str] = []
         try:
             if not source.is_file():
                 raise FileNotFoundError(f"输入文件不存在：{source}")
@@ -478,12 +547,17 @@ class ConversionSession:
 
             stage = "读取源工作簿"
             workbook = application.Workbooks.Open(str(source), 0, True)
+            # Record what Office/WPS recognized from the container itself,
+            # not only from ET/ETT suffix checks. Rust uses this evidence for
+            # an OLE/BIFF workbook whose filename was misleadingly changed to
+            # .xlsx, and rejects non-Excel or WPS-native containers there.
+            source_file_format = int(workbook.FileFormat)
+            source_link_sources = _excel_link_sources(workbook)
             # `.et` / `.ett` are CFB containers: a rename to `.xls` would still
             # open with a plausible FileFormat, so require a WPS-native format
             # before publishing anything.
             if suffix in WPS_SPREADSHEET_SUFFIXES:
                 stage = "校验源文件确为原生 ET/ETT 工作簿"
-                source_file_format = int(workbook.FileFormat)
                 if source_file_format < WPS_NATIVE_FILE_FORMAT_MIN:
                     raise ValueError(
                         f"Input has {suffix} extension but the application opened "
@@ -514,11 +588,24 @@ class ConversionSession:
             workbook.Close(SaveChanges=False)
             workbook = None
 
+            stage = "保留外部工作簿链接目标"
+            _restore_external_link_targets(output, source_link_sources)
+
             stage = "重新打开候选工作簿"
             reopened = application.Workbooks.Open(str(output), 0, True)
             stage = "读取候选工作簿并验证公式和值"
             output_snapshot = _snapshot(reopened)
             validation = _compare(source_snapshot, output_snapshot)
+            output_link_sources = _excel_link_sources(reopened)
+            if _normalized_link_sources(source_link_sources) != _normalized_link_sources(
+                output_link_sources
+            ):
+                raise ValueError(
+                    "另存后外部工作簿链接目标发生变化："
+                    f"源链接 {source_link_sources!r}，转出链接 {output_link_sources!r}"
+                )
+            validation["external_link_count"] = len(source_link_sources)
+            validation["external_links_preserved"] = True
             if recalc_method is not None:
                 validation["recalc_method"] = recalc_method
                 validation["calculation"] = f"{recalc_method} before SaveAs"
@@ -529,8 +616,9 @@ class ConversionSession:
                 validation["recalc_errors"] = recalc_errors
                 validation["calculation"] = "no formulas; recalc not required"
             if source_file_format is not None:
-                validation["source_extension"] = suffix.lstrip(".")
                 validation["source_file_format"] = source_file_format
+            if suffix in WPS_SPREADSHEET_SUFFIXES:
+                validation["source_extension"] = suffix.lstrip(".")
                 validation["source_format_verified"] = True
             reopened.Close(SaveChanges=False)
             reopened = None
@@ -575,6 +663,380 @@ class ConversionSession:
                 self._ensure_application()
         raise AssertionError("unreachable")
 
+    @staticmethod
+    def _legacy_xls_path(value: str, label: str) -> Path:
+        path = _absolute(value)
+        if path.suffix.lower() != ".xls":
+            raise ValueError(f"{label}的 COM 业务路由仅接受 .xls：{path}")
+        if not path.is_file():
+            raise FileNotFoundError(f"{label}不存在：{path}")
+        return path
+
+    @staticmethod
+    def _legacy_number(value: Any) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            try:
+                return float(str(value).strip().replace(",", ""))
+            except (ValueError, TypeError):
+                return 0.0
+
+    @staticmethod
+    def _legacy_normalize(value: Any) -> str:
+        if value is None:
+            return ""
+        text = re.sub(r"[\r\n\t　\u00a0]", " ", str(value)).strip()
+        while "  " in text:
+            text = text.replace("  ", " ")
+        return text
+
+    def institution_normalize_com(
+        self, candidate_text: str, updates: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """Apply Rust-planned institution-name updates to an isolated `.xls` copy."""
+        stage = "检查 5-2 COM 候选"
+        candidate = self._legacy_xls_path(candidate_text, "规范化候选工作簿")
+        workbook = None
+        try:
+            if not updates:
+                raise ValueError("没有可写入的机构名称更新")
+            self._ensure_application()
+            if self._application is not None:
+                try:
+                    self._application.Calculation = -4135  # xlCalculationManual, matching PyCode.
+                except Exception:
+                    pass
+            stage = "通过 Excel/WPS 打开 5-2 候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="规范化候选工作簿")
+            sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
+            stage = "记录 5-2 候选原始公式、数据和合并区域"
+            before_snapshot = _snapshot(workbook)
+            applied = 0
+            expected_updates: dict[tuple[str, tuple[int, int]], str] = {}
+            seen: set[tuple[str, tuple[int, int]]] = set()
+            stage = "写入机构映射结果"
+            for update in updates:
+                sheet_name = str(update.get("sheet", ""))
+                address = str(update.get("cell", ""))
+                value = update.get("value")
+                if not sheet_name or not address or not isinstance(value, str):
+                    raise ValueError("机构名称更新缺少工作表、单元格或文本值")
+                key = (sheet_name, address.upper())
+                if key in seen:
+                    raise ValueError(f"同一候选包含重复单元格更新：{sheet_name}!{address}")
+                seen.add(key)
+                if sheet_name not in sheets:
+                    raise ValueError(f"候选工作簿缺少工作表：{sheet_name}")
+                if value.startswith("="):
+                    raise ValueError(f"机构映射结果不能写成公式：{sheet_name}!{address}")
+                target = sheets[sheet_name].Range(address)
+                coordinate = (int(target.Row), int(target.Column))
+                key = (sheet_name, coordinate)
+                if key in seen:
+                    raise ValueError(f"同一候选包含重复单元格更新：{sheet_name}!{address}")
+                seen.add(key)
+                expected_updates[key] = value
+                target.Value = value
+                applied += 1
+            stage = "保存 5-2 COM 候选工作簿"
+            workbook.Save()
+            stage = "核对 5-2 COM 保存结果"
+            after_snapshot = _snapshot(workbook)
+            verification = _verify_institution_normalize_com_snapshots(
+                before_snapshot, after_snapshot, expected_updates
+            )
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            return {
+                "ok": True,
+                "operation": "institution_normalize_com",
+                "candidate": str(candidate),
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "applied_count": applied,
+                "verified": True,
+                "verification": verification,
+            }
+        except Exception as error:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
+
+    def village_split_com(self, current_text: str, previous_text: str, candidate_text: str) -> dict[str, Any]:
+        """Apply PyCode's 5-1 COM algorithm to an isolated `.xls` candidate."""
+        stage = "检查 5-1 COM 输入"
+        current = self._legacy_xls_path(current_text, "本期工作簿")
+        previous = self._legacy_xls_path(previous_text, "去年同期工作簿")
+        candidate = self._legacy_xls_path(candidate_text, "目标候选工作簿")
+        current_wb = previous_wb = target_wb = None
+        try:
+            self._ensure_application()
+            application = self._application
+            if application is None:
+                raise RuntimeError("Excel/WPS COM 尚未启动")
+            try:
+                application.Calculation = -4135  # xlCalculationManual; matches PyCode.
+            except Exception:
+                pass
+
+            stage = "读取本期和去年同期村镇银行数据"
+            current_wb = self._open_workbook(current, read_only=True, label="本期工作簿")
+            previous_wb = self._open_workbook(previous, read_only=True, label="去年同期工作簿")
+            matrix: list[list[Any]] = [[0] * 8 for _ in range(6)]
+            indicators = ("村镇银行本外币", "村镇银行人民币", "村镇银行外汇")
+            for index, indicator in enumerate(indicators):
+                current_sheet = next(
+                    (sheet for sheet in current_wb.Worksheets if indicator in str(sheet.Name)),
+                    None,
+                )
+                if current_sheet is None:
+                    continue
+                previous_sheet = next(
+                    (sheet for sheet in previous_wb.Worksheets if str(sheet.Name) == str(current_sheet.Name)),
+                    None,
+                )
+                if previous_sheet is None:
+                    continue
+                for row_offset, base_row in enumerate((5, 6)):
+                    target_row = index + row_offset * 3
+                    current_deposit = self._legacy_number(current_sheet.Cells(base_row, 3).Value)
+                    previous_deposit = self._legacy_number(previous_sheet.Cells(base_row, 3).Value)
+                    current_loan = self._legacy_number(current_sheet.Cells(base_row, 87).Value)
+                    previous_loan = self._legacy_number(previous_sheet.Cells(base_row, 87).Value)
+                    matrix[target_row][0] = current_deposit
+                    matrix[target_row][1] = current_sheet.Cells(base_row, 4).Value
+                    matrix[target_row][2] = current_sheet.Cells(base_row, 5).Value
+                    matrix[target_row][3] = (
+                        0 if current_deposit == 0 else "∞"
+                    ) if previous_deposit == 0 else round((current_deposit / previous_deposit - 1) * 100, 2)
+                    matrix[target_row][4] = current_loan
+                    matrix[target_row][5] = current_sheet.Cells(base_row, 88).Value
+                    matrix[target_row][6] = current_sheet.Cells(base_row, 89).Value
+                    matrix[target_row][7] = (
+                        0 if current_loan == 0 else "∞"
+                    ) if previous_loan == 0 else round((current_loan / previous_loan - 1) * 100, 2)
+            if all(matrix[0][column] in (0, None) for column in (0, 4)):
+                return {
+                    "ok": True,
+                    "matrix_empty": True,
+                    "application": self._application_name,
+                    "process_id": self._process_id,
+                    "candidate": str(candidate),
+                    "branch_sheets": 0,
+                    "filled_sheets": 0,
+                    "skipped_sheets": 0,
+                }
+            current_wb.Close(SaveChanges=False)
+            current_wb = None
+            previous_wb.Close(SaveChanges=False)
+            previous_wb = None
+
+            stage = "通过 Excel/WPS 修改目标候选工作簿"
+            target_wb = self._open_workbook(candidate, read_only=False, label="目标候选工作簿")
+            counts = {"branch_sheets": 0, "filled_sheets": 0, "skipped_sheets": 0}
+            row_names = ("博罗长江村镇银行", "惠东惠民村镇银行")
+            for sheet in target_wb.Worksheets:
+                title = str(sheet.Name)
+                if "分机构" not in title:
+                    continue
+                counts["branch_sheets"] += 1
+                if "本外币" in title:
+                    kind = 0
+                elif "人民币" in title:
+                    kind = 1
+                elif "外汇" in title:
+                    kind = 2
+                else:
+                    counts["skipped_sheets"] += 1
+                    continue
+                used = sheet.UsedRange
+                last_row = int(used.Row) + int(used.Rows.Count) - 1
+                village_row = next(
+                    (
+                        row
+                        for row in range(1, last_row + 1)
+                        if sheet.Cells(row, 1).Value is not None
+                        and str(sheet.Cells(row, 1).Value).strip() == "村镇银行"
+                    ),
+                    None,
+                )
+                if village_row is None:
+                    counts["skipped_sheets"] += 1
+                    continue
+                sheet.Rows(village_row).Delete()
+                sheet.Rows(village_row).Insert()
+                sheet.Rows(village_row).Insert()
+                sheet.Cells(village_row, 1).Value = row_names[0]
+                sheet.Cells(village_row + 1, 1).Value = row_names[1]
+                for column in range(8):
+                    sheet.Cells(village_row, column + 2).Value = matrix[kind][column]
+                    sheet.Cells(village_row + 1, column + 2).Value = matrix[kind + 3][column]
+                counts["filled_sheets"] += 1
+            stage = "保存 5-1 COM 候选工作簿"
+            target_wb.Save()
+            target_wb.Close(SaveChanges=False)
+            target_wb = None
+            return {
+                "ok": True,
+                "matrix_empty": False,
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "candidate": str(candidate),
+                **counts,
+            }
+        except Exception as error:
+            for workbook in (target_wb, previous_wb, current_wb):
+                if workbook is not None:
+                    try:
+                        workbook.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+            return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
+
+    def rural_loan_com(self, current_candidate_text: str, previous_text: str) -> dict[str, Any]:
+        """Apply PyCode's 5-7 COM algorithm to an isolated current `.xls` candidate."""
+        stage = "检查 5-7 COM 输入"
+        current = self._legacy_xls_path(current_candidate_text, "本期候选工作簿")
+        previous = self._legacy_xls_path(previous_text, "上期工作簿")
+        current_wb = previous_wb = None
+        try:
+            self._ensure_application()
+            application = self._application
+            if application is None:
+                raise RuntimeError("Excel/WPS COM 尚未启动")
+            try:
+                application.Calculation = -4135  # xlCalculationManual; matches PyCode.
+            except Exception:
+                pass
+            stage = "打开本期候选与上期工作簿"
+            current_wb = self._open_workbook(current, read_only=False, label="本期候选工作簿")
+            previous_wb = self._open_workbook(previous, read_only=True, label="上期工作簿")
+
+            def unique_sheet(workbook: Any, keys: tuple[str, ...], label: str) -> Any:
+                matches = [sheet for sheet in workbook.Worksheets if all(key in str(sheet.Name) for key in keys)]
+                if len(matches) > 1:
+                    raise ValueError(f"{label}匹配到多个工作表（关键词 {keys}）")
+                return matches[0] if matches else None
+
+            def last_row(sheet: Any) -> int:
+                used = sheet.UsedRange
+                return int(used.Row) + int(used.Rows.Count) - 1
+
+            def last_col(sheet: Any) -> int:
+                used = sheet.UsedRange
+                return int(used.Column) + int(used.Columns.Count) - 1
+
+            def institution_map(sheet: Any) -> tuple[dict[str, float], dict[str, int], list[str]]:
+                values: dict[str, float] = {}
+                rows: dict[str, int] = {}
+                duplicates: list[str] = []
+                for row in range(3, last_row(sheet) + 1):
+                    name = self._legacy_normalize(sheet.Cells(row, 2).Value)
+                    if not name:
+                        continue
+                    if name in values:
+                        duplicates.append(name)
+                        continue
+                    values[name] = self._legacy_number(sheet.Cells(row, 3).Value)
+                    rows[name] = row
+                return values, rows, duplicates
+
+            stage = "定位涉农贷款分机构与分地区工作表"
+            current_inst = unique_sheet(current_wb, ("惠州市", "涉农贷款分机构"), "本期分机构")
+            previous_inst = unique_sheet(previous_wb, ("惠州市", "涉农贷款分机构"), "上期分机构")
+            current_area = unique_sheet(current_wb, ("本外币", "涉农贷款分地区"), "本期分地区")
+            if current_inst is None:
+                raise ValueError("本期文件未找到包含“惠州市”和“涉农贷款分机构”的工作表")
+            if previous_inst is None:
+                raise ValueError("上期文件未找到包含“惠州市”和“涉农贷款分机构”的工作表")
+            if current_area is None:
+                raise ValueError("本期文件未找到包含“本外币”和“涉农贷款分地区”的工作表")
+
+            current_values, current_rows, current_duplicates = institution_map(current_inst)
+            previous_values, _, previous_duplicates = institution_map(previous_inst)
+            if current_duplicates:
+                raise ValueError("本期分机构表存在重复机构名称：" + "、".join(current_duplicates))
+            if previous_duplicates:
+                raise ValueError("上期分机构表存在重复机构名称：" + "、".join(previous_duplicates))
+
+            stage = "计算涉农贷款比上月并写入本期候选"
+            fill_total = 0.0
+            unmatched: list[str] = []
+            changed_cells = 0
+            for name, row in current_rows.items():
+                if name in previous_values:
+                    difference = current_values[name] - previous_values[name]
+                    current_inst.Cells(row, 4).Value = difference
+                    fill_total += difference
+                else:
+                    current_inst.Cells(row, 4).Value = None
+                    unmatched.append(name)
+                changed_cells += 1
+            previous_only = [name for name in previous_values if name not in current_values]
+
+            header_col = 0
+            for row in range(1, min(last_row(current_area), 10) + 1):
+                for column in range(1, last_col(current_area) + 1):
+                    if self._legacy_normalize(current_area.Cells(row, column).Value) == "涉农贷款比上月":
+                        header_col = column
+                        break
+                if header_col:
+                    break
+            if header_col == 0:
+                raise ValueError('未在“本外币涉农贷款分地区”表中找到表头“涉农贷款比上月”')
+            city_row = 0
+            for row in range(1, last_row(current_area) + 1):
+                if any(
+                    self._legacy_normalize(current_area.Cells(row, column).Value) == "惠州市"
+                    for column in range(1, 4)
+                ):
+                    city_row = row
+                    break
+            if city_row == 0:
+                raise ValueError('未在“本外币涉农贷款分地区”表中找到“惠州市”所在行')
+            area_total = self._legacy_number(current_area.Cells(city_row, header_col).Value)
+
+            stage = "保存 5-7 COM 候选工作簿"
+            current_wb.Save()
+            current_wb.Close(SaveChanges=False)
+            current_wb = None
+            previous_wb.Close(SaveChanges=False)
+            previous_wb = None
+            return {
+                "ok": True,
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "changed_cells": changed_cells,
+                "summary": {
+                    "matched": len(current_rows) - len(unmatched),
+                    "fill_total": fill_total,
+                    "area_total": area_total,
+                    "consistent": abs(fill_total - area_total) <= 0.01,
+                    "unmatched_current": unmatched,
+                    "previous_only": previous_only,
+                    "error": None,
+                },
+            }
+        except Exception as error:
+            for workbook in (previous_wb, current_wb):
+                if workbook is not None:
+                    try:
+                        workbook.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+            return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
+
     def rename_sheets(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
         """复用 pytools 的 openpyxl 改名方案，并改写跨表引用与命名区域。
 
@@ -589,6 +1051,8 @@ class ConversionSession:
             candidate_text = candidate_text[4:]
         candidate = _absolute(candidate_text)
         stage = "检查改名候选工作簿"
+        workbook = None
+        reloaded = None
         try:
             _validate_container(candidate, "改名候选工作簿")
             if candidate.suffix.lower() != ".xlsx" or not changes:
@@ -622,6 +1086,7 @@ class ConversionSession:
                 raise ValueError("改名计划中没有实际改名")
             stage = "读取改名前快照"
             before = _openpyxl_snapshot(workbook)
+            formula_caches = _formula_cache_snapshot(candidate, before, renames)
             stage = "执行改名并改写引用"
             for old, new in renames.items():
                 workbook[old].title = new
@@ -639,7 +1104,12 @@ class ConversionSession:
                     defined.attr_text = _rewrite_sheet_refs(defined.attr_text or "", renames)
             stage = "保存改名候选"
             workbook.save(candidate)
+            workbook.close()
             workbook = None
+            stage = "恢复空字符串单元格"
+            _restore_empty_string_cells(candidate, before, renames)
+            stage = "恢复公式缓存值"
+            _restore_formula_caches(candidate, formula_caches)
             stage = "重新读取并校验"
             reloaded = openpyxl.load_workbook(candidate)
             after = _openpyxl_snapshot(reloaded)
@@ -658,10 +1128,12 @@ class ConversionSession:
                             f"工作表 {source['name']!r} 公式 {address} 引用改写不一致"
                         )
                 for address, value in source["values"].items():
-                    if result["values"].get(address) != value:
+                    if not _values_equal(value, result["values"].get(address)):
                         raise ValueError(
                             f"工作表 {source['name']!r} 非公式单元格 {address} 发生变化"
                         )
+            reloaded.close()
+            reloaded = None
             if _count_ref_errors(after) > _count_ref_errors(before):
                 raise ValueError("改名后出现新的 #REF! 公式引用")
             validation = {
@@ -671,7 +1143,122 @@ class ConversionSession:
             }
             return {"ok": True, "validation": validation}
         except Exception as error:
+            for opened in (reloaded, workbook):
+                if opened is not None:
+                    try:
+                        opened.close()
+                    except Exception:
+                        pass
             return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
+
+    def rename_sheets_com(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
+        """Rename a legacy .xls candidate with Excel/WPS, as PyCode does.
+
+        Excel updates formula references as part of Worksheet.Name assignment.
+        Rust supplies an isolated candidate and publishes it only after this
+        method has reopened it and checked the sheet order, formulas and values.
+        """
+        if candidate_text.startswith("\\\\?\\UNC\\"):
+            candidate_text = "\\\\" + candidate_text[8:]
+        elif candidate_text.startswith("\\\\?\\"):
+            candidate_text = candidate_text[4:]
+        candidate = _absolute(candidate_text)
+        stage = "检查 COM 改名候选工作簿"
+        workbook = None
+        reopened = None
+        try:
+            if candidate.suffix.lower() != ".xls":
+                raise ValueError("Excel COM 改名路径仅接受 .xls 候选")
+            if not changes:
+                raise ValueError("Excel COM 改名计划为空")
+            self._ensure_application()
+            stage = "通过 Excel/WPS 打开候选工作簿"
+            workbook = self._open_workbook(candidate, read_only=False, label="改名候选工作簿")
+            before = _snapshot(workbook)
+            before_names = [sheet["name"] for sheet in before]
+            current_names = set(before_names)
+            renames: dict[str, str] = {}
+            stage = "按配置修改工作表名称"
+            for change in changes:
+                old = str(change["old_name"])
+                new = str(change["new_name"])
+                if old not in current_names:
+                    raise ValueError(f"工作表 {old!r} 不存在")
+                if not new.strip() or re.search(r"[:\\/?*\[\]]", new) or len(new) > 31:
+                    raise ValueError(f"新工作表名 {new!r} 含非法字符或超过 31 个字符")
+                if old == new:
+                    continue
+                if any(name.lower() == new.lower() for name in current_names if name != old):
+                    raise ValueError(f"新工作表名 {new!r} 与现有工作表重名")
+                workbook.Worksheets(old).Name = new
+                current_names.remove(old)
+                current_names.add(new)
+                renames[old] = new
+            if not renames:
+                raise ValueError("改名计划中没有实际改名")
+
+            stage = "保存改名候选"
+            workbook.Save()
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            stage = "重新打开并校验改名候选"
+            reopened = self._open_workbook(candidate, read_only=True, label="改名候选工作簿")
+            after = _snapshot(reopened)
+            expected_names = [renames.get(name, name) for name in before_names]
+            if [sheet["name"] for sheet in after] != expected_names:
+                raise ValueError("改名后工作表名称或顺序与计划不一致")
+            formula_count = 0
+            value_count = 0
+            for old_sheet, new_sheet in zip(before, after):
+                old_formulas = old_sheet["formulas"]
+                new_formulas = new_sheet["formulas"]
+                if set(old_formulas) != set(new_formulas):
+                    raise ValueError(f"工作表 {new_sheet['name']!r} 的公式单元格有增删")
+                for address, formula in old_formulas.items():
+                    expected = "=" + _rewrite_sheet_refs(formula[1:], renames)
+                    actual = new_formulas[address]
+                    if expected.strip() != actual.strip():
+                        raise ValueError(
+                            f"工作表 {new_sheet['name']!r} 公式 {_cell_name(address)} "
+                            f"引用改写不一致：{expected!r} -> {actual!r}"
+                        )
+                old_values = old_sheet["values"]
+                new_values = new_sheet["values"]
+                if set(old_values) != set(new_values):
+                    raise ValueError(f"工作表 {new_sheet['name']!r} 的非公式数据单元格有增删")
+                for address, value in old_values.items():
+                    if not _values_equal(value, new_values[address]):
+                        raise ValueError(
+                            f"工作表 {new_sheet['name']!r} 非公式单元格 {_cell_name(address)} "
+                            f"值发生变化：{value!r} -> {new_values[address]!r}"
+                        )
+                formula_count += len(old_formulas)
+                value_count += len(old_values)
+            return {
+                "ok": True,
+                "application": self._application_name,
+                "process_id": self._process_id,
+                "validation": {
+                    "verified": True,
+                    "level": "excel_com_sheet_order_formula_text_and_cell_values",
+                    "worksheet_count": len(after),
+                    "formula_cells": formula_count,
+                    "value_cells": value_count,
+                },
+            }
+        except Exception as error:
+            for opened in (reopened, workbook):
+                if opened is not None:
+                    try:
+                        opened.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+            return {
+                "ok": False,
+                "stage": stage,
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(limit=6),
+            }
 
     def _open_validation_pair(
         self, template_path: Path, source_copy_path: Path
@@ -1102,6 +1689,431 @@ def _openpyxl_snapshot(workbook):
     return sheets
 
 
+def _worksheet_parts_by_name(archive) -> dict[str, str]:
+    import xml.etree.ElementTree as ET
+
+    spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    office_relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package_relationships = "http://schemas.openxmlformats.org/package/2006/relationships"
+    workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+    relationships_root = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+    relationships = {
+        relationship.attrib["Id"]: relationship.attrib
+        for relationship in relationships_root.findall(
+            f"{{{package_relationships}}}Relationship"
+        )
+    }
+    parts: dict[str, str] = {}
+    for sheet in workbook.findall(f"{{{spreadsheet}}}sheets/{{{spreadsheet}}}sheet"):
+        relationship_id = sheet.attrib[f"{{{office_relationships}}}id"]
+        relationship = relationships.get(relationship_id)
+        if relationship is None or not relationship["Type"].endswith("/worksheet"):
+            continue
+        target = relationship["Target"]
+        part = target.lstrip("/") if target.startswith("/") else f"xl/{target}"
+        parts[sheet.attrib["name"]] = part
+    return parts
+
+
+def _replace_cell_xml(xml_data: bytes, address: str, transform) -> bytes:
+    coordinate = re.escape(address.encode("ascii"))
+    pattern = re.compile(
+        rb"<c\b(?=[^>]*\br=(?:\""
+        + coordinate
+        + rb"\"|'"
+        + coordinate
+        + rb"'))[^>]*?(?:/>|>.*?</c>)",
+        re.DOTALL,
+    )
+    matches = list(pattern.finditer(xml_data))
+    if len(matches) != 1:
+        raise ValueError(f"无法唯一定位工作表单元格：{address}")
+    match = matches[0]
+    return xml_data[: match.start()] + transform(match.group(0)) + xml_data[match.end() :]
+
+
+def _cell_opening_with_type(opening: bytes, cell_type: str | None) -> bytes:
+    if cell_type is None:
+        return re.sub(rb"\s+t=(?:\"[^\"]*\"|'[^']*')", b"", opening, count=1)
+    if re.search(rb"\bt=(?:\"[^\"]*\"|'[^']*')", opening):
+        return re.sub(
+            rb"\bt=(?:\"[^\"]*\"|'[^']*')",
+            f't="{cell_type}"'.encode("ascii"),
+            opening,
+            count=1,
+        )
+    return opening[:-1] + f' t="{cell_type}">'.encode("ascii")
+
+
+def _formula_cache_snapshot(
+    candidate: Path,
+    before: list[dict[str, Any]],
+    renames: dict[str, str],
+) -> dict[tuple[str, str], tuple[str | None, bool, str | None]]:
+    """Capture formula cached values before openpyxl rewrites the package."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    caches: dict[tuple[str, str], tuple[str | None, bool, str | None]] = {}
+    with zipfile.ZipFile(candidate, "r") as source_zip:
+        worksheet_parts = _worksheet_parts_by_name(source_zip)
+        for sheet in before:
+            if not sheet["formulas"]:
+                continue
+            name = sheet["name"]
+            part = worksheet_parts.get(name)
+            if part is None:
+                raise ValueError(f"改名前公式工作表部件缺失：{name}")
+            root = ET.fromstring(source_zip.read(part))
+            cells = {
+                cell.attrib.get("r"): cell
+                for cell in root.iter(f"{{{namespace}}}c")
+            }
+            final_name = renames.get(name, name)
+            for address in sheet["formulas"]:
+                cell = cells.get(address)
+                formula = (
+                    cell.find(f"{{{namespace}}}f") if cell is not None else None
+                )
+                if cell is None or formula is None:
+                    raise ValueError(f"改名前公式单元格缺失：{name}!{address}")
+                value = cell.find(f"{{{namespace}}}v")
+                caches[(final_name, address)] = (
+                    cell.attrib.get("t"),
+                    value is not None,
+                    value.text if value is not None else None,
+                )
+    return caches
+
+
+def _restore_formula_caches(
+    candidate: Path,
+    caches: dict[tuple[str, str], tuple[str | None, bool, str | None]],
+) -> None:
+    """Restore formula results that openpyxl does not retain when saving."""
+    if not caches:
+        return
+
+    import xml.etree.ElementTree as ET
+    import zipfile
+    from xml.sax.saxutils import escape
+
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    by_sheet: dict[str, list[tuple[str, tuple[str | None, bool, str | None]]]] = {}
+    for (sheet_name, address), cache in caches.items():
+        by_sheet.setdefault(sheet_name, []).append((address, cache))
+
+    patched_parts: dict[str, bytes] = {}
+    with zipfile.ZipFile(candidate, "r") as source_zip:
+        worksheet_parts = _worksheet_parts_by_name(source_zip)
+        for sheet_name, cell_caches in by_sheet.items():
+            part = worksheet_parts.get(sheet_name)
+            if part is None:
+                raise ValueError(f"改名后公式工作表部件缺失：{sheet_name}")
+            xml_data = source_zip.read(part)
+            root = ET.fromstring(xml_data)
+            cells = {
+                cell.attrib.get("r"): cell
+                for cell in root.iter(f"{{{namespace}}}c")
+            }
+            for address, (cell_type, has_value, value_text) in cell_caches:
+                cell = cells.get(address)
+                if cell is None or cell.find(f"{{{namespace}}}f") is None:
+                    raise ValueError(f"改名后公式单元格缺失：{sheet_name}!{address}")
+
+                def restore(element: bytes) -> bytes:
+                    opening_end = element.find(b">") + 1
+                    if opening_end == 0:
+                        raise ValueError(f"公式单元格 XML 不完整：{sheet_name}!{address}")
+                    opening = _cell_opening_with_type(element[:opening_end], cell_type)
+                    self_closing = opening.rstrip().endswith(b"/>")
+                    if self_closing:
+                        raise ValueError(f"改名后公式内容缺失：{sheet_name}!{address}")
+                    content = element[opening_end:-4]
+                    content = re.sub(
+                        rb"<(?:v)\b[^>]*/>|<v\b[^>]*>.*?</v>",
+                        b"",
+                        content,
+                        flags=re.DOTALL,
+                    )
+                    formula = re.search(
+                        rb"<f\b[^>]*/>|<f\b[^>]*>.*?</f>",
+                        content,
+                        re.DOTALL,
+                    )
+                    if formula is None:
+                        raise ValueError(
+                            f"改名后公式 XML 缺失：{sheet_name}!{address}"
+                        )
+                    if has_value:
+                        escaped_value = (
+                            escape(value_text).encode("utf-8")
+                            if value_text is not None
+                            else b""
+                        )
+                        content = (
+                            content[: formula.end()]
+                            + b"<v>"
+                            + escaped_value
+                            + b"</v>"
+                            + content[formula.end() :]
+                        )
+                    return opening + content + b"</c>"
+
+                try:
+                    xml_data = _replace_cell_xml(xml_data, address, restore)
+                except ValueError as error:
+                    raise ValueError(f"{sheet_name}!{address}：{error}") from error
+            patched_parts[part] = xml_data
+
+    _rewrite_zip_parts(candidate, patched_parts)
+
+
+def _rewrite_zip_parts(candidate: Path, patched_parts: dict[str, bytes]) -> None:
+    import zipfile
+
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{candidate.name}.",
+        suffix=".xlsx",
+        dir=candidate.parent,
+        delete=False,
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        with zipfile.ZipFile(candidate, "r") as source_zip, zipfile.ZipFile(
+            temporary_path, "w"
+        ) as output_zip:
+            for item in source_zip.infolist():
+                data = patched_parts.get(item.filename)
+                if data is None:
+                    data = source_zip.read(item.filename)
+                output_zip.writestr(item, data)
+        temporary_path.replace(candidate)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def _excel_link_sources(workbook: Any) -> list[str]:
+    """Read Excel workbook-link sources as absolute paths before/after SaveAs."""
+    try:
+        sources = workbook.LinkSources(1)  # xlExcelLinks
+    except Exception as error:
+        raise RuntimeError(f"读取 Excel 外部工作簿链接失败：{error}") from error
+    if sources is None:
+        return []
+    if isinstance(sources, (str, bytes)):
+        return [str(sources)]
+    return [str(source) for source in sources]
+
+
+def _link_source_path(source: str) -> Path | None:
+    """Convert a local Excel link source to a path, leaving URL links intact."""
+    import re
+    from urllib.parse import unquote, urlsplit
+
+    source = str(source)
+    if re.match(r"^[A-Za-z]:[\\/]", source) or source.startswith("\\\\"):
+        return Path(source).resolve()
+
+    parsed = urlsplit(source)
+    if parsed.scheme.lower() != "file":
+        return None if parsed.scheme else Path(source).resolve()
+
+    path = unquote(parsed.path)
+    if parsed.netloc:
+        path = "\\\\" + parsed.netloc + path.replace("/", "\\")
+    elif re.match(r"^/[A-Za-z]:/", path):
+        path = path[1:].replace("/", "\\")
+    return Path(path).resolve()
+
+
+def _normalized_link_sources(sources: list[str]) -> list[str]:
+    import os
+
+    normalized = []
+    for source in sources:
+        path = _link_source_path(source)
+        normalized.append(
+            os.path.normcase(os.path.normpath(str(path))) if path is not None else source
+        )
+    return normalized
+
+
+def _external_link_target(source: str, output_directory: Path) -> str:
+    """Make an OOXML external-link target resolve to the original link source."""
+    import os
+
+    source_path = _link_source_path(source)
+    if source_path is None:
+        return source
+    try:
+        relative = os.path.relpath(str(source_path), str(output_directory.resolve()))
+    except ValueError:
+        # A different Windows volume cannot be represented by a relative URI.
+        return source_path.as_uri()
+    return relative.replace("\\", "/")
+
+
+def _restore_external_link_targets(candidate: Path, source_links: list[str]) -> None:
+    """Restore Excel's external-link relationships to their pre-SaveAs targets.
+
+    Excel can rebase a relative external workbook link to the output directory
+    during SaveAs. The formula text and cached values then look unchanged while
+    the published workbook points at a different (often nonexistent) file.
+    Keep the COM-calculated workbook intact and patch only externalLinkPath
+    relationship targets, then let Excel reopen the package for verification.
+    """
+    if not source_links:
+        return
+
+    import re
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    package_relationships = "http://schemas.openxmlformats.org/package/2006/relationships"
+    office_relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    spreadsheet_main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    ET.register_namespace("", package_relationships)
+    relationship_tag = f"{{{package_relationships}}}Relationship"
+    external_book_tag = f"{{{spreadsheet_main}}}externalBook"
+    link_parts: list[tuple[int, str]] = []
+    with zipfile.ZipFile(candidate, "r") as archive:
+        for name in archive.namelist():
+            match = re.fullmatch(
+                r"xl/externalLinks/_rels/externalLink(\d+)\.xml\.rels", name
+            )
+            if match:
+                link_parts.append((int(match.group(1)), name))
+        link_parts.sort()
+        if len(link_parts) != len(source_links):
+            raise ValueError(
+                "另存候选中的外部工作簿链接数量与源工作簿不一致："
+                f"源 {len(source_links)} 个，候选 {len(link_parts)} 个"
+            )
+
+        patched_parts: dict[str, bytes] = {}
+        for (_, part), source in zip(link_parts, source_links):
+            root = ET.fromstring(archive.read(part))
+            external_link_part = part.replace("/_rels/", "/")[: -len(".rels")]
+            external_link_root = ET.fromstring(archive.read(external_link_part))
+            external_book = external_link_root.find(external_book_tag)
+            relationship_id = (
+                external_book.attrib.get(f"{{{office_relationships}}}id")
+                if external_book is not None
+                else None
+            )
+            relationship = next(
+                (
+                    relation
+                    for relation in root.findall(relationship_tag)
+                    if relation.attrib.get("Id") == relationship_id
+                    and relation.attrib.get("Type", "").endswith("/externalLinkPath")
+                ),
+                None,
+            )
+            if relationship is None:
+                raise ValueError(
+                    f"外部链接关系部件 {part} 找不到 externalBook 引用的路径关系："
+                    f"r:id={relationship_id!r}"
+                )
+            relationship.set(
+                "Target", _external_link_target(source, candidate.parent)
+            )
+            relationship.set("TargetMode", "External")
+            patched_parts[part] = ET.tostring(
+                root, encoding="utf-8", xml_declaration=True
+            )
+
+    _rewrite_zip_parts(candidate, patched_parts)
+
+
+def _restore_empty_string_cells(
+    candidate: Path,
+    before: list[dict[str, Any]],
+    renames: dict[str, str],
+) -> None:
+    """Restore explicit empty strings that openpyxl serializes as blank cells.
+
+    In a source XLSX an empty string may be represented by a shared-string
+    entry whose text is empty. openpyxl writes that cell as an empty
+    ``inlineStr`` element, which reloads as ``None`` and changes Excel
+    semantics (for example, ``COUNTA`` / ``ISBLANK``). Reinsert the explicit
+    empty inline string in the saved worksheet XML so the rename does not
+    silently erase it.
+    """
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    empty_cells_by_name = {
+        renames.get(sheet["name"], sheet["name"]): [
+            address
+            for address, value in sheet["values"].items()
+            if isinstance(value, str) and value == ""
+        ]
+        for sheet in before
+    }
+    empty_cells_by_name = {
+        name: cells for name, cells in empty_cells_by_name.items() if cells
+    }
+    if not empty_cells_by_name:
+        return
+
+    patched_parts: dict[str, bytes] = {}
+    with zipfile.ZipFile(candidate, "r") as source_zip:
+        worksheet_parts = _worksheet_parts_by_name(source_zip)
+
+        empty_by_part = {
+            worksheet_parts[name]: cells
+            for name, cells in empty_cells_by_name.items()
+            if name in worksheet_parts
+        }
+        missing_sheets = sorted(set(empty_cells_by_name) - set(worksheet_parts))
+        if missing_sheets:
+            raise ValueError(
+                f"改名后包含显式空字符串的工作表部件缺失：{', '.join(missing_sheets)}"
+            )
+        for part, addresses in empty_by_part.items():
+            try:
+                xml_data = source_zip.read(part)
+            except KeyError as error:
+                raise ValueError(f"改名后工作表部件缺失：{part}") from error
+            root = ET.fromstring(xml_data)
+            cells = {cell.attrib.get("r"): cell for cell in root.iter(f"{{{namespace}}}c")}
+            for address in addresses:
+                cell = cells.get(address)
+                if cell is None:
+                    raise ValueError(f"改名后显式空字符串单元格缺失：{part}!{address}")
+                if cell.find(f"{{{namespace}}}f") is not None:
+                    raise ValueError(f"显式空字符串单元格意外变成公式：{part}!{address}")
+                def restore(element: bytes) -> bytes:
+                    opening_end = element.find(b">") + 1
+                    if opening_end == 0:
+                        raise ValueError(f"工作表单元格 XML 不完整：{part}!{address}")
+                    opening = element[:opening_end]
+                    self_closing = opening.rstrip().endswith(b"/>")
+                    if self_closing:
+                        opening = opening.rstrip()[:-2] + b">"
+                    opening = _cell_opening_with_type(opening, "inlineStr")
+                    if self_closing:
+                        return opening + b"<is><t></t></is></c>"
+                    content = element[opening_end:-4]
+                    content = re.sub(
+                        rb"<(?:v|is)\b[^>]*/>|<(?:v|is)\b[^>]*>.*?</(?:v|is)>",
+                        b"",
+                        content,
+                        flags=re.DOTALL,
+                    )
+                    return opening + content + b"<is><t></t></is></c>"
+
+                xml_data = _replace_cell_xml(xml_data, address, restore)
+            patched_parts[part] = xml_data
+
+    _rewrite_zip_parts(candidate, patched_parts)
+
+
 def _count_ref_errors(sheets) -> int:
     total = 0
     for sheet in sheets:
@@ -1128,12 +2140,43 @@ def _serve() -> int:
                 if operation == "rename_sheets":
                     _write_json(session.rename_sheets(str(request["candidate"]), request["changes"]))
                     continue
+                if operation == "rename_sheets_com":
+                    _write_json(
+                        session.rename_sheets_com(
+                            str(request["candidate"]), request["changes"]
+                        )
+                    )
+                    continue
                 if operation == "recalculate_named_validation":
                     _write_json(
                         session.recalculate_named_validation(
                             str(request["source_copy"]),
                             request["regions"],
                             request.get("template"),
+                        )
+                    )
+                    continue
+                if operation == "village_split_com":
+                    _write_json(
+                        session.village_split_com(
+                            str(request["current"]),
+                            str(request["previous"]),
+                            str(request["candidate"]),
+                        )
+                    )
+                    continue
+                if operation == "institution_normalize_com":
+                    _write_json(
+                        session.institution_normalize_com(
+                            str(request["candidate"]), request["updates"]
+                        )
+                    )
+                    continue
+                if operation == "rural_loan_com":
+                    _write_json(
+                        session.rural_loan_com(
+                            str(request["current_candidate"]),
+                            str(request["previous"]),
                         )
                     )
                     continue

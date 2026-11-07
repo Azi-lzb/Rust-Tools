@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Must match `PYWIN32_PROTOCOL_VERSION` in pytools-core/src/conversion_engine.rs
 # and `PROTOCOL_VERSION` in pytools-core/python/pywin32_excel_conversion_worker.py.
-PYWIN32_PROTOCOL_VERSION = 2
+PYWIN32_PROTOCOL_VERSION = 3
 
 
 def fail(message: str) -> "NoReturn":

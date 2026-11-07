@@ -4,8 +4,8 @@ use crate::file_commit::TargetCommitReport;
 use anyhow::{Context, Result};
 use excel_editor::{
     BackendCapability, EditBackend, EditExecutionReport, EditOperation, EngineId, ExcelEditPlan,
-    ExcelModifier, OoxmlHeaderTextBackend, OoxmlHeaderTextValidator, OpenpyxlXlsxBackend,
-    UmyaXlsxBackend, UmyaXlsxValidator,
+    ExcelModifier, OoxmlHeaderTextBackend, OoxmlHeaderTextValidator, OpenpyxlWorkerConfig,
+    OpenpyxlXlsxBackend, UmyaXlsxBackend, UmyaXlsxValidator,
 };
 use serde::Deserialize;
 use std::{
@@ -155,6 +155,24 @@ pub(crate) fn apply_plan(
     modifier.execute(plan).map_err(anyhow::Error::from)
 }
 
+/// Run a single protected plan with an explicitly resolved Openpyxl runtime.
+/// This narrow entry point lets internal calculation fallbacks reuse the same
+/// ExcelModifier validation and commit path without relying on capability JSON.
+pub(crate) fn apply_plan_with_openpyxl_config(
+    plan: &ExcelEditPlan,
+    capability: BackendCapability,
+    config: OpenpyxlWorkerConfig,
+    platform: &str,
+) -> Result<EditExecutionReport> {
+    let backend = OpenpyxlXlsxBackend::new(capability, config)?;
+    let modifier = ExcelModifier::new(
+        platform,
+        vec![Arc::new(backend)],
+        Arc::new(PlanOutputValidator),
+    )?;
+    modifier.execute(plan).map_err(anyhow::Error::from)
+}
+
 struct PlanOutputValidator;
 
 impl excel_editor::OutputValidator for PlanOutputValidator {
@@ -164,7 +182,14 @@ impl excel_editor::OutputValidator for PlanOutputValidator {
             .iter()
             .all(|operation| matches!(operation, EditOperation::ReplaceHeaderText { .. }))
         {
-            OoxmlHeaderTextValidator.validate(plan, candidate_output)
+            if plan
+                .preserve
+                .contains(&excel_editor::PreservationRequirement::UnmodifiedPackageParts)
+            {
+                OoxmlHeaderTextValidator.validate(plan, candidate_output)
+            } else {
+                excel_editor::OpenpyxlXlsxValidator.validate(plan, candidate_output)
+            }
         } else {
             UmyaXlsxValidator.validate(plan, candidate_output)
         }

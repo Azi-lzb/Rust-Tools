@@ -1,12 +1,16 @@
 //! Worksheet used-range and comment-template summary workflows.
 
-use crate::conversion_engine::{ConversionRuntime, NamedValidationRegionRequest};
+use crate::conversion_engine::{
+    named_validation_calculation_engine, ConversionRuntime, NamedValidationRegionRequest,
+};
 use anyhow::{Context, Result};
 use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
-    read_workbook_with_unknown_error_tokens_as_text, read_xlsx_worksheet_extents, CellValue,
-    DefinedNameParseStatus, DefinedNameRecord, SheetDump, WorkbookDump, WorksheetExtent,
+    read_workbook_with_unknown_error_tokens_as_text, read_xlsx_effective_cell_number_formats,
+    read_xlsx_worksheet_extents, CellNumberFormatRequest, CellNumberFormatSource, CellValue,
+    DefinedNameParseStatus, DefinedNameRecord, EffectiveCellNumberFormatInfo, SheetDump,
+    WorkbookDump, WorksheetExtent,
 };
 use excel_writer::{Format, Workbook, Worksheet};
 use serde::Serialize;
@@ -469,6 +473,54 @@ fn summarize_used_ranges_inner(
         let compatibility_normalization_used = read_result.compatibility_normalization_used;
         let normalized_cell_count = read_result.normalized_cell_count;
         let mut dump = read_result.workbook;
+        let compatibility_started = Instant::now();
+        let dates_normalized =
+            match normalize_unknown_datetime_formats_for_openpyxl(&path, &mut dump) {
+                Ok(normalized) => normalized,
+                Err(error) => {
+                    progress.failed_files += 1;
+                    emitter.emit(
+                        "value_type_compatibility",
+                        "failed",
+                        "无法按 PyCode 数值语义解释日期样式单元格",
+                        &progress,
+                        Some(&path),
+                        Some(compatibility_started.elapsed()),
+                        &[
+                            "pytools-core",
+                            "calamine",
+                            "namespace-aware OOXML number-format supplement",
+                        ],
+                        Some("Calamine + OOXML number-format compatibility"),
+                        Some("number_format_compatibility_error"),
+                    );
+                    return Err(error).with_context(|| {
+                        format!(
+                            "normalize used-range dates to PyCode/OpenPyXL value semantics for {}",
+                            path.display()
+                        )
+                    });
+                }
+            };
+        let compatibility_elapsed = compatibility_started.elapsed();
+        read_elapsed_during_write += compatibility_elapsed;
+        if dates_normalized > 0 {
+            emitter.emit(
+                "value_type_compatibility",
+                "succeeded",
+                format!("按 PyCode 数值口径保留 {dates_normalized} 个 Calamine 日期样式值"),
+                &progress,
+                Some(&path),
+                Some(compatibility_elapsed),
+                &[
+                    "pytools-core",
+                    "calamine",
+                    "namespace-aware OOXML number-format supplement",
+                ],
+                Some("Calamine + OOXML number-format compatibility"),
+                None,
+            );
+        }
         if excel_reader::uses_1904_date_system(&path)? {
             shift_datetime_serials_to_1900_epoch(&mut dump);
         }
@@ -2334,12 +2386,18 @@ fn extract_named_validation_regions_inner(
             .into_iter()
             .collect::<Vec<_>>();
         emitter.emit("validation_copy", "started",
-            format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；COM 仅修改副本，原文件不变"),
+            format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；计算引擎仅处理副本，原文件不变"),
             &progress, Some(source), None, &["pytools-core"], None, None);
         let mut source_copy_created = false;
+        let calculation_engine = named_validation_calculation_engine();
+        let calculation_components: &[&str] = if cfg!(windows) {
+            &["pytools-core", "pywin32", "Excel/WPS COM"]
+        } else {
+            &["pytools-core", "LibreOffice Calc"]
+        };
         let calculation = (|runtime: &mut ConversionRuntime| -> Result<_> {
             // 校验副本保留在输出目录的“副本/”下（用户要求）：便于事后
-            // 核对 COM 重算时实际读取的数据；同名副本按序号追加。
+            // 核对公式重算时实际读取的数据；同名副本按序号追加。
             let retained_dir = output_dir.join("副本");
             fs::create_dir_all(&retained_dir)
                 .with_context(|| format!("创建副本目录失败：{}", retained_dir.display()))?;
@@ -2432,14 +2490,14 @@ fn extract_named_validation_regions_inner(
                 "validation_calculation",
                 "started",
                 format!(
-                    "正在通过 Excel/WPS COM 重算「{file_name}」的校验区域（{} 个区域）",
+                    "正在通过 {calculation_engine} 重算「{file_name}」的校验区域（{} 个区域）",
                     file_requests.len()
                 ),
                 &progress,
                 Some(source),
                 None,
-                &["pytools-core", "pywin32", "Excel/WPS COM"],
-                Some("pywin32 Excel/WPS COM"),
+                calculation_components,
+                Some(calculation_engine),
                 None,
             );
             runtime.recalculate_named_validation_regions(
@@ -2458,14 +2516,14 @@ fn extract_named_validation_regions_inner(
                         "validation_calculation",
                         "failed",
                         format!(
-                            "COM 重算校验区域失败：「{file_name}」/「{}」；原因：{cause}",
+                            "公式重算校验区域失败：「{file_name}」/「{}」；原因：{cause}",
                             routed_sheets.join("、")
                         ),
                         &progress,
                         Some(source),
                         Some(validation_started.elapsed()),
-                        &["pytools-core", "pywin32", "Excel/WPS COM"],
-                        Some("pywin32 Excel/WPS COM"),
+                        calculation_components,
+                        Some(calculation_engine),
                         Some("named_validation_calculation_error"),
                     );
                 } else {
@@ -2528,11 +2586,17 @@ fn extract_named_validation_regions_inner(
                 calculation.copied_template_sheets.len()
             )
         };
+        let calculation_application = calculation.application.clone();
+        let success_components: &[&str] = if calculation_application == "LibreOffice Calc" {
+            &["pytools-core", "LibreOffice Calc"]
+        } else {
+            &["pytools-core", "pywin32", "Excel/WPS COM"]
+        };
         emitter.emit("validation_calculation", "succeeded",
-            format!("校验区域重算完成：「{file_name}」/「{}」；{}；提取命中结果 {hit_count} 条{copied_sheets}",
-                routed_sheets.join("、"), calculation.application),
-            &progress, Some(source), Some(validation_started.elapsed()), &["pytools-core", "pywin32", "Excel/WPS COM"],
-            Some("pywin32 Excel/WPS COM"), None);
+            format!("校验区域重算完成：「{file_name}」/「{}」；计算引擎：{}；校验公式/辅助表复制：{}；提取命中结果 {hit_count} 条{copied_sheets}",
+                routed_sheets.join("、"), calculation_application, calculation.dependency_copy_engine),
+            &progress, Some(source), Some(validation_started.elapsed()), success_components,
+            Some(calculation_engine), None);
     }
 
     anyhow::ensure!(
@@ -2722,6 +2786,12 @@ fn extract_named_validation_regions_inner(
             unknown_error_token_cells_normalized: normalized_cells,
         }),
     };
+    let calculation_engine = named_validation_calculation_engine();
+    let mut run_components = vec!["pytools-core", calculation_engine, "rust_xlsxwriter"];
+    if cfg!(windows) {
+        run_components.push("pywin32");
+    }
+    let summary_engine = format!("{calculation_engine} + rust_xlsxwriter");
     emitter.emit(
         "run",
         "succeeded",
@@ -2734,13 +2804,8 @@ fn extract_named_validation_regions_inner(
         &progress,
         Some(&output_path),
         Some(started.elapsed()),
-        &[
-            "pytools-core",
-            "pywin32",
-            "Excel/WPS COM",
-            "rust_xlsxwriter",
-        ],
-        Some("pywin32 Excel/WPS COM + rust_xlsxwriter"),
+        &run_components,
+        Some(&summary_engine),
         None,
     );
     Ok(result)
@@ -5616,6 +5681,74 @@ fn column_letters(mut col: usize) -> String {
     }
     out
 }
+
+/// Calamine recognizes some locale-specific built-in number formats as dates
+/// that OpenPyXL 3.1.5 leaves as ordinary numbers (for example built-in format
+/// ID 31). The used-range summary mirrors PyCode's `data_only=True` value
+/// semantics: only retain Calamine's datetime interpretation when OOXML
+/// exposes a format code that OpenPyXL can interpret as a date.
+fn normalize_unknown_datetime_formats_for_openpyxl(
+    path: &Path,
+    workbook: &mut WorkbookDump,
+) -> Result<usize> {
+    let requests = workbook
+        .sheets
+        .iter()
+        .flat_map(|sheet| {
+            sheet.values.iter().filter_map(|(cell_reference, value)| {
+                (value.get("type").and_then(serde_json::Value::as_str) == Some("datetime_serial"))
+                    .then(|| CellNumberFormatRequest {
+                        sheet_name: sheet.name.clone(),
+                        cell_reference: cell_reference.clone(),
+                    })
+            })
+        })
+        .collect::<Vec<_>>();
+    if requests.is_empty() {
+        return Ok(0);
+    }
+
+    let formats = read_xlsx_effective_cell_number_formats(path, &requests)
+        .with_context(|| format!("read date cell number formats from {}", path.display()))?;
+    Ok(normalize_unknown_datetime_formats(workbook, &formats))
+}
+
+fn normalize_unknown_datetime_formats(
+    workbook: &mut WorkbookDump,
+    formats: &[EffectiveCellNumberFormatInfo],
+) -> usize {
+    let mut normalized = 0;
+    for format in formats.iter().filter(|format| format.format_code.is_none()) {
+        let Some(sheet) = workbook
+            .sheets
+            .iter_mut()
+            .find(|sheet| sheet.name == format.sheet_name)
+        else {
+            continue;
+        };
+        let Some(value) = sheet.values.get_mut(&format.cell_reference) else {
+            continue;
+        };
+        if value.get("type").and_then(serde_json::Value::as_str) != Some("datetime_serial") {
+            continue;
+        }
+        let Some(serial) = value.get("value").and_then(serde_json::Value::as_f64) else {
+            continue;
+        };
+        *value = if serial.is_finite()
+            && serial.fract() == 0.0
+            && serial >= i64::MIN as f64
+            && serial <= i64::MAX as f64
+        {
+            serde_json::json!({ "type": "integer", "value": serial as i64 })
+        } else {
+            serde_json::json!({ "type": "number", "value": serial })
+        };
+        normalized += 1;
+    }
+    normalized
+}
+
 /// Calamine keeps numeric date cells on the source workbook's date epoch, so
 /// serials read from a 1904-date-system workbook must shift by 1462 days
 /// before they are written into the summary's fresh 1900-epoch workbook.
@@ -6611,6 +6744,90 @@ mod patch_error_cells_tests {
         assert!(result.is_err());
         assert_eq!(output_bytes?, b"existing output");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod used_range_datetime_compat_tests {
+    use super::*;
+
+    #[test]
+    fn unknown_builtin_date_format_matches_openpyxl_numeric_values() {
+        let mut workbook = WorkbookDump {
+            schema_version: 1,
+            reader: "calamine",
+            elapsed_ms: 0,
+            sheets: vec![SheetDump {
+                name: "汇总源".to_owned(),
+                values: BTreeMap::from([
+                    (
+                        "A1".to_owned(),
+                        serde_json::json!({"type":"datetime_serial", "value":46295.0}),
+                    ),
+                    (
+                        "A2".to_owned(),
+                        serde_json::json!({"type":"datetime_serial", "value":46295.5}),
+                    ),
+                    (
+                        "A3".to_owned(),
+                        serde_json::json!({"type":"datetime_serial", "value":46295.0}),
+                    ),
+                ]),
+                formulas: BTreeMap::new(),
+                formula_status: "read_by_calamine".to_owned(),
+                merges: Vec::new(),
+                merge_status: "read_by_calamine".to_owned(),
+                comments: BTreeMap::new(),
+                comments_status: "read_by_ooxml".to_owned(),
+                conditional_formatting: Vec::new(),
+                conditional_formatting_status: "read_by_ooxml".to_owned(),
+                data_validations: Vec::new(),
+                data_validations_status: "read_by_ooxml".to_owned(),
+            }],
+        };
+        let formats = [
+            EffectiveCellNumberFormatInfo {
+                sheet_name: "汇总源".to_owned(),
+                cell_reference: "A1".to_owned(),
+                style_index: 1,
+                number_format_id: 31,
+                format_code: None,
+                source: CellNumberFormatSource::Cell,
+            },
+            EffectiveCellNumberFormatInfo {
+                sheet_name: "汇总源".to_owned(),
+                cell_reference: "A2".to_owned(),
+                style_index: 1,
+                number_format_id: 31,
+                format_code: None,
+                source: CellNumberFormatSource::Cell,
+            },
+            EffectiveCellNumberFormatInfo {
+                sheet_name: "汇总源".to_owned(),
+                cell_reference: "A3".to_owned(),
+                style_index: 2,
+                number_format_id: 14,
+                format_code: Some("mm-dd-yy".to_owned()),
+                source: CellNumberFormatSource::Cell,
+            },
+        ];
+
+        assert_eq!(
+            normalize_unknown_datetime_formats(&mut workbook, &formats),
+            2
+        );
+        assert_eq!(
+            workbook.sheets[0].values["A1"],
+            serde_json::json!({"type":"integer", "value":46295})
+        );
+        assert_eq!(
+            workbook.sheets[0].values["A2"],
+            serde_json::json!({"type":"number", "value":46295.5})
+        );
+        assert_eq!(
+            workbook.sheets[0].values["A3"],
+            serde_json::json!({"type":"datetime_serial", "value":46295.0})
+        );
     }
 }
 

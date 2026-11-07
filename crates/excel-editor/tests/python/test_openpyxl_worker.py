@@ -99,6 +99,113 @@ class OpenpyxlWorkerTests(unittest.TestCase):
                 patched.writestr(item, data)
         replacement.replace(path)
 
+    @staticmethod
+    def _add_cell_metadata(path, address):
+        replacement = path.with_name(path.stem + ".metadata.xlsx")
+        main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+        content_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+        rel_type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"
+        metadata_xml = (
+            f'<metadata xmlns="{main_ns}" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">'
+            '<metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" '
+            'copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" '
+            'clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>'
+            '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3">'
+            '<xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>'
+            '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata></metadata>'
+        ).encode("utf-8")
+        with zipfile.ZipFile(path, "r") as original, zipfile.ZipFile(
+            replacement, "w", zipfile.ZIP_DEFLATED
+        ) as patched:
+            for item in original.infolist():
+                data = original.read(item.filename)
+                if item.filename == "xl/worksheets/sheet1.xml":
+                    root = ET.fromstring(data)
+                    cell = root.find(f".//{{{main_ns}}}c[@r='{address}']")
+                    if cell is None:
+                        raise AssertionError("expected metadata cell")
+                    cell.set("cm", "1")
+                    ET.register_namespace("", main_ns)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                elif item.filename == "xl/_rels/workbook.xml.rels":
+                    root = ET.fromstring(data)
+                    ET.SubElement(root, f"{{{rel_ns}}}Relationship", {
+                        "Id": "rIdMetadata", "Type": rel_type, "Target": "metadata.xml"
+                    })
+                    ET.register_namespace("", rel_ns)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                elif item.filename == "[Content_Types].xml":
+                    root = ET.fromstring(data)
+                    ET.SubElement(root, f"{{{content_ns}}}Override", {
+                        "PartName": "/xl/metadata.xml", "ContentType": content_type
+                    })
+                    ET.register_namespace("", content_ns)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                elif item.filename == "xl/workbook.xml":
+                    root = ET.fromstring(data)
+                    extension_list = ET.SubElement(root, f"{{{main_ns}}}extLst")
+                    extension = ET.SubElement(extension_list, f"{{{main_ns}}}ext", {"uri": "urn:worker-test:calc-features"})
+                    ET.SubElement(extension, "{urn:worker-test:calc-features}feature", {"name": "retained"})
+                    ET.register_namespace("", main_ns)
+                    ET.register_namespace("xcalcf", "urn:worker-test:calc-features")
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                patched.writestr(item, data)
+            patched.writestr("xl/metadata.xml", metadata_xml)
+        replacement.replace(path)
+
+    @staticmethod
+    def _add_unstyled_column_range(path):
+        replacement = path.with_name(path.stem + ".column-range.xlsx")
+        with zipfile.ZipFile(path, "r") as original, zipfile.ZipFile(
+            replacement, "w", zipfile.ZIP_DEFLATED
+        ) as patched:
+            for item in original.infolist():
+                data = original.read(item.filename)
+                if item.filename == "xl/worksheets/sheet1.xml":
+                    marker = b"<sheetData>"
+                    fragment = b'<cols><col min="1" max="3" width="12.25" customWidth="1"/></cols>'
+                    if data.count(marker) != 1:
+                        raise AssertionError("expected one sheetData opening tag")
+                    data = data.replace(marker, fragment + marker, 1)
+                patched.writestr(item, data)
+        replacement.replace(path)
+
+    @staticmethod
+    def _add_calculation_chain(path):
+        replacement = path.with_name(path.stem + ".calc-chain.xlsx")
+        relationship_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+        content_types_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+        calc_chain_type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"
+        calc_chain_content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"
+        calc_chain = (
+            b'<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            b'<c r="C2" i="1"/></calcChain>'
+        )
+        with zipfile.ZipFile(path, "r") as original, zipfile.ZipFile(
+            replacement, "w", zipfile.ZIP_DEFLATED
+        ) as patched:
+            for item in original.infolist():
+                data = original.read(item.filename)
+                if item.filename == "xl/_rels/workbook.xml.rels":
+                    root = ET.fromstring(data)
+                    ET.SubElement(root, f"{{{relationship_ns}}}Relationship", {
+                        "Id": "rIdCalcChain", "Type": calc_chain_type, "Target": "calcChain.xml"
+                    })
+                    ET.register_namespace("", relationship_ns)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                elif item.filename == "[Content_Types].xml":
+                    root = ET.fromstring(data)
+                    ET.SubElement(root, f"{{{content_types_ns}}}Override", {
+                        "PartName": "/xl/calcChain.xml", "ContentType": calc_chain_content_type
+                    })
+                    ET.register_namespace("", content_types_ns)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                patched.writestr(item, data)
+            patched.writestr("xl/calcChain.xml", calc_chain)
+        replacement.replace(path)
+
     def tearDown(self):
         self.temp.cleanup()
 
@@ -204,14 +311,22 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertEqual(saved.sheetnames, ["Data", "DeleteMe", "Notes"])
         saved.close()
 
-    def test_unsupported_row_shift_is_rejected_before_output_write(self):
-        output = self.root / "unsupported.xlsx"
+    def test_insert_rows_is_applied_to_candidate_without_changing_source(self):
+        output = self.root / "inserted-rows.xlsx"
+        source_hash = digest(self.source)
         plan = self.base_plan(output, [operation("insert_rows", sheet="Data", first_row=2, count=1)])
         process, response = run_worker(plan, output)
-        self.assertEqual(process.returncode, 0)
-        self.assertEqual(response["status"], "unsupported_before_write")
-        self.assertEqual(response["error"]["kind"], "unsupported_operation")
-        self.assertFalse(output.exists())
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        self.assertEqual(response["verified_operation_count"], 1)
+        self.assertEqual(digest(self.source), source_hash)
+        saved = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved["Data"]["A1"].value, "before")
+        self.assertIsNone(saved["Data"]["A2"].value)
+        self.assertEqual(saved["Data"]["C3"].value, '=A1&"!"')
+        self.assertEqual(saved["Data"]["B3"].comment.text, "retain note")
+        self.assertEqual(saved["Notes"]["A1"].value, "keep")
+        saved.close()
 
     def test_formula_cache_is_rejected_before_write(self):
         cached = self.root / "cached.xlsx"
@@ -238,6 +353,382 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertEqual(response["status"], "unsupported_before_write")
         self.assertEqual(response["error"]["kind"], "formula_cache_not_preserved")
         self.assertFalse(output.exists())
+
+    def test_pycode_openpyxl_parity_feature_keeps_formula_cache_and_requests_recalc(self):
+        cached = self.root / "pycode-parity-cached.xlsx"
+        workbook = openpyxl.load_workbook(self.source)
+        workbook["Data"]["C2"] = "=1+1"
+        workbook.save(cached)
+        workbook.close()
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "C2", "2")
+
+        output = self.root / "pycode-parity-output.xlsx"
+        plan = self.base_plan(
+            output,
+            [operation("set_cell_value", sheet="Data", cell="A1", value={"type": "text", "value": "changed"})],
+        )
+        plan["request_id"] = "pytools-adjust-rural-loan"
+        plan["input"] = str(cached)
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        values = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(values["Data"]["C2"].value, 2)
+        values.close()
+        formulas = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(formulas["Data"]["C2"].value, "=1+1")
+        self.assertTrue(formulas.calculation.fullCalcOnLoad)
+        self.assertTrue(formulas.calculation.forceFullCalc)
+        formulas.close()
+
+    def test_delete_rows_preserves_unrelated_formula_cache(self):
+        cached = self.root / "delete-unrelated-cache.xlsx"
+        self.source.replace(cached)
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "C2", "1")
+
+        output = self.root / "delete-unrelated-cache-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "delete_rows", sheet="DeleteMe", first_row=1, count=1
+        )])
+        plan["input"] = str(cached)
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        saved = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(saved["Data"]["C2"].value, 1)
+        self.assertIn("DeleteMe", saved.sheetnames)
+        self.assertIsNone(saved["DeleteMe"]["A1"].value)
+        saved.close()
+
+    def test_delete_rows_is_rejected_when_formula_references_modified_sheet(self):
+        source = self.root / "delete-referenced-sheet.xlsx"
+        book = openpyxl.load_workbook(self.source)
+        book["Notes"]["A2"] = "=DeleteMe!A1"
+        book.save(source)
+        self._add_formula_cache(source, "xl/worksheets/sheet2.xml", "A2", "1")
+
+        output = self.root / "delete-referenced-sheet-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "delete_rows", sheet="DeleteMe", first_row=1, count=1
+        )])
+        plan["input"] = str(source)
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "unsupported_before_write", response)
+        self.assertIn("depends on a worksheet being edited", response["error"]["message"])
+        self.assertFalse(output.exists())
+
+    def test_delete_rows_is_rejected_when_modified_sheet_contains_formula(self):
+        source = self.root / "delete-formula-sheet.xlsx"
+        book = openpyxl.load_workbook(self.source)
+        book["DeleteMe"]["A2"] = "=Data!A1"
+        book.save(source)
+
+        output = self.root / "delete-formula-sheet-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "delete_rows", sheet="DeleteMe", first_row=1, count=1
+        )])
+        plan["input"] = str(source)
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "unsupported_before_write", response)
+        self.assertIn("worksheet that contains formulas", response["error"]["message"])
+        self.assertFalse(output.exists())
+
+    def test_empty_text_write_keeps_an_explicit_inline_string(self):
+        output = self.root / "empty-text-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_value", sheet="Data", cell="B3", value={"type": "text", "value": ""}
+        )])
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+
+        with zipfile.ZipFile(output, "r") as package:
+            root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+            cell = root.find(
+                ".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c[@r='B3']"
+            )
+            self.assertIsNotNone(cell)
+            self.assertEqual(cell.attrib.get("t"), "inlineStr")
+            inline = cell.find(
+                "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}is"
+            )
+            self.assertIsNotNone(inline)
+            self.assertIsNotNone(inline.find(
+                "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t"
+            ))
+
+        saved = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved["Data"]["B3"].value, "")
+        saved.close()
+
+    def test_formula_cache_is_preserved_when_write_is_not_a_dependency(self):
+        cached = self.root / "cached-unrelated-write.xlsx"
+        self.source.replace(cached)
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "C2", "1")
+
+        output = self.root / "cached-unrelated-write-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_value", sheet="Data", cell="B1", value={"type": "decimal", "value": "7"}
+        )])
+        plan["input"] = str(cached)
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        saved = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(saved["Data"]["C2"].value, 1)
+        saved.close()
+
+    def test_formula_cache_and_dynamic_cell_metadata_survive_unrelated_append(self):
+        cached = self.root / "cached-cell-metadata.xlsx"
+        self.source.replace(cached)
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "C2", "1")
+        self._add_cell_metadata(cached, "C2")
+
+        output = self.root / "cached-cell-metadata-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_value", sheet="Data", cell="B1", value={"type": "decimal", "value": "8"}
+        )])
+        plan["input"] = str(cached)
+        plan["workbook"]["features_present"] = ["cell_metadata"]
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+
+        with zipfile.ZipFile(cached, "r") as source, zipfile.ZipFile(output, "r") as result:
+            self.assertEqual(result.read("xl/metadata.xml"), source.read("xl/metadata.xml"))
+            relationships = ET.fromstring(result.read("xl/_rels/workbook.xml.rels"))
+            self.assertTrue(any(
+                element.attrib.get("Type", "").endswith("/sheetMetadata")
+                for element in relationships
+            ))
+            content_types = ET.fromstring(result.read("[Content_Types].xml"))
+            self.assertTrue(any(
+                element.attrib.get("PartName") == "/xl/metadata.xml"
+                for element in content_types
+            ))
+            workbook_xml = result.read("xl/workbook.xml")
+            self.assertIn(b"urn:worker-test:calc-features", workbook_xml)
+            worksheet = ET.fromstring(result.read("xl/worksheets/sheet1.xml"))
+            cell = worksheet.find(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c[@r='C2']")
+            self.assertEqual(cell.attrib.get("cm"), "1")
+
+        saved = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(saved["Data"]["C2"].value, 1)
+        saved.close()
+
+    def test_unmodified_column_dimensions_keep_the_original_ooxml_fragment(self):
+        source = self.root / "unstyled-columns.xlsx"
+        self.source.replace(source)
+        self._add_unstyled_column_range(source)
+        output = self.root / "unstyled-columns-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_value", sheet="Data", cell="A1", value={"type": "text", "value": "changed"}
+        )])
+        plan["input"] = str(source)
+
+        def columns(path):
+            with zipfile.ZipFile(path, "r") as package:
+                xml = package.read("xl/worksheets/sheet1.xml")
+            start = xml.index(b"<cols>")
+            end = xml.index(b"</cols>", start) + len(b"</cols>")
+            return xml[start:end]
+
+        source_columns = columns(source)
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        self.assertEqual(columns(output), source_columns)
+        self.assertNotIn(b"style=", columns(output))
+
+    def test_header_footer_ooxml_is_preserved_with_only_planned_text_replaced(self):
+        sheet_part = "xl/worksheets/sheet1.xml"
+        original_fragment = (
+            b'<headerFooter alignWithMargins="0" scaleWithDoc="0">'
+            b'<oddHeader>&amp;L\n Unit=OldUnit\n</oddHeader>'
+            b'<oddFooter xml:space="preserve">&amp;LFooter OldUnit\n\n</oddFooter>'
+            b"</headerFooter>"
+        )
+        with zipfile.ZipFile(self.source, "r") as original:
+            source_parts = {
+                item.filename: original.read(item.filename)
+                for item in original.infolist()
+            }
+        worksheet_xml = source_parts[sheet_part]
+        self.assertIn(b"</worksheet>", worksheet_xml)
+        source_parts[sheet_part] = worksheet_xml.replace(
+            b"</worksheet>", original_fragment + b"</worksheet>"
+        )
+        with zipfile.ZipFile(self.source, "w", zipfile.ZIP_DEFLATED) as patched:
+            for name, data in source_parts.items():
+                patched.writestr(name, data)
+
+        output = self.root / "header-footer.xlsx"
+        plan = self.base_plan(
+            output,
+            [
+                operation(
+                    "replace_header_text",
+                    sheet="Data",
+                    search="OldUnit",
+                    replacement="NewUnit",
+                )
+            ],
+        )
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        expected_fragment = original_fragment.replace(b"OldUnit", b"NewUnit", 1)
+        with zipfile.ZipFile(output, "r") as saved:
+            saved_xml = saved.read(sheet_part)
+            self.assertIn(expected_fragment, saved_xml)
+            notes_xml = saved.read("xl/worksheets/sheet2.xml")
+            self.assertNotIn(b"<headerFooter", notes_xml)
+
+    def test_header_text_replacement_matches_numeric_xml_character_references(self):
+        sheet_part = "xl/worksheets/sheet1.xml"
+        original_fragment = (
+            b'<headerFooter alignWithMargins="0">'
+            b'<oddHeader>&amp;L&#21333;&#20301;&#65306;&#19975;&#20803;</oddHeader>'
+            b'<oddFooter>&amp;L&#19975;&#20803;</oddFooter>'
+            b"</headerFooter>"
+        )
+        with zipfile.ZipFile(self.source, "r") as original:
+            source_parts = {
+                item.filename: original.read(item.filename)
+                for item in original.infolist()
+            }
+        worksheet_xml = source_parts[sheet_part]
+        source_parts[sheet_part] = worksheet_xml.replace(
+            b"</worksheet>", original_fragment + b"</worksheet>"
+        )
+        with zipfile.ZipFile(self.source, "w", zipfile.ZIP_DEFLATED) as patched:
+            for name, data in source_parts.items():
+                patched.writestr(name, data)
+
+        output = self.root / "numeric-header-footer.xlsx"
+        plan = self.base_plan(
+            output,
+            [
+                operation(
+                    "replace_header_text",
+                    sheet="Data",
+                    search="万元",
+                    replacement="万美元",
+                )
+            ],
+        )
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        with zipfile.ZipFile(output, "r") as saved:
+            root = ET.fromstring(saved.read(sheet_part))
+            ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+            header_footer = root.find(ns + "headerFooter")
+            self.assertEqual(header_footer.attrib, {"alignWithMargins": "0"})
+            self.assertEqual(header_footer.find(ns + "oddHeader").text, "&L单位：万美元")
+            self.assertEqual(header_footer.find(ns + "oddFooter").text, "&L万元")
+
+    def test_calculation_chain_is_invalidated_when_cell_value_changes(self):
+        source = self.root / "calculation-chain.xlsx"
+        self.source.replace(source)
+        self._add_formula_cache(source, "xl/worksheets/sheet1.xml", "C2", "1")
+        self._add_calculation_chain(source)
+        output = self.root / "calculation-chain-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_value", sheet="Data", cell="B1", value={"type": "decimal", "value": "7"}
+        )])
+        plan["input"] = str(source)
+
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        with zipfile.ZipFile(output, "r") as result:
+            self.assertNotIn("xl/calcChain.xml", result.namelist())
+            relationships = ET.fromstring(result.read("xl/_rels/workbook.xml.rels"))
+            self.assertFalse(any(
+                element.attrib.get("Type", "").endswith("/calcChain")
+                and element.attrib.get("Target") == "calcChain.xml"
+                for element in relationships
+            ))
+            content_types = ET.fromstring(result.read("[Content_Types].xml"))
+            self.assertFalse(any(
+                element.attrib.get("PartName") == "/xl/calcChain.xml"
+                and element.attrib.get("ContentType", "").endswith(".calcChain+xml")
+                for element in content_types
+            ))
+            workbook = ET.fromstring(result.read("xl/workbook.xml"))
+            calc_properties = workbook.find(
+                "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}calcPr"
+            )
+            self.assertIsNotNone(calc_properties)
+            self.assertEqual(calc_properties.attrib.get("fullCalcOnLoad"), "1")
+            self.assertEqual(calc_properties.attrib.get("forceFullCalc"), "1")
+        cached_values = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(cached_values["Data"]["C2"].value, 1)
+        cached_values.close()
+
+    def test_formula_cache_is_preserved_for_style_only_edits(self):
+        cached = self.root / "cached-style.xlsx"
+        self.source.replace(cached)
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "C2", "1")
+
+        output = self.root / "cached-style-output.xlsx"
+        plan = self.base_plan(output, [operation(
+            "set_cell_fill_color", sheet="Data", cell="A1", argb="FFFF0000"
+        )])
+        plan["input"] = str(cached)
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+
+        saved_formulas = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved_formulas["Data"]["C2"].value, '=A1&"!"')
+        saved_formulas.close()
+        saved_values = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(saved_values["Data"]["C2"].value, 1)
+        saved_values.close()
+
+    def test_formula_caches_are_preserved_when_only_appending_a_new_sheet(self):
+        cached = self.root / "cached-append.xlsx"
+        book = openpyxl.Workbook()
+        book.active.title = "Data"
+        book["Data"]["A1"] = "=1+1"
+        book.save(cached)
+        self._add_formula_cache(cached, "xl/worksheets/sheet1.xml", "A1", "2")
+
+        output = self.root / "cached-append-output.xlsx"
+        plan = self.base_plan(output, [
+            operation("create_sheet", name="Added"),
+            operation(
+                "import_range",
+                source_workbook=str(self.import_source), source_sheet="Source",
+                source_range="A1:B1", target_sheet="Added", target_start="A1",
+                copy_values=True, copy_formulas=False, style_mode="full", copy_comments=False,
+                copy_merges=False, copy_row_heights=False, copy_column_widths=False,
+                copy_row_hidden=False, copy_column_hidden=False, copy_outline_levels=False,
+                copy_all_row_dimensions=False, copy_all_column_dimensions=False,
+                materialize_blank_cells=True, hide_zero=False,
+            ),
+        ])
+        plan["input"] = str(cached)
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+
+        saved_formulas = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved_formulas["Data"]["A1"].value, "=1+1")
+        saved_formulas.close()
+        saved_values = openpyxl.load_workbook(output, data_only=True)
+        self.assertEqual(saved_values["Data"]["A1"].value, 2)
+        saved_values.close()
 
     def test_formula_cache_inside_materialized_import_range_can_be_replaced(self):
         cached = self.root / "cached-target.xlsx"

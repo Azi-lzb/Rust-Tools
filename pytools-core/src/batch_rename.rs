@@ -611,7 +611,10 @@ fn cell_raw_text(value: Option<&Value>, date_1904: bool) -> String {
             .filter(|number| number.is_finite())
             .map(|number| {
                 if number.fract() == 0.0 {
-                    format!("{number:.1}")
+                    // PyCode reads this configuration column with pandas
+                    // `dtype=object`; integral numeric cells stringify as an
+                    // integer (for example, `7010`), not `7010.0`.
+                    format!("{number:.0}")
                 } else {
                     number.to_string()
                 }
@@ -733,7 +736,16 @@ mod tests {
             "2026-01-31 00:00:00"
         );
         assert_eq!(cell_raw_text(Some(&date_1904), true), "2026-01-31 00:00:00");
-        assert_eq!(cell_raw_text(Some(&ordinary_number), false), "46053.0");
+        assert_eq!(cell_raw_text(Some(&ordinary_number), false), "46053");
+    }
+
+    #[test]
+    fn integral_numeric_config_values_match_python_object_stringification() {
+        let code = serde_json::json!({"type": "number", "value": 7010.0});
+        let fractional = serde_json::json!({"type": "number", "value": 7010.25});
+
+        assert_eq!(cell_raw_text(Some(&code), false), "7010");
+        assert_eq!(cell_raw_text(Some(&fractional), false), "7010.25");
     }
 
     #[test]

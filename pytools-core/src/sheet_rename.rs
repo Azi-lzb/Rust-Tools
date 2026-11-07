@@ -1,7 +1,7 @@
 //! Plan and safe-copy execution for V2 file menu 4-5 sheet renaming.
 
 use crate::{
-    edit_plan::apply_plan_with_capability_file,
+    conversion_engine::ConversionRuntime,
     file_commit::{
         create_target_from_candidate, replace_target_from_candidate, sha256_file,
         verify_planning_snapshot, TargetCommitReport,
@@ -40,6 +40,7 @@ pub struct SheetRenameFileResult {
     pub input: PathBuf,
     pub output: Option<PathBuf>,
     pub status: String,
+    pub engine: Option<String>,
     pub renamed: usize,
     pub skipped: usize,
     pub reason: Option<String>,
@@ -91,35 +92,12 @@ fn build_sheet_rename_plan_with_mapping(
         .iter()
         .map(|sheet| sheet.name.clone())
         .collect::<Vec<_>>();
-    let mut operations = Vec::new();
-    let mut current_names = names.iter().cloned().collect::<BTreeSet<_>>();
-    let mut renamed = 0;
-    let mut skipped = 0;
-    for old in &names {
-        let lookup = if mapping.contains_key(old) {
-            old.clone()
-        } else {
-            old.trim().to_owned()
-        };
-        let Some(new) = mapping.get(&lookup) else {
-            continue;
-        };
-        if old == new {
-            skipped += 1;
-            continue;
-        }
-        if !valid_name(new) || has_conflicting_sheet_name(&current_names, old, new) {
-            skipped += 1;
-            continue;
-        }
-        operations.push(EditOperation::RenameSheet {
-            old_name: old.clone(),
-            new_name: new.clone(),
-        });
-        current_names.remove(old);
-        current_names.insert(new.clone());
-        renamed += 1;
+    let (changes, skipped) = proposed_sheet_renames(mapping, &names);
+    let mut operations = Vec::with_capacity(changes.len());
+    for (old_name, new_name) in changes {
+        operations.push(EditOperation::RenameSheet { old_name, new_name });
     }
+    let renamed = operations.len();
     let plan = if operations.is_empty() {
         None
     } else {
@@ -160,11 +138,40 @@ fn build_sheet_rename_plan_with_mapping(
     })
 }
 
-/// Apply the source project's XLSX sheet-rename workflow through an explicitly
-/// supplied, evidence-gated ExcelModifier capability. Each workbook is copied
-/// to a dedicated folder beside the source, modified and validated there, and
-/// published without replacing an existing result or the source. XLSM and
-/// legacy formats are reported as skipped until separately tested.
+fn proposed_sheet_renames(
+    mapping: &BTreeMap<String, String>,
+    names: &[String],
+) -> (Vec<(String, String)>, usize) {
+    let mut changes = Vec::new();
+    let mut current_names = names.iter().cloned().collect::<BTreeSet<_>>();
+    let mut skipped = 0;
+    for old in names {
+        let lookup = if mapping.contains_key(old) {
+            old.clone()
+        } else {
+            old.trim().to_owned()
+        };
+        let Some(new) = mapping.get(&lookup) else {
+            continue;
+        };
+        if old == new {
+            skipped += 1;
+            continue;
+        }
+        if !valid_name(new) || has_conflicting_sheet_name(&current_names, old, new) {
+            skipped += 1;
+            continue;
+        }
+        changes.push((old.clone(), new.clone()));
+        current_names.remove(old);
+        current_names.insert(new.clone());
+    }
+    (changes, skipped)
+}
+
+/// Compatibility wrapper for callers that still pass a legacy capability
+/// file. The file extension selects the already-approved 4-5 route; the
+/// capability is not consulted.
 pub fn run_batch_sheet_rename_candidate(
     config: &Path,
     inputs: &[PathBuf],
@@ -172,26 +179,36 @@ pub fn run_batch_sheet_rename_candidate(
     capability_path: &Path,
     platform: &str,
 ) -> Result<SheetRenameRunReport> {
-    run_batch_sheet_rename_impl(config, inputs, recursive, Some((capability_path, platform)))
+    let _ = (capability_path, platform);
+    run_batch_sheet_rename_impl(config, inputs, recursive)
 }
 
-/// Use the bundled openpyxl worker without inventing a capability record.
+/// Use Openpyxl for `.xlsx` and the dedicated Windows Excel/WPS COM rename
+/// operation for legacy `.xls`, without requiring a capability record.
+pub fn run_batch_sheet_rename(
+    config: &Path,
+    inputs: &[PathBuf],
+    recursive: bool,
+) -> Result<SheetRenameRunReport> {
+    run_batch_sheet_rename_impl(config, inputs, recursive)
+}
+
+/// Compatibility alias retained for existing callers.
 pub fn run_batch_sheet_rename_openpyxl(
     config: &Path,
     inputs: &[PathBuf],
     recursive: bool,
 ) -> Result<SheetRenameRunReport> {
-    run_batch_sheet_rename_impl(config, inputs, recursive, None)
+    run_batch_sheet_rename(config, inputs, recursive)
 }
 
 fn run_batch_sheet_rename_impl(
     config: &Path,
     inputs: &[PathBuf],
     recursive: bool,
-    capability: Option<(&Path, &str)>,
 ) -> Result<SheetRenameRunReport> {
     let started = Instant::now();
-    let mut excel_runtime = crate::conversion_engine::ConversionRuntime::default();
+    let mut excel_runtime = ConversionRuntime::default();
     let mapping = load_mapping(config)?;
     anyhow::ensure!(!mapping.is_empty(), "重命名配置 缺少原表名/新表名映射。");
     let files = collect_inputs(inputs, recursive)?;
@@ -215,11 +232,21 @@ fn run_batch_sheet_rename_impl(
             ));
             continue;
         }
-        if !is_xlsx(&input) {
+        let input_is_xls = is_xls(&input);
+        if !is_xlsx(&input) && !input_is_xls {
             report.skip += 1;
             report.files.push(skipped_file_result(
                 input,
-                "format_not_verified; convert to xlsx before renaming",
+                "仅支持 .xlsx 和 Windows Excel/WPS COM 可处理的 .xls 工作簿",
+                file_started.elapsed().as_millis(),
+            ));
+            continue;
+        }
+        if input_is_xls && !cfg!(windows) {
+            report.skip += 1;
+            report.files.push(skipped_file_result(
+                input,
+                ".xls 工作表改名需要 Windows Excel/WPS COM；可先在 Windows 使用 4-4 转成 .xlsx",
                 file_started.elapsed().as_millis(),
             ));
             continue;
@@ -229,19 +256,46 @@ fn run_batch_sheet_rename_impl(
         let input_hash = sha256_file(&input)?;
         let output = sheet_rename_output_path(&input)?;
         let candidate = candidate_path(&input)?;
-        let plan_report = build_sheet_rename_plan_with_mapping(&mapping, &input, &candidate)
-            .with_context(|| format!("build sheet-rename plan for {}", input.display()))?;
+        let (changes, skipped, plan) = if input_is_xls {
+            let dump = read_workbook(&input).with_context(|| {
+                format!("读取 .xls 工作簿的工作表名称失败：{}", input.display())
+            })?;
+            let names = dump
+                .sheets
+                .iter()
+                .map(|sheet| sheet.name.clone())
+                .collect::<Vec<_>>();
+            let (changes, skipped) = proposed_sheet_renames(&mapping, &names);
+            (changes, skipped, None)
+        } else {
+            let plan_report = build_sheet_rename_plan_with_mapping(&mapping, &input, &candidate)
+                .with_context(|| format!("build sheet-rename plan for {}", input.display()))?;
+            let changes = plan_report
+                .plan
+                .as_ref()
+                .into_iter()
+                .flat_map(|plan| plan.operations.iter())
+                .filter_map(|operation| match operation {
+                    EditOperation::RenameSheet { old_name, new_name } => {
+                        Some((old_name.clone(), new_name.clone()))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            (changes, plan_report.skipped, plan_report.plan)
+        };
         let planning_ms = planning_started.elapsed().as_millis();
         report.workbooks += 1;
-        report.skip += plan_report.skipped;
+        report.skip += skipped;
 
-        let Some(plan) = plan_report.plan else {
+        if changes.is_empty() {
             report.files.push(SheetRenameFileResult {
                 input,
                 output: None,
                 status: "unchanged".to_owned(),
+                engine: None,
                 renamed: 0,
-                skipped: plan_report.skipped,
+                skipped,
                 reason: None,
                 planning_ms,
                 editing_ms: 0,
@@ -251,25 +305,13 @@ fn run_batch_sheet_rename_impl(
                 commit: None,
             });
             continue;
-        };
+        }
 
-        let mut candidate_owned = capability.is_some();
-        let result = (|| -> Result<(Option<EditExecutionReport>, TargetCommitReport, u128)> {
+        let mut candidate_owned = false;
+        let result = (|| -> Result<(Option<EditExecutionReport>, TargetCommitReport, u128, String)> {
             verify_planning_snapshot(&input, Some(&input_hash))?;
             let editing_started = Instant::now();
-            let execution = if let Some((capability_path, platform)) = capability {
-                anyhow::ensure!(
-                    !plan.workbook.features_present.contains(&WorkbookFeature::Formulas)
-                        && !plan.workbook.features_present.contains(&WorkbookFeature::DefinedNames),
-                    "原有 capability 改名路径不能保证公式和命名区域引用更新；请使用默认 openpyxl 改名路径（省略 --capabilities）"
-                );
-                Some(
-                    apply_plan_with_capability_file(&plan, capability_path, platform)
-                        .with_context(|| {
-                            format!("execute sheet-rename plan for {}", input.display())
-                        })?,
-                )
-            } else {
+            if let Some(plan) = &plan {
                 anyhow::ensure!(
                     plan.workbook.inventory_complete,
                     "工作簿包含未识别的结构，拒绝覆盖源文件"
@@ -279,33 +321,32 @@ fn run_batch_sheet_rename_impl(
                         feature,
                         WorkbookFeature::DigitalSignatures | WorkbookFeature::ActiveX | WorkbookFeature::ExternalLinks | WorkbookFeature::Macros
                     )),
-                    "工作簿包含数字签名、ActiveX、外部链接或宏，当前 openpyxl 改名路径未验证，拒绝覆盖源文件"
+                    "工作簿包含数字签名、ActiveX、外部链接或宏，当前 Openpyxl 改名路径未验证，拒绝覆盖源文件"
                 );
-                let changes = plan
-                    .operations
-                    .iter()
-                    .filter_map(|operation| match operation {
-                        EditOperation::RenameSheet { old_name, new_name } => {
-                            Some((old_name.clone(), new_name.clone()))
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-                let mut original = fs::File::open(&input)
-                    .with_context(|| format!("读取源工作簿失败：{}", input.display()))?;
-                let mut temporary = fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&candidate)
-                    .with_context(|| format!("创建改名临时候选失败：{}", candidate.display()))?;
-                candidate_owned = true;
-                std::io::copy(&mut original, &mut temporary)?;
-                temporary.sync_all()?;
-                drop(temporary);
+            }
+            candidate_owned = true;
+            let mut original = fs::File::open(&input)
+                .with_context(|| format!("读取源工作簿失败：{}", input.display()))?;
+            let mut temporary = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&candidate)
+                .with_context(|| format!("创建改名临时候选失败：{}", candidate.display()))?;
+            candidate_owned = true;
+            std::io::copy(&mut original, &mut temporary)?;
+            temporary.sync_all()?;
+            drop(temporary);
+            // Windows cannot replace the source while this read handle is open.
+            drop(original);
+            let engine = if input_is_xls {
+                excel_runtime
+                    .rename_sheets_com_in_candidate(&candidate, &changes)
+                    .with_context(|| format!("Excel/WPS COM 工作表改名失败：{}", input.display()))?
+            } else {
                 excel_runtime
                     .rename_sheets_in_candidate(&candidate, &changes)
-                    .with_context(|| format!("Excel 工作表改名失败：{}", input.display()))?;
-                None
+                    .with_context(|| format!("Openpyxl 工作表改名失败：{}", input.display()))?;
+                "openpyxl".to_owned()
             };
             let editing_ms = editing_started.elapsed().as_millis();
             let commit_started = Instant::now();
@@ -322,7 +363,7 @@ fn run_batch_sheet_rename_impl(
                 })?
             };
             commit.elapsed_ms = commit_started.elapsed().as_millis();
-            Ok((execution, commit, editing_ms))
+            Ok((None, commit, editing_ms, engine))
         })();
         let cleanup = if candidate_owned {
             match fs::remove_file(&candidate) {
@@ -333,7 +374,7 @@ fn run_batch_sheet_rename_impl(
         } else {
             None
         };
-        let (execution, mut commit, editing_ms) = match result {
+        let (execution, mut commit, editing_ms, engine) = match result {
             Ok(result) => result,
             Err(error) => {
                 return Err(match cleanup {
@@ -348,13 +389,14 @@ fn run_batch_sheet_rename_impl(
                 None => cleanup,
             });
         }
-        report.rename_ok += plan_report.renamed;
+        report.rename_ok += changes.len();
         report.files.push(SheetRenameFileResult {
             input,
             output: Some(output),
             status: "renamed".to_owned(),
-            renamed: plan_report.renamed,
-            skipped: plan_report.skipped,
+            engine: Some(engine),
+            renamed: changes.len(),
+            skipped,
             reason: None,
             planning_ms,
             editing_ms,
@@ -373,6 +415,7 @@ fn skipped_file_result(input: PathBuf, reason: &str, elapsed_ms: u128) -> SheetR
         input,
         output: None,
         status: "skipped".to_owned(),
+        engine: None,
         renamed: 0,
         skipped: 1,
         reason: Some(reason.to_owned()),
@@ -389,11 +432,15 @@ fn candidate_path(input: &Path) -> Result<PathBuf> {
     let parent = input
         .parent()
         .context("input workbook has no parent directory")?;
+    let extension = input
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xlsx");
     for _ in 0..256 {
         let sequence = CANDIDATE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let candidate = parent.join(format!(
-            ".pytools-sheet-rename-{}-{sequence}.xlsx",
-            std::process::id()
+            ".pytools-sheet-rename-{}-{sequence}.{extension}",
+            std::process::id(),
         ));
         if !candidate.exists() {
             return Ok(candidate);
@@ -544,6 +591,11 @@ fn is_xlsx(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+}
+fn is_xls(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("xls"))
 }
 fn parse_a1(address: &str) -> Option<(usize, usize)> {
     let split = address.find(|c: char| c.is_ascii_digit())?;

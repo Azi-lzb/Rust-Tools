@@ -24,6 +24,8 @@ staging_root=$(realpath -e -- "$3")
 source_root=$(realpath -e -- "$(dirname -- "$0")/../..")
 worker_source="$source_root/crates/excel-editor/python/openpyxl_worker.py"
 [[ -f "$worker_source" ]] || fail "worker source is missing: $worker_source"
+lo_calc_worker_source="$source_root/pytools-core/python/libreoffice_calc_worker.py"
+[[ -f "$lo_calc_worker_source" ]] || fail "LibreOffice calculator worker source is missing: $lo_calc_worker_source"
 expected_python_version=$(tr -d '\r\n' < "$source_root/packaging/openpyxl/python-version.txt")
 
 product_libexec="$staging_root/usr/libexec/$product_id"
@@ -36,6 +38,7 @@ trap 'rm -rf -- "$temporary"' EXIT
 install -d -- "$temporary/worker"
 cp -a -- "$runtime_source" "$temporary/runtime"
 install -m 0644 -- "$worker_source" "$temporary/worker/openpyxl_worker.py"
+install -m 0644 -- "$lo_calc_worker_source" "$temporary/worker/libreoffice_calc_worker.py"
 
 python="$temporary/runtime/bin/python3"
 resolved_python=$(realpath -e -- "$python")

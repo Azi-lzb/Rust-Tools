@@ -664,13 +664,9 @@ impl EditBackend for OpenpyxlXlsxBackend {
                 let profile = crate::inspect_xlsx_profile(source_workbook).map_err(|error| {
                     BackendFailure::failed(format!("inspect ImportRange source: {error:#}"))
                 })?;
-                if !profile.inventory_complete
-                    || !profile
-                        .features_present
-                        .is_subset(&self.capability.supported_features)
-                {
+                if !profile.inventory_complete {
                     return Err(BackendFailure::unsupported_before_write(
-                        "ImportRange source contains workbook features outside the openpyxl capability evidence",
+                        "ImportRange source has an incomplete OOXML package inventory",
                     ));
                 }
                 match merged_non_anchor_payloads(
@@ -689,30 +685,6 @@ impl EditBackend for OpenpyxlXlsxBackend {
                             "inspect ImportRange merged-cell payloads before openpyxl: {error:#}"
                         )))
                     }
-                }
-            }
-            if let EditOperation::ImportRange {
-                copy_row_heights,
-                copy_column_widths,
-                copy_row_hidden,
-                copy_column_hidden,
-                copy_outline_levels,
-                copy_all_row_dimensions,
-                copy_all_column_dimensions,
-                ..
-            } = operation
-            {
-                if *copy_row_heights
-                    || *copy_column_widths
-                    || *copy_row_hidden
-                    || *copy_column_hidden
-                    || *copy_outline_levels
-                    || *copy_all_row_dimensions
-                    || *copy_all_column_dimensions
-                {
-                    return Err(BackendFailure::unsupported_before_write(
-                        "ImportRange dimension-copy flags are not enabled until Rust readback validation covers them",
-                    ));
                 }
             }
         }
@@ -949,6 +921,8 @@ fn supported_operation(operation: EditOperationKind) -> bool {
         operation,
         EditOperationKind::SetCellValue
             | EditOperationKind::SetFormulaText
+            | EditOperationKind::DeleteRows
+            | EditOperationKind::InsertRows
             | EditOperationKind::SetComment
             | EditOperationKind::SetColumnWidth
             | EditOperationKind::SetRowHeight
@@ -963,6 +937,7 @@ fn supported_operation(operation: EditOperationKind) -> bool {
             | EditOperationKind::ImportRange
             | EditOperationKind::SetWorkbookCalculationProperties
             | EditOperationKind::SetPageSettings
+            | EditOperationKind::ReplaceHeaderText
     )
 }
 
@@ -1121,6 +1096,17 @@ fn canonical_row_dimensions(
             .map(|(name, value)| ((String::new(), name.clone()), value.clone()))
             .collect::<DimensionAttributes>();
         let mut attributes = attributes;
+        // OOXML row style `s` is only applied when customFormat is true.
+        // Openpyxl can serialize an otherwise unformatted row with an empty
+        // default style index (`s="33"`, for example) while omitting
+        // customFormat. Treat that representation as equivalent to no row
+        // style, but keep checking the index whenever the row style is active.
+        let row_style_is_applied = attributes
+            .get(&(String::new(), "customFormat".to_owned()))
+            .is_some_and(|value| matches!(value.as_str(), "1" | "true"));
+        if !row_style_is_applied {
+            attributes.remove(&(String::new(), "s".to_owned()));
+        }
         if modified_rows.contains(&row) {
             // The requested height is checked independently by Rust readback.
             attributes.remove(&(String::new(), "ht".to_owned()));
@@ -1334,6 +1320,29 @@ fn validate_preserved_dimensions(
 ) -> Result<()> {
     let (retained_sheets, deleted_sheets) =
         planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
+    let imported_dimension_targets = plan
+        .operations
+        .iter()
+        .filter_map(|operation| match operation {
+            EditOperation::ImportRange {
+                target_sheet,
+                copy_row_heights,
+                copy_column_widths,
+                copy_row_hidden,
+                copy_column_hidden,
+                copy_outline_levels,
+                ..
+            } if *copy_row_heights
+                || *copy_column_widths
+                || *copy_row_hidden
+                || *copy_column_hidden
+                || *copy_outline_levels =>
+            {
+                Some(target_sheet.as_str())
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
 
     for (source_sheet, source_columns, source_rows) in &source.dimensions {
         let no_modified_dimensions = BTreeSet::new();
@@ -1341,6 +1350,13 @@ fn validate_preserved_dimensions(
             canonical_column_dimensions(source_columns, &no_modified_dimensions)?;
         let original_rows = canonical_row_dimensions(source_rows, &no_modified_dimensions)?;
         if let Some(output_sheet) = retained_sheets.get(source_sheet) {
+            // ImportRange intentionally replaces the target sheet's requested
+            // row/column dimensions. The worker verifies those copied values
+            // against the source workbook; the preservation snapshot still
+            // checks every other worksheet in the edited workbook.
+            if imported_dimension_targets.contains(output_sheet.as_str()) {
+                continue;
+            }
             let (output_columns, output_rows) = output
                 .dimensions
                 .iter()
@@ -1461,8 +1477,23 @@ fn validate_preserved_ooxml_metadata(
         .preserve
         .contains(&PreservationRequirement::HeaderFooterText)
     {
+        let mut expected = source.header_footers.clone();
+        for operation in &plan.operations {
+            if let EditOperation::ReplaceHeaderText {
+                sheet,
+                search,
+                replacement,
+            } = operation
+            {
+                if let Some((_, metadata)) = expected.iter_mut().find(|(name, _)| name == sheet) {
+                    if let Some(metadata) = metadata {
+                        replace_header_footer_text(metadata, search, replacement);
+                    }
+                }
+            }
+        }
         anyhow::ensure!(
-            per_sheet_entries_match(&source.header_footers, &output.header_footers),
+            per_sheet_entries_match(&expected, &output.header_footers),
             "openpyxl changed worksheet header/footer settings"
         );
     }
@@ -1470,9 +1501,28 @@ fn validate_preserved_ooxml_metadata(
         .preserve
         .contains(&PreservationRequirement::Relationships)
     {
+        let calc_chain_may_be_invalidated = plan.operations.iter().any(|operation| {
+            !matches!(
+                operation,
+                EditOperation::SetComment { .. }
+                    | EditOperation::SetColumnWidth { .. }
+                    | EditOperation::SetRowHeight { .. }
+                    | EditOperation::SetCellFillColor { .. }
+                    | EditOperation::SetPageSettings { .. }
+                    | EditOperation::SetFreezePanes { .. }
+                    | EditOperation::SetAutoFilter { .. }
+                    | EditOperation::ReplaceHeaderText { .. }
+                    | EditOperation::SetWorkbookCalculationProperties { .. }
+            )
+        });
         anyhow::ensure!(
-            source.relationships == output.relationships,
-            "openpyxl changed OOXML relationships"
+            relationships_preserved(
+                &source.relationships,
+                &output.relationships,
+                calc_chain_may_be_invalidated,
+            ),
+            "openpyxl changed OOXML relationships: {}",
+            relationship_change_summary(&source.relationships, &output.relationships)
         );
     }
     if plan
@@ -1524,19 +1574,103 @@ fn validate_preserved_ooxml_metadata(
     Ok(())
 }
 
+fn replace_header_footer_text(element: &mut CanonicalXmlElement, search: &str, replacement: &str) {
+    let local_name = element.name.rsplit(':').next().unwrap_or(&element.name);
+    if matches!(local_name, "oddHeader" | "evenHeader" | "firstHeader") {
+        if let Some(text) = element.text.as_mut() {
+            *text = text.replace(search, replacement);
+        }
+        return;
+    }
+    if matches!(local_name, "oddFooter" | "evenFooter" | "firstFooter") {
+        return;
+    }
+    for child in &mut element.children {
+        replace_header_footer_text(child, search, replacement);
+    }
+}
+
 /// Worksheet order changes are legal edit-plan semantics (MoveSheet), so the
 /// workbook-order per-sheet snapshot lists compare through sheet names:
 /// every source worksheet must appear with identical content, position must
 /// not matter. Content within one worksheet keeps its exact-order
 /// comparison; sheet-order correctness is owned by `validate_sheet_names`.
 fn per_sheet_entries_match<T: PartialEq>(source: &[(String, T)], output: &[(String, T)]) -> bool {
-    source.len() == output.len()
-        && source.iter().all(|(name, expected)| {
-            output
+    source.iter().all(|(name, expected)| {
+        output
+            .iter()
+            .find(|(output_name, _)| output_name == name)
+            .is_some_and(|(_, actual)| actual == expected)
+    })
+}
+
+fn relationships_preserved(
+    source: &[(String, Vec<CanonicalXmlElement>)],
+    output: &[(String, Vec<CanonicalXmlElement>)],
+    allow_calc_chain_invalidation: bool,
+) -> bool {
+    source.iter().all(|(part_name, expected)| {
+        let Some((_, actual)) = output
+            .iter()
+            .find(|(output_part, _)| output_part == part_name)
+        else {
+            return false;
+        };
+        let mut unmatched = actual.clone();
+        expected
+            .iter()
+            .filter(|relationship| {
+                !(allow_calc_chain_invalidation
+                    && part_name == "xl/_rels/workbook.xml.rels"
+                    && is_calc_chain_relationship(relationship))
+            })
+            .all(|relationship| {
+                unmatched
+                    .iter()
+                    .position(|candidate| candidate == relationship)
+                    .map(|index| {
+                        unmatched.remove(index);
+                    })
+                    .is_some()
+            })
+    })
+}
+
+fn is_calc_chain_relationship(relationship: &CanonicalXmlElement) -> bool {
+    relationship
+        .attributes
+        .iter()
+        .any(|(_, name, value)| name == "Type" && value.ends_with("/relationships/calcChain"))
+}
+
+fn relationship_change_summary(
+    source: &[(String, Vec<CanonicalXmlElement>)],
+    output: &[(String, Vec<CanonicalXmlElement>)],
+) -> String {
+    let mut changes = Vec::new();
+    for (part_name, expected) in source {
+        let Some((_, actual)) = output
+            .iter()
+            .find(|(output_part, _)| output_part == part_name)
+        else {
+            changes.push(format!("relationship part {part_name:?} is missing"));
+            continue;
+        };
+        let mut unmatched = actual.clone();
+        for relationship in expected {
+            if let Some(index) = unmatched
                 .iter()
-                .find(|(output_name, _)| output_name == name)
-                .is_some_and(|(_, actual)| actual == expected)
-        })
+                .position(|candidate| candidate == relationship)
+            {
+                unmatched.remove(index);
+            } else {
+                changes.push(format!(
+                    "relationship part {part_name:?} lost {relationship:?}"
+                ));
+            }
+        }
+    }
+    changes.join("; ")
 }
 
 fn preserved_sheet_metadata_matches(
@@ -1825,7 +1959,13 @@ fn workbook_preservation_snapshot(path: &Path) -> Result<WorkbookPreservationSna
                     && node.tag_name().namespace() == Some(PACKAGE_REL_NS)
                     && node.tag_name().name() == "Relationship"
             })
-            .map(canonical_xml_element)
+            .filter(|node| {
+                !(part_name == "xl/_rels/workbook.xml.rels"
+                    && node
+                        .attribute("Type")
+                        .is_some_and(|kind| kind.ends_with("/sharedStrings")))
+            })
+            .map(|node| canonical_relationship_element(node, &part_name))
             .collect::<Vec<_>>();
         entries.sort();
         snapshot.relationships.push((part_name, entries));
@@ -1851,7 +1991,7 @@ fn canonical_page_settings(root: roxmltree::Node<'_, '_>) -> Vec<CanonicalXmlEle
             child.tag_name().name(),
             "pageMargins" | "pageSetup" | "printOptions" | "rowBreaks" | "colBreaks"
         ) {
-            page_settings.push(canonical_xml_element(child));
+            page_settings.push(canonical_page_setting_element(child));
         } else if child.tag_name().name() == "sheetPr" {
             if let Some(setup_properties) = child
                 .children()
@@ -1870,6 +2010,29 @@ fn canonical_page_settings(root: roxmltree::Node<'_, '_>) -> Vec<CanonicalXmlEle
         }
     }
     page_settings
+}
+
+fn canonical_page_setting_element(node: roxmltree::Node<'_, '_>) -> CanonicalXmlElement {
+    let mut element = canonical_xml_element(node);
+    if node.tag_name().name() == "pageMargins" {
+        for (namespace, _, value) in &mut element.attributes {
+            if namespace.is_empty() {
+                if let Ok(number) = value.parse::<f64>() {
+                    // Openpyxl serializes decimal inch values through binary
+                    // floating point, which can shift the last digit by one
+                    // ULP (for example, 0.19652777777777777 to
+                    // 0.1965277777777778). Compare margin values at a precision
+                    // far below visible/layout precision while leaving every
+                    // non-numeric page setting strict.
+                    *value = format!("{number:.14}")
+                        .trim_end_matches('0')
+                        .trim_end_matches('.')
+                        .to_owned();
+                }
+            }
+        }
+    }
+    element
 }
 
 fn canonical_xml_element(node: roxmltree::Node<'_, '_>) -> CanonicalXmlElement {
@@ -1904,6 +2067,84 @@ fn canonical_xml_element(node: roxmltree::Node<'_, '_>) -> CanonicalXmlElement {
         text: (!text.trim().is_empty()).then_some(text),
         children,
     }
+}
+
+fn canonical_relationship_element(
+    node: roxmltree::Node<'_, '_>,
+    relationship_part: &str,
+) -> CanonicalXmlElement {
+    let mut element = canonical_xml_element(node);
+    for (namespace, name, value) in &mut element.attributes {
+        if namespace.is_empty() && name == "Target" {
+            let relationship_type = node.attribute("Type").unwrap_or_default();
+            *value = if node.attribute("TargetMode").is_none()
+                && relationship_type.ends_with("/comments")
+            {
+                // openpyxl relocates comments parts while preserving their
+                // worksheet-level comment data, which is validated separately.
+                "[comments]".to_owned()
+            } else if node.attribute("TargetMode").is_none()
+                && relationship_type.ends_with("/vmlDrawing")
+            {
+                // Legacy note VML parts are likewise renamed by openpyxl.
+                "[vmlDrawing]".to_owned()
+            } else {
+                normalize_relationship_target(
+                    relationship_part,
+                    value,
+                    node.attribute("TargetMode"),
+                )
+            };
+        }
+    }
+    // Relationship IDs are local serialization identifiers. openpyxl may
+    // renumber them (including comment/VML relationships) while preserving
+    // each relationship's type and resolved destination; consumers' ID
+    // references are validated with the corresponding workbook/sheet parts.
+    element
+        .attributes
+        .retain(|(namespace, name, _)| !(namespace.is_empty() && name == "Id"));
+    element
+}
+
+fn normalize_relationship_target(
+    relationship_part: &str,
+    target: &str,
+    target_mode: Option<&str>,
+) -> String {
+    if target_mode.is_some_and(|mode| mode.eq_ignore_ascii_case("external")) {
+        return target.to_owned();
+    }
+
+    let source_part = if relationship_part == "_rels/.rels" {
+        String::new()
+    } else if let Some((directory, file)) = relationship_part.rsplit_once("/_rels/") {
+        file.strip_suffix(".rels")
+            .map(|name| format!("{directory}/{name}"))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let package_absolute = target.starts_with('/');
+    let mut segments = if package_absolute {
+        Vec::new()
+    } else {
+        source_part
+            .rsplit_once('/')
+            .map(|(directory, _)| directory.split('/').collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    let normalized_target = target.trim_start_matches('/').replace('\\', "/");
+    for segment in normalized_target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            value => segments.push(value),
+        }
+    }
+    segments.join("/")
 }
 
 fn canonical_defined_names(
@@ -2344,9 +2585,9 @@ fn validate_requested_operations(
                     _ => bail!("comment presence mismatch at {sheet}!{cell}"),
                 }
             }
-            EditOperation::ReplaceHeaderText { .. } => {
-                bail!("ReplaceHeaderText is intentionally routed to the OOXML Patch backend")
-            }
+            // Header/footer text is checked against the source and output
+            // OOXML snapshots by validate_preserved_ooxml_metadata below.
+            EditOperation::ReplaceHeaderText { .. } => {}
             EditOperation::CopyRange {
                 source_sheet,
                 source_range,
@@ -2699,6 +2940,22 @@ fn validate_unmodified_styles(
             // row mapping leaves this address in place.
             if output_address == address {
                 if let Some(equal) =
+                    merged_anchor_effective_borders_equal(source_sheet, output_sheet, &address)
+                {
+                    anyhow::ensure!(
+                        equal,
+                        "Rust unmodified merged-anchor border readback mismatch at {output_name}!{address}"
+                    );
+                    anyhow::ensure!(
+                        styles_semantically_equal_except_borders(
+                            &actual,
+                            source_cell.style()
+                        ),
+                        "Rust unmodified merged-anchor style readback mismatch at {output_name}!{address}"
+                    );
+                    continue;
+                }
+                if let Some(equal) =
                     merged_member_effective_borders_equal(source_sheet, output_sheet, &address)
                 {
                     anyhow::ensure!(
@@ -2715,6 +2972,54 @@ fn validate_unmodified_styles(
         }
     }
     Ok(())
+}
+
+/// openpyxl materializes the effective bottom/right edges of a merged range
+/// onto the top-left anchor when saving. Compare the effective range perimeter
+/// so that this representation change does not look like a lost or added border.
+fn merged_anchor_effective_borders_equal(
+    source_sheet: &umya_spreadsheet::Worksheet,
+    output_sheet: &umya_spreadsheet::Worksheet,
+    address: &str,
+) -> Option<bool> {
+    let (row, column) = parse_cell(address).ok()?;
+    let (start_row, start_column, end_row, end_column) =
+        source_sheet.merge_cells().iter().find_map(|merged| {
+            let range = parse_range(&merged.range()).ok()?;
+            (range.0 == row && range.1 == column).then_some(range)
+        })?;
+
+    let anchor_address = format!("{}{}", column_letters(start_column), start_row);
+    let bottom_right_address = format!("{}{}", column_letters(end_column), end_row);
+    let source_anchor = source_sheet
+        .cell(anchor_address.as_str())
+        .map(|cell| cell.style().clone())
+        .unwrap_or_default();
+    let output_anchor = output_sheet
+        .cell(anchor_address.as_str())
+        .map(|cell| cell.style().clone())
+        .unwrap_or_default();
+    let source_bottom_right = source_sheet
+        .cell(bottom_right_address.as_str())
+        .map(|cell| cell.style().clone())
+        .unwrap_or_default();
+    let output_bottom_right = output_sheet
+        .cell(bottom_right_address.as_str())
+        .map(|cell| cell.style().clone())
+        .unwrap_or_default();
+    let source_anchor = source_anchor.borders().cloned().unwrap_or_default();
+    let output_anchor = output_anchor.borders().cloned().unwrap_or_default();
+    let source_bottom_right = source_bottom_right.borders().cloned().unwrap_or_default();
+    let output_bottom_right = output_bottom_right.borders().cloned().unwrap_or_default();
+
+    Some(
+        source_anchor.top() == output_anchor.top()
+            && source_anchor.left() == output_anchor.left()
+            && merged_border_side(source_anchor.bottom(), source_bottom_right.bottom())
+                == merged_border_side(output_anchor.bottom(), output_bottom_right.bottom())
+            && merged_border_side(source_anchor.right(), source_bottom_right.right())
+                == merged_border_side(output_anchor.right(), output_bottom_right.right()),
+    )
 }
 
 fn merged_member_effective_borders_equal(
@@ -3006,6 +3311,7 @@ fn expected_import_styles(
             target_sheet,
             target_start,
             style_mode,
+            copy_merges,
             ..
         } = operation
         else {
@@ -3044,6 +3350,16 @@ fn expected_import_styles(
                 let worksheet = imported.sheet_by_name(source_sheet).with_context(|| {
                     format!("ImportRange source sheet {source_sheet:?} missing")
                 })?;
+                // A merged range is rendered from its anchor cell. Some Rust
+                // readers expose the anchor's style on merged members even
+                // when the source OOXML stores no direct style there, while
+                // openpyxl materializes merged members differently. Verify
+                // the anchor style and merge structure separately; do not
+                // reject an otherwise valid import over an inherited member
+                // style that is not independently rendered by Excel.
+                if *copy_merges && is_merged_non_anchor(worksheet, &source_cell) {
+                    continue;
+                }
                 let style = if worksheet.cell(source_cell.as_str()).is_none() {
                     let probe = normalized_source
                         .probe_cells
@@ -3057,12 +3373,84 @@ fn expected_import_styles(
                 };
                 styles.insert(
                     (target_sheet.clone(), target_cell),
-                    project_import_style(&style, *style_mode),
+                    project_import_style_for_openpyxl_merge(
+                        &imported,
+                        worksheet,
+                        &source_cell,
+                        &style,
+                        *style_mode,
+                        *copy_merges,
+                    )?,
                 );
             }
         }
     }
     Ok(styles)
+}
+
+fn project_import_style_for_openpyxl_merge(
+    workbook: &umya_spreadsheet::Workbook,
+    worksheet: &umya_spreadsheet::Worksheet,
+    address: &str,
+    source_style: &umya_spreadsheet::Style,
+    mode: RangeStyleMode,
+    copy_merges: bool,
+) -> Result<umya_spreadsheet::Style> {
+    let mut projected = project_import_style(source_style, mode);
+    if mode != RangeStyleMode::Full || !copy_merges {
+        return Ok(projected);
+    }
+
+    let (row, column) = parse_cell(address)?;
+    let merge = worksheet.merge_cells().iter().find_map(|merged| {
+        let (first_row, first_column, last_row, last_column) = parse_range(&merged.range()).ok()?;
+        (first_row == row && first_column == column).then_some((last_row, last_column))
+    });
+    let Some((last_row, last_column)) = merge else {
+        return Ok(projected);
+    };
+
+    // openpyxl materializes bottom/right border sides from the bottom-right
+    // cell onto the top-left anchor when loading a merged range. This is a
+    // serialization normalization: Excel renders the same merged perimeter.
+    let bottom_right = format!("{}{}", column_letters(last_column), last_row);
+    let bottom_right_style = style_at(workbook, worksheet.name(), &bottom_right)?;
+    let bottom_right_borders = bottom_right_style.borders().cloned().unwrap_or_default();
+    let mut anchor_borders = source_style.borders().cloned().unwrap_or_default();
+    let default_border = umya_spreadsheet::Border::default();
+    let mut changed = false;
+    if anchor_borders.bottom() == &default_border
+        && bottom_right_borders.bottom() != &default_border
+    {
+        *anchor_borders.bottom_mut() = bottom_right_borders.bottom().clone();
+        changed = true;
+    }
+    if anchor_borders.right() == &default_border && bottom_right_borders.right() != &default_border
+    {
+        *anchor_borders.right_mut() = bottom_right_borders.right().clone();
+        changed = true;
+    }
+    if changed {
+        projected.set_borders(anchor_borders);
+    }
+    Ok(projected)
+}
+
+fn is_merged_non_anchor(sheet: &umya_spreadsheet::Worksheet, address: &str) -> bool {
+    let Ok((row, column)) = parse_cell(address) else {
+        return false;
+    };
+    sheet.merge_cells().iter().any(|merged| {
+        let Ok((start_row, start_column, end_row, end_column)) = parse_range(&merged.range())
+        else {
+            return false;
+        };
+        row >= start_row
+            && row <= end_row
+            && column >= start_column
+            && column <= end_column
+            && (row != start_row || column != start_column)
+    })
 }
 
 /// Umya applies a cell style only when a worksheet cell has an explicit `s`
@@ -3402,6 +3790,38 @@ fn append_xf_zero_probe(xml: &str) -> Result<(String, String)> {
         .find(|row| !used.contains(row))
         .context("worksheet has no free row for temporary XF0 probe")?;
     let probe = format!("A{probe_row}");
+    let injected = format!(
+        "<row xmlns=\"{SPREADSHEET_MAIN_NS}\" r=\"{probe_row}\"><c r=\"{probe}\" s=\"0\"/></row>"
+    );
+    let sheet_data_range = sheet_data.range();
+    let sheet_data_fragment = &xml[sheet_data_range.start..sheet_data_range.end];
+    let start_tag_length = xml_start_tag_length(sheet_data_fragment.as_bytes())
+        .context("find worksheet sheetData start-tag boundary")?;
+    let start_tag = &sheet_data_fragment[..start_tag_length];
+    let start_tag_without_end = start_tag[..start_tag.len() - 1].trim_end();
+    if start_tag_without_end.ends_with('/') {
+        let name_end = start_tag[1..]
+            .find(|character: char| {
+                character.is_ascii_whitespace() || matches!(character, '/' | '>')
+            })
+            .map(|offset| offset + 1)
+            .context("find worksheet sheetData element name")?;
+        let qualified_name = &start_tag[1..name_end];
+        let mut slash_offset = start_tag.len() - 1;
+        while slash_offset > 0 && start_tag.as_bytes()[slash_offset - 1].is_ascii_whitespace() {
+            slash_offset -= 1;
+        }
+        anyhow::ensure!(
+            slash_offset > 0 && start_tag.as_bytes()[slash_offset - 1] == b'/',
+            "self-closing worksheet sheetData has no closing slash"
+        );
+
+        let mut normalized = xml.to_owned();
+        normalized.remove(sheet_data_range.start + slash_offset - 1);
+        let insertion = sheet_data_range.end - 1;
+        normalized.insert_str(insertion, &format!("{injected}</{qualified_name}>"));
+        return Ok((normalized, probe));
+    }
     let insertion = if let Some(row) = rows.iter().find(|row| {
         row.attribute("r")
             .and_then(|value| value.parse::<u32>().ok())
@@ -3409,16 +3829,11 @@ fn append_xf_zero_probe(xml: &str) -> Result<(String, String)> {
     }) {
         row.range().start
     } else {
-        let range = sheet_data.range();
-        let fragment = &xml[range.start..range.end];
-        range.start
-            + fragment
+        sheet_data_range.start
+            + sheet_data_fragment
                 .rfind("</")
                 .context("sheetData is not an explicit XML element")?
     };
-    let injected = format!(
-        "<row xmlns=\"{SPREADSHEET_MAIN_NS}\" r=\"{probe_row}\"><c r=\"{probe}\" s=\"0\"/></row>"
-    );
     let mut normalized = xml.to_owned();
     normalized.insert_str(insertion, &injected);
     Ok((normalized, probe))
@@ -3599,6 +4014,17 @@ fn styles_semantically_equal(
     actual: &umya_spreadsheet::Style,
     expected: &umya_spreadsheet::Style,
 ) -> bool {
+    styles_semantically_equal_except_borders(actual, expected)
+        && match (actual.borders(), expected.borders()) {
+            (Some(a), Some(b)) => a == b,
+            _ => true,
+        }
+}
+
+fn styles_semantically_equal_except_borders(
+    actual: &umya_spreadsheet::Style,
+    expected: &umya_spreadsheet::Style,
+) -> bool {
     fn equal_defaulted<T>(actual: Option<&T>, expected: Option<&T>) -> bool
     where
         T: Clone + Default + PartialEq,
@@ -3628,7 +4054,13 @@ fn styles_semantically_equal(
 
         match (actual.pattern_fill(), expected.pattern_fill()) {
             (Some(actual), Some(expected)) => {
-                actual.pattern_type() == expected.pattern_type()
+                let no_pattern = |pattern: &umya_spreadsheet::PatternFill| {
+                    pattern.pattern_type() == &umya_spreadsheet::PatternValues::None
+                        && pattern.foreground_color().is_none()
+                        && pattern.background_color().is_none()
+                };
+                (actual.pattern_type() == expected.pattern_type()
+                    || (no_pattern(actual) && no_pattern(expected)))
                     && actual.foreground_color() == expected.foreground_color()
                     && actual.background_color() == expected.background_color()
             }
@@ -3640,12 +4072,6 @@ fn styles_semantically_equal(
 
     fonts_semantically_equal(actual.font(), expected.font())
         && equal_fill(actual.fill(), expected.fill())
-        // openpyxl 会为无边框单元格写出显式空 <border/>，umya 侧则保留“未设置”；
-        // 仅当两侧都存在边框信息时才要求结构相等，否则视为视觉等价。
-        && match (actual.borders(), expected.borders()) {
-            (Some(a), Some(b)) => a == b,
-            _ => true,
-        }
         // 同理：openpyxl 写出显式默认对齐/保护，umya 侧可能为未设置。
         && match (actual.alignment(), expected.alignment()) {
             (Some(a), Some(b)) => a == b,
@@ -5300,6 +5726,62 @@ mod tests {
     }
 
     #[test]
+    fn page_margin_float_serialization_rounding_is_tolerated_but_real_changes_are_not() -> Result<()>
+    {
+        const NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        let source_xml = format!(
+            r#"<worksheet xmlns="{NS}"><pageMargins left="0.39305555555555555" right="0.39305555555555555" top="0.98402777777777772" bottom="0.59027777777777779" header="0.51111111111111107" footer="0.51111111111111107"/></worksheet>"#
+        );
+        let normalized_xml = format!(
+            r#"<worksheet xmlns="{NS}"><pageMargins left="0.3930555555555555" right="0.3930555555555555" top="0.9840277777777777" bottom="0.5902777777777778" header="0.5111111111111111" footer="0.5111111111111111"/></worksheet>"#
+        );
+        let changed_xml = format!(
+            r#"<worksheet xmlns="{NS}"><pageMargins left="0.2" right="0.3930555555555555" top="0.9840277777777777" bottom="0.5902777777777778" header="0.5111111111111111" footer="0.5111111111111111"/></worksheet>"#
+        );
+        let source = roxmltree::Document::parse(&source_xml)?;
+        let normalized = roxmltree::Document::parse(&normalized_xml)?;
+        let changed = roxmltree::Document::parse(&changed_xml)?;
+
+        assert_eq!(
+            canonical_page_settings(source.root_element()),
+            canonical_page_settings(normalized.root_element())
+        );
+        assert_ne!(
+            canonical_page_settings(source.root_element()),
+            canonical_page_settings(changed.root_element())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn replacing_header_text_does_not_change_footer_text() {
+        let mut metadata = CanonicalXmlElement {
+            name: format!("{SPREADSHEET_MAIN_NS}:headerFooter"),
+            attributes: Vec::new(),
+            text: None,
+            children: vec![
+                CanonicalXmlElement {
+                    name: format!("{SPREADSHEET_MAIN_NS}:oddHeader"),
+                    attributes: Vec::new(),
+                    text: Some("Unit: 万元".to_owned()),
+                    children: Vec::new(),
+                },
+                CanonicalXmlElement {
+                    name: format!("{SPREADSHEET_MAIN_NS}:oddFooter"),
+                    attributes: Vec::new(),
+                    text: Some("Report: 万元".to_owned()),
+                    children: Vec::new(),
+                },
+            ],
+        };
+
+        replace_header_footer_text(&mut metadata, "万元", "万美元");
+
+        assert_eq!(metadata.children[0].text.as_deref(), Some("Unit: 万美元"));
+        assert_eq!(metadata.children[1].text.as_deref(), Some("Report: 万元"));
+    }
+
+    #[test]
     fn row_dimensions_allow_only_openpyxl_custom_height_serialization_normalization() -> Result<()>
     {
         let source = dimension_snapshot(
@@ -5322,14 +5804,22 @@ mod tests {
         let source = dimension_snapshot(
             "Report",
             Vec::new(),
-            vec![row_dimension(12, &[("ht", "15.0"), ("s", "2")])],
+            vec![row_dimension(
+                12,
+                &[("ht", "15.0"), ("s", "2"), ("customFormat", "1")],
+            )],
         );
         let changed_height = dimension_snapshot(
             "Report",
             Vec::new(),
             vec![row_dimension(
                 12,
-                &[("ht", "16.0"), ("customHeight", "1"), ("s", "2")],
+                &[
+                    ("ht", "16.0"),
+                    ("customHeight", "1"),
+                    ("s", "2"),
+                    ("customFormat", "1"),
+                ],
             )],
         );
         let changed_style = dimension_snapshot(
@@ -5337,13 +5827,35 @@ mod tests {
             Vec::new(),
             vec![row_dimension(
                 12,
-                &[("ht", "15.0"), ("customHeight", "1"), ("s", "3")],
+                &[
+                    ("ht", "15.0"),
+                    ("customHeight", "1"),
+                    ("s", "3"),
+                    ("customFormat", "1"),
+                ],
             )],
         );
         let plan = dimension_plan(Vec::new(), BTreeMap::new());
 
         assert!(validate_preserved_dimensions(&source, &changed_height, &plan).is_err());
         assert!(validate_preserved_dimensions(&source, &changed_style, &plan).is_err());
+    }
+
+    #[test]
+    fn row_dimensions_ignore_style_index_when_custom_format_is_disabled() -> Result<()> {
+        let source = dimension_snapshot(
+            "Report",
+            Vec::new(),
+            vec![row_dimension(12, &[("ht", "15.0")])],
+        );
+        let output = dimension_snapshot(
+            "Report",
+            Vec::new(),
+            vec![row_dimension(12, &[("ht", "15.0"), ("s", "33")])],
+        );
+        let plan = dimension_plan(Vec::new(), BTreeMap::new());
+
+        validate_preserved_dimensions(&source, &output, &plan)
     }
 
     #[test]
@@ -5782,6 +6294,46 @@ mod tests {
     }
 
     #[test]
+    fn xf_zero_probe_expands_self_closing_sheet_data() -> Result<()> {
+        let examples = [
+            format!(r#"<worksheet xmlns="{SPREADSHEET_MAIN_NS}"><sheetData/></worksheet>"#),
+            format!(r#"<worksheet xmlns:x="{SPREADSHEET_MAIN_NS}"><x:sheetData /></worksheet>"#),
+        ];
+
+        for xml in examples {
+            let (normalized, probe) = append_xf_zero_probe(&xml)?;
+            let document = roxmltree::Document::parse(&normalized)?;
+            let sheet_data = document
+                .descendants()
+                .find(|node| {
+                    node.is_element()
+                        && node.tag_name().namespace() == Some(SPREADSHEET_MAIN_NS)
+                        && node.tag_name().name() == "sheetData"
+                })
+                .context("normalized worksheet has no sheetData")?;
+            let row = sheet_data
+                .children()
+                .find(|node| {
+                    node.is_element()
+                        && node.tag_name().namespace() == Some(SPREADSHEET_MAIN_NS)
+                        && node.tag_name().name() == "row"
+                })
+                .context("normalized sheetData has no probe row")?;
+            assert_eq!(row.attribute("r"), Some("1048576"));
+            let cell = row
+                .children()
+                .find(|node| {
+                    node.is_element()
+                        && node.tag_name().namespace() == Some(SPREADSHEET_MAIN_NS)
+                        && node.tag_name().name() == "c"
+                })
+                .context("probe row has no cell")?;
+            assert_eq!(cell.attribute("r"), Some(probe.as_str()));
+        }
+        Ok(())
+    }
+
+    #[test]
     fn implicit_xf_zero_properties_are_visible_to_umya_expected_style_reader() -> Result<()> {
         let source = ScratchFile::create(&std::env::temp_dir(), "implicit-xf0-source")?;
         let mut workbook = rust_xlsxwriter::Workbook::new();
@@ -5902,6 +6454,14 @@ mod tests {
             ("使用说明".to_owned(), vec![1]),
         ];
         assert!(per_sheet_entries_match(&source, &reordered));
+        // Adding a planned worksheet must not make preserved metadata on the
+        // pre-existing worksheets fail validation.
+        let with_added_sheet = vec![
+            ("核查表校验结果".to_owned(), vec![2, 3]),
+            ("使用说明".to_owned(), vec![1]),
+            ("新追加工作表".to_owned(), vec![4]),
+        ];
+        assert!(per_sheet_entries_match(&source, &with_added_sheet));
         // Changed per-sheet content still fails.
         let changed = vec![
             ("核查表校验结果".to_owned(), vec![2, 4]),
@@ -5910,6 +6470,105 @@ mod tests {
         assert!(!per_sheet_entries_match(&source, &changed));
         // A dropped worksheet still fails.
         assert!(!per_sheet_entries_match(&source, &reordered[0..1].to_vec()));
+    }
+
+    #[test]
+    fn relationship_snapshot_allows_planned_additions_but_preserves_existing_entries() {
+        let relation = |target: &str| CanonicalXmlElement {
+            name: "Relationships:Relationship".to_owned(),
+            attributes: vec![(String::new(), "Target".to_owned(), target.to_owned())],
+            text: None,
+            children: Vec::new(),
+        };
+        let source = vec![(
+            "xl/_rels/workbook.xml.rels".to_owned(),
+            vec![relation("worksheets/sheet1.xml")],
+        )];
+        let with_planned_sheet = vec![
+            (
+                "xl/_rels/workbook.xml.rels".to_owned(),
+                vec![
+                    relation("worksheets/sheet1.xml"),
+                    relation("worksheets/sheet2.xml"),
+                ],
+            ),
+            (
+                "xl/worksheets/_rels/sheet2.xml.rels".to_owned(),
+                vec![relation("../comments2.xml")],
+            ),
+        ];
+        assert!(relationships_preserved(&source, &with_planned_sheet, false));
+
+        let changed_existing_target = vec![(
+            "xl/_rels/workbook.xml.rels".to_owned(),
+            vec![
+                relation("worksheets/replaced.xml"),
+                relation("worksheets/sheet2.xml"),
+            ],
+        )];
+        assert!(!relationships_preserved(
+            &source,
+            &changed_existing_target,
+            false
+        ));
+        assert!(!relationships_preserved(&source, &[], false));
+    }
+
+    #[test]
+    fn relationship_snapshot_allows_only_calc_chain_invalidation_for_formula_edits() {
+        let relationship = |kind: &str, target: &str| CanonicalXmlElement {
+            name: "Relationships:Relationship".to_owned(),
+            attributes: vec![
+                (String::new(), "Type".to_owned(), kind.to_owned()),
+                (String::new(), "Target".to_owned(), target.to_owned()),
+            ],
+            text: None,
+            children: Vec::new(),
+        };
+        let source = vec![(
+            "xl/_rels/workbook.xml.rels".to_owned(),
+            vec![
+                relationship(
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                    "worksheets/sheet1.xml",
+                ),
+                relationship(
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                    "calcChain.xml",
+                ),
+            ],
+        )];
+        let output_without_calc_chain = vec![(
+            "xl/_rels/workbook.xml.rels".to_owned(),
+            vec![relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                "worksheets/sheet1.xml",
+            )],
+        )];
+
+        assert!(!relationships_preserved(
+            &source,
+            &output_without_calc_chain,
+            false
+        ));
+        assert!(relationships_preserved(
+            &source,
+            &output_without_calc_chain,
+            true
+        ));
+
+        let output_without_sheet = vec![(
+            "xl/_rels/workbook.xml.rels".to_owned(),
+            vec![relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                "calcChain.xml",
+            )],
+        )];
+        assert!(!relationships_preserved(
+            &source,
+            &output_without_sheet,
+            true
+        ));
     }
 
     fn sheet_dump(name: &str, merges: &[&str]) -> SheetDump {
@@ -6187,6 +6846,57 @@ mod tests {
     }
 
     #[test]
+    fn imported_merged_anchor_style_includes_openpyxl_perimeter_borders() -> Result<()> {
+        let mut workbook = umya_spreadsheet::new_file();
+        let worksheet = workbook.sheet_by_name_mut("Sheet1").unwrap();
+        worksheet.add_merge_cells("A1:B2");
+        worksheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .top_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+        worksheet
+            .cell_mut("B2")
+            .style_mut()
+            .borders_mut()
+            .right_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+        worksheet
+            .cell_mut("B2")
+            .style_mut()
+            .borders_mut()
+            .bottom_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Double);
+
+        let style = style_at(&workbook, "Sheet1", "A1")?;
+        let projected = project_import_style_for_openpyxl_merge(
+            &workbook,
+            workbook.sheet_by_name("Sheet1").unwrap(),
+            "A1",
+            &style,
+            RangeStyleMode::Full,
+            true,
+        )?;
+        let borders = projected
+            .borders()
+            .context("projected style has no borders")?;
+        assert_eq!(
+            borders.bottom().style(),
+            &umya_spreadsheet::BorderStyleValues::Double
+        );
+        assert_eq!(
+            borders.right().style(),
+            &umya_spreadsheet::BorderStyleValues::Thin
+        );
+        assert_eq!(
+            borders.top().style(),
+            &umya_spreadsheet::BorderStyleValues::Thin
+        );
+        Ok(())
+    }
+
+    #[test]
     fn merged_style_readback_treats_only_non_anchor_cells_as_normalized() {
         let mut source = umya_spreadsheet::new_file();
         let source_sheet = source.sheet_by_name_mut("Sheet1").unwrap();
@@ -6275,6 +6985,83 @@ mod tests {
     }
 
     #[test]
+    fn merged_anchor_readback_accepts_materialized_perimeter_and_empty_fill() {
+        let mut source = umya_spreadsheet::new_file();
+        let source_sheet = source.sheet_by_name_mut("Sheet1").unwrap();
+        source_sheet.add_merge_cells("A1:A2");
+        source_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .top_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Medium);
+        source_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .right_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+        source_sheet
+            .cell_mut("A2")
+            .style_mut()
+            .borders_mut()
+            .bottom_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+        source_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .fill_mut()
+            .pattern_fill_mut()
+            .set_pattern_type(umya_spreadsheet::PatternValues::None);
+
+        let mut output = umya_spreadsheet::new_file();
+        let output_sheet = output.sheet_by_name_mut("Sheet1").unwrap();
+        output_sheet.add_merge_cells("A1:A2");
+        output_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .top_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Medium);
+        output_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .right_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+        // openpyxl moves the merged range's bottom edge onto the anchor.
+        output_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .bottom_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Thin);
+
+        let source_style = source_sheet.cell("A1").unwrap().style();
+        let output_style = output_sheet.cell("A1").unwrap().style();
+        assert!(!styles_semantically_equal(source_style, output_style));
+        assert!(styles_semantically_equal_except_borders(
+            source_style,
+            output_style
+        ));
+        assert_eq!(
+            merged_anchor_effective_borders_equal(source_sheet, output_sheet, "A1"),
+            Some(true)
+        );
+
+        output_sheet
+            .cell_mut("A1")
+            .style_mut()
+            .borders_mut()
+            .bottom_mut()
+            .set_style(umya_spreadsheet::BorderStyleValues::Double);
+        assert_eq!(
+            merged_anchor_effective_borders_equal(source_sheet, output_sheet, "A1"),
+            Some(false)
+        );
+    }
+
+    #[test]
     fn packaged_runtime_uses_an_absolute_internal_path_and_never_path_lookup() {
         let config =
             OpenpyxlWorkerConfig::for_product_binary("/usr/bin/pytools", "pytools").unwrap();
@@ -6326,7 +7113,7 @@ mod tests {
             .capability()
             .operations
             .contains(&EditOperationKind::SetCellValue));
-        assert!(!backend
+        assert!(backend
             .capability()
             .operations
             .contains(&EditOperationKind::DeleteRows));

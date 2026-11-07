@@ -356,7 +356,7 @@ where
         let file_name = crate::run_logging::portable_file_name(source);
         emitter.current_workbook_name = Some(file_name.clone());
         emitter.current_worksheet_name = None;
-        if !openpyxl_compatible_extension(source) {
+        if !region_sum_readable_extension(source) {
             emitter.progress.processed_files += 1;
             emitter.progress.failed_files += 1;
             write_log(
@@ -369,7 +369,7 @@ where
                 "input_validation",
                 "failed",
                 format!(
-                    "第 {input_index} 个工作簿格式不受支持：仅支持 .xlsx，实际扩展名为 {}",
+                    "第 {input_index} 个工作簿格式不受支持：仅支持 .xlsx/.xlsm/.xls/.xltx/.xltm，实际扩展名为 {}",
                     source
                         .extension()
                         .and_then(|value| value.to_str())
@@ -638,13 +638,13 @@ fn validate_timestamp(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn openpyxl_compatible_extension(path: &Path) -> bool {
+fn region_sum_readable_extension(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
             matches!(
                 extension.to_ascii_lowercase().as_str(),
-                "xlsx" | "xlsm" | "xltx" | "xltm"
+                "xlsx" | "xlsm" | "xls" | "xltx" | "xltm"
             )
         })
 }
@@ -961,6 +961,8 @@ fn save_report(
     {
         let worksheet = workbook.add_worksheet();
         worksheet.set_name(RESULT_SHEET)?;
+        // Match the page layout produced by the PyCode Openpyxl report.
+        worksheet.set_margins(0.75, 0.75, 1.0, 1.0, 0.5, 0.5);
         // The Python baseline stores this marker as a formula with no cached
         // value, so preserve that cache state instead of rust_xlsxwriter's 0.
         worksheet.set_formula_result_default("");
@@ -1104,9 +1106,11 @@ fn commit_without_overwrite(temporary: &Path, desired: PathBuf) -> Result<PathBu
 
 #[cfg(test)]
 mod tests {
-    use super::{check_one_sheet, number_or_none, parse_python_float};
+    use super::{
+        check_one_sheet, number_or_none, parse_python_float, region_sum_readable_extension,
+    };
     use excel_reader::{CellValue, SheetValues};
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, path::Path};
 
     fn sheet(values: &[(&str, CellValue)], max_row: usize, max_column: usize) -> SheetValues {
         SheetValues {
@@ -1141,6 +1145,14 @@ mod tests {
             None
         );
         assert_eq!(parse_python_float(" Infinity "), Some(f64::INFINITY));
+    }
+
+    #[test]
+    fn region_sum_accepts_legacy_xls_for_calamine_reads() {
+        assert!(region_sum_readable_extension(Path::new("monthly.xls")));
+        assert!(region_sum_readable_extension(Path::new("monthly.XLS")));
+        assert!(region_sum_readable_extension(Path::new("monthly.xlsx")));
+        assert!(!region_sum_readable_extension(Path::new("monthly.csv")));
     }
 
     #[test]

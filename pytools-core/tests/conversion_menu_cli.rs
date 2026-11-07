@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::{
     env, fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
     sync::atomic::{AtomicU64, Ordering},
@@ -265,7 +265,9 @@ fn v2_file_menu_hides_native_value_conversion() -> Result<()> {
     let output = run_menu(&config, "4\n0\n0\n")?;
     assert!(output.status.success(), "menu failed: {}", stderr(&output));
     let menu = String::from_utf8_lossy(&output.stdout);
-    assert!(menu.contains("Office 格式转换（XLS/ET/ETT → XLSX，DOC/WPS/WPT → DOCX）"));
+    assert!(menu.contains(
+        "Office 格式转换（Excel 工作簿 → XLSX；支持 .xlsx 规范另存，DOC/WPS/WPT → DOCX）"
+    ));
     assert!(!menu.contains("批量原生值转换"));
     Ok(())
 }
@@ -287,19 +289,19 @@ fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
     );
     assert!(
         help.contains(
-            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|pywin32|native]"
+            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|com|pywin32]"
         ),
-        "Excel conversion help must list the supported COM engine: {help}"
+        "Excel conversion help must list the pywin32 Excel/WPS COM route only: {help}"
     );
     assert!(
         help.contains(
-            "convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com|pywin32]"
+            "convert-word --config <config.xlsx> [--to docx] [--engine auto|com|pywin32]"
         ),
-        "Word conversion help must list the supported COM engine: {help}"
+        "Word conversion help must list only the supported COM engines: {help}"
     );
     assert!(
-        help.contains("convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|pywin32|native]"),
-        "single-file conversion help must list the supported COM engine: {help}"
+        help.contains("convert-file --input <file> --to <extension> [--output <file>] [--engine auto|com|pywin32|native]"),
+        "single-file conversion help must list the supported engines: {help}"
     );
     Ok(())
 }
@@ -346,6 +348,65 @@ fn conversion_cli_rejects_xlsx_payload_mislabeled_as_et() -> Result<()> {
         .contains("engine is unavailable"));
     assert!(!output_dir.join("mislabeled.xlsx").exists());
     assert_eq!(fs::read(&mislabeled_et)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as() -> Result<()> {
+    if !spreadsheet_com_available() {
+        eprintln!("skipping: no Excel/WPS spreadsheet COM available for this host");
+        return Ok(());
+    }
+    let root = TestDirectory::new()?;
+    let input = root.path().join("renamed-legacy-xls.xlsx");
+    let output_path = root.path().join("normalized.xlsx");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/timeline/wide_summary_elapsed_duration.xls");
+    let worker =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("python/pywin32_excel_conversion_worker.py");
+    let python = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .context("pytools-core manifest must have a repository parent")?
+        .join("dist/python/python.exe");
+    if !python.is_file() {
+        eprintln!("skipping: bundled Python runtime is unavailable for the COM worker");
+        return Ok(());
+    }
+    fs::copy(&fixture, &input)?;
+    let source_before = fs::read(&input)?;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["convert-file", "--input"])
+        .arg(&input)
+        .args(["--output"])
+        .arg(&output_path)
+        .args(["--to", "xlsx", "--engine", "pywin32"])
+        .env("PYTOOLS_COM_WORKER", &worker)
+        .env("PYTOOLS_COM_PYTHON", &python)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "renamed legacy XLS should be opened as XLS and saved as XLSX: {}",
+        stderr(&output)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(report["status"], "converted", "{report}");
+    assert_eq!(report["validation"]["verified"], true, "{report}");
+    assert!(
+        matches!(
+            report["validation"]["source_file_format"].as_i64(),
+            Some(39 | 43 | 56)
+        ),
+        "COM must identify the source as a legacy BIFF Excel workbook: {report}"
+    );
+    let converted_bytes = fs::read(&output_path)?;
+    assert!(converted_bytes.starts_with(b"PK\x03\x04"));
+    assert!(!read_workbook(&output_path)?.sheets.is_empty());
+    assert_eq!(
+        fs::read(&input)?,
+        source_before,
+        "source copy must remain unchanged"
+    );
     Ok(())
 }
 
@@ -711,7 +772,7 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
 }
 
 #[test]
-fn sheet_rename_menu_executes_only_after_capability_and_confirmation() -> Result<()> {
+fn sheet_rename_menu_executes_openpyxl_after_confirmation() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let input = root.path().join("rename-confirmed.xlsx");
@@ -727,12 +788,11 @@ fn sheet_rename_menu_executes_only_after_capability_and_confirmation() -> Result
         stderr(&result)
     );
     assert!(String::from_utf8_lossy(&result.stdout).contains("将直接修改所选源工作簿"));
-    let report = menu_object_json(&result)?;
-    assert_eq!(report["rename_ok"], 1);
-    assert_eq!(report["files"][0]["status"], "renamed");
-    assert_eq!(
-        report["files"][0]["execution"]["engine"],
-        "umya_spreadsheet"
+    assert!(String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        stdout.contains("成功改名 1 个工作表"),
+        "expected a successful sheet-rename summary, got:\n{stdout}"
     );
 
     // 4-5 改为就地修改：源工作簿被改写，不再生成结果目录副本。
@@ -741,11 +801,7 @@ fn sheet_rename_menu_executes_only_after_capability_and_confirmation() -> Result
         original,
         "in-place sheet rename must rewrite the source workbook"
     );
-    let output_path = PathBuf::from(
-        report["files"][0]["output"]
-            .as_str()
-            .context("renamed workbook path missing")?,
-    );
+    let output_path = input.clone();
     assert!(output_path.is_file());
     assert_eq!(
         fs::canonicalize(&output_path)?,
@@ -815,24 +871,26 @@ fn sheet_rename_menu_without_capability_can_be_cancelled() -> Result<()> {
 }
 
 #[test]
-fn sheet_rename_menu_reports_unavailable_excel_without_changing_source() -> Result<()> {
+fn sheet_rename_openpyxl_does_not_require_excel_com() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let input = root.path().join("rename-engine-disabled.xlsx");
     create_source_workbook(&input, "OldSheet")?;
-    let original = fs::read(&input)?;
     let mut child = menu_command(&config);
     child.env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1");
     let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
     assert!(result.status.success());
-    assert!(String::from_utf8_lossy(&result.stdout).contains("已禁用外部引擎"));
-    assert_eq!(fs::read(&input)?, original);
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(stdout.contains("使用 openpyxl"));
+    assert!(stdout.contains("成功改名 1 个工作表"), "{stdout}");
+    let workbook = read_workbook(&input)?;
+    assert!(workbook.sheets.iter().any(|sheet| sheet.name == "NewSheet"));
     assert!(!root.path().join("PyTools_Sheet改名结果").exists());
     Ok(())
 }
 
 #[test]
-fn sheet_rename_legacy_capability_rejects_formula_workbook() -> Result<()> {
+fn sheet_rename_legacy_capability_does_not_route_to_umya() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let input = root.path().join("rename-legacy-formula.xlsx");
@@ -848,8 +906,19 @@ fn sheet_rename_legacy_capability_rejects_formula_workbook() -> Result<()> {
     write_sheet_rename_capability(&config, &input, &capability)?;
     let original = fs::read(&input)?;
     let result = run_sheet_rename_menu(&config, &capability, &input, "y")?;
-    assert!(String::from_utf8_lossy(&result.stdout).contains("不能保证公式和命名区域引用更新"));
-    assert_eq!(fs::read(&input)?, original);
+    assert!(result.status.success(), "{}", stderr(&result));
+    assert!(String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        stdout.contains("成功改名 1 个工作表"),
+        "expected a successful sheet-rename summary, got:\n{stdout}"
+    );
+    assert_ne!(fs::read(&input)?, original);
+    let workbook = read_workbook(&input)?;
+    assert_eq!(
+        workbook.sheets[1].formulas.get("A1").map(String::as_str),
+        Some("NewSheet!A1")
+    );
     Ok(())
 }
 
@@ -859,15 +928,26 @@ fn sheet_rename_menu_excel_updates_cross_sheet_formula() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let input = root.path().join("rename-excel.xlsx");
+    let raw_input = root.path().join("rename-excel-raw.xlsx");
     let mut book = rust_xlsxwriter::Workbook::new();
-    book.add_worksheet()
-        .set_name("OldSheet")?
-        .write_number(0, 0, 42.0)?;
+    let old_sheet = book.add_worksheet();
+    old_sheet.set_name("OldSheet")?;
+    old_sheet.write_number(0, 0, 42.0)?;
+    // This value changes by one ULP after an openpyxl save/load round trip.
+    // 4-5 must tolerate that representation drift while rejecting real edits.
+    let round_trip_value = 60_735.415_594_000_006;
+    old_sheet.write_number(6, 2, round_trip_value)?;
+    old_sheet.write_string(7, 3, "empty-marker")?;
     let data = book.add_worksheet();
     data.set_name("Data")?;
-    data.write_formula(0, 0, "=OldSheet!A1")?;
+    data.write_formula(
+        0,
+        0,
+        rust_xlsxwriter::Formula::new("OldSheet!A1").set_result("42"),
+    )?;
     book.define_name("SampleName", "=OldSheet!$A$1")?;
-    book.save(&input)?;
+    book.save(&raw_input)?;
+    inject_empty_inline_string(&raw_input, &input, "xl/worksheets/sheet1.xml", "D8")?;
     let source_before = fs::read(&input)?;
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut child = menu_command(&config);
@@ -897,6 +977,52 @@ fn sheet_rename_menu_excel_updates_cross_sheet_formula() -> Result<()> {
         ["NewSheet", "Data"]
     );
     assert!(workbook.sheets[1].formulas["A1"].contains("NewSheet"));
+    let rewritten_value = workbook.sheets[0]
+        .values
+        .get("C7")
+        .and_then(|value| value.get("value"))
+        .and_then(Value::as_f64)
+        .context("renamed workbook lost C7 numeric value")?;
+    assert!(
+        (rewritten_value - round_trip_value).abs() <= 1e-15 * round_trip_value.abs(),
+        "C7 changed outside the allowed float serialization tolerance: {round_trip_value:?} -> {rewritten_value:?}"
+    );
+
+    let mut archive = zip::ZipArchive::new(fs::File::open(&input)?)?;
+    let mut sheet_xml = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")?
+        .read_to_string(&mut sheet_xml)?;
+    let sheet = roxmltree::Document::parse(&sheet_xml)?;
+    let empty_cell = sheet
+        .descendants()
+        .find(|node| node.tag_name().name() == "c" && node.attribute("r") == Some("D8"))
+        .context("renamed workbook lost explicit empty-string cell D8")?;
+    assert_eq!(empty_cell.attribute("t"), Some("inlineStr"));
+    let empty_text = empty_cell
+        .descendants()
+        .find(|node| node.tag_name().name() == "t")
+        .context("empty-string cell has no text node")?;
+    assert!(empty_text.text().map_or(true, str::is_empty));
+
+    let mut archive = zip::ZipArchive::new(fs::File::open(&input)?)?;
+    let mut sheet_xml = String::new();
+    archive
+        .by_name("xl/worksheets/sheet2.xml")?
+        .read_to_string(&mut sheet_xml)?;
+    let sheet = roxmltree::Document::parse(&sheet_xml)?;
+    let formula_cell = sheet
+        .descendants()
+        .find(|node| node.tag_name().name() == "c" && node.attribute("r") == Some("A1"))
+        .context("renamed workbook lost formula cell Data!A1")?;
+    assert_eq!(
+        formula_cell
+            .children()
+            .find(|node| node.tag_name().name() == "v")
+            .and_then(|node| node.text()),
+        Some("42"),
+        "sheet rename must preserve the formula's existing cached result"
+    );
     let names = excel_reader::read_defined_names(&input)?;
     assert!(names
         .iter()
@@ -1376,6 +1502,40 @@ fn create_source_workbook(path: &Path, second_sheet: &str) -> Result<()> {
     Ok(())
 }
 
+fn inject_empty_inline_string(source: &Path, output: &Path, part: &str, cell: &str) -> Result<()> {
+    let mut input = zip::ZipArchive::new(fs::File::open(source)?)?;
+    let mut writer = zip::ZipWriter::new(fs::File::create(output)?);
+    for index in 0..input.len() {
+        let mut entry = input.by_index(index)?;
+        let name = entry.name().to_owned();
+        let options =
+            zip::write::SimpleFileOptions::default().compression_method(entry.compression());
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        if name == part {
+            let mut xml = String::from_utf8(data)?;
+            let marker = format!("<c r=\"{cell}\"");
+            let start = xml
+                .find(&marker)
+                .with_context(|| format!("synthetic cell {cell} missing from {part}"))?;
+            let closing = xml[start..]
+                .find("</c>")
+                .with_context(|| format!("synthetic cell {cell} XML is incomplete"))?
+                + start
+                + "</c>".len();
+            xml.replace_range(
+                start..closing,
+                &format!("<c r=\"{cell}\" t=\"inlineStr\"><is><t></t></is></c>"),
+            );
+            data = xml.into_bytes();
+        }
+        writer.start_file(name, options)?;
+        writer.write_all(&data)?;
+    }
+    writer.finish()?;
+    Ok(())
+}
+
 fn write_sheet_rename_capability(config: &Path, input: &Path, path: &Path) -> Result<()> {
     let plan_output = input.with_file_name("sheet-rename-plan-output.xlsx");
     let plan = build_sheet_rename_plan(config, input, &plan_output)?
@@ -1414,7 +1574,7 @@ fn run_sheet_rename_menu(
         .arg("--platform")
         .arg(SHEET_RENAME_PLATFORM)
         .arg("--log-view")
-        .arg("off");
+        .arg("user");
     let menu_input = format!("4\n5\n1\n{}\n{confirmation}\n0\n0\n", input.display());
     finish_menu(child, &menu_input)
 }
@@ -1544,16 +1704,6 @@ fn output_json(output: &Output) -> Result<Value> {
         .context("CLI JSON output missing")?;
     let mut deserializer = serde_json::Deserializer::from_slice(&output.stdout[start..]);
     Value::deserialize(&mut deserializer).context("decode CLI JSON output")
-}
-
-fn menu_object_json(output: &Output) -> Result<Value> {
-    let start = output
-        .stdout
-        .iter()
-        .position(|byte| *byte == b'{')
-        .context("menu JSON object missing")?;
-    let mut deserializer = serde_json::Deserializer::from_slice(&output.stdout[start..]);
-    Value::deserialize(&mut deserializer).context("decode menu JSON object")
 }
 
 fn find_files_with_extension(root: &Path, extension: &str) -> Result<Vec<PathBuf>> {

@@ -1,4 +1,4 @@
-//! 报表打印菜单（3-1 umya / 3-2 openpyxl / 3-3 预校验）的端到端测试。
+//! 报表打印菜单（3-1/3-2 Openpyxl / 3-3 预校验）的端到端测试。
 //!
 //! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口。
 
@@ -46,7 +46,7 @@ impl Drop for TestDirectory {
 }
 
 #[test]
-fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
+fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
@@ -59,11 +59,11 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
     assert!(menu.status.success());
     let menu_text = String::from_utf8_lossy(&menu.stdout);
     assert!(
-        menu_text.contains("1  按打印配置生成：umya-spreadsheet"),
+        menu_text.contains("1  按打印配置生成：openpyxl（旧 3-1 入口）"),
         "{menu_text}"
     );
     assert!(
-        menu_text.contains("2  按打印配置生成：openpyxl"),
+        menu_text.contains("2  按打印配置生成：openpyxl（旧 3-2 入口）"),
         "{menu_text}"
     );
     assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
@@ -73,32 +73,33 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
         "comment print entries are removed"
     );
 
-    // 3-1：直接执行，无 y 确认。
-    let umya = run_menu(&config, "3\n1\n0\n0\n")?;
+    // 3-1 保留原菜单编号，实际使用 openpyxl，直接执行且无 y 确认。
+    let print_run = run_menu(&config, "3\n1\n0\n0\n")?;
     assert!(
-        umya.status.success(),
-        "umya print failed: {}",
-        String::from_utf8_lossy(&umya.stderr)
+        print_run.status.success(),
+        "openpyxl print failed: {}",
+        String::from_utf8_lossy(&print_run.stderr)
     );
-    let umya_stdout = String::from_utf8_lossy(&umya.stdout);
-    assert!(!umya_stdout.contains("输入 y/yes/是"), "{umya_stdout}");
+    let print_stdout = String::from_utf8_lossy(&print_run.stdout);
+    assert!(!print_stdout.contains("输入 y/yes/是"), "{print_stdout}");
     assert!(
-        umya_stdout.contains("按配置生成静态打印文件：执行成功")
-            && umya_stdout.contains("保存工作簿 1 个"),
-        "{umya_stdout}"
+        print_stdout.contains("按配置生成静态打印文件：执行成功")
+            && print_stdout.contains("保存工作簿 1 个"),
+        "{print_stdout}"
     );
     // 统一日志要求：开始与完成行都带本机时间戳。
-    let start_line = umya_stdout
+    let start_line = print_stdout
         .lines()
         .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
     assert!(starts_with_timestamp(start_line), "{start_line}");
-    let done_line = umya_stdout
+    assert!(start_line.contains("（openpyxl）"), "{start_line}");
+    let done_line = print_stdout
         .lines()
         .find(|line| line.contains("按配置生成静态打印文件：执行成功"))
         .context("done line missing")?;
     assert!(starts_with_timestamp(done_line), "{done_line}");
-    let history_path = umya_stdout
+    let history_path = print_stdout
         .lines()
         .find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim()))
         .context("print run summary missing")?;
@@ -124,7 +125,7 @@ fn interactive_print_menu_routes_umya_openpyxl_and_precheck() -> Result<()> {
         .iter()
         .any(|event| event["event_name"] == "run_finished"));
     let printed = target.clone();
-    assert!(printed.is_file(), "umya print output missing");
+    assert!(printed.is_file(), "openpyxl print output missing");
     assert_eq!(
         fs::read(&source)?,
         source_before,
@@ -203,7 +204,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         .lines()
         .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
-    assert!(start_line.contains("（umya-spreadsheet）"), "{start_line}");
+    assert!(start_line.contains("（openpyxl）"), "{start_line}");
     assert!(starts_with_timestamp(start_line), "{start_line}");
     assert!(
         !stdout.contains("输入 y/yes/是"),
@@ -241,7 +242,21 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         sheet.formulas.is_empty(),
         "print output must be static values"
     );
-    assert!(sheet.comments.is_empty(), "print output must drop comments");
+    assert_eq!(
+        sheet.comments.get("A1").map(String::as_str),
+        Some("Author:\n打印区域 1"),
+        "PyCode keeps comments inside printed ranges by default"
+    );
+    assert_eq!(
+        sheet.comments.get("C3").map(String::as_str),
+        Some("Author:\n打印区域#1"),
+        "comments should follow their cells into the output range"
+    );
+    assert_eq!(
+        sheet.comments.len(),
+        2,
+        "comments outside the print range are omitted"
+    );
     assert_eq!(
         sheet.merges,
         vec!["B2:C2".to_owned()],
@@ -268,6 +283,7 @@ fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Resul
     let output = run_menu(&config, "3\n2\n0\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("（openpyxl）"), "{stdout}");
     let printed = target.clone();
     if printed.is_file() {
         assert!(

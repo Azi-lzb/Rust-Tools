@@ -73,7 +73,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
         "{config_check_stdout}"
     );
     assert!(
-        config_check_stdout.contains("已更新并保存源工作簿"),
+        config_check_stdout.contains("保存工作簿数：1"),
         "{config_check_stdout}"
     );
     assert!(
@@ -112,10 +112,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
     assert!(delete_stdout.contains("执行成功"), "{delete_stdout}");
     assert!(delete_stdout.contains("删除重复行数：1"), "{delete_stdout}");
-    assert!(
-        delete_stdout.contains("已更新并保存源工作簿"),
-        "{delete_stdout}"
-    );
+    assert!(delete_stdout.contains("保存工作簿数：1"), "{delete_stdout}");
     assert!(
         !delete_stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -222,6 +219,36 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
 }
 
 #[test]
+fn zero_duplicate_scan_is_reported_as_info_without_false_warning() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    create_unique_data_source(&source)?;
+    let source_before = fs::read(&source)?;
+
+    for (selection, operation) in [("1", "检查"), ("2", "删除")] {
+        let output = run_menu(&config, &format!("2\n{selection}\n0\n"))?;
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("未发现重复数据，源工作簿未修改"),
+            "{operation} with zero duplicates should report a successful no-op: {stdout}"
+        );
+        assert!(
+            !stdout.contains("未找到对应的重复检查结果"),
+            "{operation} with zero duplicates must not emit a misleading missing-result warning: {stdout}"
+        );
+        assert!(
+            !stdout.contains("[WARN] 配置结果"),
+            "{operation} with zero duplicates must not be classified as a warning: {stdout}"
+        );
+    }
+
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
 fn configured_duplicate_check_marks_formula_workbook_in_place() -> Result<()> {
     // 2026-10-28 起 2-1 直接在源工作簿上标红标记重复行，不再拒绝公式工作簿。
     let root = TestDirectory::new()?;
@@ -270,8 +297,11 @@ fn configured_duplicate_check_marks_comment_workbook_in_place() -> Result<()> {
 }
 
 #[test]
-fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
-    // 2026-10-28 起 2-2 直接在源工作簿上删除重复行（保留首次出现）。
+fn configured_duplicate_delete_refuses_formula_cache_loss() -> Result<()> {
+    // 2-2 不得让 openpyxl 保存时清空公式缓存。openpyxl 的行删除无法保证
+    // 公式缓存随行号平移，worker 在写前直接拒绝含公式的工作表
+    // （row deletion is not allowed on a worksheet that contains formulas），
+    // 源工作簿必须保持原样。
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -281,19 +311,16 @@ fn configured_duplicate_delete_removes_duplicates_in_place() -> Result<()> {
     let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("执行成功") && stdout.contains("删除重复行数：1"),
-        "{stdout}"
-    );
-    assert!(stdout.contains("已更新并保存源工作簿"), "{stdout}");
+    assert!(stdout.contains("执行失败"), "{stdout}");
+    assert!(stdout.contains("row deletion is not allowed"), "{stdout}");
     assert!(
         !stdout.contains("\"execution\""),
         "menu must not print JSON"
     );
-    assert_ne!(
+    assert_eq!(
         fs::read(&source)?,
         source_before,
-        "in-place deletion must modify the source workbook"
+        "source workbook must stay unchanged when cache preservation is unsupported"
     );
     Ok(())
 }
@@ -463,7 +490,7 @@ fn interactive_dedup_append_directly_updates_existing_target_without_capability(
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("PT-2 完成"));
+    assert!(stdout.contains("PT-2 完成"), "{stdout}");
     assert!(!stdout.contains("确认提交上述追加"));
     let report = output_json(&output)?;
     assert_eq!(report[0]["target_existed"], true);
@@ -472,7 +499,7 @@ fn interactive_dedup_append_directly_updates_existing_target_without_capability(
     assert_eq!(report[0]["appended_rows"], 1);
     assert_eq!(report[0]["duplicate_rows_filtered"], 2);
     assert_eq!(report[0]["execution_result"]["route"], "direct_append");
-    assert_eq!(report[0]["execution_result"]["engine"], "umya_spreadsheet");
+    assert_eq!(report[0]["execution_result"]["engine"], "openpyxl_worker");
     assert_eq!(
         report[0]["execution_result"]["target_commit"]["operation"],
         "replaced"
@@ -505,20 +532,20 @@ fn interactive_dedup_append_directly_updates_existing_target_without_capability(
     assert!(read_2_3_events(root.path())?.iter().any(|event| {
         event["event_name"] == "engine_operation"
             && event["file_name"] == "target.xlsx"
-            && event["engine"] == "umya_spreadsheet"
+            && event["engine"] == "openpyxl_worker"
             && event["status"] == "成功"
     }));
     Ok(())
 }
 
 #[test]
-fn interactive_dedup_append_direct_preserves_existing_formula_comments_and_merges() -> Result<()> {
+fn interactive_dedup_append_direct_preserves_comments_merges_and_names() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("target.xlsx");
     create_duplicate_source(&source)?;
-    create_rich_append_target(&target)?;
+    create_rich_append_target(&target, false)?;
     let source_before = fs::read(&source)?;
     let before = read_workbook(&target)?;
     let before_names = excel_reader::read_defined_names(&target)?;
@@ -541,7 +568,6 @@ fn interactive_dedup_append_direct_preserves_existing_formula_comments_and_merge
         .find(|sheet| sheet.name == "Untouched")
         .context("saved untouched worksheet missing")?;
     assert_eq!(before_sheet.values, after_sheet.values);
-    assert_eq!(before_sheet.formulas, after_sheet.formulas);
     assert_eq!(before_sheet.merges, after_sheet.merges);
     assert_eq!(before_sheet.comments, after_sheet.comments);
     let after_names = excel_reader::read_defined_names(&target)?;
@@ -553,6 +579,46 @@ fn interactive_dedup_append_direct_preserves_existing_formula_comments_and_merge
         assert_eq!(before.areas, after.areas);
     }
     assert_eq!(before_comments, excel_reader::read_ooxml_comments(&target)?);
+    assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn interactive_dedup_append_preserves_formula_cache_and_rich_features() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_dedup_config(root.path())?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("target.xlsx");
+    create_duplicate_source(&source)?;
+    create_rich_append_target(&target, true)?;
+    let source_before = fs::read(&source)?;
+    let target_before = fs::read(&target)?;
+    let before = read_workbook(&target)?;
+
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
+    assert!(output.status.success());
+    let report = output_json(&output)?;
+    assert_eq!(report[0]["status"], "succeeded", "{report}");
+    assert_eq!(report[0]["appended_rows"], 1);
+    assert_eq!(report[0]["duplicate_rows_filtered"], 2);
+    assert_ne!(fs::read(&target)?, target_before);
+    let workbook = read_workbook(&target)?;
+    let untouched = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Untouched")
+        .context("saved untouched worksheet missing")?;
+    let untouched_before = before
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Untouched")
+        .context("original untouched worksheet missing")?;
+    assert_eq!(
+        untouched.formulas.get("A2").map(String::as_str),
+        Some("1+1")
+    );
+    assert_eq!(untouched.comments, untouched_before.comments);
+    assert_eq!(untouched.merges, untouched_before.merges);
     assert_eq!(fs::read(&source)?, source_before);
     Ok(())
 }
@@ -774,7 +840,7 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
     assert_eq!(report[0]["execution"], "committed");
     assert_eq!(report[0]["appended_rows"], 1);
     assert_eq!(report[0]["duplicate_rows_filtered"], 2);
-    assert_eq!(report[0]["execution_result"]["engine"], "umya_spreadsheet");
+    assert_eq!(report[0]["execution_result"]["engine"], "openpyxl_worker");
     assert_eq!(
         report[0]["execution_result"]["target_commit"]["operation"],
         "replaced"
@@ -802,7 +868,7 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
 }
 
 #[test]
-fn interactive_dedup_append_keeps_target_when_capability_is_invalid() -> Result<()> {
+fn interactive_dedup_append_uses_openpyxl_without_legacy_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
@@ -822,16 +888,15 @@ fn interactive_dedup_append_keeps_target_when_capability_is_invalid() -> Result<
     )?;
     assert!(output.status.success());
     let report = output_json(&output)?;
-    assert_eq!(report[0]["status"], "failed");
-    assert!(report[0]["error"]
-        .as_str()
-        .is_some_and(|error| error.contains("decode backend capability")));
+    assert_eq!(report[0]["status"], "succeeded");
+    assert_eq!(report[0]["execution_result"]["engine"], "openpyxl_worker");
     assert!(read_2_3_events(root.path())?.iter().any(|event| {
         event["event_name"] == "engine_operation"
             && event["file_name"] == "target.xlsx"
-            && event["error_code"] == "CONFIG_READ_FAILED"
+            && event["engine"] == "openpyxl_worker"
+            && event["status"] == "成功"
     }));
-    assert_eq!(fs::read(&target)?, target_before);
+    assert_ne!(fs::read(&target)?, target_before);
     assert_eq!(fs::read(&source)?, source_before);
     Ok(())
 }
@@ -915,6 +980,22 @@ fn create_pure_data_duplicate_source(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn create_unique_data_source(path: &Path) -> Result<()> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("Commented")?;
+    sheet.write_string(0, 0, "源数据")?;
+    sheet.write_string(0, 1, "ID")?;
+    sheet.write_string(0, 2, "Value")?;
+    for (row, id, value) in [(1, 123.0, 10.0), (2, 456.0, 20.0), (3, 789.0, 30.0)] {
+        sheet.write_string(row, 0, format!("row-{row}"))?;
+        sheet.write_number(row, 1, id)?;
+        sheet.write_number(row, 2, value)?;
+    }
+    workbook.save(path)?;
+    Ok(())
+}
+
 fn create_duplicate_source_with_formula(path: &Path) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();
@@ -953,7 +1034,7 @@ fn create_initial_target(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_rich_append_target(path: &Path) -> Result<()> {
+fn create_rich_append_target(path: &Path, with_formula_cache: bool) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     {
         let sheet = workbook.add_worksheet();
@@ -970,7 +1051,9 @@ fn create_rich_append_target(path: &Path) -> Result<()> {
         sheet.set_name("Untouched")?;
         sheet.write_string(0, 0, "保留")?;
         sheet.insert_note(0, 0, &rust_xlsxwriter::Note::new("保留批注"))?;
-        sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=1+1").set_result("2"))?;
+        if with_formula_cache {
+            sheet.write_formula(1, 0, rust_xlsxwriter::Formula::new("=1+1").set_result("2"))?;
+        }
         sheet.merge_range(2, 0, 2, 1, "保留合并", &rust_xlsxwriter::Format::new())?;
     }
     workbook.define_name("ImportantCell", "'Untouched'!$A$1")?;

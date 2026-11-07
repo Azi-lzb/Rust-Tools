@@ -12,6 +12,7 @@ use excel_reader::{
     read_defined_names, read_ooxml_comments, read_workbook,
     read_xlsx_effective_cell_number_formats, CellNumberFormatRequest, CellValue as ReaderCellValue,
     DefinedNameParseStatus, DefinedNameRecord, DefinedNameScope, SheetDump, WorkbookComment,
+    WorkbookDump,
 };
 use excel_writer::{Format, Note, Workbook as NewWorkbook};
 use rust_xlsxwriter::Formula;
@@ -54,6 +55,14 @@ pub struct NormalizePlanResult {
     pub mapped_rows: usize,
     pub mapping_empty: bool,
     pub plan: Option<ExcelEditPlan>,
+    pub com_updates: Vec<InstitutionNormalizeCellUpdate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct InstitutionNormalizeCellUpdate {
+    pub sheet: String,
+    pub cell: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +73,7 @@ pub struct InstitutionNormalizeRunOptions {
     pub plan_dir: Option<PathBuf>,
     /// 就地修改：直接把规范化结果写回源工作簿（不再生成结果目录副本）。
     pub in_place: bool,
-    /// 就地修改使用的引擎名称（"umya" 或 "openpyxl"）。
+    /// 就地修改使用的引擎名称；现有工作簿修改统一使用 openpyxl。
     pub engine: Option<String>,
 }
 
@@ -401,6 +410,7 @@ where
         return Ok(report);
     }
 
+    let mut com_runtime = crate::conversion_engine::ConversionRuntime::default();
     for (index, input) in inputs.iter().enumerate() {
         let file_name = input
             .file_name()
@@ -440,6 +450,7 @@ where
             &run_id,
             &mapping,
             &options,
+            &mut com_runtime,
             &mut report,
             &mut on_event,
             progress,
@@ -570,6 +581,7 @@ fn build_and_optionally_apply_institution_plan(
     run_id: &str,
     mapping: &[(String, String)],
     options: &InstitutionNormalizeRunOptions,
+    com_runtime: &mut crate::conversion_engine::ConversionRuntime,
     report: &mut InstitutionNormalizeRunReport,
     on_event: &mut impl FnMut(&InstitutionNormalizeEvent),
     progress: InstitutionNormalizeProgress,
@@ -582,7 +594,12 @@ fn build_and_optionally_apply_institution_plan(
     let mut timings = InstitutionNormalizeStageTimings::default();
     let mut stage_components = BTreeMap::new();
     let mut actual_engine = None;
-    if !has_extension(input, "xlsx") {
+    let legacy_xls = has_extension(input, "xls");
+    if !has_extension(input, "xlsx")
+        && !(legacy_xls
+            && options.in_place
+            && matches!(options.engine.as_deref(), Some("com" | "auto")))
+    {
         return Err(normalize_file_failure(
             "format_check",
             "unsupported_format",
@@ -685,71 +702,80 @@ fn build_and_optionally_apply_institution_plan(
         None
     };
 
-    let profile_started = Instant::now();
-    stage_components.insert(
-        "profile_inspection".to_owned(),
-        vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
-    );
-    emit_institution_stage(
-        report,
-        on_event,
-        "profile_inspection",
-        "started",
-        format!("正在检查工作簿结构：{file_name}。"),
-        &progress,
-        &file_name,
-        None,
-        vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
-        None,
-        None,
-        None,
-        None,
-    );
-    let profile_result = excel_editor::inspect_xlsx_profile(input);
-    timings.profile_inspection_ms = profile_started.elapsed().as_millis();
-    let profile = match profile_result {
-        Ok(profile) => profile,
-        Err(error) => {
-            let failure = normalize_file_failure(
-                "profile_inspection",
-                "workbook_inspection_failed",
-                format!("inspect workbook package: {error:#}"),
-                None,
-            )
-            .attach_state(&timings, &stage_components, actual_engine.as_deref());
-            emit_institution_stage(
-                report,
-                on_event,
-                "profile_inspection",
-                "failed",
-                format!("工作簿结构检查失败：{file_name}。"),
-                &progress,
-                &file_name,
-                Some(timings.profile_inspection_ms),
-                vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
-                None,
-                Some(failure.error_type.to_owned()),
-                Some(failure.diagnostic.clone()),
-                None,
-            );
-            return Err(failure);
-        }
+    let profile = if legacy_xls {
+        None
+    } else {
+        let profile_started = Instant::now();
+        stage_components.insert(
+            "profile_inspection".to_owned(),
+            vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
+        );
+        emit_institution_stage(
+            report,
+            on_event,
+            "profile_inspection",
+            "started",
+            format!("正在检查工作簿结构：{file_name}。"),
+            &progress,
+            &file_name,
+            None,
+            vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
+            None,
+            None,
+            None,
+            None,
+        );
+        let profile_result = excel_editor::inspect_xlsx_profile(input);
+        timings.profile_inspection_ms = profile_started.elapsed().as_millis();
+        let profile = match profile_result {
+            Ok(profile) => profile,
+            Err(error) => {
+                let failure = normalize_file_failure(
+                    "profile_inspection",
+                    "workbook_inspection_failed",
+                    format!("inspect workbook package: {error:#}"),
+                    None,
+                )
+                .attach_state(
+                    &timings,
+                    &stage_components,
+                    actual_engine.as_deref(),
+                );
+                emit_institution_stage(
+                    report,
+                    on_event,
+                    "profile_inspection",
+                    "failed",
+                    format!("工作簿结构检查失败：{file_name}。"),
+                    &progress,
+                    &file_name,
+                    Some(timings.profile_inspection_ms),
+                    vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
+                    None,
+                    Some(failure.error_type.to_owned()),
+                    Some(failure.diagnostic.clone()),
+                    None,
+                );
+                return Err(failure);
+            }
+        };
+        emit_institution_stage(
+            report,
+            on_event,
+            "profile_inspection",
+            "completed",
+            format!("工作簿结构检查完成：{file_name}。"),
+            &progress,
+            &file_name,
+            Some(timings.profile_inspection_ms),
+            vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
+            None,
+            None,
+            None,
+            None,
+        );
+        Some(profile)
     };
-    emit_institution_stage(
-        report,
-        on_event,
-        "profile_inspection",
-        "completed",
-        format!("工作簿结构检查完成：{file_name}。"),
-        &progress,
-        &file_name,
-        Some(timings.profile_inspection_ms),
-        vec!["Rust".to_owned(), "zip".to_owned(), "roxmltree".to_owned()],
-        None,
-        None,
-        None,
-        None,
-    );
 
     let plan_started = Instant::now();
     stage_components.insert(
@@ -771,13 +797,17 @@ fn build_and_optionally_apply_institution_plan(
         None,
         None,
     );
-    let plan_result_result = build_institution_normalize_plan(
-        input,
-        candidate,
-        profile,
-        format!("{run_id}-{index}"),
-        mapping,
-    );
+    let plan_result_result = if legacy_xls {
+        build_institution_normalize_com_updates(input, mapping)
+    } else {
+        build_institution_normalize_plan(
+            input,
+            candidate,
+            profile.expect("xlsx profile was inspected"),
+            format!("{run_id}-{index}"),
+            mapping,
+        )
+    };
     timings.plan_build_ms = plan_started.elapsed().as_millis();
     let plan_result = match plan_result_result {
         Ok(plan_result) => plan_result,
@@ -826,7 +856,11 @@ fn build_and_optionally_apply_institution_plan(
         None,
     );
 
-    let Some(plan) = plan_result.plan else {
+    let operation_count = plan_result
+        .plan
+        .as_ref()
+        .map_or(plan_result.com_updates.len(), |plan| plan.operations.len());
+    if operation_count == 0 {
         return Ok(InstitutionNormalizeFileResult {
             file_name: file_name.clone(),
             status: "no_changes".to_owned(),
@@ -848,9 +882,7 @@ fn build_and_optionally_apply_institution_plan(
             route_diagnostic: None,
             cleanup_warning: None,
         });
-    };
-
-    let operation_count = plan.operations.len();
+    }
     let plan_path = if let Some(plan_dir) = options.plan_dir.as_deref() {
         let path = plan_dir.join(format!("{index:04}_institution_normalize.json"));
         stage_components.insert(
@@ -873,7 +905,11 @@ fn build_and_optionally_apply_institution_plan(
             None,
         );
         let write_started = Instant::now();
-        let write_result = write_json_create_new(&path, &plan);
+        let write_result = if let Some(plan) = plan_result.plan.as_ref() {
+            write_json_create_new(&path, plan)
+        } else {
+            write_json_create_new(&path, &plan_result.com_updates)
+        };
         timings.plan_persistence_ms = write_started.elapsed().as_millis();
         if let Err(error) = write_result {
             let failure = normalize_file_failure(
@@ -1055,8 +1091,14 @@ fn build_and_optionally_apply_institution_plan(
     );
 
     let modifier_route = options.capabilities.is_some();
-    let selected_components = if options.in_place {
-        // 就地模式：引擎在执行阶段确定（openpyxl / umya-spreadsheet），不预挂 rust_xlsxwriter。
+    let selected_components = if legacy_xls {
+        vec![
+            "Rust".to_owned(),
+            "Calamine".to_owned(),
+            "pywin32 COM".to_owned(),
+        ]
+    } else if options.in_place {
+        // 就地模式统一使用 openpyxl，不预挂 rust_xlsxwriter。
         vec!["Rust".to_owned(), "in-place".to_owned()]
     } else if modifier_route {
         vec!["Rust".to_owned(), "ExcelModifier".to_owned()]
@@ -1074,7 +1116,9 @@ fn build_and_optionally_apply_institution_plan(
         on_event,
         "engine_execution",
         "started",
-        if options.in_place {
+        if legacy_xls {
+            format!("正在通过 Excel/WPS COM 修改 .xls 候选：{file_name}。")
+        } else if options.in_place {
             format!("正在就地改写源工作簿：{file_name}。")
         } else if modifier_route {
             format!("正在按已登记能力生成规范化副本：{file_name}。")
@@ -1095,52 +1139,95 @@ fn build_and_optionally_apply_institution_plan(
         String,
         Vec<String>,
         Option<crate::file_commit::TargetCommitReport>,
-    )> = if options.in_place {
-        let engine = match options.engine.as_deref() {
-            Some("openpyxl") => crate::inplace_edit::InPlaceEngine::Openpyxl,
-            _ => crate::inplace_edit::InPlaceEngine::Umya,
-        };
-        crate::inplace_edit::execute_in_place(&plan, engine).map(|outcome| {
-            let engine_name = engine.label().to_owned();
-            let mut components = vec!["Rust".to_owned(), "in-place".to_owned()];
-            components.push(engine_name.clone());
-            let commit = outcome.commit.clone();
+    )> = if legacy_xls {
+        execute_institution_normalize_xls_com(
+            input,
+            candidate,
+            &plan_result.com_updates,
+            &expected_source_hash,
+            com_runtime,
+        )
+        .map(|commit| {
             (
                 Some(serde_json::json!({
-                    "engine": engine_name,
+                    "engine": "pywin32_com",
                     "mode": "in_place",
-                    "execution": outcome.execution,
-                    "commit": outcome.commit,
+                    "operation_count": plan_result.com_updates.len(),
+                    "commit": commit.clone(),
                 })),
-                engine_name,
-                components,
+                "pywin32_com".to_owned(),
+                vec![
+                    "Rust".to_owned(),
+                    "Calamine".to_owned(),
+                    "pywin32 COM".to_owned(),
+                ],
                 Some(commit),
             )
+        })
+    } else if options.in_place {
+        let engine = match options.engine.as_deref() {
+            Some("openpyxl") | Some("umya") | Some("auto") | None => {
+                Ok(crate::inplace_edit::InPlaceEngine::Openpyxl)
+            }
+            Some(other) => Err(anyhow::anyhow!(
+                "就地工作簿修改仅支持 openpyxl，收到 {other:?}"
+            )),
+        };
+        engine.and_then(|engine| {
+            let plan = plan_result
+                .plan
+                .as_ref()
+                .ok_or_else(|| anyhow!("Openpyxl modification requires an XLSX edit plan"))?;
+            crate::inplace_edit::execute_in_place(plan, engine).map(|outcome| {
+                let engine_name = engine.label().to_owned();
+                let mut components = vec!["Rust".to_owned(), "in-place".to_owned()];
+                components.push(engine_name.clone());
+                let commit = outcome.commit.clone();
+                (
+                    Some(serde_json::json!({
+                        "engine": engine_name,
+                        "mode": "in_place",
+                        "execution": outcome.execution,
+                        "commit": outcome.commit,
+                    })),
+                    engine_name,
+                    components,
+                    Some(commit),
+                )
+            })
         })
     } else if let (Some(capability_file), Some(platform)) =
         (options.capabilities.as_deref(), options.platform.as_deref())
     {
-        crate::edit_plan::apply_plan_with_capability_file(&plan, capability_file, platform).map(
-            |execution| {
-                let engine = execution.engine.to_string();
-                let mut components = vec!["Rust".to_owned(), "ExcelModifier".to_owned()];
-                components.push(engine.clone());
-                components.push(engine_language(&engine).to_owned());
-                (
-                    serde_json::to_value(execution).ok(),
-                    engine,
-                    components,
-                    None,
-                )
-            },
+        crate::edit_plan::apply_plan_with_capability_file(
+            plan_result.plan.as_ref().expect("XLSX edit plan exists"),
+            capability_file,
+            platform,
         )
+        .map(|execution| {
+            let engine = execution.engine.to_string();
+            let mut components = vec!["Rust".to_owned(), "ExcelModifier".to_owned()];
+            components.push(engine.clone());
+            components.push(engine_language(&engine).to_owned());
+            (
+                serde_json::to_value(execution).ok(),
+                engine,
+                components,
+                None,
+            )
+        })
     } else {
-        create_rust_new_workbook_from_cell_plan(input, candidate, &plan).map(|()| {
+        create_rust_new_workbook_from_cell_plan(
+            input,
+            candidate,
+            plan_result.plan.as_ref().expect("XLSX edit plan exists"),
+        )
+        .map(|()| {
             (
                 Some(serde_json::json!({
                     "engine": "rust_xlsxwriter",
                     "execution": "created_and_validated_workbook",
-                    "operation_count": plan.operations.len(),
+                    "operation_count": operation_count,
                 })),
                 "rust_xlsxwriter".to_owned(),
                 selected_components.clone(),
@@ -1163,7 +1250,9 @@ fn build_and_optionally_apply_institution_plan(
         let failure = normalize_file_failure(
             "engine_execution",
             error_type,
-            if modifier_route {
+            if legacy_xls {
+                format!("Excel/WPS COM did not produce a verified replacement: {error:#}")
+            } else if modifier_route {
                 format!("ExcelModifier execution failed: {error:#}")
             } else {
                 format!("Rust could not create a safe normalized workbook copy: {error:#}")
@@ -1176,7 +1265,11 @@ fn build_and_optionally_apply_institution_plan(
             on_event,
             "engine_execution",
             "failed",
-            format!("规范化副本生成失败：{file_name}；原文件未被修改。"),
+            if legacy_xls {
+                format!(".xls 规范化失败：{file_name}；原文件未被替换。")
+            } else {
+                format!("规范化副本生成失败：{file_name}；原文件未被修改。")
+            },
             &progress,
             &file_name,
             Some(timings.engine_execution_ms),
@@ -1196,7 +1289,12 @@ fn build_and_optionally_apply_institution_plan(
         on_event,
         "engine_execution",
         "completed",
-        if modifier_route {
+        if options.in_place {
+            format!(
+                "{} 候选已通过验证，准备安全提交就地修改：{file_name}。",
+                execution_engine
+            )
+        } else if modifier_route {
             format!("工作簿修改引擎已生成规范化副本：{file_name}。")
         } else {
             format!("Rust 新工作簿已生成并通过内容校验：{file_name}。")
@@ -1221,7 +1319,13 @@ fn build_and_optionally_apply_institution_plan(
         on_event,
         "safe_commit",
         "started",
-        format!("正在验证源文件并另存修改副本：{file_name}。"),
+        if options.in_place {
+            format!("正在核对源文件快照并安全提交就地修改：{file_name}。")
+        } else if modifier_route {
+            format!("正在核对源文件快照并发布规范化副本：{file_name}。")
+        } else {
+            format!("正在验证源文件并另存修改副本：{file_name}。")
+        },
         &progress,
         &file_name,
         None,
@@ -1286,7 +1390,7 @@ fn build_and_optionally_apply_institution_plan(
         "completed",
         if options.in_place {
             format!(
-                "源工作簿已通过快照校验安全替换：{}。",
+                "源工作簿已通过快照校验并安全就地修改：{}。",
                 output_path.display()
             )
         } else {
@@ -2558,9 +2662,9 @@ fn cleanup_institution_normalize_candidate(candidate: &Path) -> Result<()> {
         .context("temporary candidate has no UTF-8 file name")?;
     ensure!(
         file_name.starts_with(".pytools-institution-normalize-")
-            && candidate
-                .extension()
-                .is_some_and(|extension| extension == "xlsx"),
+            && candidate.extension().is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("xlsx") || extension.eq_ignore_ascii_case("xls")
+            }),
         "refusing to clean up a path that is not a generated PT-7-2 candidate"
     );
     let metadata = match fs::symlink_metadata(candidate) {
@@ -2585,9 +2689,13 @@ fn institution_normalize_candidate(input: &Path, run_id: &str, index: usize) -> 
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
+    let extension = input
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("xlsx");
     for attempt in 0..1000usize {
         let candidate = parent.join(format!(
-            ".pytools-institution-normalize-{run_id}-{index}-{attempt}.xlsx"
+            ".pytools-institution-normalize-{run_id}-{index}-{attempt}.{extension}"
         ));
         if !candidate.exists() {
             return Ok(candidate);
@@ -2865,6 +2973,231 @@ pub fn build_institution_normalize_plan(
     Ok(result)
 }
 
+fn build_institution_normalize_com_updates(
+    input: impl AsRef<Path>,
+    mapping: &[(String, String)],
+) -> Result<NormalizePlanResult> {
+    let input = input.as_ref();
+    let dump = read_workbook(input).with_context(|| format!("read {}", input.display()))?;
+    let mut result = NormalizePlanResult::default();
+
+    for sheet in dump
+        .sheets
+        .iter()
+        .filter(|sheet| sheet.name.contains(BRANCH_SHEET_KEY))
+    {
+        result.branch_sheets += 1;
+        if sheet.formula_status.starts_with("read_error:") {
+            bail!(
+                "cannot plan institution normalization because formula text could not be read for worksheet {}: {}",
+                sheet.name,
+                sheet.formula_status
+            );
+        }
+        let max_row = sheet
+            .values
+            .keys()
+            .chain(sheet.formulas.keys())
+            .filter_map(|address| target_column_row(address))
+            .map(|(_, row)| row)
+            .max()
+            .unwrap_or_default();
+        if max_row < 2 {
+            continue;
+        }
+
+        let mut rows = vec![vec![None, None]; max_row];
+        for row in 1..=max_row {
+            for column in 0..2 {
+                let address = target_cell_address(column, row);
+                rows[row - 1][column] = cell_python_string_from_dump(sheet, &address)?;
+            }
+        }
+        let original_rows = rows.clone();
+        let changed_rows = normalize_branch_sheet_values(&sheet.name, &mut rows, mapping);
+        if changed_rows == 0 {
+            continue;
+        }
+
+        let target_column = target_column(&rows, rows.len())
+            .context("normalization changed rows without selecting a target column")?;
+        result.mapped_sheets += 1;
+        result.mapped_rows += changed_rows;
+        for row_index in 1..rows.len() {
+            let Some(value) = rows[row_index][target_column].as_ref() else {
+                continue;
+            };
+            if rows[row_index][target_column] != original_rows[row_index][target_column] {
+                result.com_updates.push(InstitutionNormalizeCellUpdate {
+                    sheet: sheet.name.clone(),
+                    cell: target_cell_address(target_column, row_index + 1),
+                    value: value.clone(),
+                });
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn execute_institution_normalize_xls_com(
+    input: &Path,
+    candidate: &Path,
+    updates: &[InstitutionNormalizeCellUpdate],
+    expected_sha256: &str,
+    runtime: &mut crate::conversion_engine::ConversionRuntime,
+) -> Result<crate::file_commit::TargetCommitReport> {
+    ensure!(
+        has_extension(input, "xls"),
+        "COM normalization requires .xls input"
+    );
+    ensure!(
+        has_extension(candidate, "xls"),
+        "COM normalization candidate must use .xls"
+    );
+    ensure!(!updates.is_empty(), "COM normalization has no cell updates");
+    crate::file_commit::verify_planning_snapshot(input, Some(expected_sha256))
+        .context("source changed before COM candidate creation")?;
+
+    let original =
+        read_workbook(input).with_context(|| format!("read source {}", input.display()))?;
+    copy_file_create_new(input, candidate)?;
+    let com_updates = updates
+        .iter()
+        .map(|update| {
+            (
+                update.sheet.clone(),
+                update.cell.clone(),
+                update.value.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let response = runtime
+        .institution_normalize_com(candidate, &com_updates)
+        .context("apply institution normalization through Excel/WPS COM")?;
+    ensure!(
+        response.get("applied_count").and_then(Value::as_u64) == Some(updates.len() as u64),
+        "COM worker applied a different number of cell updates than planned"
+    );
+    ensure!(
+        response.get("verified").and_then(Value::as_bool) == Some(true),
+        "COM worker did not verify formula, value and merge preservation"
+    );
+    let output = read_workbook(candidate)
+        .with_context(|| format!("read COM candidate {}", candidate.display()))?;
+    validate_institution_normalize_xls_candidate(&original, &output, updates)?;
+    crate::file_commit::verify_planning_snapshot(input, Some(expected_sha256))
+        .context("source changed during COM candidate processing")?;
+    crate::file_commit::replace_target_from_candidate(candidate, input, expected_sha256)
+        .context("safely replace the .xls source after COM validation")
+}
+
+fn copy_file_create_new(input: &Path, candidate: &Path) -> Result<()> {
+    let mut source = fs::File::open(input).with_context(|| format!("open {}", input.display()))?;
+    let mut target = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(candidate)
+        .with_context(|| format!("create candidate {} without overwrite", candidate.display()))?;
+    if let Err(error) = std::io::copy(&mut source, &mut target) {
+        drop(target);
+        let _ = fs::remove_file(candidate);
+        return Err(error).with_context(|| format!("copy {} to candidate", input.display()));
+    }
+    target
+        .sync_all()
+        .with_context(|| format!("sync candidate {}", candidate.display()))
+}
+
+fn validate_institution_normalize_xls_candidate(
+    original: &WorkbookDump,
+    output: &WorkbookDump,
+    updates: &[InstitutionNormalizeCellUpdate],
+) -> Result<()> {
+    let original_names = original
+        .sheets
+        .iter()
+        .map(|sheet| sheet.name.as_str())
+        .collect::<Vec<_>>();
+    let output_names = output
+        .sheets
+        .iter()
+        .map(|sheet| sheet.name.as_str())
+        .collect::<Vec<_>>();
+    ensure!(
+        original_names == output_names,
+        "COM candidate changed worksheet names, count or order"
+    );
+
+    let updated_cells = updates
+        .iter()
+        .map(|update| (update.sheet.as_str(), update.cell.as_str()))
+        .collect::<BTreeSet<_>>();
+    for (source_sheet, output_sheet) in original.sheets.iter().zip(&output.sheets) {
+        ensure!(
+            !source_sheet.formula_status.starts_with("read_error:")
+                && !output_sheet.formula_status.starts_with("read_error:"),
+            "formula text could not be verified for worksheet {:?}",
+            source_sheet.name
+        );
+        // Calamine does not expose formula text for legacy `.xls` sources;
+        // the COM worker compares formulas/results before and after saving.
+        let formula_addresses = source_sheet
+            .formulas
+            .keys()
+            .chain(output_sheet.formulas.keys())
+            .collect::<BTreeSet<_>>();
+        let source_values = source_sheet
+            .values
+            .iter()
+            .filter(|(address, _)| {
+                !formula_addresses
+                    .iter()
+                    .any(|formula_address| *formula_address == *address)
+                    && !updated_cells.contains(&(source_sheet.name.as_str(), address.as_str()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let output_values = output_sheet
+            .values
+            .iter()
+            .filter(|(address, _)| {
+                !formula_addresses
+                    .iter()
+                    .any(|formula_address| *formula_address == *address)
+                    && !updated_cells.contains(&(output_sheet.name.as_str(), address.as_str()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        ensure!(
+            source_values == output_values,
+            "COM candidate changed non-target cell values in worksheet {:?}",
+            source_sheet.name
+        );
+        let mut source_merges = source_sheet.merges.clone();
+        let mut output_merges = output_sheet.merges.clone();
+        source_merges.sort();
+        output_merges.sort();
+        ensure!(
+            source_merges == output_merges,
+            "COM candidate changed merged ranges in worksheet {:?}",
+            source_sheet.name
+        );
+    }
+    for update in updates {
+        let sheet = output
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == update.sheet)
+            .with_context(|| format!("candidate is missing worksheet {:?}", update.sheet))?;
+        ensure!(
+            cell_python_string_from_dump(sheet, &update.cell)?.as_deref()
+                == Some(update.value.as_str()),
+            "COM candidate did not store expected text at {:?}!{}",
+            update.sheet,
+            update.cell
+        );
+    }
+    Ok(())
+}
+
 fn target_column_row(address: &str) -> Option<(usize, usize)> {
     let first_digit = address.find(|character: char| character.is_ascii_digit())?;
     let column = match &address[..first_digit] {
@@ -3100,8 +3433,7 @@ fn normalize_name(original: &str, mapping: &[(String, String)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use excel_reader::read_workbook;
-    use serde_json::{json, Value};
+    use serde_json::json;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]

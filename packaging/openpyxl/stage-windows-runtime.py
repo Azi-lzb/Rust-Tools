@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -185,7 +186,14 @@ def verify(runtime: Path) -> None:
         text=True,
         timeout=120,
     )
-    if worker_version.returncode != 0 or worker_version.stdout.strip() != f"protocol=1 pywin32={PYWIN32_VERSION}":
+    worker_source = PYWIN32_WORKER_SOURCE.read_text(encoding="utf-8")
+    protocol_match = re.search(r"^PROTOCOL_VERSION\s*=\s*(\d+)\s*$", worker_source, re.MULTILINE)
+    if protocol_match is None:
+        fail("pywin32 worker 源码未声明 PROTOCOL_VERSION")
+    expected_worker_version = (
+        f"protocol={protocol_match.group(1)} pywin32={PYWIN32_VERSION}"
+    )
+    if worker_version.returncode != 0 or worker_version.stdout.strip() != expected_worker_version:
         fail(f"pywin32 worker 握手失败：{worker_version.stdout.strip()} {worker_version.stderr.strip()[:400]}")
     openpyxl_help = subprocess.run(
         [str(python), "-I", str(runtime / "openpyxl_worker.py"), "--help"],

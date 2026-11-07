@@ -1,8 +1,5 @@
 use anyhow::Context;
-use excel_editor::{
-    inspect_xlsx_profile, open_xlsx, BackendCapability, CapabilityEvidence, CapabilityStatus,
-    EditOperationKind, EngineId, PreservationRequirement, WorkbookFormat,
-};
+use excel_editor::open_xlsx;
 use excel_reader::{
     read_ooxml_comments, read_value_columns, read_value_columns_with_iso_dates, read_workbook,
     read_xlsx_cell_number_formats, read_xlsx_worksheet_extents, CellNumberFormatRequest, CellValue,
@@ -10,7 +7,6 @@ use excel_reader::{
 use pytools_core::config::ExtractTask;
 use pytools_core::sheet_extract::run_extract_sheets_area_candidate;
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -171,139 +167,6 @@ fn run_menu_with_view(config: &Path, input: &str, view: &str) -> std::process::O
     child.wait_with_output().unwrap()
 }
 
-fn run_menu_with_capability(
-    config: &Path,
-    input: &str,
-    view: &str,
-    capability: &Path,
-    platform: &str,
-) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
-        .arg("menu")
-        .arg("--config")
-        .arg(config)
-        .arg("--log-view")
-        .arg(view)
-        .arg("--capabilities")
-        .arg(capability)
-        .arg("--platform")
-        .arg(platform)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
-}
-
-fn write_full_sheet_test_capability(
-    root: &Path,
-    source: &Path,
-    platform: &str,
-) -> anyhow::Result<PathBuf> {
-    let skeleton_path = root.join("full-sheet-capability-skeleton.xlsx");
-    let mut skeleton = rust_xlsxwriter::Workbook::new();
-    skeleton.add_worksheet().set_name("报表")?;
-    skeleton.save(&skeleton_path)?;
-
-    let mut supported_features = inspect_xlsx_profile(source)?.features_present;
-    supported_features.extend(inspect_xlsx_profile(&skeleton_path)?.features_present);
-    let capability = BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: WorkbookFormat::Xlsx,
-        operations: [EditOperationKind::ImportRange].into_iter().collect(),
-        supported_features,
-        preserved: [
-            PreservationRequirement::CellValuesAndTypes,
-            PreservationRequirement::Styles,
-            PreservationRequirement::MergedRanges,
-            PreservationRequirement::RowAndColumnDimensions,
-            PreservationRequirement::UnmodifiedPackageParts,
-            PreservationRequirement::SheetIdentityAndOrder,
-        ]
-        .into_iter()
-        .collect::<BTreeSet<_>>(),
-        platform: platform.to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-7-6-full-sheet-menu".to_owned(),
-            report_path: "pytools-core/tests/sheet_extract_area_operation_parity.rs".to_owned(),
-            adapter_version: "pytools-core fixture-scoped test capability".to_owned(),
-            engine_version: "umya-spreadsheet 3.1.1".to_owned(),
-            platform: platform.to_owned(),
-        }),
-    };
-    let capability_path = root.join("temporary-full-sheet-capability.json");
-    fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
-    Ok(capability_path)
-}
-
-fn write_append_test_capability(
-    root: &Path,
-    existing: &Path,
-    incoming_source: &Path,
-    platform: &str,
-) -> anyhow::Result<PathBuf> {
-    let mut supported_features = inspect_xlsx_profile(existing)?.features_present;
-    supported_features.extend(inspect_xlsx_profile(incoming_source)?.features_present);
-    let skeleton_path = root.join("append-capability-skeleton.xlsx");
-    let mut skeleton = rust_xlsxwriter::Workbook::new();
-    for sheet in read_value_columns_with_iso_dates(incoming_source, 16_384)? {
-        skeleton.add_worksheet().set_name(&sheet.name)?;
-    }
-    skeleton.save(&skeleton_path)?;
-    supported_features.extend(inspect_xlsx_profile(&skeleton_path)?.features_present);
-    let capability = BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
-        status: CapabilityStatus::Passed,
-        format: WorkbookFormat::Xlsx,
-        operations: [
-            EditOperationKind::CreateSheet,
-            EditOperationKind::ImportRange,
-        ]
-        .into_iter()
-        .collect(),
-        supported_features,
-        preserved: [
-            PreservationRequirement::CellValuesAndTypes,
-            PreservationRequirement::FormulaText,
-            PreservationRequirement::CommentsAndPositions,
-            PreservationRequirement::Styles,
-            PreservationRequirement::MergedRanges,
-            PreservationRequirement::ConditionalFormatting,
-            PreservationRequirement::DataValidations,
-            PreservationRequirement::DefinedNames,
-            PreservationRequirement::RowAndColumnDimensions,
-            PreservationRequirement::PageSettings,
-            PreservationRequirement::HeaderFooterText,
-            PreservationRequirement::Relationships,
-            PreservationRequirement::UnmodifiedPackageParts,
-            PreservationRequirement::SheetIdentityAndOrder,
-            PreservationRequirement::FreezePanes,
-            PreservationRequirement::AutoFilter,
-        ]
-        .into_iter()
-        .collect(),
-        platform: platform.to_owned(),
-        evidence: Some(CapabilityEvidence {
-            sample_id: "synthetic-pt-7-6-append-cli".to_owned(),
-            report_path: "pytools-core/tests/sheet_extract_area_operation_parity.rs".to_owned(),
-            adapter_version: "pytools-core fixture-scoped test capability".to_owned(),
-            engine_version: "umya-spreadsheet 3.1.1".to_owned(),
-            platform: platform.to_owned(),
-        }),
-    };
-    let capability_path = root.join("temporary-append-test-capability.json");
-    fs::write(&capability_path, serde_json::to_vec_pretty(&capability)?)?;
-    Ok(capability_path)
-}
-
 fn write_append_source(path: &Path, sheet_name: &str) -> anyhow::Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();
@@ -349,8 +212,6 @@ fn run_extract_cli(
     output_dir: &Path,
     log_dir: &Path,
     append_existing: bool,
-    capability: Option<&Path>,
-    platform: Option<&str>,
     source: &Path,
 ) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
@@ -366,12 +227,6 @@ fn run_extract_cli(
         .arg("developer");
     if append_existing {
         command.arg("--append-existing");
-    }
-    if let Some(capability) = capability {
-        command.arg("--capabilities").arg(capability);
-    }
-    if let Some(platform) = platform {
-        command.arg("--platform").arg(platform);
     }
     command.arg(source).output().unwrap()
 }
@@ -908,7 +763,6 @@ fn interactive_menu_routes_area_extraction_matches_python_and_records_engines() 
             "worksheet_names_dimensions_values_and_types": "preserved",
             "source_input_bytes": "preserved",
             "run_history_excludes_cell_values": "passed",
-            "production_capability_created": false,
         }
     });
     let report_path =
@@ -977,7 +831,6 @@ fn interactive_menu_writes_area_extraction_to_configured_target_sheet() -> anyho
 #[test]
 fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() -> anyhow::Result<()>
 {
-    const PLATFORM: &str = "synthetic-pt-7-6-full-sheet-menu";
     let baseline = full_sheet_baseline();
     assert_eq!(baseline["status"], "partial");
     assert!(baseline["worksheet"]["style_checks"]["python_output"].is_null());
@@ -1000,14 +853,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
     tasks[0].output_folder = "整表导入".to_owned();
     tasks[0].output_name = "full-sheet-output.xlsx".to_owned();
     let config = create_menu_config(&root, &tasks);
-    let capability = write_full_sheet_test_capability(&root, &source, PLATFORM)?;
-    let output = run_menu_with_capability(
-        &config,
-        &format!("5\n6\nn\n{}\n", source.display()),
-        "developer",
-        &capability,
-        PLATFORM,
-    );
+    let output = run_menu(&config, &format!("5\n6\nn\n{}\n", source.display()));
     assert!(
         output.status.success(),
         "full-sheet menu failed: {}",
@@ -1191,7 +1037,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
         "source_read",
         "worksheet_extent_read",
         "skeleton_write",
-        "excel_modifier",
+        "openpyxl_import",
         "full_sheet_validation",
         "output_validation",
         "output_commit",
@@ -1201,7 +1047,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
             "missing {phase} event"
         );
     }
-    for engine in ["calamine", "rust_xlsxwriter", "umya_spreadsheet"] {
+    for engine in ["calamine", "rust_xlsxwriter", "openpyxl_worker"] {
         assert!(
             events.iter().any(|event| event["actual_engine"] == engine),
             "missing actual engine {engine}"
@@ -1227,7 +1073,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
     assert_eq!(history["result"]["extracted_sheets"], 1);
     assert_eq!(history["result"]["output_files"], 1);
     let actual_engines = history["actual_engines"].as_array().unwrap();
-    for engine in ["calamine", "rust_xlsxwriter", "umya_spreadsheet"] {
+    for engine in ["calamine", "rust_xlsxwriter", "openpyxl_worker"] {
         assert!(actual_engines.iter().any(|actual| actual == engine));
     }
     let sample_cell_value = expected_values
@@ -1249,11 +1095,6 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
         "baseline": "PyCode/core/feature_1_6_extract_sheets.py::_copy_full_sheet_with_style",
         "baseline_style_limitation": baseline["limitations"],
         "input_format": "xlsx",
-        "temporary_test_capability": {
-            "engine": "umya_spreadsheet",
-            "platform": PLATFORM,
-            "production_capability_created": false
-        },
         "result": {
             "files": 1,
             "extracted_sheets": 1,
@@ -1266,7 +1107,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
             "extended_row_dimension": expected_sheet["extended_row_dimension"],
             "extended_column_dimension": expected_sheet["extended_column_dimension"],
             "copied_comments": false,
-            "actual_engines": ["calamine", "rust_xlsxwriter", "umya_spreadsheet"]
+            "actual_engines": ["calamine", "rust_xlsxwriter", "openpyxl_worker"]
         },
         "checks": {
             "menu_task_loading_and_source_selection": "passed",
@@ -1276,8 +1117,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
             "source_bytes": "preserved",
             "developer_events_and_history": "passed",
             "history_excludes_cell_values": "passed",
-            "python_helper_output_style_reopen": baseline["worksheet"]["style_checks"]["python_output_read_error"],
-            "production_capability_created": false
+            "python_helper_output_style_reopen": baseline["worksheet"]["style_checks"]["python_output_read_error"]
         }
     });
     let report_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1288,7 +1128,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
 }
 
 #[test]
-fn interactive_menu_stops_when_extract_tasks_are_missing_or_full_sheet_capability_is_unavailable() {
+fn interactive_menu_allows_full_sheet_tasks_without_capability_files() {
     let cases = cases();
     let root = temporary_directory("sheet-extract-menu-gates");
     let no_tasks_config = create_menu_config(&root.join("no-tasks"), &[]);
@@ -1305,17 +1145,16 @@ fn interactive_menu_stops_when_extract_tasks_are_missing_or_full_sheet_capabilit
     let full_sheet = run_menu(&full_sheet_config, "5\n6\n");
     assert!(full_sheet.status.success());
     let full_sheet_stdout = String::from_utf8_lossy(&full_sheet.stdout);
-    assert!(full_sheet_stdout.contains("整表提取任务"));
-    assert!(full_sheet_stdout.contains("没有匹配的 ExcelModifier 能力文件与平台"));
+    assert!(full_sheet_stdout.contains("已加载"));
+    assert!(full_sheet_stdout.contains("若任务配置的输出工作簿已存在"));
+    assert!(!full_sheet_stdout.contains("ExcelModifier 能力文件"));
     assert!(!full_sheet_stdout.contains("文件路径>"));
     assert!(!root.join("full-sheet/app/output").exists());
     fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
-fn interactive_menu_appends_only_after_confirmation_and_with_matching_capability(
-) -> anyhow::Result<()> {
-    const PLATFORM: &str = "synthetic-pt-7-6-append-menu";
+fn interactive_menu_appends_after_confirmation_without_capability_files() -> anyhow::Result<()> {
     let root = temporary_directory("sheet-extract-append-menu");
     let source = root.join("menu-source.xlsx");
     write_append_source(&source, "新增工作表")?;
@@ -1323,7 +1162,6 @@ fn interactive_menu_appends_only_after_confirmation_and_with_matching_capability
     fs::create_dir_all(&output_dir)?;
     let output_path = output_dir.join("合并结果.xlsx");
     write_existing_full_sheet_output(&output_path)?;
-    let original_output = fs::read(&output_path)?;
     let original_source = fs::read(&source)?;
 
     let task = ExtractTask {
@@ -1340,25 +1178,7 @@ fn interactive_menu_appends_only_after_confirmation_and_with_matching_capability
     };
     let config = create_menu_config(&root, &[task]);
 
-    let refused = run_menu(&config, "5\n6\nyes\n");
-    assert!(
-        refused.status.success(),
-        "menu should report the missing capability without launching extraction: {}",
-        String::from_utf8_lossy(&refused.stderr)
-    );
-    let refused_stdout = String::from_utf8_lossy(&refused.stdout);
-    assert!(refused_stdout.contains("追加到已存在的输出工作簿需要 --capabilities 与 --platform"));
-    assert!(!refused_stdout.contains("文件路径>"));
-    assert_eq!(fs::read(&output_path)?, original_output);
-
-    let capability = write_append_test_capability(&root, &output_path, &source, PLATFORM)?;
-    let appended = run_menu_with_capability(
-        &config,
-        &format!("5\n6\nyes\n{}\n", source.display()),
-        "developer",
-        &capability,
-        PLATFORM,
-    );
+    let appended = run_menu(&config, &format!("5\n6\nyes\n{}\n", source.display()));
     assert!(
         appended.status.success(),
         "menu append failed: {}",
@@ -1368,8 +1188,8 @@ fn interactive_menu_appends_only_after_confirmation_and_with_matching_capability
     let stderr = String::from_utf8_lossy(&appended.stderr);
     assert!(stdout.contains("[追加模式]"));
     assert!(stdout.contains("\"output_files\": 1"));
-    assert!(stderr.contains("\"phase\":\"excel_modifier\""));
-    assert!(stderr.contains("\"actual_engine\":\"umya_spreadsheet\""));
+    assert!(stderr.contains("\"phase\":\"openpyxl_import\""));
+    assert!(stderr.contains("\"actual_engine\":\"openpyxl_worker\""));
 
     let result = read_workbook(&output_path)?;
     assert_eq!(
@@ -1397,7 +1217,8 @@ fn interactive_menu_appends_only_after_confirmation_and_with_matching_capability
         })
         .context("PT-7-6 append run history was not written")?;
     let history = fs::read_to_string(history_path)?;
-    assert!(history.contains("umya_spreadsheet"));
+    assert!(history.contains("openpyxl_worker"));
+    assert!(!history.contains("umya_spreadsheet"));
     assert!(!history.contains("R1C1"));
 
     fs::remove_dir_all(root)?;
@@ -1449,7 +1270,6 @@ fn interactive_menu_supports_user_and_off_log_views() {
 
 #[test]
 fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
-    const PLATFORM: &str = "synthetic-pt-7-6-append-cli";
     let root = temporary_directory("sheet-extract-append-cli");
     let source_first = root.join("2026第一批.xlsx");
     let source_second = root.join("2026第二批.xlsx");
@@ -1473,15 +1293,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
     let log_dir = root.join("app/logs");
     let output_path = output_dir.join("合并结果.xlsx");
 
-    let first_run = run_extract_cli(
-        &config,
-        &output_dir,
-        &log_dir,
-        false,
-        None,
-        None,
-        &source_first,
-    );
+    let first_run = run_extract_cli(&config, &output_dir, &log_dir, false, &source_first);
     assert!(
         first_run.status.success(),
         "first extraction failed: {}",
@@ -1489,7 +1301,6 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
     );
     let first_report: Value = serde_json::from_slice(&first_run.stdout)?;
     assert_eq!(first_report["extracted_sheets"], 1);
-    let original_target = fs::read(&output_path)?;
     let original_sheets = read_value_columns_with_iso_dates(&output_path, 16_384)?;
     assert_eq!(original_sheets.len(), 1);
     assert_eq!(original_sheets[0].name, "第一张表");
@@ -1498,42 +1309,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
         Some(&CellValue::Text("R1C1".to_owned()))
     );
 
-    let without_capability = run_extract_cli(
-        &config,
-        &output_dir,
-        &log_dir,
-        true,
-        None,
-        None,
-        &source_second,
-    );
-    assert!(!without_capability.status.success());
-    assert!(String::from_utf8_lossy(&without_capability.stderr)
-        .contains("requires --capabilities and --platform"));
-    assert_eq!(fs::read(&output_path)?, original_target);
-
-    let capability = write_append_test_capability(&root, &output_path, &source_second, PLATFORM)?;
-    let mismatched_platform = run_extract_cli(
-        &config,
-        &output_dir,
-        &log_dir,
-        true,
-        Some(&capability),
-        Some("different-synthetic-platform"),
-        &source_second,
-    );
-    assert!(!mismatched_platform.status.success());
-    assert_eq!(fs::read(&output_path)?, original_target);
-
-    let append_run = run_extract_cli(
-        &config,
-        &output_dir,
-        &log_dir,
-        true,
-        Some(&capability),
-        Some(PLATFORM),
-        &source_second,
-    );
+    let append_run = run_extract_cli(&config, &output_dir, &log_dir, true, &source_second);
     assert!(
         append_run.status.success(),
         "append extraction failed: {}",
@@ -1543,7 +1319,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
     assert_eq!(append_report["extracted_sheets"], 1);
     assert_eq!(append_report["output_files"], 1);
     let events = String::from_utf8_lossy(&append_run.stderr);
-    assert!(events.contains("\"actual_engine\":\"umya_spreadsheet\""));
+    assert!(events.contains("\"actual_engine\":\"openpyxl_worker\""));
     assert!(events.contains("\"phase\":\"output_commit\""));
 
     let history_path = fs::read_dir(&log_dir)?
@@ -1551,7 +1327,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
         .find(|path| {
             fs::read_to_string(path)
                 .map(|history| {
-                    history.contains("umya_spreadsheet") && history.contains("output_commit")
+                    history.contains("openpyxl_worker") && history.contains("output_commit")
                 })
                 .unwrap_or(false)
         })
@@ -1564,7 +1340,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
     assert_eq!(history["result"]["extracted_sheets"], 1);
     assert!(history["actual_engines"]
         .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "umya_spreadsheet")));
+        .is_some_and(|engines| engines.iter().any(|engine| engine == "openpyxl_worker")));
     assert!(history["events"]
         .as_array()
         .is_some_and(|events| events.iter().any(|event| event["phase"] == "output_commit")));
@@ -1598,7 +1374,6 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
 #[test]
 fn append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_layout(
 ) -> anyhow::Result<()> {
-    const PLATFORM: &str = "synthetic-pt-7-6-full-sheet-append";
     let root = temporary_directory("sheet-extract-full-sheet-append");
     let source = root.join("2026第二批.xlsx");
     write_append_full_sheet_source(&source, "第二张表")?;
@@ -1627,16 +1402,7 @@ fn append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_layo
     assert_eq!(before.sheets[0].merges, ["A2:B2"]);
     assert!(before.sheets[0].comments["A1"].contains("保留批注"));
 
-    let capability = write_append_test_capability(&root, &output_path, &source, PLATFORM)?;
-    let append_run = run_extract_cli(
-        &config,
-        &output_dir,
-        &root.join("app/logs"),
-        true,
-        Some(&capability),
-        Some(PLATFORM),
-        &source,
-    );
+    let append_run = run_extract_cli(&config, &output_dir, &root.join("app/logs"), true, &source);
     assert!(
         append_run.status.success(),
         "full-sheet append failed: {}",
@@ -1645,7 +1411,7 @@ fn append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_layo
     let append_report: Value = serde_json::from_slice(&append_run.stdout)?;
     assert_eq!(append_report["extracted_sheets"], 1);
     let events = String::from_utf8_lossy(&append_run.stderr);
-    assert!(events.contains("\"actual_engine\":\"umya_spreadsheet\""));
+    assert!(events.contains("\"actual_engine\":\"openpyxl_worker\""));
     assert!(events.contains("\"actual_engine\":\"rust_xlsxwriter\""));
 
     let after = read_workbook(&output_path)?;
@@ -1680,7 +1446,7 @@ fn append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_layo
 }
 
 #[test]
-fn append_mode_creates_a_missing_output_and_unsupported_operations_are_rejected_safely() {
+fn full_sheet_extraction_creates_output_and_existing_targets_are_protected() {
     let cases = cases();
     let source = fixture_path("省级月度报表_A.xlsx");
     let root = temporary_directory("sheet-extract-reject");
@@ -1702,17 +1468,17 @@ fn append_mode_creates_a_missing_output_and_unsupported_operations_are_rejected_
         .is_file());
 
     loaded_tasks[0].area_spec.clear();
-    let full_sheet_error = run_extract_sheets_area_candidate(
+    let full_sheet_result = run_extract_sheets_area_candidate(
         std::slice::from_ref(&source),
         &loaded_tasks,
         &output_dir,
         false,
         Some("unused.xlsx"),
     )
-    .unwrap_err();
-    assert!(full_sheet_error
-        .to_string()
-        .contains("full-sheet extraction"));
+    .unwrap();
+    assert_eq!(full_sheet_result.files, 1);
+    assert_eq!(full_sheet_result.output_files, 1);
+    assert!(output_dir.join("区域提取/area-result.xlsx").is_file());
     loaded_tasks = load_tasks(&cases);
 
     let date_output = root.join("date-output");

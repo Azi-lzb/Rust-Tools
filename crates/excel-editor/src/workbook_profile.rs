@@ -39,6 +39,9 @@ pub fn inspect_xlsx_profile(path: impl AsRef<Path>) -> Result<WorkbookProfile> {
         if lower.ends_with(".rels") {
             features.insert(WorkbookFeature::Relationships);
         }
+        if lower == "xl/metadata.xml" {
+            features.insert(WorkbookFeature::CellMetadata);
+        }
         if lower.starts_with("xl/comments") && lower.ends_with(".xml") {
             features.insert(WorkbookFeature::Comments);
         }
@@ -158,6 +161,7 @@ fn known_part(name: &str) -> bool {
         || name == "xl/styles.xml"
         || name == "xl/sharedstrings.xml"
         || name == "xl/calcchain.xml"
+        || name == "xl/metadata.xml"
         || name.starts_with("xl/theme/")
         || name.starts_with("xl/worksheets/")
         || name.starts_with("xl/comments")
@@ -212,6 +216,7 @@ mod tests {
             "xl/externallinks/externallink1.xml",
             "xl/tables/table1.xml",
             "xl/querytables/querytable1.xml",
+            "xl/metadata.xml",
             "xl/activex/activex1.xml",
             "xl/vbaproject.bin",
             "customxml/item1.xml",
@@ -258,10 +263,21 @@ mod tests {
         writer
             .add_directory("xl/drawings/", SimpleFileOptions::default())
             .unwrap();
+        writer
+            .start_file("xl/metadata.xml", SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(
+            &mut writer,
+            br#"<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>"#,
+        )
+        .unwrap();
         writer.finish().unwrap();
 
         let profile = inspect_xlsx_profile(&output).unwrap();
         assert!(profile.inventory_complete);
+        assert!(profile
+            .features_present
+            .contains(&WorkbookFeature::CellMetadata));
         assert!(!profile
             .features_present
             .contains(&WorkbookFeature::UnknownExtensions));

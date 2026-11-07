@@ -1,15 +1,18 @@
 # Isolated openpyxl runtime staging
 
-`stage-runtime.sh` prepares the openpyxl worker subtree inside an existing deb staging root. It does not build a Python runtime, install packages, create a deb, or modify product route capabilities.
+`stage-runtime.sh` prepares the Openpyxl worker subtree and the small LibreOffice calculation adapter inside an existing deb staging root. It does not build a Python runtime, install packages, create a deb, or modify product route capabilities.
 
 The supplied relocatable runtime must already contain `bin/python3`, openpyxl, and et-xmlfile. The pinned versions are Python 3.8.18 (`python-version.txt`), openpyxl 3.1.5, and et-xmlfile 2.0.0 (`requirements.txt`). The staging script rejects a different Python version, then copies it to:
 
 ```text
 <deb-root>/usr/libexec/<product>/openpyxl/runtime/
-<deb-root>/<deb-root>/usr/libexec/<product>/openpyxl/worker/openpyxl_worker.py
+<deb-root>/usr/libexec/<product>/openpyxl/worker/openpyxl_worker.py
+<deb-root>/usr/libexec/<product>/openpyxl/worker/libreoffice_calc_worker.py
 ```
 
 This matches `OpenpyxlWorkerConfig::for_product_binary` for `/usr/bin/<product>`. The runtime must resolve its interpreter and internal symlinks within the staged runtime tree. Staging checks `python -I`, imports openpyxl, starts the worker help path, verifies every runtime symlink stays inside the staged tree, and rejects unresolved dynamic dependencies found by `ldd` (whitelisting only glibc base libraries) plus any GLIBC symbol requirement above the 2.28 delivery ceiling.
+
+The LibreOffice adapter is currently launched only by menu 1-4 for formula calculation. Rust/OOXML first copies the configured validation regions into an isolated temporary workbook; LibreOffice Calc opens, calculates, and saves that temporary copy so Calamine can read the cached results. This calculation save is not a general workbook-editing or conversion route. The adapter uses the system `/usr/bin/python3` with `python3-uno` and a user-installed LibreOffice Calc; it is not run with the bundled Openpyxl interpreter. These optional packages are not required for ordinary reads, workbook edits, report creation, or the rest of the application. If they are missing, 1-4 reports that the optional calculation engine is unavailable.
 
 Shell scripts are forced to LF via `.gitattributes` (`*.sh text eol=lf`); checkouts that still carry CRLF break the WSL shebang invocation, so normalize before use (`sed -i 's/\r$//'`).
 

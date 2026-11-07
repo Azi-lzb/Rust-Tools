@@ -224,15 +224,18 @@ struct OoxmlSheetMetadata {
     data_validations: Vec<Value>,
 }
 
-/// The three SpreadsheetML worksheet header variants.
+/// SpreadsheetML worksheet header and footer variants.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum HeaderVariant {
     Odd,
     Even,
     First,
+    OddFooter,
+    EvenFooter,
+    FirstFooter,
 }
 
-/// Plain text from one worksheet header variant, including Excel control codes.
+/// Plain text from one worksheet header/footer variant, including Excel control codes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorksheetHeaderText {
     pub sheet_name: String,
@@ -578,11 +581,11 @@ fn is_a1_area(reference: &str) -> bool {
     pair.next().is_none() && cell(first) && second.map_or(true, cell)
 }
 
-/// Read odd/even/first-page header text from an OOXML workbook.
+/// Read odd/even/first-page header and footer text from an OOXML workbook.
 ///
 /// This is an OOXML metadata read, separate from Calamine cell-value reading.
 /// Rich/nested header markup is rejected so callers cannot mistake a partial
-/// text projection for the original header contract.
+/// text projection for the original header/footer contract.
 pub fn read_header_inventory(path: impl AsRef<Path>) -> Result<Vec<WorksheetHeaderInventory>> {
     let path = path.as_ref();
     let is_ooxml = path
@@ -621,6 +624,9 @@ pub fn read_header_inventory(path: impl AsRef<Path>) -> Result<Vec<WorksheetHead
                     "oddHeader" => HeaderVariant::Odd,
                     "evenHeader" => HeaderVariant::Even,
                     "firstHeader" => HeaderVariant::First,
+                    "oddFooter" => HeaderVariant::OddFooter,
+                    "evenFooter" => HeaderVariant::EvenFooter,
+                    "firstFooter" => HeaderVariant::FirstFooter,
                     _ => continue,
                 };
                 ensure!(

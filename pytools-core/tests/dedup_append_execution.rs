@@ -190,19 +190,19 @@ fn assert_success(output: &Output) -> Result<Value> {
 
 fn capability_for(plan: &ExcelEditPlan) -> BackendCapability {
     BackendCapability {
-        engine: EngineId::UmyaSpreadsheet,
+        engine: EngineId::OpenpyxlWorker,
         status: CapabilityStatus::Passed,
         format: plan.format,
         operations: plan.operations.iter().map(EditOperation::kind).collect(),
         supported_features: plan.workbook.features_present.clone(),
         preserved: plan.preserve.clone(),
-        platform: "synthetic-pt-2-5-umya-test".to_owned(),
+        platform: "synthetic-pt-2-5-openpyxl-test".to_owned(),
         evidence: Some(CapabilityEvidence {
             sample_id: "synthetic-pt-2-5-existing-target".to_owned(),
             report_path: "pytools-core/tests/dedup_append_execution.rs".to_owned(),
-            adapter_version: "umya-spreadsheet-3.1.1".to_owned(),
-            engine_version: "umya-spreadsheet-3.1.1".to_owned(),
-            platform: "synthetic-pt-2-5-umya-test".to_owned(),
+            adapter_version: "openpyxl-worker-v1".to_owned(),
+            engine_version: "openpyxl".to_owned(),
+            platform: "synthetic-pt-2-5-openpyxl-test".to_owned(),
         }),
     }
 }
@@ -442,10 +442,10 @@ fn pt_2_5_existing_target_edits_a_candidate_without_overwriting_the_target() -> 
         .arg(&plan_path)
         .args(["--capabilities"])
         .arg(&capability_path)
-        .args(["--platform", "synthetic-pt-2-5-umya-test"])
+        .args(["--platform", "synthetic-pt-2-5-openpyxl-test"])
         .output()?;
     let execution = assert_success(&executed)?;
-    assert_eq!(execution["engine"], "umya_spreadsheet");
+    assert_eq!(execution["engine"], "openpyxl_worker");
     assert_eq!(execution["attempts"][0]["outcome"], "succeeded");
     let candidate = PathBuf::from(&plan.candidate);
     assert!(candidate.is_file());
@@ -565,18 +565,18 @@ fn pt_1_3_pt_1_4_explicitly_commit_existing_target_after_capability_validation()
         .arg(&capability_path)
         .args([
             "--platform",
-            "synthetic-pt-2-5-umya-test",
+            "synthetic-pt-2-5-openpyxl-test",
             "--commit-target",
         ])
         .output()?;
     let execution = assert_success(&executed)?;
-    assert_eq!(execution["engine"], "umya_spreadsheet");
+    assert_eq!(execution["engine"], "openpyxl_worker");
     assert_eq!(execution["target_commit"]["operation"], "replaced");
     assert_eq!(execution["target_commit"]["sha256_before"], target_hash);
     assert_eq!(execution["execution_summary"]["status"], "succeeded");
     assert_eq!(
         execution["execution_summary"]["stages"][0]["engine"],
-        "umya_spreadsheet"
+        "openpyxl_worker"
     );
     assert_eq!(execution["execution_summary"]["task_success_count"], 2);
     let candidate = PathBuf::from(&plan.candidate);
@@ -863,7 +863,8 @@ fn pt_2_5_chart_target_falls_back_to_openpyxl_and_keeps_charts() -> Result<()> {
 
 /// 带图表的既有目标工作簿（openpyxl 写出，确保图表是真实 OOXML 部件）。
 fn make_chart_target(path: &Path) -> Result<()> {
-    let python = std::env::var("PYTOOLS_OPENPYXL_PYTHON")?;
+    let python = openpyxl_python_for_fixtures()
+        .context("no openpyxl interpreter for the chart fixture (set PYTOOLS_OPENPYXL_PYTHON or stage python/ beside the test binary)")?;
     let script = format!(
         r#"
 import sys
@@ -894,23 +895,25 @@ wb.save(r"{path}")
 
 /// 回退路径是否可执行：显式环境变量或发行包 dist/python 皆可。
 fn openpyxl_runtime_available() -> bool {
-    if let (Ok(python), Ok(_worker)) = (
-        std::env::var("PYTOOLS_OPENPYXL_PYTHON"),
-        std::env::var("PYTOOLS_OPENPYXL_WORKER"),
-    ) {
-        return Path::new(&python).is_file();
+    openpyxl_python_for_fixtures().is_some()
+}
+
+/// 夹具构造用的解释器解析：显式环境变量优先，其次从测试可执行文件
+/// 逐级向上的 python/python.exe（与产品运行时解析的 ZIP 布局一致）。
+fn openpyxl_python_for_fixtures() -> Option<PathBuf> {
+    if let Ok(python) = std::env::var("PYTOOLS_OPENPYXL_PYTHON") {
+        if Path::new(&python).is_file() {
+            return Some(PathBuf::from(python));
+        }
     }
-    let exe = match std::env::current_exe() {
-        Ok(exe) => exe,
-        Err(_) => return false,
-    };
+    let exe = std::env::current_exe().ok()?;
     let mut cursor = exe.parent();
     while let Some(directory) = cursor {
         let candidate = directory.join("python").join("python.exe");
         if candidate.is_file() {
-            return true;
+            return Some(candidate);
         }
         cursor = directory.parent();
     }
-    false
+    None
 }

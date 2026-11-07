@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use excel_reader::{read_value_columns_with_iso_dates, read_workbook, CellValue, SheetDump};
-use excel_writer::{Format, Workbook};
+use excel_writer::{Format, FormatAlign, FormatBorder, Workbook};
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -803,7 +803,11 @@ fn write_table(
 ) -> Result<()> {
     let sheet = workbook.add_worksheet();
     sheet.set_name(name)?;
-    let header_format = Format::new().set_bold();
+    let header_format = Format::new()
+        .set_bold()
+        .set_border(FormatBorder::Thin)
+        .set_align(FormatAlign::Center)
+        .set_align(FormatAlign::Top);
     for (col, header) in headers.iter().enumerate() {
         sheet.write_string_with_format(0, col as u16, *header, &header_format)?;
     }

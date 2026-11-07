@@ -13,7 +13,7 @@ use crate::file_commit::TargetCommitReport;
 use anyhow::{Context, Result};
 use excel_editor::{
     BackendCapability, CapabilityEvidence, CapabilityStatus, EditExecutionReport, EditOperation,
-    EngineId, ExcelEditPlan,
+    EngineId, ExcelEditPlan, PreservationRequirement,
 };
 use std::path::{Path, PathBuf};
 
@@ -106,8 +106,8 @@ fn capability_for(plan: &ExcelEditPlan, engine: InPlaceEngine) -> BackendCapabil
     }
 }
 
-/// 供内置追加执行器（2-3 已有目标）在 umya 结构校验失败时构造 openpyxl
-/// 回退能力记录：operations/features/preserve 全部由追加计划推导。
+/// 供 2-3 既有目标追加候选使用的 Openpyxl worker 能力记录；
+/// operations/features/preserve 全部由追加计划推导。
 pub(crate) fn openpyxl_worker_capability_for_plan(
     plan: &ExcelEditPlan,
 ) -> excel_editor::BackendCapability {
@@ -190,8 +190,9 @@ pub fn execute_candidate(
         "{}",
         engine.unsupported_hint(&plan.input)
     );
-    let capability = capability_for(plan, engine);
-    crate::edit_plan::apply_plan(plan, &[capability], &platform_id())
+    let execution_plan = plan_for_engine(plan, engine);
+    let capability = capability_for(&execution_plan, engine);
+    crate::edit_plan::apply_plan(&execution_plan, &[capability], &platform_id())
 }
 
 /// 就地执行一个 plan：先出候选、校验，再替换目标原文件。
@@ -201,13 +202,40 @@ pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<I
         "{}",
         engine.unsupported_hint(&plan.input)
     );
-    let capability = capability_for(plan, engine);
-    let (execution, commit) = apply_plan_in_place(plan, &[capability], &platform_id())?;
+    let execution_plan = plan_for_engine(plan, engine);
+    let capability = capability_for(&execution_plan, engine);
+    let (execution, commit) = apply_plan_in_place(&execution_plan, &[capability], &platform_id())?;
     Ok(InPlaceOutcome {
         target: plan.input.clone(),
         execution,
         commit,
     })
+}
+
+fn plan_for_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> ExcelEditPlan {
+    let mut execution_plan = plan.clone();
+    if engine == InPlaceEngine::Openpyxl {
+        // Legacy PyCode saves existing workbooks through openpyxl. It rewrites
+        // OOXML package parts, so do not route-block it on byte/package identity.
+        // Concrete workbook values, formulas, styles and requested operations
+        // remain checked by the OpenpyxlXlsxValidator before safe replacement.
+        execution_plan
+            .preserve
+            .remove(&PreservationRequirement::UnmodifiedPackageParts);
+        if matches!(
+            plan.request_id.as_str(),
+            "pytools-split-village-bank" | "pytools-adjust-rural-loan"
+        ) {
+            // PyCode's Openpyxl saves normalize row style IDs and row
+            // dimensions across the workbook. These functions intentionally
+            // align with that established save path; cell styles and the
+            // requested row/cell operations remain validated independently.
+            execution_plan
+                .preserve
+                .remove(&PreservationRequirement::RowAndColumnDimensions);
+        }
+    }
+    execution_plan
 }
 
 /// openpyxl 引擎可用性预检：返回不可用原因，供菜单提前提示。

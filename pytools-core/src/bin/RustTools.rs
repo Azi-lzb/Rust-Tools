@@ -50,10 +50,8 @@ use pytools_core::print_ops::{
 };
 use pytools_core::quick::{open_config, open_latest_output, open_output_directory};
 use pytools_core::region_sum::{run_region_sum_check_with_progress, RegionSumRunEvent};
-use pytools_core::sheet_extract::{is_full_sheet_task, run_extract_sheets_candidate_with_progress};
-use pytools_core::sheet_rename::{
-    build_sheet_rename_plan, run_batch_sheet_rename_candidate, run_batch_sheet_rename_openpyxl,
-};
+use pytools_core::sheet_extract::run_extract_sheets_candidate_with_progress;
+use pytools_core::sheet_rename::{build_sheet_rename_plan, run_batch_sheet_rename};
 use pytools_core::source_discovery::discover_configured_source_files;
 use pytools_core::submission_check::{
     run_submission_check, run_submission_check_with_progress, SubmissionCheckProgressEvent,
@@ -395,12 +393,9 @@ fn run_interactive_menu(arguments: Vec<String>) -> Result<()> {
         .get("config")
         .map(PathBuf::from)
         .unwrap_or_else(default_app_config_path);
-    let capabilities = options.values.get("capabilities").map(PathBuf::from);
-    let platform = options.values.get("platform").cloned();
-    anyhow::ensure!(
-        capabilities.is_some() == platform.is_some(),
-        "--capabilities and --platform must be provided together"
-    );
+    // Interactive menus use the bundled Openpyxl worker for existing XLSX
+    // edits. Legacy capability files remain accepted by the parser for CLI
+    // compatibility, but are not required to enter the menus.
     let (mut global, mut config_error) = match load_global(&config_path) {
         Ok(global) => (global, None),
         Err(error) => (
@@ -449,8 +444,8 @@ fn run_interactive_menu(arguments: Vec<String>) -> Result<()> {
         &mut config_error,
         &log_view,
         allow_native_dialog,
-        capabilities.as_deref(),
-        platform.as_deref(),
+        None,
+        None,
     )
 }
 
@@ -653,8 +648,6 @@ where
                 global,
                 log_view,
                 allow_native_dialog,
-                capabilities,
-                platform,
             )?,
             "archive.organize" => run_interactive_archive_menu(
                 input,
@@ -1806,27 +1799,17 @@ where
         }
     }
 
-    let (Some(capabilities), Some(platform)) = (capabilities, platform) else {
-        writeln!(
-            output,
-            "当前为计划模式；源配置未修改，也未生成候选。启动菜单时提供 --capabilities <json> 与 --platform <id>，且二者须匹配已验收能力，才可执行候选。"
-        )?;
-        facts.metrics["execution_mode"] = serde_json::json!("plan_only");
-        if log_view == "developer" {
-            writeln!(
-                output,
-                "实际读取组件: excel-reader / Calamine 与 OOXML worksheet extent reader；修改引擎: 未执行"
-            )?;
-        }
-        return Ok(());
-    };
+    let _ = (capabilities, platform);
 
     verify_planning_snapshot(config_path, Some(&original_sha256))?;
     let execution_started = Instant::now();
     facts.excel_modifier_invoked = true;
-    facts.add_component("excel_editor::ExcelModifier");
-    let execution = apply_plan_with_capability_file(&plan, capabilities, platform)?;
-    facts.add_engine(execution.engine.to_string());
+    facts.add_component("excel_editor::OpenpyxlXlsxBackend");
+    let execution = pytools_core::inplace_edit::execute_candidate(
+        &plan,
+        pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
+    )?;
+    facts.add_engine("openpyxl");
     let _candidate_view = view_config(&candidate_path)?;
     facts.add_component("pytools_core::config::view_config");
     let _candidate_global = load_global(&candidate_path)?;
@@ -2982,11 +2965,7 @@ where
                 diagnostic_events.push(
                     pytools_core::engine_diag::DiagEvent::new(
                         if plan.target_existed {
-                            if direct_existing {
-                                "umya-spreadsheet"
-                            } else {
-                                "ExcelModifier"
-                            }
+                            "openpyxl"
                         } else {
                             "rust_xlsxwriter"
                         },
@@ -3529,12 +3508,14 @@ fn write_dedup_task_results<W: Write>(
             continue;
         }
 
+        // The per-task diagnostic describes the scan result, independently
+        // of whether this operation marks or deletes duplicates.
         let duplicate_count = task_event.and_then(|event| {
             event
                 .message
-                .strip_prefix(&format!("{duplicate_label} "))
-                .and_then(|message| message.strip_suffix(" 行"))
-                .and_then(|count| count.parse::<usize>().ok())
+                .strip_prefix("发现重复行 ")
+                .and_then(|message| message.split_once(" 行"))
+                .and_then(|(count, _)| count.parse::<usize>().ok())
         });
         let Some(duplicate_count) = duplicate_count else {
             writeln!(
@@ -3561,7 +3542,7 @@ fn write_dedup_task_results<W: Write>(
                 format!("{duplicate_label} {duplicate_count} 行；源工作簿未保存"),
             )
         } else {
-            ("INFO", format!("未发现{duplicate_label}，源工作簿未修改"))
+            ("INFO", "未发现重复数据，源工作簿未修改".to_owned())
         };
         writeln!(
             output,
@@ -4703,12 +4684,13 @@ fn unique_menu_action_dir(output_root: &Path, action: &str) -> PathBuf {
     candidate
 }
 
-/// 3-1/3-2：按配置直接执行静态打印，不做 y 确认。
+/// 3-1/3-2：按配置直接执行静态打印，不做 y 确认；两个历史入口统一走 Openpyxl。
 /// 运行日志统一带本机时间戳；失败显示阶段、引擎与原始错误；输出文件去重显示。
 fn run_configured_static_print_menu<W>(
     output: &mut W,
     config_path: &Path,
     global: &GlobalConfig,
+    feature_id: &str,
     engine: pytools_core::static_print_engines::StaticPrintEngine,
     log_view: &str,
 ) -> Result<()>
@@ -4717,11 +4699,6 @@ where
 {
     use pytools_core::engine_diag::{DiagOutcome, DiagStage};
     use pytools_core::run_logging::{EventWriter, Level, RunTracker, TaskStatus};
-    let feature_id = match engine {
-        pytools_core::static_print_engines::StaticPrintEngine::Umya => "3-1",
-        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl => "3-2",
-        _ => "PT-3",
-    };
     let tracker = RunTracker::new(feature_id, "按配置生成静态打印文件", &[]);
     let mut diagnostic = if log_view == "off" {
         None
@@ -5166,14 +5143,14 @@ where
     W: Write,
 {
     // 打印改为“按配置直接生成”：不再需要 y 确认，也不再提供仅出计划的入口。
-    // 保格式回写的两个引擎（umya / openpyxl）与配置预校验并列。
+    // 保留旧菜单编号；3-1 与 3-2 当前统一调用 openpyxl。
     let _ = (allow_native_dialog, capabilities, platform);
     loop {
         writeln!(output, "------ 报表打印 ------")?;
-        writeln!(output, "  1  按打印配置生成：umya-spreadsheet  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
+        writeln!(output, "  1  按打印配置生成：openpyxl（旧 3-1 入口）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
         writeln!(
             output,
-            "  2  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
+            "  2  按打印配置生成：openpyxl（旧 3-2 入口）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
         )?;
         writeln!(output, "  3  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
@@ -5187,7 +5164,8 @@ where
                     output,
                     config_path,
                     global,
-                    pytools_core::static_print_engines::StaticPrintEngine::Umya,
+                    "3-1",
+                    pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
                     log_view,
                 )?;
             }
@@ -5196,6 +5174,7 @@ where
                     output,
                     config_path,
                     global,
+                    "3-2",
                     pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
                     log_view,
                 )?;
@@ -5614,8 +5593,8 @@ fn run_interactive_convert_menu<R, W>(
     global: &GlobalConfig,
     log_view: &str,
     allow_native_dialog: bool,
-    capabilities: Option<&Path>,
-    platform: Option<&str>,
+    _capabilities: Option<&Path>,
+    _platform: Option<&str>,
 ) -> Result<()>
 where
     R: BufRead,
@@ -5634,7 +5613,7 @@ where
         writeln!(output, "  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】")?;
         writeln!(
             output,
-            "  4  Office 格式转换（XLS/ET/ETT → XLSX，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】"
+            "  4  Office 格式转换（Excel 工作簿 → XLSX；支持 .xlsx 规范另存，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】"
         )?;
         writeln!(
             output,
@@ -5685,7 +5664,7 @@ where
             }
             "4" => {
                 writeln!(output, "选择格式转换：")?;
-                writeln!(output, "  1  Excel 格式转换（XLS / ET / ETT → XLSX）")?;
+                writeln!(output, "  1  Excel 格式转换或 .xlsx 规范另存为 XLSX")?;
                 writeln!(output, "  2  Word 格式转换（DOC / WPS / WPT → DOCX）")?;
                 let Some(format_choice) = read_menu_choice(input, output, "选择格式> ")? else {
                     return Ok(());
@@ -5726,7 +5705,7 @@ where
             "files.office_conversion.word" => {
                 ("批量转换 Word 文件", NativeFileFilter::WordDocuments)
             }
-            "files.rename_sheets" => ("批量修改 Sheet 名", NativeFileFilter::XlsxOnly),
+            "files.rename_sheets" => ("批量修改 Sheet 名", NativeFileFilter::ExcelWorkbooks),
             "files.submission_check" => ("检查提交文件", NativeFileFilter::AllFiles),
             _ => unreachable!("resolved stable file operation ID"),
         };
@@ -5785,9 +5764,10 @@ where
                         output,
                         "[确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。"
                     )?;
-                    if capabilities.is_none() {
-                        writeln!(output, "[引擎] 使用 openpyxl 修改工作表名称，并同步改写跨表公式与命名区域引用。")?;
-                    }
+                    writeln!(
+                        output,
+                        "[引擎] .xlsx 使用 openpyxl 改名并更新公式/命名区域引用；.xls 请先在 Windows 通过 4-4 转为 .xlsx。"
+                    )?;
                     read_menu_choice(
                         input,
                         output,
@@ -5802,14 +5782,6 @@ where
                 };
                 if execute {
                     let mut arguments = config_cli_arguments(config_path);
-                    if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
-                        arguments.extend([
-                            "--capabilities".to_owned(),
-                            capabilities.to_string_lossy().into_owned(),
-                            "--platform".to_owned(),
-                            platform.to_owned(),
-                        ]);
-                    }
                     arguments.extend([
                         "--log-dir".to_owned(),
                         global.log_dir.to_string_lossy().into_owned(),
@@ -5971,19 +5943,16 @@ where
     }
 }
 
-/// 菜单 5 的就地修改引擎选择：先选引擎，再选文件。
-/// openpyxl 走本机 Python（可处理 xlsm/xltm 并保留宏）；umya 为纯 Rust（仅 xlsx/xltx）。
+/// 菜单 5 的就地修改统一使用受保护的 openpyxl 执行路径。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SpecialReportEngine {
     Openpyxl,
-    Umya,
 }
 
 impl SpecialReportEngine {
     fn label(self) -> &'static str {
         match self {
             Self::Openpyxl => "openpyxl（本机 Python，保留宏）",
-            Self::Umya => "umya-spreadsheet（纯 Rust，速度快）",
         }
     }
 
@@ -5995,35 +5964,7 @@ impl SpecialReportEngine {
             .unwrap_or_default()
             .to_ascii_lowercase();
         match self {
-            Self::Umya => matches!(extension.as_str(), "xlsx" | "xltx"),
             Self::Openpyxl => matches!(extension.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm"),
-        }
-    }
-}
-
-fn choose_special_report_engine<R: BufRead, W: Write>(
-    input: &mut R,
-    output: &mut W,
-) -> Result<Option<SpecialReportEngine>> {
-    writeln!(output, "选择就地修改引擎：")?;
-    writeln!(
-        output,
-        "  1  openpyxl（本机 Python；可处理 xlsm/xltm 并保留宏）"
-    )?;
-    writeln!(
-        output,
-        "  2  umya-spreadsheet（纯 Rust；仅 xlsx/xltx，速度更快）"
-    )?;
-    writeln!(output, "  0  返回")?;
-    loop {
-        let Some(choice) = read_menu_choice(input, output, "引擎选择> ")? else {
-            return Ok(None);
-        };
-        match choice.trim() {
-            "1" => return Ok(Some(SpecialReportEngine::Openpyxl)),
-            "2" => return Ok(Some(SpecialReportEngine::Umya)),
-            "0" => return Ok(None),
-            _ => writeln!(output, "仅接受 1、2 或 0")?,
         }
     }
 }
@@ -6035,8 +5976,6 @@ fn run_interactive_batch_menu<R, W>(
     global: &GlobalConfig,
     log_view: &str,
     allow_native_dialog: bool,
-    capabilities: Option<&Path>,
-    platform: Option<&str>,
 ) -> Result<()>
 where
     R: BufRead,
@@ -6044,11 +5983,11 @@ where
 {
     loop {
         writeln!(output, "------ 专用报表处理 ------")?;
-        writeln!(output, "  1  拆分村镇银行数据（生成独立副本）")?;
-        writeln!(output, "  2  机构名称规范化（Rust 新建规范化副本）  【机构映射表：原始机构名称/映射后机构名称】")?;
+        writeln!(output, "  1  拆分村镇银行数据（直接修改所选源工作簿）")?;
+        writeln!(output, "  2  机构名称规范化（直接修改所选源工作簿）  【机构映射表：原始机构名称/映射后机构名称】")?;
         writeln!(
             output,
-            "  3  删除分机构表中的外资行（直接修改原工作簿）  【机构映射表：是否为外资行】"
+            "  3  删除分机构表中的外资行（生成“金融局”副本，原文件不变）  【机构映射表：是否为外资行】"
         )?;
         writeln!(output, "  4  修改外汇工作表页眉单位（直接修改原工作簿）")?;
         writeln!(output, "  5  地区总分校验（读取并生成核对结果）")?;
@@ -6056,8 +5995,11 @@ where
             output,
             "  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】"
         )?;
-        writeln!(output, "  7  涉农贷款比上月修正（生成独立副本）")?;
-        writeln!(output, "  8  季度涉农贷款修正及分地区核对（生成独立副本）")?;
+        writeln!(output, "  7  涉农贷款比上月修正（直接修改本期源工作簿）")?;
+        writeln!(
+            output,
+            "  8  季度涉农贷款修正及分地区核对（直接修改本期源工作簿）"
+        )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -6078,20 +6020,19 @@ where
                 continue;
             }
         };
-        // 5-1/5-2/5-7/5-8 就地修改工作簿：先让用户选择执行引擎（openpyxl / umya）。
-        let engine: Option<SpecialReportEngine> = if matches!(feature_id, "PT-7-1" | "PT-7-2") {
-            Some(SpecialReportEngine::Umya)
-        } else if matches!(feature_id, "PT-7-7" | "PT-7-8") {
-            match choose_special_report_engine(input, output)? {
-                Some(engine) => Some(engine),
-                None => continue,
-            }
+        // 专用报表菜单的既有工作簿修改统一使用项目内置 openpyxl worker，不路由到 umya。
+        let engine: Option<SpecialReportEngine> = if matches!(
+            feature_id,
+            "PT-7-1" | "PT-7-2" | "PT-7-3" | "PT-7-4" | "PT-7-7" | "PT-7-8"
+        ) {
+            Some(SpecialReportEngine::Openpyxl)
         } else {
             None
         };
         match feature_id {
             "PT-7-1" => {
-                let Some(current) = choose_single_xlsx_workbook(
+                writeln!(output, "→ 第一次文件选择：选择 本期商业银行共享一批")?;
+                let Some(current) = choose_single_excel_workbook(
                     "选择 本期商业银行共享一批",
                     input,
                     output,
@@ -6101,7 +6042,8 @@ where
                     writeln!(output, "[已取消] 未选择本期工作簿。")?;
                     return Ok(());
                 };
-                let Some(previous) = choose_single_xlsx_workbook(
+                writeln!(output, "→ 第二次文件选择：选择 去年同期商业银行共享一批")?;
+                let Some(previous) = choose_single_excel_workbook(
                     "选择 去年同期商业银行共享一批",
                     input,
                     output,
@@ -6111,9 +6053,13 @@ where
                     writeln!(output, "[已取消] 未选择去年同期商业银行共享一批。")?;
                     return Ok(());
                 };
+                writeln!(
+                    output,
+                    "→ 第三次文件选择：选择 本外币、人民币、外币、外发用报表（修改分机构表）"
+                )?;
                 let Some(selected) = choose_source_files_or_folders(
-                    "选择 本外币、人民币、外币、外发用文件（修改分机构表）",
-                    NativeFileFilter::XlsxOnly,
+                    "选择 本外币、人民币、外币、外发用报表（修改分机构表）（可多选）",
+                    NativeFileFilter::ExcelWorkbooks,
                     input,
                     output,
                     allow_native_dialog,
@@ -6134,71 +6080,101 @@ where
                         )?;
                         continue;
                     }
-                    let accepted = match engine {
-                        Some(SpecialReportEngine::Openpyxl) => path.extension().is_some_and(|e| {
-                            let e = e.to_string_lossy().to_ascii_lowercase();
-                            matches!(e.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm")
-                        }),
-                        _ => path.extension().is_some_and(|e| {
-                            let e = e.to_string_lossy().to_ascii_lowercase();
-                            matches!(e.as_str(), "xlsx" | "xltx")
-                        }),
-                    };
+                    let accepted = path.extension().is_some_and(|extension| {
+                        matches!(
+                            extension.to_string_lossy().to_ascii_lowercase().as_str(),
+                            "xls" | "xlsx"
+                        )
+                    });
                     if accepted {
                         targets.push(path);
                     } else {
                         writeln!(
                             output,
-                            "[跳过] {}：PT-7-4 当前仅验收 .xlsx；.xls 请先显式转换，含 VBA 的 .xlsm 暂不修改。",
+                            "[跳过] {}：PT-7-1 当前只接受 .xls/.xlsx；其他格式不处理。",
                             display_path_for_user(&path)
                         )?;
                     }
                 }
                 if targets.is_empty() {
-                    writeln!(output, "[提示] 没有可处理的 .xlsx 目标工作簿。")?;
+                    writeln!(output, "[提示] 没有可处理的 .xls/.xlsx 目标工作簿。")?;
                     return Ok(());
+                }
+                let current_ext = current
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                let previous_ext = previous
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                if current_ext != previous_ext {
+                    writeln!(
+                        output,
+                        "[中止] 本期和去年同期工作簿格式必须相同，均选 .xls 或均选 .xlsx。"
+                    )?;
+                    return Ok(());
+                }
+                let mut xls_targets = Vec::new();
+                let mut xlsx_targets = Vec::new();
+                for target in targets {
+                    match target.extension().and_then(|extension| extension.to_str()) {
+                        Some(extension) if extension.eq_ignore_ascii_case("xls") => {
+                            xls_targets.push(target)
+                        }
+                        Some(extension) if extension.eq_ignore_ascii_case("xlsx") => {
+                            xlsx_targets.push(target)
+                        }
+                        _ => {}
+                    }
                 }
                 writeln!(
                     output,
-                    "[就地模式] 将使用 {} 直接改写目标工作簿中的村镇银行数据；会先出候选并校验，再替换原文件。",
-                    match engine {
-                        Some(SpecialReportEngine::Openpyxl) => "openpyxl",
-                        _ => "umya-spreadsheet",
-                    }
+                    "[就地模式] .xls 由 Excel/WPS COM 修改安全候选后替换源文件；.xlsx 保持 Openpyxl 路径。两者都不生成额外结果副本。"
                 )?;
-                let mut arguments = vec![
-                    "--current".to_owned(),
-                    current.to_string_lossy().into_owned(),
-                    "--previous".to_owned(),
-                    previous.to_string_lossy().into_owned(),
-                    "--output-dir".to_owned(),
-                    global.output_dir.to_string_lossy().into_owned(),
-                    "--log-dir".to_owned(),
-                    global.log_dir.to_string_lossy().into_owned(),
-                    "--log-view".to_owned(),
-                    log_view.to_owned(),
-                ];
-                // 就地修改：按用户选择的引擎直接改写目标工作簿。
-                arguments.push("--in-place".to_owned());
-                arguments.push(
-                    match engine {
-                        Some(SpecialReportEngine::Openpyxl) => "openpyxl",
-                        _ => "umya",
+                for (extension, selected_targets, engine_name) in [
+                    ("xls", xls_targets, "com"),
+                    ("xlsx", xlsx_targets, "openpyxl"),
+                ] {
+                    if selected_targets.is_empty() {
+                        continue;
                     }
-                    .to_owned(),
-                );
-                arguments.extend(
-                    targets
-                        .into_iter()
-                        .map(|path| path.to_string_lossy().into_owned()),
-                );
-                run_village_split_batch(arguments, true)?;
+                    if extension != current_ext {
+                        writeln!(
+                            output,
+                            "[跳过] 选择的目标 .{extension} 与本期/去年同期 .{current_ext} 不一致；为避免跨格式计算，本次不处理该组。"
+                        )?;
+                        continue;
+                    }
+                    let mut arguments = vec![
+                        "--current".to_owned(),
+                        current.to_string_lossy().into_owned(),
+                        "--previous".to_owned(),
+                        previous.to_string_lossy().into_owned(),
+                        "--output-dir".to_owned(),
+                        global.output_dir.to_string_lossy().into_owned(),
+                        "--log-dir".to_owned(),
+                        global.log_dir.to_string_lossy().into_owned(),
+                        "--log-view".to_owned(),
+                        log_view.to_owned(),
+                        "--in-place".to_owned(),
+                        engine_name.to_owned(),
+                    ];
+                    arguments.extend(
+                        selected_targets
+                            .into_iter()
+                            .map(|path| path.to_string_lossy().into_owned()),
+                    );
+                    run_village_split_batch(arguments, true)?;
+                }
                 return Ok(());
             }
             "PT-7-2" => {
                 let Some(selected) = choose_source_files_or_folders(
                     "选择需要规范化机构名称的目标工作簿",
-                    NativeFileFilter::XlsxOnly,
+                    NativeFileFilter::ExcelWorkbooks,
                     input,
                     output,
                     allow_native_dialog,
@@ -6220,15 +6196,24 @@ where
                         )?;
                         continue;
                     }
-                    let accepted = match engine {
-                        Some(SpecialReportEngine::Openpyxl) => path.extension().is_some_and(|e| {
-                            let e = e.to_string_lossy().to_ascii_lowercase();
-                            matches!(e.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm")
-                        }),
-                        _ => path.extension().is_some_and(|e| {
-                            let e = e.to_string_lossy().to_ascii_lowercase();
-                            matches!(e.as_str(), "xlsx" | "xltx")
-                        }),
+                    let accepted = if path
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("xls"))
+                    {
+                        cfg!(windows)
+                    } else {
+                        match engine {
+                            Some(SpecialReportEngine::Openpyxl) => {
+                                path.extension().is_some_and(|e| {
+                                    let e = e.to_string_lossy().to_ascii_lowercase();
+                                    matches!(e.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm")
+                                })
+                            }
+                            _ => path.extension().is_some_and(|e| {
+                                let e = e.to_string_lossy().to_ascii_lowercase();
+                                matches!(e.as_str(), "xlsx" | "xltx")
+                            }),
+                        }
                     };
                     if accepted {
                         targets.push(path);
@@ -6238,29 +6223,22 @@ where
                     {
                         writeln!(
                             output,
-                            "[跳过] {}：旧版 .xls 不支持就地修改；请先用 4-4 格式转换另存为 .xlsx 后再处理。",
+                            "[跳过] {}：旧版 .xls 机构规范化需要 Windows Excel/WPS COM。",
                             display_path_for_user(&path)
                         )?;
                     } else {
                         writeln!(
                             output,
-                            "[跳过] {}：当前引擎不支持该格式（umya 仅 xlsx/xltx；openpyxl 支持 xlsx/xlsm/xltx/xltm）。",
+                            "[跳过] {}：当前 openpyxl 引擎不支持该格式。",
                             display_path_for_user(&path)
                         )?;
                     }
                 }
                 if targets.is_empty() {
-                    writeln!(output, "[提示] 没有可处理的 .xlsx 目标工作簿。")?;
+                    writeln!(output, "[提示] 没有可处理的 Excel 工作簿。")?;
                     return Ok(());
                 }
-                writeln!(
-                    output,
-                    "[就地模式] 将使用 {} 直接改写源工作簿中的机构名称。",
-                    match engine {
-                        Some(SpecialReportEngine::Openpyxl) => "openpyxl",
-                        _ => "umya-spreadsheet",
-                    }
-                )?;
+                writeln!(output, "[就地模式] .xls 使用 Excel/WPS COM；.xlsx 使用 Openpyxl，直接改写源工作簿中的机构名称。")?;
 
                 let mut arguments = vec![
                     "--config".to_owned(),
@@ -6268,10 +6246,7 @@ where
                     "--view".to_owned(),
                     log_view.to_owned(),
                     "--in-place".to_owned(),
-                    match engine {
-                        Some(SpecialReportEngine::Openpyxl) => "openpyxl".to_owned(),
-                        _ => "umya".to_owned(),
-                    },
+                    "auto".to_owned(),
                 ];
                 if log_view != "off" {
                     let nonce = SystemTime::now()
@@ -6290,14 +6265,6 @@ where
                     ]);
                 }
                 arguments.push("--apply".to_owned());
-                if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
-                    arguments.extend([
-                        "--capabilities".to_owned(),
-                        capabilities.to_string_lossy().into_owned(),
-                        "--platform".to_owned(),
-                        platform.to_owned(),
-                    ]);
-                }
                 arguments.extend(
                     targets
                         .into_iter()
@@ -6316,7 +6283,7 @@ where
                     return Ok(());
                 }
                 let Some(selected) = choose_source_files_or_folders(
-                    "选择要删除分机构表外资行的工作簿（直接修改原文件）",
+                    "选择要生成外发用副本的工作簿（删除分机构表外资行）",
                     NativeFileFilter::XlsxOnly,
                     input,
                     output,
@@ -6355,7 +6322,7 @@ where
                     writeln!(output, "[提示] 没有可处理的 .xlsx 工作簿。")?;
                     return Ok(());
                 }
-                writeln!(output, "[就地模式] 使用 umya 删除选中工作簿分机构表中的外资行；候选校验通过后备份并安全替换原文件。")?;
+                writeln!(output, "[副本模式] 使用 openpyxl 删除分机构表中的外资行，生成“(金融局)”副本；原工作簿保持不变。")?;
 
                 let mut arguments = vec![
                     "--config".to_owned(),
@@ -6383,7 +6350,7 @@ where
                         report_path.to_string_lossy().into_owned(),
                     ]);
                 }
-                arguments.extend(["--in-place".to_owned(), "umya".to_owned()]);
+                arguments.push("--create-copy".to_owned());
                 arguments.extend(
                     targets
                         .into_iter()
@@ -6434,7 +6401,7 @@ where
                 }
                 writeln!(
                     output,
-                    "[就地模式] 将校验 OOXML 页眉补丁，备份后安全替换选中的原工作簿。"
+                    "[就地模式] 优先使用 OOXML 定点补丁修改外汇页眉；仅遇到 OOXML 不支持的结构时回退到受保护的 Openpyxl，候选校验后安全替换原文件。"
                 )?;
                 let mut arguments = vec![
                     "--output-dir".to_owned(),
@@ -6444,7 +6411,7 @@ where
                     "--view".to_owned(),
                     log_view.to_owned(),
                 ];
-                arguments.push("--commit-target".to_owned());
+                arguments.extend(["--in-place".to_owned(), "openpyxl".to_owned()]);
                 arguments.extend(
                     targets
                         .into_iter()
@@ -6517,14 +6484,6 @@ where
                     "[就绪] 已加载 {} 条启用的工作表提取任务。",
                     tasks.len()
                 )?;
-                let full_sheet_tasks = tasks.iter().filter(|task| is_full_sheet_task(task)).count();
-                if full_sheet_tasks > 0 && capabilities.is_none() {
-                    writeln!(
-                        output,
-                        "[已中止] 配置中有 {full_sheet_tasks} 条整表提取任务；当前没有匹配的 ExcelModifier 能力文件与平台，未选择文件、未生成输出。"
-                    )?;
-                    return Ok(());
-                }
                 let Some(append_choice) = read_menu_choice(
                     input,
                     output,
@@ -6537,13 +6496,6 @@ where
                     append_choice.trim().to_ascii_lowercase().as_str(),
                     "y" | "yes" | "是"
                 );
-                if append_existing && (capabilities.is_none() || platform.is_none()) {
-                    writeln!(
-                        output,
-                        "[已中止] 追加到已存在的输出工作簿需要 --capabilities 与 --platform；未选择文件、未生成或修改输出。"
-                    )?;
-                    return Ok(());
-                }
                 let Some(selected) = choose_workbooks(
                     "选择要提取工作表数据的源文件（可多选）",
                     true,
@@ -6589,14 +6541,6 @@ where
                         output,
                         "[追加模式] 已明确选择向配置指定的已有输出工作簿追加工作表。"
                     )?;
-                }
-                if let (Some(capabilities), Some(platform)) = (capabilities, platform) {
-                    arguments.extend([
-                        "--capabilities".to_owned(),
-                        capabilities.to_string_lossy().into_owned(),
-                        "--platform".to_owned(),
-                        platform.to_owned(),
-                    ]);
                 }
                 arguments.extend(
                     sources
@@ -6647,21 +6591,10 @@ where
                 };
                 writeln!(
                     output,
-                    "[就地模式] {operation} 将使用 {} 直接改写本期工作簿；先出候选并校验，再按快照安全替换。",
-                    match engine {
-                        Some(SpecialReportEngine::Openpyxl) => "openpyxl",
-                        _ => "umya-spreadsheet",
-                    }
+                    "[就地模式] {operation}：.xls 使用 Excel/WPS COM 修改隔离候选，校验快照后备份并替换源文件；.xlsx 使用 Openpyxl 候选路径。"
                 )?;
                 run_rural_loan_menu(
-                    &current,
-                    &previous,
-                    global,
-                    log_view,
-                    capabilities,
-                    platform,
-                    quarterly,
-                    engine,
+                    &current, &previous, global, log_view, None, None, quarterly, engine,
                 )?;
                 return Ok(());
             }
@@ -6716,7 +6649,7 @@ where
     )
 }
 
-fn choose_single_xlsx_workbook<R, W>(
+fn choose_single_excel_workbook<R, W>(
     title: &str,
     input: &mut R,
     output: &mut W,
@@ -6729,7 +6662,7 @@ where
     let Some(mut selected) = choose_input_paths(
         title,
         false,
-        NativeFileFilter::XlsxOnly,
+        NativeFileFilter::ExcelWorkbooks,
         input,
         output,
         allow_native_dialog,
@@ -6738,17 +6671,20 @@ where
         return Ok(None);
     };
     if selected.len() != 1 {
-        writeln!(output, "[提示] 此步骤需要且只需要选择一个 .xlsx 工作簿。")?;
+        writeln!(
+            output,
+            "[提示] 此步骤需要且只需要选择一个 .xls 或 .xlsx 工作簿。"
+        )?;
         return Ok(None);
     }
     let path = selected.remove(0);
-    if !path
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
-    {
+    let supported = path.extension().is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("xls") || extension.eq_ignore_ascii_case("xlsx")
+    });
+    if !supported {
         writeln!(
             output,
-            "[跳过] {}：PT-7-1 当前只接受 .xlsx；未验收的格式请勿直接修改。",
+            "[跳过] {}：PT-7-1 当前只接受 .xls/.xlsx；未验收格式不执行修改。",
             display_path_for_user(&path)
         )?;
         return Ok(None);
@@ -6767,10 +6703,15 @@ where
     R: BufRead,
     W: Write,
 {
+    let file_filter = if feature_id == "PT-7-7" {
+        NativeFileFilter::ExcelWorkbooks
+    } else {
+        NativeFileFilter::XlsxOnly
+    };
     let Some(mut selected) = choose_input_paths(
         title,
         false,
-        NativeFileFilter::XlsxOnly,
+        file_filter,
         input,
         output,
         allow_native_dialog,
@@ -6781,18 +6722,25 @@ where
     if selected.len() != 1 {
         writeln!(
             output,
-            "[提示] {feature_id} 此步骤需要且只需要一个 .xlsx 工作簿。"
+            "[提示] {feature_id} 此步骤需要且只需要一个工作簿。5-7 接受 .xls/.xlsx；5-8 接受 .xlsx。"
         )?;
         return Ok(None);
     }
     let path = selected.remove(0);
-    if !path
+    let extension = path
         .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
-    {
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let supported = if feature_id == "PT-7-7" {
+        matches!(extension.as_str(), "xls" | "xlsx")
+    } else {
+        extension == "xlsx"
+    };
+    if !supported {
         writeln!(
             output,
-            "[跳过] {}：{feature_id} 当前只接受 .xlsx；请先显式转换，未验收格式不执行修改。",
+            "[跳过] {}：{feature_id} 当前格式不受支持；5-7 接受 .xls/.xlsx，5-8 暂只接受 .xlsx。",
             display_path_for_user(&path)
         )?;
         return Ok(None);
@@ -7680,7 +7628,7 @@ fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_jso
     let commit = replace_target_from_candidate(&candidate, &plan.target, expected_hash)
         .context("stage=target_commit")?;
     Ok(serde_json::json!({
-        "engine": "umya_spreadsheet",
+        "engine": "openpyxl_worker",
         "route": "direct_append",
         "candidate": candidate,
         "target_commit": &commit,
@@ -7696,7 +7644,7 @@ fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_jso
                 {
                     "name": "existing_workbook_candidate_and_validation",
                     "status": "succeeded",
-                    "engine": "umya_spreadsheet",
+                    "engine": "openpyxl",
                     "elapsed_ms": candidate_elapsed_ms
                 },
                 {
@@ -7722,11 +7670,6 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
             .as_ref()
             .context("append plan does not contain an edit plan")?;
         edit_plan.validate().context("stage=edit_plan_validation")?;
-        let capabilities = required_path(&options, "capabilities")?;
-        let platform = options
-            .values
-            .get("platform")
-            .context("--platform is required")?;
         let expected_target_hash = if commit_target {
             let expected = plan.target_sha256.as_deref().context(
                 "append plan has no target SHA-256; regenerate the plan before committing",
@@ -7750,7 +7693,10 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
         };
         let candidate_preexisted = plan.candidate.exists();
         let edit_started = Instant::now();
-        let execution = match apply_plan_with_capability_file(edit_plan, capabilities, platform) {
+        let execution = match pytools_core::inplace_edit::execute_candidate(
+            edit_plan,
+            pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
+        ) {
             Ok(execution) => execution,
             Err(error) => {
                 if !candidate_preexisted && plan.candidate.exists() {
@@ -8343,26 +8289,44 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
     let (create_copy, arguments) = extract_boolean_flag(arguments, "create-copy")?;
     let options = parse_cli_arguments(arguments)?;
     let in_place = options.values.get("in-place").cloned();
+    let capabilities = options.values.get("capabilities");
+    let platform = options.values.get("platform");
     let current = required_path(&options, "current")?;
     let previous = required_path(&options, "previous")?;
+    let current_extension = current
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let previous_extension = previous
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     anyhow::ensure!(
-        current
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-        "PT-7-1 current-period input currently supports .xlsx only"
+        current_extension == previous_extension
+            && matches!(current_extension.as_str(), "xls" | "xlsx"),
+        "PT-7-1 本期与去年同期工作簿必须都是 .xls 或都是 .xlsx"
     );
-    anyhow::ensure!(
-        previous
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-        "PT-7-1 prior-period input currently supports .xlsx only"
-    );
+    let legacy_xls_com = current_extension == "xls";
+    if legacy_xls_com {
+        anyhow::ensure!(
+            cfg!(windows),
+            "PT-7-1 的 .xls 路径需要 Windows Excel/WPS COM"
+        );
+        anyhow::ensure!(
+            in_place.as_deref() == Some("com"),
+            "PT-7-1 .xls 就地修改需要显式指定 --in-place com"
+        );
+        anyhow::ensure!(
+            !create_copy && !commit_target && capabilities.is_none(),
+            "PT-7-1 .xls COM 路径仅支持经快照保护的源文件就地修改"
+        );
+    }
     anyhow::ensure!(
         !options.positional.is_empty(),
         "provide at least one target workbook"
     );
-    let capabilities = options.values.get("capabilities");
-    let platform = options.values.get("platform");
     anyhow::ensure!(
         capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
@@ -8411,7 +8375,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
             display_path_for_user(&output_dir)
         )
     })?;
-    if emit_plan_files && !create_copy {
+    if emit_plan_files && !create_copy && !legacy_xls_com {
         fs::create_dir_all(&plan_dir).with_context(|| {
             format!("create plan directory {}", display_path_for_user(&plan_dir))
         })?;
@@ -8444,6 +8408,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         ..SummaryProgress::default()
     };
     let mut items = Vec::new();
+    let mut excel_com_runtime = pytools_core::conversion_engine::ConversionRuntime::default();
     for (index, input) in options.positional.iter().enumerate() {
         let display_name = input
             .file_name()
@@ -8480,15 +8445,195 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         );
         let file_started = Instant::now();
         let mut current_stage = "planning";
-        let candidate = unique_workbook_candidate(input, &output_dir, "village_split");
+        let candidate = if legacy_xls_com {
+            unique_workbook_candidate_preserving_extension(input, &output_dir, "village_split")
+        } else {
+            unique_workbook_candidate(input, &output_dir, "village_split")
+        };
         let plan_path = plan_dir.join(format!("target-{:04}.plan.json", index + 1));
         let item_result = (|| -> Result<serde_json::Value> {
+            let target_extension = input
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            anyhow::ensure!(
+                target_extension == current_extension,
+                "PT-7-1 目标格式 .{target_extension} 与参考工作簿格式 .{current_extension} 不一致"
+            );
+            if legacy_xls_com {
+                current_stage = "com_candidate_copy";
+                let expected_target_hash = sha256_file(input)?;
+                let expected_current_hash = sha256_file(&current)?;
+                let expected_previous_hash = sha256_file(&previous)?;
+                fs::copy(input, &candidate).with_context(|| {
+                    format!(
+                        "复制 .xls 候选 {} → {}",
+                        display_path_for_user(input),
+                        display_path_for_user(&candidate)
+                    )
+                })?;
+                let isolated_current = unique_workbook_candidate_preserving_extension(
+                    &current,
+                    &output_dir,
+                    "village_current_reference",
+                );
+                let isolated_previous = unique_workbook_candidate_preserving_extension(
+                    &previous,
+                    &output_dir,
+                    "village_previous_reference",
+                );
+                if let Err(error) = fs::copy(&current, &isolated_current) {
+                    let _ = remove_regular_candidate(&isolated_current);
+                    return Err(error).with_context(|| {
+                        format!(
+                            "为 Excel/WPS COM 隔离本期参考工作簿失败：{}",
+                            display_path_for_user(&current)
+                        )
+                    });
+                }
+                if let Err(error) = fs::copy(&previous, &isolated_previous) {
+                    let cleanup_error = remove_regular_candidate(&isolated_current).err();
+                    let error = anyhow::Error::from(error).context(format!(
+                        "为 Excel/WPS COM 隔离上期参考工作簿失败：{}",
+                        display_path_for_user(&previous)
+                    ));
+                    return Err(match cleanup_error {
+                        Some(cleanup_error) => {
+                            error.context(format!("本期参考副本清理也失败：{cleanup_error:#}"))
+                        }
+                        None => error,
+                    });
+                }
+                current_stage = "com_execution";
+                let com_result = excel_com_runtime.village_split_com(
+                    &isolated_current,
+                    &isolated_previous,
+                    &candidate,
+                );
+                let cleanup_current = remove_regular_candidate(&isolated_current);
+                let cleanup_previous = remove_regular_candidate(&isolated_previous);
+                let com_result = match com_result {
+                    Ok(result) => {
+                        cleanup_current.context("清理本期 COM 参考副本失败")?;
+                        cleanup_previous.context("清理上期 COM 参考副本失败")?;
+                        result
+                    }
+                    Err(error) => {
+                        let cleanup_error =
+                            cleanup_current.err().or_else(|| cleanup_previous.err());
+                        return Err(match cleanup_error {
+                            Some(cleanup_error) => error.context(format!(
+                                "stage=pywin32_com_village_split；参考副本清理也失败：{cleanup_error:#}"
+                            )),
+                            None => error.context("stage=pywin32_com_village_split"),
+                        });
+                    }
+                };
+                verify_planning_snapshot(&current, Some(&expected_current_hash))
+                    .context("本期参考工作簿在 COM 处理期间发生变化")?;
+                verify_planning_snapshot(&previous, Some(&expected_previous_hash))
+                    .context("去年同期参考工作簿在 COM 处理期间发生变化")?;
+                if com_result["matrix_empty"] == true {
+                    emit_village_split_event(
+                        &mut events,
+                        log_view,
+                        started,
+                        "com_execution",
+                        "no_changes",
+                        "COM 读取到的村镇银行参考数据为空；目标未提交",
+                        &progress,
+                        Some(file_started),
+                        &["pywin32", "Excel/WPS COM"],
+                        com_result["application"].as_str(),
+                        None,
+                    );
+                    return Ok(serde_json::json!({
+                        "input": input,
+                        "candidate": candidate,
+                        "output_copy": null,
+                        "plan_file": null,
+                        "status": "no_changes",
+                        "matched_sheets": 0,
+                        "changed_cells": 0,
+                        "warnings": ["COM 读取到的村镇银行参考数据为空，候选未提交"],
+                        "execution": com_result,
+                        "target_commit": null,
+                        "elapsed_ms": file_started.elapsed().as_millis(),
+                    }));
+                }
+                let filled_sheets = com_result["filled_sheets"].as_u64().unwrap_or_default();
+                let branch_sheets = com_result["branch_sheets"].as_u64().unwrap_or_default();
+                let skipped_sheets = com_result["skipped_sheets"].as_u64().unwrap_or_default();
+                emit_village_split_event(
+                    &mut events,
+                    log_view,
+                    started,
+                    "com_execution",
+                    "completed",
+                    format!(
+                        "COM 已处理分机构工作表：匹配 {filled_sheets} 个，跳过 {skipped_sheets} 个"
+                    ),
+                    &progress,
+                    Some(file_started),
+                    &["pywin32", "Excel/WPS COM"],
+                    com_result["application"].as_str(),
+                    None,
+                );
+                let commit = if filled_sheets > 0 {
+                    current_stage = "safe_commit";
+                    emit_village_split_event(
+                        &mut events,
+                        log_view,
+                        started,
+                        "safe_commit",
+                        "started",
+                        "正在校验源文件快照并安全提交 .xls 候选",
+                        &progress,
+                        None,
+                        &["pytools-core", "file-commit"],
+                        None,
+                        None,
+                    );
+                    verify_planning_snapshot(input, Some(&expected_target_hash))?;
+                    let commit =
+                        replace_target_from_candidate(&candidate, input, &expected_target_hash)
+                            .context("stage=target_commit")?;
+                    emit_village_split_event(
+                        &mut events,
+                        log_view,
+                        started,
+                        "safe_commit",
+                        "completed",
+                        "候选校验通过，已备份并安全替换 .xls 源工作簿",
+                        &progress,
+                        Some(file_started),
+                        &["pytools-core", "file-commit"],
+                        None,
+                        None,
+                    );
+                    Some(serde_json::to_value(commit)?)
+                } else {
+                    None
+                };
+                return Ok(serde_json::json!({
+                    "input": input,
+                    "candidate": candidate,
+                    "output_copy": null,
+                    "plan_file": null,
+                    "status": if commit.is_some() { "committed" } else { "no_changes" },
+                    "matched_sheets": filled_sheets,
+                    "changed_cells": filled_sheets * 18,
+                    "warnings": if branch_sheets == 0 { vec!["未发现名称包含“分机构”的工作表".to_owned()] } else if skipped_sheets > 0 { vec![format!("跳过 {skipped_sheets} 个无法识别或未找到村镇银行行的工作表")] } else { Vec::<String>::new() },
+                    "execution": com_result,
+                    "target_commit": commit,
+                    "elapsed_ms": file_started.elapsed().as_millis(),
+                }));
+            }
             if in_place.is_none() {
                 anyhow::ensure!(
-                    input
-                        .extension()
-                        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-                    "PT-7-1 target currently supports .xlsx only"
+                    target_extension == "xlsx",
+                    "PT-7-1 计划模式当前只接受 .xlsx"
                 );
             }
             // 就地模式同样需要规划期快照，用于提交前校验源未被改动。
@@ -8590,7 +8735,28 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
             } else {
                 serde_json::Value::String("no_changes".to_owned())
             };
-            let commit = if commit_target && report.plan.is_some() {
+            let commit = if in_place.is_some() && report.plan.is_some() {
+                current_stage = "safe_commit";
+                let commit_started = Instant::now();
+                let commit = execution
+                    .get("commit")
+                    .cloned()
+                    .context("in-place execution completed without a target commit report")?;
+                emit_village_split_event(
+                    &mut events,
+                    log_view,
+                    started,
+                    "safe_commit",
+                    "completed",
+                    "候选校验通过；已备份并安全替换所选源工作簿",
+                    &progress,
+                    Some(commit_started),
+                    &["pytools-core", "file-commit"],
+                    execution.get("engine").and_then(serde_json::Value::as_str),
+                    None,
+                );
+                Some(serde_json::to_value(commit)?)
+            } else if commit_target && report.plan.is_some() {
                 current_stage = "safe_commit";
                 let commit_started = Instant::now();
                 let commit = replace_target_from_candidate(
@@ -8613,7 +8779,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                     execution.get("engine").and_then(serde_json::Value::as_str),
                     None,
                 );
-                Some(commit)
+                Some(serde_json::to_value(commit)?)
             } else {
                 None
             };
@@ -8737,7 +8903,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         "matched_sheets": matched_sheets,
         "changed_cells": changed_cells,
         "created_copies": items.iter().filter(|item| item["status"] == "copy_created").count(),
-        "mode": if create_copy { "create_copy" } else if commit_target { "commit_target" } else if capabilities.is_some() { "candidate" } else { "plan_only" },
+        "mode": if create_copy { "create_copy" } else if in_place.is_some() { "in_place" } else if commit_target { "commit_target" } else if capabilities.is_some() { "candidate" } else { "plan_only" },
         "status": status,
         "plan_dir": plan_dir,
         "elapsed_ms": started.elapsed().as_millis(),
@@ -9079,13 +9245,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                 );
             }
             let started = Instant::now();
-            let output = match foreign_bank_copy_path(&input).and_then(|default_output| {
-                if create_copy {
-                    specialized_report_copy_path(&default_output, "PyTools_专用报表处理结果")
-                } else {
-                    Ok(default_output)
-                }
-            }) {
+            let output = match foreign_bank_copy_path(&input) {
                 Ok(path) => path,
                 Err(error) => {
                     result["failed_files"] =
@@ -9321,12 +9481,12 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                         candidate_plan.output = candidate.clone();
                         pytools_core::inplace_edit::execute_candidate(
                             &candidate_plan,
-                            pytools_core::inplace_edit::InPlaceEngine::Umya,
+                            pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
                         )?;
                         verify_planning_snapshot(&input, Some(&expected_source_hash))?;
                         create_target_from_candidate(&candidate, &output)?;
                         Ok(serde_json::json!({
-                            "engine": "umya-spreadsheet",
+                            "engine": "openpyxl",
                             "execution": "created_and_validated_workbook_copy",
                             "output": output,
                             "operation_count": plan.operations.len()
@@ -9381,7 +9541,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 "外发结果副本已生成，原工作簿保持不变。",
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["pytools-core", "excel-editor", "umya-spreadsheet"],
+                                &["pytools-core", "openpyxl"],
                                 actual_engine.as_deref(),
                                 None,
                             );
@@ -9408,7 +9568,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 ),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["pytools-core", "excel-editor", "umya-spreadsheet"],
+                                &["pytools-core", "openpyxl"],
                                 None,
                                 Some("execution"),
                             );
@@ -9436,7 +9596,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                         })
                     }
                 } else if in_place.is_some() {
-                    Ok(serde_json::json!({"engine": "umya-spreadsheet", "execution": "no_changes"}))
+                    Ok(serde_json::json!({"engine": "openpyxl", "execution": "no_changes"}))
                 } else {
                     copy_workbook_to_new_target(&input, &output).and_then(|report| {
                         serde_json::to_value(report).context("serialize copy result")
@@ -9474,7 +9634,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 },
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["ExcelModifier"],
+                                &["openpyxl"],
                                 actual_engine.as_deref(),
                                 None,
                             );
@@ -9501,7 +9661,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                                 ),
                                 &progress,
                                 Some(execution_started.elapsed().as_millis()),
-                                &["ExcelModifier"],
+                                &["openpyxl"],
                                 None,
                                 Some("execution"),
                             );
@@ -10019,26 +10179,45 @@ fn run_rural_loan_menu(
             "涉农贷款比上月修正",
         )
     };
+    let current_extension = current
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let previous_extension = previous
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let legacy_xls_com = !quarterly && current_extension == "xls" && previous_extension == "xls";
     anyhow::ensure!(
         matches!(log_view, "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
     );
     anyhow::ensure!(
-        capabilities.is_some() == platform.is_some(),
+        engine.is_some() || capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
     );
-    anyhow::ensure!(
-        current
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-        "{feature_id} current-period input currently supports .xlsx only"
-    );
-    anyhow::ensure!(
-        previous
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx")),
-        "{feature_id} prior-period input currently supports .xlsx only"
-    );
+    if quarterly {
+        anyhow::ensure!(
+            current_extension == "xlsx" && previous_extension == "xlsx",
+            "{feature_id} current and prior inputs currently support .xlsx only"
+        );
+    } else {
+        anyhow::ensure!(
+            current_extension == previous_extension
+                && matches!(current_extension.as_str(), "xls" | "xlsx"),
+            "{feature_id} 本期与上期工作簿必须均为 .xls 或均为 .xlsx"
+        );
+        if legacy_xls_com {
+            anyhow::ensure!(cfg!(windows), "5-7 的 .xls 路径需要 Windows Excel/WPS COM");
+            anyhow::ensure!(engine.is_some(), "5-7 的 .xls 路径需要就地安全提交模式");
+            anyhow::ensure!(
+                capabilities.is_none() && platform.is_none(),
+                "5-7 的 .xls COM 路径不接受 ExcelModifier capability"
+            );
+        }
+    }
 
     let run_started = Instant::now();
     let started_at = Local::now().to_rfc3339();
@@ -10079,8 +10258,12 @@ fn run_rural_loan_menu(
             format!("正在读取本期和上期工作簿并执行{operation_name}"),
             &progress,
             None,
-            &["Rust", "pytools-core", "excel-reader", "calamine"],
-            None,
+            if legacy_xls_com {
+                &["Python", "pywin32", "Excel/WPS COM"]
+            } else {
+                &["Rust", "pytools-core", "excel-reader", "calamine"]
+            },
+            legacy_xls_com.then_some("Excel/WPS COM"),
             None,
         ),
     );
@@ -10091,6 +10274,7 @@ fn run_rural_loan_menu(
     let mut output_copy = None::<PathBuf>;
     let mut candidate_cleanup_path = None::<PathBuf>;
     let mut target_commit = None::<serde_json::Value>;
+    let mut com_runtime = pytools_core::conversion_engine::ConversionRuntime::default();
     let result = (|| -> Result<serde_json::Value> {
         fs::create_dir_all(&global.output_dir).with_context(|| {
             format!(
@@ -10098,7 +10282,12 @@ fn run_rural_loan_menu(
                 display_path_for_user(&global.output_dir)
             )
         })?;
-        let candidate = unique_workbook_candidate(current, &global.output_dir, suffix);
+        let candidate = if legacy_xls_com {
+            let candidate_dir = current.parent().unwrap_or(&global.output_dir);
+            unique_workbook_candidate_preserving_extension(current, candidate_dir, suffix)
+        } else {
+            unique_workbook_candidate(current, &global.output_dir, suffix)
+        };
         candidate_cleanup_path = Some(candidate.clone());
         anyhow::ensure!(
             !rural_loan_paths_equal(current, &candidate)?,
@@ -10113,14 +10302,69 @@ fn run_rural_loan_menu(
         }
         let plan_path = plan_dir.join("rural-loan-adjustment.plan.json");
         let expected_target_hash = Some(sha256_file(current)?);
+        let expected_previous_hash = legacy_xls_com.then(|| sha256_file(previous)).transpose()?;
 
         phase_started = Instant::now();
-        let (report, summary) = if quarterly {
+        let (report, summary, com_result) = if legacy_xls_com {
+            phase = "com_candidate_copy";
+            fs::copy(current, &candidate).with_context(|| {
+                format!(
+                    "复制 5-7 .xls 候选 {} → {}",
+                    display_path_for_user(current),
+                    display_path_for_user(&candidate)
+                )
+            })?;
+            let isolated_previous = unique_workbook_candidate_preserving_extension(
+                previous,
+                candidate.parent().unwrap_or(&global.output_dir),
+                "rural_loan_previous_reference",
+            );
+            fs::copy(previous, &isolated_previous).with_context(|| {
+                format!(
+                    "为 Excel/WPS COM 隔离上期参考工作簿失败：{}",
+                    display_path_for_user(previous)
+                )
+            })?;
+            phase = "com_execution";
+            let response = com_runtime.rural_loan_com(&candidate, &isolated_previous);
+            let cleanup_previous = remove_regular_candidate(&isolated_previous);
+            let response = match response {
+                Ok(response) => {
+                    cleanup_previous.context("清理上期 COM 参考副本失败")?;
+                    response
+                }
+                Err(error) => match cleanup_previous {
+                    Ok(()) => return Err(error.context("stage=pywin32_com_rural_loan")),
+                    Err(cleanup_error) => {
+                        return Err(error.context(format!(
+                        "stage=pywin32_com_rural_loan；上期参考副本清理也失败：{cleanup_error:#}"
+                    )))
+                    }
+                },
+            };
+            verify_planning_snapshot(current, expected_target_hash.as_deref())
+                .context("本期工作簿在 COM 处理期间发生变化")?;
+            verify_planning_snapshot(previous, expected_previous_hash.as_deref())
+                .context("上期工作簿在 COM 处理期间发生变化")?;
+            let summary = response
+                .get("summary")
+                .cloned()
+                .context("5-7 COM worker 未返回业务统计")?;
+            let report = pytools_core::batch_ops::PlanBuildReport {
+                input: current.to_path_buf(),
+                output: candidate.clone(),
+                matched_sheets: 2,
+                changed_cells: response["changed_cells"].as_u64().unwrap_or_default() as usize,
+                plan: None,
+                warnings: Vec::new(),
+            };
+            (report, summary, Some(response))
+        } else if quarterly {
             let (report, summary) = build_quarterly_rural_loan_plan(current, previous, &candidate)?;
-            (report, serde_json::to_value(summary)?)
+            (report, serde_json::to_value(summary)?, None)
         } else {
             let (report, summary) = build_rural_loan_plan(current, previous, &candidate)?;
-            (report, serde_json::to_value(summary)?)
+            (report, serde_json::to_value(summary)?, None)
         };
         if let Some(expected_hash) = expected_target_hash.as_deref() {
             verify_planning_snapshot(current, Some(expected_hash))?;
@@ -10172,9 +10416,23 @@ fn run_rural_loan_menu(
             new_rural_loan_menu_event(
                 &run_started,
                 feature_id,
-                "planning",
+                if legacy_xls_com {
+                    "com_execution"
+                } else {
+                    "planning"
+                },
                 "completed",
-                if quarterly {
+                if legacy_xls_com {
+                    format!(
+                        "Excel/WPS COM 已完成 .xls 业务处理：匹配机构 {} 个；{}",
+                        matched_entities,
+                        if consistent {
+                            "分地区总数一致"
+                        } else {
+                            "分地区总数不一致"
+                        }
+                    )
+                } else if quarterly {
                     format!(
                         "季度计算完成：地区 {} 个、匹配机构 {} 个；{}",
                         summary["regions"].as_array().map_or(0, Vec::len),
@@ -10198,24 +10456,81 @@ fn run_rural_loan_menu(
                 },
                 &progress,
                 Some(plan_elapsed_ms),
-                &["Rust", "pytools-core", "excel-reader", "calamine"],
-                Some("calamine"),
+                if legacy_xls_com {
+                    &["Python", "pywin32", "Excel/WPS COM"]
+                } else {
+                    &["Rust", "pytools-core", "excel-reader", "calamine"]
+                },
+                if legacy_xls_com {
+                    com_result
+                        .as_ref()
+                        .and_then(|response| response["application"].as_str())
+                        .or(Some("Excel/WPS COM"))
+                } else {
+                    Some("calamine")
+                },
                 None,
             ),
         );
 
         let mut execution = serde_json::json!("no_changes");
-        if let Some(plan) = report.plan.as_ref() {
-            if let Some(engine) = engine {
+        if legacy_xls_com {
+            let response = com_result.as_ref().context("5-7 COM 结果缺失")?;
+            if report.changed_cells > 0 {
+                phase = "safe_commit";
+                phase_started = Instant::now();
+                emit_rural_loan_menu_event(
+                    log_view,
+                    &mut events,
+                    new_rural_loan_menu_event(
+                        &run_started,
+                        feature_id,
+                        "safe_commit",
+                        "started",
+                        "正在校验源文件快照并备份后安全替换 .xls 本期工作簿",
+                        &progress,
+                        None,
+                        &["Rust", "pytools-core", "file-commit"],
+                        None,
+                        None,
+                    ),
+                );
+                let expected_hash = expected_target_hash
+                    .as_deref()
+                    .context("missing current-period planning snapshot")?;
+                verify_planning_snapshot(current, Some(expected_hash))?;
+                let commit = replace_target_from_candidate(&candidate, current, expected_hash)
+                    .context("stage=target_commit")?;
+                target_commit = Some(serde_json::to_value(commit)?);
+                execution = serde_json::json!({
+                    "mode": "in_place",
+                    "engine": "pywin32_com",
+                    "application": response["application"],
+                    "changed_cells": report.changed_cells,
+                });
+                emit_rural_loan_menu_event(
+                    log_view,
+                    &mut events,
+                    new_rural_loan_menu_event(
+                        &run_started,
+                        feature_id,
+                        "safe_commit",
+                        "completed",
+                        "COM 候选已通过快照校验，已备份并安全替换本期 .xls 工作簿",
+                        &progress,
+                        Some(phase_started.elapsed().as_millis()),
+                        &["Rust", "pytools-core", "file-commit"],
+                        Some("pywin32 Excel/WPS COM"),
+                        None,
+                    ),
+                );
+            }
+        } else if let Some(plan) = report.plan.as_ref() {
+            if engine.is_some() {
                 // 就地修改：直接改写本期工作簿（候选校验 + 快照替换）。
                 phase = "in_place_execution";
                 phase_started = Instant::now();
-                let in_place_engine = match engine {
-                    SpecialReportEngine::Openpyxl => {
-                        pytools_core::inplace_edit::InPlaceEngine::Openpyxl
-                    }
-                    SpecialReportEngine::Umya => pytools_core::inplace_edit::InPlaceEngine::Umya,
-                };
+                let in_place_engine = pytools_core::inplace_edit::InPlaceEngine::Openpyxl;
                 emit_rural_loan_menu_event(
                     log_view,
                     &mut events,
@@ -10465,6 +10780,7 @@ fn run_rural_loan_menu(
 
     if result.is_err() && log_view != "off" {
         let error_type = match phase {
+            "com_execution" => "excel_com_operation_error",
             "engine_execution" => "excel_modifier_error",
             "safe_commit" => "target_commit_error",
             _ => "rural_loan_planning_error",
@@ -10516,6 +10832,7 @@ fn run_rural_loan_menu(
             phase,
             match phase {
                 "safe_commit" => "OUTPUT_COMMIT_FAILED",
+                "com_execution" => "EXCEL_COM_OPERATION_FAILED",
                 "engine_execution" => "EXCEL_EDIT_FAILED",
                 _ => "RURAL_LOAN_FAILED",
             },
@@ -11316,7 +11633,8 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         .get("log-dir")
         .map(PathBuf::from)
         .unwrap_or_else(pytools_core::run_logging::default_log_dir);
-    let plan_dir = if create_copy || (commit_target && capabilities.is_none()) {
+    let plan_dir = if create_copy || in_place.is_some() || (commit_target && capabilities.is_none())
+    {
         None
     } else {
         Some(
@@ -11548,9 +11866,16 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                         create_copy,
                     )?
                 } else if in_place.is_some() {
-                    // 就地修改：直接改写源工作簿（execute_optional_plan 读取 --in-place）。
                     current_stage = "in_place_execution";
-                    execute_optional_plan(&options, Some(plan))?
+                    execute_fx_header_in_place(
+                        input,
+                        &candidate,
+                        plan,
+                        expected_target_hash
+                            .as_deref()
+                            .context("source snapshot missing before header modification")?,
+                        &options,
+                    )?
                 } else {
                     execute_optional_plan(&options, Some(plan))?
                 };
@@ -11563,12 +11888,22 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                     "completed",
                     if create_copy {
                         "已通过 OOXML 页眉补丁校验并生成独立副本"
+                    } else if in_place.is_some() {
+                        if engine == Some("ooxml_patch") {
+                            "已通过 OOXML 页眉定点补丁校验候选"
+                        } else {
+                            "OOXML 定点补丁不适用，已由 Openpyxl 保护回退并校验候选"
+                        }
                     } else {
                         "已通过 ExcelModifier 修改并验证候选工作簿"
                     },
                     &progress,
                     Some(execution_started),
-                    &["pytools-core", "excel-editor", "ooxml-patch"],
+                    if engine == Some("ooxml_patch") {
+                        &["pytools-core", "ooxml-patch"][..]
+                    } else {
+                        &["pytools-core", "excel-editor", "openpyxl_worker"][..]
+                    },
                     engine,
                     None,
                 );
@@ -11577,7 +11912,26 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                 serde_json::Value::String("no_changes".to_owned())
             };
 
-            let commit = if commit_target && inspection.plan.is_some() {
+            let commit = if in_place.is_some() && inspection.plan.is_some() {
+                let commit = execution
+                    .get("commit")
+                    .cloned()
+                    .context("in-place FX header execution returned no safe-commit report")?;
+                emit_fx_header_event(
+                    &mut events,
+                    view,
+                    run_started,
+                    "safe_commit",
+                    "completed",
+                    "页眉修改候选已校验并安全替换原工作簿",
+                    &progress,
+                    Some(file_started),
+                    &["pytools-core", "file-commit"],
+                    execution.get("engine").and_then(serde_json::Value::as_str),
+                    None,
+                );
+                Some(serde_json::to_value(commit)?)
+            } else if commit_target && inspection.plan.is_some() {
                 current_stage = "safe_commit";
                 let commit_started = Instant::now();
                 let commit = replace_target_from_candidate(
@@ -11600,7 +11954,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                     execution.get("engine").and_then(serde_json::Value::as_str),
                     None,
                 );
-                Some(commit)
+                Some(serde_json::to_value(commit)?)
             } else {
                 None
             };
@@ -11612,7 +11966,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
             };
             Ok(serde_json::json!({
                 "input": input,
-                "candidate": if inspection.plan.is_some() && !create_copy { Some(&candidate) } else { None },
+                "candidate": if inspection.plan.is_some() && !create_copy && in_place.is_none() { Some(&candidate) } else { None },
                 "output_copy": output_copy,
                 "plan_file": plan_file,
                 "status": if commit.is_some() {
@@ -11632,7 +11986,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
             }))
         })();
 
-        let item_result = if create_copy || commit_target {
+        let item_result = if create_copy || commit_target || in_place.is_some() {
             match (item_result, remove_regular_candidate(&candidate)) {
                 (Ok(item), Ok(())) => Ok(item),
                 (Err(error), Ok(())) => Err(error),
@@ -11747,7 +12101,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         "run_id": run_id,
         "started_at": started_at,
         "status": status,
-        "mode": if create_copy { "create_copy" } else if commit_target { "commit_target" } else { "plan_only" },
+        "mode": if in_place.is_some() { "in_place" } else if create_copy { "create_copy" } else if commit_target { "commit_target" } else { "plan_only" },
         "files": total_files,
         "completed_files": completed_files,
         "failed_files": failed_files,
@@ -11921,6 +12275,35 @@ fn create_fx_header_copy(
         "package_parts": written.package_parts,
         "publication": publication,
     }))
+}
+
+fn execute_fx_header_in_place(
+    input: &Path,
+    candidate: &Path,
+    plan: &excel_editor::ExcelEditPlan,
+    expected_source_hash: &str,
+    options: &ParsedCli,
+) -> Result<serde_json::Value> {
+    match create_fx_header_copy(input, candidate, plan, expected_source_hash, false) {
+        Ok(mut execution) => {
+            let commit = replace_target_from_candidate(candidate, input, expected_source_hash)
+                .context("safely replace source after validating OOXML header patch")?;
+            execution["execution"] = serde_json::json!("validated_ooxml_patch_and_safe_replace");
+            execution["commit"] = serde_json::to_value(commit)?;
+            Ok(execution)
+        }
+        Err(ooxml_error) => {
+            remove_regular_candidate(candidate)
+                .context("remove rejected OOXML header candidate before Openpyxl fallback")?;
+            verify_planning_snapshot(input, Some(expected_source_hash))
+                .context("source changed after OOXML header route; refusing fallback")?;
+            let mut fallback = execute_optional_plan(options, Some(plan))
+                .with_context(|| format!("OOXML header patch failed ({ooxml_error:#}); protected Openpyxl fallback also failed"))?;
+            fallback["fallback_reason"] = serde_json::json!(format!("{ooxml_error:#}"));
+            fallback["route"] = serde_json::json!("openpyxl_protected_fallback");
+            Ok(fallback)
+        }
+    }
 }
 
 fn emit_fx_header_event(
@@ -12100,12 +12483,11 @@ fn execute_optional_plan(
     let Some(plan) = plan else {
         return Ok(serde_json::json!("no_changes"));
     };
-    // 菜单 5 的就地修改：--in-place <openpyxl|umya>，直接改写目标工作簿本身。
+    // 既有工作簿就地修改统一使用 Openpyxl；旧的 umya 参数只作为兼容别名。
     if let Some(engine_name) = options.values.get("in-place") {
         let engine = match engine_name.as_str() {
-            "openpyxl" => pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
-            "umya" => pytools_core::inplace_edit::InPlaceEngine::Umya,
-            other => anyhow::bail!("--in-place 仅接受 openpyxl 或 umya，收到 {other:?}"),
+            "openpyxl" | "umya" => pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
+            other => anyhow::bail!("--in-place 仅接受 openpyxl，收到 {other:?}"),
         };
         let outcome = pytools_core::inplace_edit::execute_in_place(plan, engine)?;
         return Ok(serde_json::json!({
@@ -12156,25 +12538,10 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         matches!(log_view, "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
     );
-    let capabilities = options.values.get("capabilities").map(PathBuf::from);
-    let platform = options.values.get("platform");
-    anyhow::ensure!(
-        capabilities.is_some() == platform.is_some(),
-        "--capabilities 和 --platform 必须同时指定"
-    );
     let mut unified =
         UnifiedRunSession::new(&log_dir, "PT-4-5", "按配置修改 Sheet 名", log_view, None);
     unified.set_inputs(&options.positional, None);
-    let result = match (&capabilities, platform) {
-        (Some(capabilities), Some(platform)) => run_batch_sheet_rename_candidate(
-            &config,
-            &options.positional,
-            recursive,
-            capabilities,
-            platform,
-        ),
-        _ => run_batch_sheet_rename_openpyxl(&config, &options.positional, recursive),
-    };
+    let result = run_batch_sheet_rename(&config, &options.positional, recursive);
     let report = match result {
         Ok(report) => report,
         Err(error) => {
@@ -12204,12 +12571,19 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         };
         let code = (status == pytools_core::run_logging::FileStatus::Failed)
             .then_some("SHEET_RENAME_FAILED");
+        let detail = item
+            .reason
+            .clone()
+            .unwrap_or_else(|| match item.engine.as_deref() {
+                Some(engine) => format!("{}（引擎：{}）", item.status, engine),
+                None => item.status.clone(),
+            });
         unified.discovered_file_event(
             index + 1,
             &item.input,
             status,
             "sheet_rename",
-            item.reason.as_deref().unwrap_or(&item.status),
+            &detail,
             code,
             None,
         );
@@ -15269,38 +15643,218 @@ fn run_wide_summary_cli_report(
     }
 }
 
-/// 读取 umya 单元格的显示文本（用于表头比对；数值按整数/小数文本，错误值取显示）。
-fn umya_cell_display(sheet: &umya_spreadsheet::Worksheet, column: u32, row: u32) -> String {
-    let mut letters = String::new();
-    let mut rest = column;
-    while rest > 0 {
-        letters.insert(0, (b'A' + ((rest - 1) % 26) as u8) as char);
-        rest = (rest - 1) / 26;
+fn wide_dump_used_bounds(sheet: &excel_reader::SheetDump) -> (u32, u32) {
+    let (mut max_row, mut max_column) = (0usize, 0usize);
+    for address in sheet.values.keys().chain(sheet.formulas.keys()) {
+        if let Some((row, column)) = parse_wide_a1(address) {
+            max_row = max_row.max(row);
+            max_column = max_column.max(column);
+        }
     }
-    let address = format!("{letters}{row}");
-    sheet
-        .get_cell(address.as_str())
-        .map(|cell| cell.get_raw_value().to_string())
-        .unwrap_or_default()
-        .trim()
-        .to_owned()
+    (max_column as u32, max_row as u32)
 }
 
-/// umya 无通用 set_raw_value：按变体写入；富文本/懒加载/错误值按显示文本落盘。
-fn set_umya_raw_value(cell: &mut umya_spreadsheet::Cell, raw: &umya_spreadsheet::CellRawValue) {
-    use umya_spreadsheet::CellRawValue;
-    match raw {
-        CellRawValue::Numeric(number) => {
-            cell.set_value_number(*number);
+fn wide_dump_cell_display(sheet: &excel_reader::SheetDump, column: u32, row: u32) -> String {
+    let address = pytools_core::rule_engine::cell_address(row as usize, column as usize);
+    let Some(value) = sheet.values.get(&address) else {
+        return sheet
+            .formulas
+            .get(&address)
+            .map(|formula| format!("={formula}"))
+            .unwrap_or_default();
+    };
+    match value.get("type").and_then(serde_json::Value::as_str) {
+        Some("number" | "integer" | "datetime_serial") => value
+            .get("value")
+            .and_then(serde_json::Value::as_f64)
+            .map(|number| {
+                if number.fract() == 0.0 {
+                    format!("{number:.0}")
+                } else {
+                    number.to_string()
+                }
+            })
+            .unwrap_or_default(),
+        Some("boolean") => value
+            .get("value")
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        _ => value
+            .get("value")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+    }
+}
+
+fn parse_wide_a1(address: &str) -> Option<(usize, usize)> {
+    let split = address
+        .char_indices()
+        .find_map(|(index, character)| character.is_ascii_digit().then_some(index))?;
+    let (letters, digits) = address.split_at(split);
+    if letters.is_empty()
+        || !letters
+            .chars()
+            .all(|character| character.is_ascii_alphabetic())
+    {
+        return None;
+    }
+    let column = letters.chars().try_fold(0usize, |value, character| {
+        value
+            .checked_mul(26)?
+            .checked_add(character.to_ascii_uppercase() as usize - 'A' as usize + 1)
+    })?;
+    Some((digits.parse().ok()?, column))
+}
+
+/// Append selected rows from the Rust-built 1-1 summary workbook to an
+/// existing target through the Openpyxl worker, then publish with a verified
+/// snapshot and backup. The source target is never edited in place by Python.
+fn commit_wide_summary_existing_target_openpyxl(
+    summary_path: &Path,
+    target: &Path,
+    expected_hash: &str,
+    summary_sheet: &str,
+    target_sheet: &str,
+    summary_max_col: u32,
+    write_start_row: u32,
+    include_header: bool,
+    create_sheet: bool,
+    kept_rows: &[u32],
+) -> Result<()> {
+    use excel_editor::{
+        EditOperation, ExcelEditPlan, PreservationRequirement, RangeStyleMode, WorkbookFormat,
+    };
+
+    anyhow::ensure!(summary_max_col > 0, "汇总工作表没有可写入的列");
+    let profile = excel_editor::inspect_xlsx_profile(target)
+        .with_context(|| format!("检查既有目标工作簿失败：{}", target.display()))?;
+    anyhow::ensure!(
+        profile.inventory_complete,
+        "目标工作簿结构清单不完整，拒绝使用 openpyxl 修改"
+    );
+    let mut operations = Vec::new();
+    if create_sheet {
+        operations.push(EditOperation::CreateSheet {
+            name: target_sheet.to_owned(),
+        });
+    }
+    let mut destination_row = write_start_row;
+    let mut push_import = |source_start: u32,
+                           source_end: u32,
+                           destination_start: u32|
+     -> Result<()> {
+        let source_start_cell = pytools_core::rule_engine::cell_address(source_start as usize, 1);
+        let source_end_cell =
+            pytools_core::rule_engine::cell_address(source_end as usize, summary_max_col as usize);
+        operations.push(EditOperation::ImportRange {
+            source_workbook: summary_path.to_path_buf(),
+            source_sheet: summary_sheet.to_owned(),
+            source_range: format!("{source_start_cell}:{source_end_cell}"),
+            target_sheet: target_sheet.to_owned(),
+            target_start: format!("A{destination_start}"),
+            copy_values: true,
+            copy_formulas: true,
+            style_mode: RangeStyleMode::Full,
+            copy_comments: false,
+            copy_merges: false,
+            copy_row_heights: false,
+            copy_column_widths: false,
+            copy_row_hidden: false,
+            copy_column_hidden: false,
+            copy_outline_levels: false,
+            copy_all_row_dimensions: false,
+            copy_all_column_dimensions: false,
+            materialize_blank_cells: false,
+            hide_zero: false,
+        });
+        Ok(())
+    };
+    if include_header {
+        push_import(1, 1, destination_row)?;
+        destination_row += 1;
+    }
+    let mut rows = kept_rows.iter().copied();
+    if let Some(mut range_start) = rows.next() {
+        let mut range_end = range_start;
+        for row in rows {
+            if row == range_end + 1 {
+                range_end = row;
+                continue;
+            }
+            push_import(range_start, range_end, destination_row)?;
+            destination_row += range_end - range_start + 1;
+            range_start = row;
+            range_end = row;
         }
-        CellRawValue::Bool(value) => {
-            cell.set_value_bool(*value);
-        }
-        CellRawValue::Empty => {}
-        other => {
-            cell.set_value_string(other.to_string());
+        push_import(range_start, range_end, destination_row)?;
+    }
+    drop(push_import);
+    anyhow::ensure!(!operations.is_empty(), "目标追加计划没有实际写入区域");
+
+    let plan = ExcelEditPlan {
+        request_id: format!(
+            "rusttools-1-1-openpyxl-{}",
+            target.file_stem().unwrap_or_default().to_string_lossy()
+        ),
+        input: target.to_path_buf(),
+        output: target.to_path_buf(),
+        format: WorkbookFormat::Xlsx,
+        workbook: profile,
+        operations,
+        preserve: std::collections::BTreeSet::from([
+            PreservationRequirement::CellValuesAndTypes,
+            PreservationRequirement::FormulaText,
+            PreservationRequirement::Styles,
+            PreservationRequirement::CommentsAndPositions,
+            PreservationRequirement::MergedRanges,
+            PreservationRequirement::ConditionalFormatting,
+            PreservationRequirement::DataValidations,
+            PreservationRequirement::DefinedNames,
+            PreservationRequirement::RowAndColumnDimensions,
+            PreservationRequirement::PageSettings,
+            PreservationRequirement::HeaderFooterText,
+            PreservationRequirement::Relationships,
+            PreservationRequirement::SheetIdentityAndOrder,
+        ]),
+        drop_allowed: Default::default(),
+    };
+    plan.validate().context("校验 1-1 Openpyxl 追加计划失败")?;
+    verify_planning_snapshot(target, Some(expected_hash))
+        .context("目标工作簿在规划期间发生变化，未执行追加")?;
+
+    let candidate = wide_target_candidate_path(target)?;
+    let mut plan = plan;
+    plan.output = candidate.path().to_path_buf();
+    plan.validate().context("校验 1-1 Openpyxl 候选路径失败")?;
+    pytools_core::inplace_edit::execute_candidate(
+        &plan,
+        pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
+    )
+    .context("openpyxl 生成并校验目标候选文件失败")?;
+    replace_target_from_candidate(candidate.path(), target, expected_hash)
+        .context("校验并安全替换目标工作簿失败")?;
+    Ok(())
+}
+
+fn wide_target_candidate_path(target: &Path) -> Result<TemporaryFile> {
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let stem = target.file_stem().unwrap_or_default().to_string_lossy();
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    for index in 0..1000 {
+        let path = parent.join(format!(
+            ".{stem}.rusttools-wide-{}-{stamp}-{index}.xlsx",
+            std::process::id()
+        ));
+        if !path.exists() {
+            return Ok(TemporaryFile::new(path));
         }
     }
+    bail!("无法为目标工作簿分配临时候选路径：{}", target.display())
 }
 
 fn execute_wide_summary_target_writes(
@@ -15314,8 +15868,8 @@ fn execute_wide_summary_target_writes(
     feature_id: &str,
     events: &mut Vec<WideSummaryRunEvent>,
 ) -> (Vec<serde_json::Value>, String) {
-    // 先生成候选文件；对既有目标使用快照和备份保护后再提交。
-    use umya_spreadsheet as umya;
+    // Calamine reads source/target values; Openpyxl edits existing targets;
+    // Rust XlsxWriter creates new targets.
     let stage_started = Instant::now();
     let total_inputs = events
         .last()
@@ -15347,7 +15901,7 @@ fn execute_wide_summary_target_writes(
             format!("没有可写入的目标：{} 条规则启用了目标写入；请检查目标工作簿路径和目标工作表是否填写，汇总文件已生成", enabled),
             Some(stage_started.elapsed().as_millis()),
             0,
-            &["pytools-core", "umya-spreadsheet"],
+            &["pytools-core"],
             None,
             Some("no_intermediate_target_configured"),
         );
@@ -15357,7 +15911,7 @@ fn execute_wide_summary_target_writes(
         emit_wide_summary_event(_log_view, events, event);
         return (Vec::new(), "not_configured".to_owned());
     }
-    let mut summary_book = match umya::reader::xlsx::read(summary_path) {
+    let summary_book = match excel_reader::read_workbook(summary_path) {
         Ok(book) => book,
         Err(error) => {
             let mut event = new_wide_summary_cli_event(
@@ -15373,7 +15927,7 @@ fn execute_wide_summary_target_writes(
                 ),
                 Some(stage_started.elapsed().as_millis()),
                 0,
-                &["pytools-core", "umya-spreadsheet"],
+                &["pytools-core", "calamine"],
                 None,
                 Some("target_write_error"),
             );
@@ -15423,7 +15977,7 @@ fn execute_wide_summary_target_writes(
                     message.clone(),
                     Some(stage_started.elapsed().as_millis()),
                     0,
-                    &["pytools-core", "umya-spreadsheet"],
+                    &["pytools-core"],
                     None,
                     Some("target_folder_missing"),
                 );
@@ -15468,9 +16022,9 @@ fn execute_wide_summary_target_writes(
         } else {
             None
         };
-        let mut book = if existed {
-            match umya::reader::xlsx::read(target) {
-                Ok(book) => book,
+        let target_book = if existed {
+            match excel_reader::read_workbook(target) {
+                Ok(book) => Some(book),
                 Err(error) => {
                     any_failed = true;
                     let message = format!("打开既有目标工作簿失败：{error:#}");
@@ -15484,7 +16038,7 @@ fn execute_wide_summary_target_writes(
                         format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                         Some(stage_started.elapsed().as_millis()),
                         0,
-                        &["pytools-core", "umya-spreadsheet"],
+                        &["pytools-core", "calamine"],
                         None,
                         Some("target_write_error"),
                     );
@@ -15499,9 +16053,13 @@ fn execute_wide_summary_target_writes(
                 }
             }
         } else {
-            umya::new_file()
+            None
         };
-        let existed_sheet = book.get_sheet_by_name(&target_sheet_name).is_ok();
+        let existed_sheet = target_book.as_ref().is_some_and(|book| {
+            book.sheets
+                .iter()
+                .any(|sheet| sheet.name == target_sheet_name)
+        });
         // 每条规则只能写入对应的汇总工作表；名称冲突时拒绝猜测。
         let summary_sheet_name = pytools_core::sheet_extract::sanitize_sheet_name(&rule.name);
         let ambiguous = rules
@@ -15512,7 +16070,12 @@ fn execute_wide_summary_target_writes(
             })
             .count()
             > 1;
-        if ambiguous || summary_book.get_sheet_by_name(&summary_sheet_name).is_err() {
+        if ambiguous
+            || !summary_book
+                .sheets
+                .iter()
+                .any(|sheet| sheet.name == summary_sheet_name)
+        {
             any_failed = true;
             let mut event = new_wide_summary_cli_event(
                 events,
@@ -15524,7 +16087,7 @@ fn execute_wide_summary_target_writes(
                 "汇总工作表不存在或名称不唯一；未执行写入".to_owned(),
                 Some(stage_started.elapsed().as_millis()),
                 0,
-                &["pytools-core", "umya-spreadsheet"],
+                &["pytools-core", "calamine"],
                 None,
                 Some("summary_sheet_missing"),
             );
@@ -15539,10 +16102,12 @@ fn execute_wide_summary_target_writes(
             }));
             continue;
         }
-        let (summary_max_col, summary_max_row) = summary_book
-            .get_sheet_by_name(&summary_sheet_name)
-            .expect("summary sheet resolved above")
-            .get_highest_column_and_row();
+        let summary_sheet = summary_book
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == summary_sheet_name)
+            .expect("summary sheet resolved above");
+        let (summary_max_col, summary_max_row) = wide_dump_used_bounds(summary_sheet);
 
         // 既有工作表：完全空白→视为待填充，直接写入表头+数据；
         // 否则先比对表头（列数 + 每列文本）：一致→在末尾追加数据行；
@@ -15551,12 +16116,17 @@ fn execute_wide_summary_target_writes(
         let mut blank_existing_sheet = false;
         let (write_start_row, _first_source_row, mode) = if existed_sheet {
             let (target_max_col, target_max_row, mismatch) = {
-                let target_ws = book
-                    .get_sheet_by_name(&target_sheet_name)
+                let target_ws = target_book
+                    .as_ref()
+                    .and_then(|book| {
+                        book.sheets
+                            .iter()
+                            .find(|sheet| sheet.name == target_sheet_name)
+                    })
                     .expect("target sheet resolved above");
-                let (target_max_col, target_max_row) = target_ws.get_highest_column_and_row();
+                let (target_max_col, target_max_row) = wide_dump_used_bounds(target_ws);
                 if target_max_col == 0 || target_max_row == 0 {
-                    // umya 对无任何单元格的表返回 (0, 0)：完全空白，视为待填充。
+                    // 空白目标工作表视为待填充。
                     (0u32, 0u32, None)
                 } else {
                     let mut mismatch = None;
@@ -15566,12 +16136,8 @@ fn execute_wide_summary_target_writes(
                         ));
                     } else {
                         for column in 1..=summary_max_col {
-                            let expected = umya_cell_display(target_ws, column, 1);
-                            let actual = summary_book
-                                .get_sheet_by_name(&summary_sheet_name)
-                                .ok()
-                                .map(|sheet| umya_cell_display(sheet, column, 1))
-                                .unwrap_or_default();
+                            let expected = wide_dump_cell_display(target_ws, column, 1);
+                            let actual = wide_dump_cell_display(summary_sheet, column, 1);
                             if expected != actual {
                                 mismatch = Some(format!(
                                     "第 {column} 列表头不同：目标 {expected:?}，汇总 {actual:?}"
@@ -15599,7 +16165,7 @@ fn execute_wide_summary_target_writes(
                     format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                     Some(stage_started.elapsed().as_millis()),
                     0,
-                    &["pytools-core", "umya-spreadsheet"],
+                    &["pytools-core", "calamine"],
                     None,
                     Some("target_header_mismatch"),
                 );
@@ -15624,7 +16190,6 @@ fn execute_wide_summary_target_writes(
                 (target_max_row + 1, 2u32, "表头一致追加")
             }
         } else {
-            let _ = book.new_sheet(target_sheet_name.clone());
             (1u32, 1u32, "新建工作表写入")
         };
         // 追加语义仅在“既有非空白工作表”上成立；新表/空白表都由本次写入表头。
@@ -15632,11 +16197,8 @@ fn execute_wide_summary_target_writes(
 
         // 对齐旧 Python：写入前先做两级去重——键列默认“数据日期+集合表头+行头路径/首个动态列”，
         // 可由规则“目标去重列”显式指定；批内重复行与目标既有行都不再写入。
-        let summary_ws_for_dedup = summary_book
-            .get_sheet_by_name(&summary_sheet_name)
-            .expect("summary sheet resolved above");
         let summary_headers: Vec<String> = (1..=summary_max_col)
-            .map(|column| umya_cell_display(summary_ws_for_dedup, column, 1))
+            .map(|column| wide_dump_cell_display(summary_sheet, column, 1))
             .collect();
         let key_names =
             match pytools_core::timeline_ops::wide_target_key_names(rule, &summary_headers) {
@@ -15680,17 +16242,22 @@ fn execute_wide_summary_target_writes(
                     + 1
             })
             .collect();
-        let row_key = |sheet: &umya::Worksheet, row: u32| -> Vec<String> {
+        let row_key = |sheet: &excel_reader::SheetDump, row: u32| -> Vec<String> {
             key_columns
                 .iter()
-                .map(|&column| umya_cell_display(sheet, column as u32, row))
+                .map(|&column| wide_dump_cell_display(sheet, column as u32, row))
                 .collect()
         };
         let mut seen_keys: std::collections::HashSet<Vec<String>> =
             std::collections::HashSet::new();
         if existed_sheet {
-            let target_ws = book
-                .get_sheet_by_name(&target_sheet_name)
+            let target_ws = target_book
+                .as_ref()
+                .and_then(|book| {
+                    book.sheets
+                        .iter()
+                        .find(|sheet| sheet.name == target_sheet_name)
+                })
                 .expect("target sheet resolved above");
             for row in 2..=existing_target_rows {
                 seen_keys.insert(row_key(target_ws, row));
@@ -15703,7 +16270,7 @@ fn execute_wide_summary_target_writes(
         let mut kept_rows = Vec::<u32>::new();
         // 去重始终只针对数据行（第 2 行起）；表头行由下方写入逻辑单独处理。
         for row in 2..=summary_max_row {
-            let key = row_key(summary_ws_for_dedup, row);
+            let key = row_key(summary_sheet, row);
             if !batch_keys.insert(key.clone()) {
                 batch_dedup_rows += 1;
                 continue;
@@ -15732,7 +16299,7 @@ fn execute_wide_summary_target_writes(
                 message.clone(),
                 Some(stage_started.elapsed().as_millis()),
                 0,
-                &["pytools-core", "umya-spreadsheet"],
+                &["pytools-core", "calamine"],
                 None,
                 Some("no_new_rows_after_dedup"),
             );
@@ -15756,71 +16323,59 @@ fn execute_wide_summary_target_writes(
             continue;
         }
 
-        // 写入汇总内容：逐格复制值与样式（仅写入去重后保留的行；新表先复制表头行）。
-        let mut copied = 0usize;
-        {
-            if let Ok(summary_ws) = summary_book.get_sheet_by_name(&summary_sheet_name) {
-                let target_ws = book
-                    .get_sheet_by_name_mut(&target_sheet_name)
-                    .expect("target sheet resolved above");
-                let mut destination_row = write_start_row;
-                let mut copy_one = |destination_row: &mut u32, source_row: u32| -> usize {
-                    let mut copied = 0usize;
-                    for column in 1..=summary_max_col {
-                        let mut letters = String::new();
-                        let mut rest = column;
-                        while rest > 0 {
-                            letters.insert(0, (b'A' + ((rest - 1) % 26) as u8) as char);
-                            rest = (rest - 1) / 26;
-                        }
-                        let address = format!("{letters}{source_row}");
-                        if let Some(source_cell) = summary_ws.get_cell(address.as_str()) {
-                            let style = source_cell.get_style().clone();
-                            let raw = source_cell.get_raw_value().clone();
-                            let target_cell = target_ws.cell_mut((column, *destination_row));
-                            target_cell.set_style(style);
-                            set_umya_raw_value(target_cell, &raw);
-                            copied += 1;
-                        }
-                    }
-                    *destination_row += 1;
-                    copied
-                };
-                if !append_to_existing {
-                    copied += copy_one(&mut destination_row, 1);
-                }
-                for &source_row in &kept_rows {
-                    copied += copy_one(&mut destination_row, source_row);
-                }
-            }
+        // 统计实际导入的非空/公式单元格；既有目标由 Openpyxl 导入区域。
+        let mut rows_to_write =
+            Vec::with_capacity(kept_rows.len() + usize::from(!append_to_existing));
+        if !append_to_existing {
+            rows_to_write.push(1);
         }
+        rows_to_write.extend(kept_rows.iter().copied());
+        let copied = rows_to_write
+            .iter()
+            .map(|row| {
+                (1..=summary_max_col)
+                    .filter(|column| {
+                        let address = pytools_core::rule_engine::cell_address(
+                            *row as usize,
+                            *column as usize,
+                        );
+                        summary_sheet.values.contains_key(&address)
+                            || summary_sheet.formulas.contains_key(&address)
+                    })
+                    .count()
+            })
+            .sum::<usize>();
         let publish = (|| -> Result<()> {
-            let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-            let mut candidate = None;
-            for index in 0..1000 {
-                let path = std::env::temp_dir().join(format!(
-                    "pytools-wide-target-{}-{stamp}-{index}.xlsx",
-                    std::process::id()
-                ));
-                match OpenOptions::new().write(true).create_new(true).open(&path) {
-                    Ok(file) => {
-                        drop(file);
-                        candidate = Some(TemporaryFile::new(path));
-                        break;
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                    Err(error) => return Err(error).context("创建目标写入临时文件失败"),
-                }
-            }
-            let candidate = candidate.context("无法分配目标写入临时文件")?;
-            umya::writer::xlsx::write(&book, candidate.path())
-                .context("保存目标工作簿候选文件失败")?;
             if let Some(hash) = original_hash.as_deref() {
-                replace_target_from_candidate(candidate.path(), target, hash)
-                    .context("校验并安全替换目标工作簿失败")?;
+                commit_wide_summary_existing_target_openpyxl(
+                    summary_path,
+                    target,
+                    hash,
+                    &summary_sheet_name,
+                    &target_sheet_name,
+                    summary_max_col,
+                    write_start_row,
+                    !append_to_existing,
+                    !existed_sheet,
+                    &kept_rows,
+                )?;
             } else {
+                let candidate = wide_target_candidate_path(target)?;
+                let writer_rows =
+                    pytools_core::timeline_ops::write_wide_summary_new_target_candidate(
+                        summary_path,
+                        rule,
+                        &target_sheet_name,
+                        candidate.path(),
+                    )?;
+                anyhow::ensure!(
+                    writer_rows == kept_rows.len(),
+                    "Rust XlsxWriter 与目标去重规划的行数不一致：计划 {} 行，实际 {} 行",
+                    kept_rows.len(),
+                    writer_rows
+                );
                 create_target_from_candidate(candidate.path(), target)
-                    .context("发布新目标工作簿失败")?;
+                    .context("Rust XlsxWriter 候选验证后发布新目标工作簿失败")?;
             }
             Ok(())
         })();
@@ -15837,7 +16392,11 @@ fn execute_wide_summary_target_writes(
                 format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
                 Some(stage_started.elapsed().as_millis()),
                 0,
-                &["pytools-core", "umya-spreadsheet"],
+                if existed {
+                    &["pytools-core", "openpyxl"]
+                } else {
+                    &["pytools-core", "rust_xlsxwriter"]
+                },
                 None,
                 Some("target_write_error"),
             );
@@ -15882,8 +16441,16 @@ fn execute_wide_summary_target_writes(
             message.clone(),
             Some(stage_started.elapsed().as_millis()),
             0,
-            &["pytools-core", "umya-spreadsheet"],
-            Some("umya-spreadsheet"),
+            if existed {
+                &["pytools-core", "openpyxl"]
+            } else {
+                &["pytools-core", "rust_xlsxwriter"]
+            },
+            Some(if existed {
+                "openpyxl"
+            } else {
+                "rust_xlsxwriter"
+            }),
             None,
         );
         event.workbook_name = Some(target.to_string_lossy().into_owned());
@@ -18444,6 +19011,29 @@ fn unique_workbook_candidate(input: &Path, output_dir: &Path, suffix: &str) -> P
     candidate
 }
 
+fn unique_workbook_candidate_preserving_extension(
+    input: &Path,
+    output_dir: &Path,
+    suffix: &str,
+) -> PathBuf {
+    use std::hash::{Hash, Hasher};
+    let stem = input.file_stem().unwrap_or_default().to_string_lossy();
+    let extension = input
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("xls");
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    input.hash(&mut hasher);
+    let base = format!("{stem}_{suffix}_{:08x}", hasher.finish() as u32);
+    let mut candidate = output_dir.join(format!("{base}.{extension}"));
+    let mut index = 1usize;
+    while candidate.exists() {
+        candidate = output_dir.join(format!("{base}_{index}.{extension}"));
+        index += 1;
+    }
+    candidate
+}
+
 fn create_rust_report_copy(
     input: &Path,
     candidate: &Path,
@@ -20127,8 +20717,6 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let mut output_dir = None::<PathBuf>;
     let mut log_dir = None::<PathBuf>;
     let mut log_view = None::<String>;
-    let mut capability_path = None::<PathBuf>;
-    let mut platform = None::<String>;
     let mut append_existing = false;
     let mut source_workbooks = Vec::new();
     while let Some(argument) = arguments.next() {
@@ -20151,13 +20739,13 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
             "--log-view" => {
                 log_view = Some(arguments.next().context("--log-view requires a value")?);
             }
+            // Accepted for compatibility with older invocations. PT-7-6 now
+            // selects the bundled openpyxl worker internally.
             "--capabilities" => {
-                capability_path = Some(PathBuf::from(
-                    arguments.next().context("--capabilities requires a path")?,
-                ));
+                let _ = arguments.next().context("--capabilities requires a path")?;
             }
             "--platform" => {
-                platform = Some(arguments.next().context("--platform requires an id")?);
+                let _ = arguments.next().context("--platform requires an id")?;
             }
             "--append-existing" => append_existing = true,
             "--help" | "-h" => {
@@ -20183,10 +20771,6 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     if source_workbooks.is_empty() {
         bail!("provide at least one source workbook path");
     }
-    anyhow::ensure!(
-        capability_path.is_some() == platform.is_some(),
-        "--capabilities and --platform must be provided together"
-    );
     let tasks = load_extract_tasks(&config_path).with_context(|| {
         format!(
             "load worksheet-extraction tasks from {}",
@@ -20308,8 +20892,6 @@ fn run_extract_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
         &output_dir,
         append_existing,
         None,
-        capability_path.as_deref(),
-        platform.as_deref(),
         |event| {
             if view == "off" {
                 events.push(event.clone());
@@ -21419,7 +22001,7 @@ fn print_usage() {
     eprintln!("rustTools {}", build_banner().trim());
     eprintln!(
         "Usage:\n\
-         pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id>]\n\
+         pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off]\n\
          no command opens the rustTools menu; available categories: 1 (data extraction and summaries 1-5), 2 (configured deduplication and append 1-4), 3 (static print and precheck 1-2), 4 (file processing 1-8), 5 (special reports 1-8), 6 (archive preview and copy), and 7 (configuration and quick actions 1-5)\n\
          timeline-precheck --config <workbook.xlsx>\n\
          timeline-compare --config <workbook.xlsx> --template <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
@@ -21445,7 +22027,7 @@ fn print_usage() {
          config-repair-plan --input <config.xlsx> --output <candidate.xlsx> [--plan-output <plan.json>] [--capabilities <json> --platform <id>]\n\
          config-view --config <config.xlsx>\n\
          village-split-plan --current <xlsx> --previous <xlsx> --input <target.xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
-         village-split --current <xlsx> --previous <xlsx> [--config <config.xlsx>] [--output-dir <directory>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id> [--commit-target]] <target.xlsx>...\n\
+         village-split --current <xls|xlsx> --previous <xls|xlsx> [--config <config.xlsx>] [--output-dir <directory>] [--log-dir <directory>] [--log-view user|developer|off] [--capabilities <json> --platform <id> [--commit-target]] <target.xls|xlsx>... (Windows .xls uses Excel/WPS COM; .xlsx uses openpyxl)\n\
          remove-foreign-bank-plan --config <config.xlsx> --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          remove-foreign-bank --config <config.xlsx> [--plan-dir <dir>] [--view user|developer|off] [--log-dir <dir>] [--report-output <json>] [--capabilities <json> --platform <id>] <source.xlsx>...\n\
          rural-loan-plan --current <xlsx> --previous <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
@@ -21456,19 +22038,20 @@ fn print_usage() {
          fx-header <xlsx>... [--output-dir <dir>] [--log-dir <dir>] [--plan-dir <dir>] [--view user|developer|off] [--commit-target --capabilities <json> --platform <id>]\n\
          fx-header-plan --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          rename-sheets-plan --config <config.xlsx> --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
-         rename-sheets --config <config.xlsx> [--capabilities <json> --platform <id>] [--recursive] <file-or-directory>... (默认用 openpyxl 改名并改写公式/命名区域引用)\n\
+         rename-sheets --config <config.xlsx> [--recursive] <file-or-directory>... (.xlsx 使用 openpyxl；Windows .xls 使用专用 Excel/WPS COM 改名)\n\
          submission-check --config <config.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file-or-directory>...\n\
          archive-date-preview --target-root <dir> [--config <config.xlsx>] [--output-dir <dir>] <file-or-directory>...\n\
          archive-type-preview --config <config.xlsx> --target-root <dir> [--output-dir <dir>] <file-or-directory>...\n\
          archive-date-copy --target-root <dir> [--config <config.xlsx>] [--output-dir <dir>] <file-or-directory>...\n\
          archive-type-copy --config <config.xlsx> --target-root <dir> [--output-dir <dir>] <file-or-directory>...\n\
          archive-execute-plan --plan <archive-plan.xlsx> [--output-dir <dir>]\n\
-         convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|lo|com|pywin32|native] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
-         convert-word --config <config.xlsx> [--to docx] [--engine auto|lo|com|pywin32] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
-         convert-file --input <file> --to <extension> [--output <file>] [--engine auto|lo|com|pywin32|native]\n\
+         convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|com|pywin32] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
+         convert-word --config <config.xlsx> [--to docx] [--engine auto|com|pywin32] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
+         convert-file --input <file> --to <extension> [--output <file>] [--engine auto|com|pywin32|native]\n\
+         Office 文件转换仅使用 Windows pywin32 + Microsoft Excel/WPS COM；Linux 不执行 LibreOffice 转换\n\
          native = 按值重建（C01，丢弃样式/公式缓存）；Excel 公式文本保留但不重算，CSV 按文本写入\n\
                    ISO 日期/时长、错误值、空文本和检测到的 1904 epoch XLS/XLSM/XLSB 会拒绝转换\n\
-         pytools extract-sheets --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--append-existing] [--capabilities <json> --platform <id>] <source.xlsx>...\n\
+         pytools extract-sheets --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--append-existing] <source.xlsx>...\n\
          pytools region-sum-check [--config <workbook.xlsx>] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
          pytools file-sort-prefix --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          pytools remove-file-sort-prefix --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [<file>...]\n\

@@ -4,6 +4,15 @@
 
 功能状态仅使用以下四类：**已实现，待人工验收**、**人工测试发现问题，待修复**、**部分实现或存在已知限制**、**已明确暂缓或取消**。具体人工验收结果另记实际范围、日期和结果；不能仅因菜单存在而记为通过。实现、单元/冒烟、Windows 真实样本、Linux/deb 验证分别记录；历史证据不可自动推广到当前版本或其他平台。
 
+### 当前 Excel 引擎路由（2026-11-06 用户确认）
+
+- 普通值读取仍以 Calamine 为主，Calamine 不提供的 OOXML 字段使用局部 OOXML 补读。
+- 从零新建 XLSX 使用 `rust_xlsxwriter`，OOXML 仅作明确、窄范围的补充；修改既有 `.xlsx` 使用隔离 Openpyxl worker + 必要的 OOXML 定点修改。Umya 能避免时不使用。
+- 1-4 公式重算按平台路由：Windows 由随包 pywin32 调用 Microsoft Excel/WPS COM；Linux 使用 LibreOffice Calc。Linux 1-4 先通过 OOXML 把模板校验区域复制到隔离工作副本，再由 LO 计算并保存缓存，最后由 Calamine 提取结果。当前其他功能不得自动调用 LO。
+- 用户已授权在 Windows 为 5-1 至 5-7 逐项开发与 PyCode 对应的功能专用 Excel/WPS COM 业务操作，尤其覆盖 PyCode 对 `.xls` 使用 COM 的路由。当前 5-1、5-7 的 `.xls` 专用路径已接入并完成 Excel/WPS 临时副本对拍；5-2 至 5-6 仍需逐项实现和验收。Rust 继续负责业务规则，各菜单、格式及 Excel/WPS 应用分别验证。Linux 不支持 COM 业务路由。
+- `.xls → .xlsx` 只允许在 Windows 通过 pywin32 调用 Excel/WPS COM 另存为。Linux 不做该转换；需 Openpyxl/OOXML 修改的 `.xls` 先让用户在 Windows 转成 `.xlsx`。
+- 旧的按菜单限制 LO、将 BIFF `.xls` 直接交给通用修改引擎、或把 Umya 作为常规写入引擎的记录属于历史状态，不覆盖本路由。
+
 ## 1. 数据提取与汇总
 
 - 1-1 时序宽表汇总：**部分实现或存在已知限制**。保留行头加后缀和不加后缀的既有语义；目标写入的当前路径和验证状态见下方记录。
@@ -21,7 +30,7 @@
   2026-11-02：表结构区域改为可选严格路由。模板 Sheet 未配置时沿用表头核对；配置后额外比对指定区域的单元格值、公式文本和合并区域。直接同名模板优先，兜底模板规则仅用于没有直接规则的源 Sheet；校验按源 Sheet 进行，单个 Sheet 不匹配时跳过该 Sheet，继续处理同一本源簿的其他 Sheet。输出仍按模板/兜底 Sheet 分页。已修改源码；未编译、未运行测试，待人工验收。
 
   2026-11-03：允许同一模板工作表配置多个“表结构区域”或“表结构区域_N”；源工作表必须逐一通过已配置区域的值、公式文本和合并区域比对。命名区域模板解析错误时，1-3 摘要区分已尝试、失败、跳过和待处理源文件；1-3 普通菜单日志不显示运行编号和诊断 JSON 路径，内部运行记录继续保留。已做静态语法解析和 diff 检查；未编译、未运行测试，待人工验收。
-- 1-4 按模板校验区域提取校验：**部分实现或存在已知限制**。已拆出独立菜单和处理入口；复制源工作簿到临时副本后调用 Excel/WPS COM 重算，从命名校验区域提取命中项并生成校验结果工作簿；原始工作簿保持不变。编译、测试和人工验收待完成。
+- 1-4 按模板校验区域提取校验：**部分实现或存在已知限制**。已拆出独立菜单和处理入口；在临时工作副本中复制命名校验区域，Windows 通过 pywin32 调用 Excel/WPS COM、Linux 通过 LibreOffice Calc 重算，之后由 Calamine 读取缓存并生成校验结果工作簿；原始工作簿保持不变。2026-11-06 Linux WSL 合成工作簿端到端重算与缓存读取测试通过，Windows 路径已编译并通过跨平台结果解析单测；Linux/deb 打包验证及真实业务工作簿人工验收仍待完成。
 - 1-5 表头路径比对与映射：**已实现，待人工验收**。
 - 1-6 时序配置预校验：**已实现，待人工验收**。
 
@@ -55,6 +64,12 @@
 - 4-3 根据工作簿单元格内容命名：**已实现，待人工验收**。输入格式和内容语义按实际能力处理。
 - 4-4 Office 格式转换（XLS/ET/ETT→XLSX、DOC/WPS/WPT→DOCX）：**部分实现或存在已知限制**。历史 XLS、DOC 有合成正向冒烟；原生 ET/ETT 正向转换、真实业务文件和目标平台仍未充分验证，相关外部引擎与格式证据必须显式满足。
 
+  2026-11-06 当前源码对拍：隔离的 20 个 XLS + 2 个 XLSX 分别由 PyCode 与当前 Rust Release 经 Excel COM 另存为，22 对输出共 47 张工作表、1,721 个公式；工作表顺序、公式文本、公式缓存、单元格值、样式、合并区域及行列尺寸均为 0 差异，输入副本与备份哈希 0 差异。另将真实 BIFF/OLE `.xls` 副本改名为 `.xlsx` 验证内容路由：当前 Rust 会先识别 OLE 容器，在隔离目录暂存为 `.xls`，要求 COM 回报 BIFF `FileFormat` 后才发布 `.xlsx`；Release 实测识别为 56、转换成功、输出为 ZIP OOXML，源文件 SHA-256 不变。测试及完整证据见 `test-runs/route_4_4_current_20261106/REPORT.md`。PyCode 对伪装 `.xlsx` 用例仍按后缀打开而失败；此场景是按用户“真另存为”要求做的 Rust 定点补强，不计作与 PyCode 对齐。当前仅验证 Excel.Application；WPS 和原生 ET/ETT 正向转换仍待验证。Release 留在 `F:\RustBuild\pytools\release\RustTools.exe`，未替换 `dist` 或生成正式安装包。
+
+  2026-11-06 历史状态（已由下方更新替代）：用户暂停所有 Office 文件的 LibreOffice 转换，4-4 只允许 Windows 随包 pywin32 驱动 Microsoft Excel/WPS COM；`auto` 不回退 LO，Linux 明确报 COM 不可用，显式 `--engine lo` 在启动外部程序前拒绝。此处的“Linux 1-4 LO 重算尚未实现”是接入前记录。工作簿 `native` 值重建不能替代 Office 格式另存。随包 Worker 的 `KET.Application` 路径已对真实 `.xls → .xlsx` 样本完成验证：64 个公式、155 个非公式数据单元格回读通过，执行 `CalculateFullRebuild`；Excel 能重新打开 WPS 候选。Excel/WPS 对比中公式、公式缓存、单元格值、合并区域一致；样本的边框颜色编码不同（WPS auto、Excel indexed 64），另有 3 个字体 charset 元数据差异及少量行高记录差异，详细记录见 `test-runs/wps_pywin32_conversion_20261106_recheck/REPORT.md`。WPS 改写了隔离输入副本字节，因此 Rust 调用必须继续先私有暂存源文件。专项 Rust 验证通过：2 个显式 LO 拒绝测试、路由矩阵测试、CLI 帮助测试；没有运行 LO。尚未重建或替换 `dist\RustTools.exe`；用户真实使用前仍需 Release 版本人工验收。
+
+  2026-11-06 路由与计算更新：用户确认 `.xls → .xlsx` 仅 Windows pywin32 Excel/WPS COM，Linux 不支持转换；LibreOffice 仅作为 1-4 的 Linux 公式计算引擎。1-4 的 Linux 计算已接入批次复用 UNO worker：模板校验区域由 OOXML 复制到临时源副本，LibreOffice 打开该副本重算并保存缓存，最后 Calamine 读取结果。此处 LO 写入仅限计算流程中的临时副本，不构成一般修改路由。WSL 中真实 LibreOffice 临时工作簿集成测试通过，覆盖公式 `=IF(A2>0,"错|校验项|差异","")` 的计算及命中提取；Linux/deb 发布包和真实业务样本尚未验证。此前本节“Linux 1-4 LO 重算尚未实现”是接入前状态，以本条更新为准。
+
   2026-11-04：经用户选择方案 B，取消 Rust 直连 COM 通道（删除 `pytools-core/src/conversion_com.rs`），Windows 全部保真转换统一走随包 pywin32 Worker：`.xls/.xlsb/.xlsm/.et/.ett→.xlsx`、`.doc/.wps/.wpt→.docx`；`--engine com` 保留为兼容别名（路由到 pywin32），Worker 协议升到 v2。`.et/.ett` 用 KET 打开并核验 WPS 原生 `FileFormat >= 65521`；`.wps/.wpt` 用 KWPS 优先。DOCX 另存改用 wdFormatXMLDocument(12)：本机实测 WPS 文字会忽略 wdFormatDocumentDefault(16) 并写出二进制 .doc，Worker 现在还会检查候选是否为 OOXML ZIP。Rust 侧删除 ET 二次探测转换，改用 Worker 在同一批次内完成的源/候选双向比较证据。Windows 合成样本验证：XLS 批次复用 Worker 与 Excel 进程、DOC/WPS/WPT 三种 Word 源均转换成功且源字节不变、伪装 ET 被拒绝。真实原生 ET/ETT 正向转换仍无合法夹具，Linux/deb 未验证。
 
   2026-10-30：按用户要求比较 Windows Excel/WPS 下 Rust COM、PowerShell COM、pywin32 COM。合成数据为 4 个 XLS、每个 3 张表且每表 250 行，每种引擎/模式计时两轮；全批次输出与相同应用的基准结果一致。计时来自产品接入前的独立 Rust COM bridge 原型，不是 UI 端到端数据。Excel 批量中位耗时：Rust 6.433 秒、PowerShell 6.199 秒、pywin32 18.361 秒（两轮为 29.389/7.334 秒，波动较大）；WPS 批量：Rust 2.923 秒、PowerShell 4.457 秒、pywin32 4.675 秒。样本和轮数有限，仅作当前机器参考。原始样本哈希未变；WPS 会修改交给它打开的临时副本，因此正式转换仍先复制源文件。
@@ -62,19 +77,21 @@
   同日：Windows XLS→XLSX 表格转换改为 Rust `windows` COM，在专用 STA 线程中按批次复用自行创建的 Excel/WPS 实例；每次转换使用源文件临时副本，先检查进程与空工作簿，只有确认由本次任务新建的实例才会在任务结束时退出。转换结果继续校验工作表、值和公式。PowerShell COM 仍用于 DOC→DOCX；LibreOffice 路径未变。Windows 合成测试覆盖 V2 菜单批量 Excel、Excel 批次实例复用及异常后恢复、WPS 正向转换与实例复用、伪装 ET 的拒绝和源文件保护。当前机器的 WPS 生成样本未能证明 `FileFormat=65521` 的原生 ET 正向路径，故严格 ET 校验保留且该路径仍待真实原生 ET 样本；未更新 Release EXE，真实业务样本人工验收及 Linux/deb 验证未进行。计时明细见 `probe/reports/com_conversion_benchmark_20261030.json`。
 
   2026-11-02：旧 Rust COM 对三个真实 `.xls` 样本的转换在 Calamine 读取阶段报告公式数量不一致。用 Excel COM 将源文件临时副本另存为 XLSX 后，按工作表顺序、公式地址/文本及非公式单元格值进行批量比较，三份样本均一致；原始文件未改动。新增 Windows 随包 CPython 3.12.10 + pywin32 312 Worker，并在批次内复用独立 Excel/WPS COM 会话；Windows 自动 `.xls/.xlsb/.xlsm→.xlsx` 改走此 Worker，其他格式继续使用既有路由。Worker 通过 Excel/WPS 回读验证后，Rust 仍确认候选可读且非空。Worker 在临时样本上验证通过；Rust 集成未编译/测试，Release EXE 与 ZIP 未更新，待用户人工验收；原生 ET 和 Linux/deb 状态不变。
-- 4-5 按配置修改 Sheet 名：**已实现，待人工验收**。默认路径不再依赖 ExcelModifier capability：复制源工作簿到临时候选后，由随包 worker 用 openpyxl 改名，并在同一遍里按改名映射改写跨表公式与命名区域引用（旧实现会留下指向旧表名的失效引用）。改名后重新读取校验：工作表顺序/名称、公式单元格集合、非公式值、新增 `#REF!`/`#NAME?`。源文件在提交前有 SHA-256 快照校验，通过后以候选替换；数字签名/ActiveX/外部链接/宏工作簿仍拒绝覆盖。旧的 `--capabilities` 路径保留但会拒绝含公式或命名区域的工作簿。临时候选文件会短暂出现在源目录，成功或失败都会清理。
+- 4-5 按配置修改 Sheet 名：**部分实现或存在已知限制**。`.xlsx` 复制到临时候选后由随包 Openpyxl worker 改名，并按映射更新跨表公式与命名区域引用，再校验工作表顺序/名称、公式单元格集合、非公式值及新增 `#REF!`/`#NAME?`。Windows `.xls` 使用专用 pywin32 Excel/WPS COM 改名操作，非通用 COM 编辑器；Linux `.xls` 不支持，可先在 Windows 通过 4-4 转成 `.xlsx`。Linux `.xlsx` 菜单路由仍未接入通用 Openpyxl worker。源文件在提交前有 SHA-256 快照校验，通过后以候选替换；数字签名/ActiveX/外部链接/宏工作簿仍拒绝覆盖。2026-11-06 定点验证：当前 Release 在 20 个 `.xls` 上与 PyCode COM 统计一致（改名 2 个工作表、跳过 38 项、失败 0）；4020 命中样本及 3010 未命中样本逐单元格、公式、样式、合并、尺寸和页面设置比较无差异。所有用户测试用例原件哈希与备份一致。COM 样本使用 `Excel.Application`；WPS 路径及 Linux 菜单仍待验收。
 - 4-6 机构提交完整性检查：**已实现，待人工验收**。
 - 4-7/4-8 [临时] umya / openpyxl 区域回写格式探针：**临时诊断入口**（2026-10-28 经用户要求添加，`pytools-core/src/format_probe.rs` + 文件处理菜单 7/8）。用于人工对比两引擎“整簿读入→保留区域→删除区域外行列→另存副本”的格式保留效果；openpyxl 按钮依赖本机 python+openpyxl（可用 `PYTOOLS_OPENPYXL_PYTHON` 指定解释器）。**用户对比得出结论后应移除**，不进入迁移清单正式子功能。
 
 ## 5. 专用报表处理
 
-- 5-1 拆分村镇银行数据：**部分实现或存在已知限制**。
-- 5-2 机构名称规范化：**部分实现或存在已知限制**。
-- 5-3 删除分机构表中的外资行：**部分实现或存在已知限制**。
+- 5-1 拆分村镇银行数据：**部分实现或存在已知限制**。`.xlsx` 保持 Openpyxl 路由；Windows `.xls` 使用本功能专用 pywin32 Excel/WPS COM 路由，输入引用先复制到隔离临时目录，结果候选保留 `.xls` 扩展名并通过快照保护后提交。Linux `.xls` 不支持该业务修改。
+- 5-2 机构名称规范化：**部分实现或存在已知限制**。2026-11-06 在 `.xls` 副本先经 4-4 Excel COM 另存为 `.xlsx`，再按当前配置规范化；读取 39 条有效映射，命中 1 张表并修改 8 行，结果副本生成成功。
+- 5-3 删除分机构表中的外资行：**部分实现或存在已知限制**。2026-11-06 对上述 5-2 结果副本成功生成计划（目标表 1 张、待删 3 行），但 Openpyxl 执行因无法证明操作与 530 个已保存公式缓存独立而安全拒绝；未发布结果。PyCode 在同一副本上删除 3 行成功，因此 Rust/PyCode 执行结果尚未对齐。详情见 `test-runs/special-reports-5-3_5-5_5-6_20261106/REPORT.md`。
 - 5-4 修改外汇工作表页眉单位：**部分实现或存在已知限制**。
-- 5-5 地区总分校验：**已实现，待人工验收**。
-- 5-6 工作表数据提取（普通无批注版）：**部分实现或存在已知限制**。区域提取接受 XLSX/XLSM 并输出新 XLSX，后者不保留源 VBA；整表样式导入仅接受 XLSX，追加既有目标受能力门控。拆分时加入的 XLSM、错误值和合并子单元格相关测试当时未运行。
-- 5-7 涉农贷款比上月修正、5-8 季度涉农贷款修正及分地区核对：**部分实现或存在已知限制**。
+- 5-5 地区总分校验：**已实现，待人工验收**。2026-11-06 `.xls` 样本读取及结果簿生成成功，但当前配置匹配 0 张工作表、核对 0 项；此样本未验证实际地区总分逻辑。
+- 5-6 工作表数据提取（普通无批注版）：**部分实现或存在已知限制**。区域提取接受 XLSX/XLSM 并输出新 XLSX，后者不保留源 VBA；整表样式导入仅接受 XLSX，追加既有目标按当前 Openpyxl/OOXML 操作路径处理。2026-11-06 使用 5-2 输出的 `.xlsx` 按配置成功提取 1 张工作表并生成 `一批分地区（金监局）.xlsx`；直接输入 `.xls` 会按格式限制拒绝。拆分时加入的 XLSM、错误值和合并子单元格相关测试当时未运行。
+- 5-7 涉农贷款比上月修正、5-8 季度涉农贷款修正及分地区核对：**部分实现或存在已知限制**。5-7 的 `.xlsx` 保持 Openpyxl 路由；Windows `.xls` 使用本功能专用 pywin32 Excel/WPS COM 路由，以源文件旁的候选文件进行处理，并在校验与快照检查后提交。Linux `.xls` 不支持该业务修改；5-8 未纳入本次实现。
+
+  2026-11-06：5-1、5-7 的 Windows `.xls` COM 路由接入。PyCode 对拍使用测试用例副本；Rust Excel `Excel.Application` 与 WPS `ket.Application` 两种路径均完成 5-1、5-7 定点运行。5-1 本外币/外发用样本分别处理 1/3 张工作表，5-7 样本匹配 32 个机构且分地区总数一致；与同引擎 PyCode 基线逐工作表比较，5-1 的 38/10 张表及 5-7 的 24 张表均无单元格值/公式差异，工作表顺序一致。WPS 会改写交给它打开的文件，即使只读打开也可能变更字节；实现已将输入引用复制到隔离临时副本，并在 Rust 层校验原始输入 SHA-256 不变。测试日志和报告见 `test-runs/xls_5-1_5-7_com_20261106_230820/REPORT.md`，原件备份见配套 `test-backups/`。这是限定样本上的集成验证，不代表其他 `.xls`、5-2 至 5-6 或人工验收通过。5-1/5-7 修改后通常由用户通过 WPS 人工使用，不默认要求 Calamine 继续读取公式缓存；如需重算缓存，可将结果文件交由 4-4 通过 COM 另存为 `.xlsx`，并按实际文件验证结果。
 
 上述修改类操作已有不同范围的历史计划、候选或合成证据；执行还受各自引擎能力、格式和安全提交条件限制，不能仅凭菜单文字判定生产能力或用户验收通过。
 
@@ -96,10 +113,10 @@ PT-1-2 时序提取、COM 批注版工作表提取、PDF 导出、跨类别转�
 
 ## 需要保留的限制
 
-- Excel 编辑器：既有工作簿按操作、格式、对象、平台和对应 capability 选择后端。测试用临时 capability 不等于生产能力；超出已验证范围应安全拒绝。隔离 openpyxl worker 仅用于既有 XLSX 修改，非空公式缓存、未知部件等限制按现有实现处理。
-- `ImportRange`：已有目标的去重追加、整表复制或追加依赖具体能力；历史上部分路径仅用合成临时 capability 验证。openpyxl 路径对行插删及 ImportRange 尺寸复制有限制。
-- `SetComment`：历史配置修复合成操作批次中，umya 候选未保留预期表头批注；openpyxl worker 在合成及真实配置副本上有局部通过证据，但仅使用临时测试 capability，不能等同于生产验收。详见 `probe/reports/config_repair_execution_20261023.json`。
-- 转换与计算：XLS/ET、DOC 及引擎能力各自记录，ET 原生正向样本仍缺证据。公式重算默认关闭，旧缓存不等于重新计算；Office、WPS、LibreOffice 等只能作为明确选择的可选能力。
+- Excel 编辑器：交互菜单不要求外部 capability 文件；既有 XLSX 修改按具体操作使用 Openpyxl/OOXML 路径。格式、操作或工作簿对象超出当前实现范围时仍须安全拒绝。非空公式缓存、未知部件等限制按当前实现处理。
+- `ImportRange`：已有目标的去重追加、整表复制或追加按具体操作使用 Openpyxl/OOXML 路径；历史合成 capability 仅是旧测试手段，不是运行门槛或生产可用性证明。Openpyxl 路径对行插删及 ImportRange 尺寸复制有限制。
+- `SetComment`：历史配置修复合成操作批次中，umya 候选未保留预期表头批注；Openpyxl worker 在合成及真实配置副本上有局部测试证据，仍不能等同于完整人工验收。详见 `probe/reports/config_repair_execution_20261023.json`。
+- 转换与计算：XLS/ET、DOC 及引擎能力各自记录，ET 原生正向样本仍缺证据。除 1-4 按其校验流程重算隔离副本外，普通路径不隐式重算；旧缓存不等于重新计算。1-4 在 Windows 使用 Excel/WPS COM，在 Linux 使用 LibreOffice Calc；其他功能没有默认的 LibreOffice 计算路由。
 - 结构与安全：原文件、业务数据、公式、合并及明确需要保留的结构必须保护；改表名、插删行和追加须考虑引用与目标冲突。普通字体、边框等外观差异不自动阻塞交付。
 - Linux 目标仍为 x86_64、glibc 2.28 和离线 deb。历史特定二进制或样本的验证不等于当前版本、目标发行版及所有功能均已验收。
 - 历史比较辅助：`probe/compare_real_rules_wide.py` 使用本项目相对路径，仅供按需比较，不属于默认验证流程。其辅助脚本未指定现有 EXE 时会调用 `cargo run`；任何 Rust 执行均须用户明确授权。其他比较辅助及 `probe/probe.toml` 仍可引用只读原 Python 项目。

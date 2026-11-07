@@ -7,7 +7,6 @@
   "checks": {
     "damaged_xlsx_reported_as_partial_failure": "passed",
     "menu_task_loading_and_file_selection": "passed",
-    "production_capability_created": false,
     "run_history_excludes_cell_values": "passed",
     "source_input_bytes": "preserved",
     "unsupported_format_filtered_before_reader": "passed",

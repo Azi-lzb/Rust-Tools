@@ -10,6 +10,7 @@ use excel_reader::read_workbook;
 use rust_xlsxwriter::{Format, Formula, Workbook};
 use std::{
     fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -161,7 +162,7 @@ fn numeric_at(sheet: &excel_reader::SheetDump, address: &str) -> Option<f64> {
 }
 
 #[test]
-fn umya_print_preserves_formula_cached_values_and_formats() -> Result<()> {
+fn openpyxl_print_preserves_formula_cached_values_and_formats() -> Result<()> {
     let dir = TestDir::new();
     let source = dir.path("source.xlsx");
     let target = dir.path("output/printed.xlsx");
@@ -170,7 +171,7 @@ fn umya_print_preserves_formula_cached_values_and_formats() -> Result<()> {
 
     let run = pytools_core::static_print_engines::run_configured_static_print(
         &config,
-        pytools_core::static_print_engines::StaticPrintEngine::Umya,
+        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
     )?;
     assert_eq!(run.task_ok, 1, "issues: {:?}", run.issues);
     let printed_path = run.outputs.first().context("no output")?.clone();
@@ -178,6 +179,18 @@ fn umya_print_preserves_formula_cached_values_and_formats() -> Result<()> {
 
     let printed = read_workbook(&printed_path)?;
     let sheet = &printed.sheets[0];
+
+    let mut package = zip::ZipArchive::new(fs::File::open(&printed_path)?)?;
+    let mut worksheet_xml = String::new();
+    package
+        .by_name("xl/worksheets/sheet1.xml")?
+        .read_to_string(&mut worksheet_xml)?;
+    let worksheet = roxmltree::Document::parse(&worksheet_xml)?;
+    let footer = worksheet
+        .descendants()
+        .find(|node| node.tag_name().name() == "oddFooter")
+        .and_then(|node| node.text());
+    assert_eq!(footer, Some("&C第 1 页 / 共 1 页"));
 
     // 公式必须变成静态缓存值。
     assert!(
@@ -219,7 +232,7 @@ fn umya_print_preserves_formula_cached_values_and_formats() -> Result<()> {
 }
 
 #[test]
-fn umya_print_copies_column_widths_and_row_heights() -> Result<()> {
+fn openpyxl_print_copies_column_widths_and_row_heights() -> Result<()> {
     let dir = TestDir::new();
     let source = dir.path("source.xlsx");
     let target = dir.path("output/printed.xlsx");
@@ -228,7 +241,7 @@ fn umya_print_copies_column_widths_and_row_heights() -> Result<()> {
 
     let run = pytools_core::static_print_engines::run_configured_static_print(
         &config,
-        pytools_core::static_print_engines::StaticPrintEngine::Umya,
+        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
     )?;
     assert_eq!(run.task_ok, 1, "issues: {:?}", run.issues);
     let printed_path = run.outputs.first().context("no output")?.clone();

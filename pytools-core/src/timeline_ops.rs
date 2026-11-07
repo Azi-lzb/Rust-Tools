@@ -1940,7 +1940,7 @@ fn run_wide_summary_inner(
                     None,
                     None,
                 );
-                let (matrix, merges) = match matrix_from_dump(sheet) {
+                let (mut matrix, merges) = match matrix_from_dump(sheet) {
                     Ok(value) => value,
                     Err(error) => {
                         emitter.progress.failed_inputs += 1;
@@ -1959,6 +1959,7 @@ fn run_wide_summary_inner(
                         });
                     }
                 };
+                normalize_wide_blank_values(&mut matrix);
                 let rule_name = if rule.name.trim().is_empty() {
                     "未命名规则".to_owned()
                 } else {
@@ -2361,6 +2362,18 @@ fn wide_calendar_date_values(
         }
     }
     Ok((uses_1904_epoch, dates))
+}
+
+fn normalize_wide_blank_values(matrix: &mut [Vec<Option<WorkbookCell>>]) {
+    for cell in matrix.iter_mut().flatten() {
+        if matches!(
+            cell,
+            Some(WorkbookCell::Text(value)) if value.is_empty()
+        ) || matches!(cell, Some(WorkbookCell::Error(_)))
+        {
+            *cell = None;
+        }
+    }
 }
 
 fn normalize_wide_subday_serials(sheets: &mut [SheetDump], date_1904: bool) -> usize {
@@ -3154,6 +3167,43 @@ pub fn build_wide_target_append_plans(
         reports.push(report);
     }
     Ok(reports)
+}
+
+/// Write one new 1-1 configured target from its validated Rust-built summary
+/// payload. Existing targets are handled separately through Openpyxl plans.
+pub fn write_wide_summary_new_target_candidate(
+    summary_path: &Path,
+    rule: &TimelineRule,
+    target_sheet_name: &str,
+    output_path: &Path,
+) -> Result<usize> {
+    let output_dir = output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .context("new wide-summary candidate has no parent directory")?;
+    let mut normalized_rule = rule.clone();
+    normalized_rule.target_sheet = Some(target_sheet_name.to_owned());
+    let reports = build_wide_target_append_plans(
+        summary_path,
+        std::slice::from_ref(&normalized_rule),
+        output_dir,
+    )?;
+    let report = reports
+        .iter()
+        .find(|report| Some(&report.target) == normalized_rule.target_wb_path.as_ref())
+        .context("wide-summary planner did not return the configured target")?;
+    anyhow::ensure!(
+        !report.target_existed,
+        "target appeared before Rust XlsxWriter output was prepared"
+    );
+    let payload = report
+        .new_workbook
+        .as_ref()
+        .context("wide-summary planner returned no new-workbook payload")?;
+    let appended_rows = report.appended_rows;
+    write_append_workbook_payload(payload, output_path)
+        .context("rust_xlsxwriter failed to write the new 1-1 target")?;
+    Ok(appended_rows)
 }
 
 /// Create the isolated source workbook required by PT-1-3/PT-1-4 replacement
@@ -4140,14 +4190,33 @@ fn write_compare_summary_table(workbook: &mut Workbook, rows: &[Vec<String>]) ->
 #[cfg(test)]
 mod keyword_match_tests {
     use super::{
-        keyword_match, normalize_wide_subday_serials, overlay_wide_calendar_date_values,
-        overlay_wide_elapsed_duration_serials, path_differences, position_differences,
-        wide_datetime_serial, wide_python_subday_value,
+        keyword_match, normalize_wide_blank_values, normalize_wide_subday_serials,
+        overlay_wide_calendar_date_values, overlay_wide_elapsed_duration_serials, path_differences,
+        position_differences, wide_datetime_serial, wide_python_subday_value,
     };
     use crate::{config::TimelineRule, workbook_extract::WorkbookCell};
     use excel_reader::SheetDump;
     use serde_json::json;
     use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+    #[test]
+    fn wide_summary_treats_empty_and_error_cells_as_missing_like_pycode() {
+        let mut matrix = vec![vec![
+            Some(WorkbookCell::Text(String::new())),
+            Some(WorkbookCell::Error("Div0".to_owned())),
+            Some(WorkbookCell::Text(" ".to_owned())),
+            Some(WorkbookCell::Integer(0)),
+            Some(WorkbookCell::Text("value".to_owned())),
+        ]];
+
+        normalize_wide_blank_values(&mut matrix);
+
+        assert_eq!(matrix[0][0], None);
+        assert_eq!(matrix[0][1], None);
+        assert_eq!(matrix[0][2], Some(WorkbookCell::Text(" ".to_owned())));
+        assert_eq!(matrix[0][3], Some(WorkbookCell::Integer(0)));
+        assert_eq!(matrix[0][4], Some(WorkbookCell::Text("value".to_owned())));
+    }
 
     #[test]
     fn sheet_keywords_match_python_case_and_delimiter_semantics() {

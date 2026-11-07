@@ -114,7 +114,7 @@
 | 1-1 | 时序宽表汇总 | `tests/timeline_menu_cli.rs`（wide_summary_* 约 25 例：日期边界、时长、legacy XLS、中间目标写入与能力门控） | `tests/fixtures/timeline/`、运行时生成 | Python 基线/手工断言（测试内） | 否 | 已通过 |
 | 1-2 | 按使用区域汇总 | `tests/summary_menu_cli.rs`、`tests/summary_used_range_error.rs`（错误矩阵、XLSM、未知错误值） | 运行时生成 | 测试内断言 | 否 | 已通过 |
 | 1-3 | 按模板命名区域/批注汇总 | `tests/summary_menu_cli.rs`（named_range_*）、`tests/summary_comments_cli.rs`（合并锚点、set 标记、公式表头） | `tests/fixtures/summary_comments/` | Python 基线 + 测试内断言 | 否 | 已通过 |
-| 1-4 | 按模板校验区域提取校验 | `summary_ops::named_range_spec_tests::validation_template_does_not_require_summary_regions`；`tests/summary_menu_cli.rs` 确认 1-3 不附加校验结果页 | 合成定义名称；COM 菜单流程待补充 | 未运行 | Excel/WPS COM | 未验证 |
+| 1-4 | 按模板校验区域提取校验 | `conversion_engine::tests::named_validation_*`；忽略的真实 LibreOffice UNO 临时工作簿测试显式运行；`tests/summary_menu_cli.rs` 确认 1-3 不附加校验结果页 | Rust 合成工作簿；WSL LibreOffice Calc + python3-uno | 公式缓存命中结果由 Calamine 读取 | Linux WSL：2 单测 + UNO 端到端 1 测试通过；Windows 分支已编译，真实 Excel/WPS 与业务文件待验收 | Windows Excel/WPS COM；Linux LibreOffice Calc | 部分验证，Linux/deb 未验证 |
 | 1-5 | 表头路径比对与映射 | `tests/timeline_menu_cli.rs`（header_path_compare_*） | 运行时生成 | 测试内断言 | 否 | 已通过 |
 | 1-6 | 时序配置预校验 | `tests/timeline_menu_cli.rs`（timeline_precheck_*）、`tests/config_task_loader_parity.rs` | `tests/fixtures/config_loader.xlsx` | Python 基线 `probe/reports/config_loader_baseline.json` | 否 | 已通过 |
 
@@ -147,8 +147,8 @@
 | 4-1 | 文件名机构标准化 | `tests/batch_rename_parity.rs`（Python 基线、冲突保护、缺 RenameSheet 拒绝） | `tests/fixtures/batch_rename_*` | Python 基线 | 否 | 已通过 |
 | 4-2 | 排序前缀添加/清理 | `tests/file_sort_prefix_parity.rs`、`file_sort_prefix_operation_parity.rs`（操作 49）、`file_sort_prefix_remove_parity.rs`（操作 410，含空输入） | `tests/fixtures/file_sort_prefix_*` | Python 基线 | 否 | 已通过 |
 | 4-3 | 按内容重命名 | `tests/content_rename_46_parity.rs`、`content_unrename_47_parity.rs`、`local_filename_map_48_parity.rs`（XLS 浮点文本、冲突与跳过） | `tests/fixtures/content_*_cases.json` | Python 基线 | 否 | 已通过 |
-| 4-4 | XLS/ET/DOC 格式转换 | `tests/conversion_menu_cli.rs`（路由、伪造 ET 拒绝、进度脱敏）；`sidecar/lo-convert/tests/`（需 LibreOffice） | `tests/fixtures/timeline/*.xls` + `testdata/manual-menu/input/files/待转换/` | Python/手工断言 | **是（LibreOffice/Office）** | 已通过；WPS COM 伪标 ET 拒绝已实测通过（真实 WPS 在环）；**原生 ET 正向样本待用户提供**（WPS COM 无法写出原生 ET，见下） |
-| 4-5 | 按配置修改 Sheet 名 | `tests/sheet_rename_execution.rs`（就地改名 + 公式/命名区域引用改写、递归批量、capability 路径拒绝公式簿）；`tests/conversion_menu_cli.rs`（菜单确认、引擎禁用保护、跨表公式与命名区域回读） | 运行时生成 + `testdata/manual-menu/input/files/工作表重命名/` | Python 语义断言 + 引用改写 | 否（随包 openpyxl） | 已通过 |
+| 4-4 | XLS/ET/DOC 格式转换 | `tests/conversion_menu_cli.rs`（Windows pywin32 路由、伪装 ET 拒绝、BIFF `.xls` 伪装 `.xlsx` 的 COM SaveAs）；`tests/conversion_pywin32_windows.rs`（Office/WPS COM 实测） | `tests/fixtures/timeline/*.xls` + `testdata/manual-menu/input/files/待转换/` + `test-runs/route_4_4_current_20261106/` | PyCode 与 Rust Release 输出对照 | **是（仅 Windows Excel/WPS COM）** | 22 对输出、47 张表、1,721 个公式：公式文本/缓存、值、样式、合并、行列尺寸和工作表顺序 0 差异；伪装 `.xlsx` 的 OLE/BIFF 文件由 Rust Release 识别为 FileFormat 56 后真实另存为 OOXML，源哈希不变。原生 ET/ETT 正向样本、WPS 本轮独立复验、Linux 转换均未验证/不支持；详见该目录 `REPORT.md` |
+| 4-5 | 按配置修改 Sheet 名 | `tests/sheet_rename_execution.rs`（Openpyxl `.xlsx` 改名与引用校验、无 capability 改名、递归批量、`.xls` Linux 拒绝、Windows COM `.xls` 改名）；`tests/conversion_menu_cli.rs`（菜单、跨表公式与命名区域回读） | 运行时生成；`testdata/manual-menu/input/files/工作表重命名/`；`测试用例/4/xls2xlsx/` 的隔离副本 | PyCode Openpyxl/COM 语义对照 | 是（仅 Windows `.xls` COM 路径） | Release 20 本 `.xls` 批量对照：改名 2、跳过 38、失败 0；4020 与 3010 样本的公式/值/样式/合并/尺寸/页面设置比较无差异。定点测试 4 通过，COM 忽略用例显式运行 1 通过。WPS 路径、Linux `.xlsx` 菜单和真实用户验收待验证 |
 | 4-6 | 报送完整性检查 | `tests/submission_check_parity.rs`（AND/OR 别名语义、日期关键字、报告统计） | `tests/fixtures/` + `testdata/manual-menu/input/files/报送检查/` | Python 基线 | 否 | 已通过 |
 
 ## 第 5 类：一二批专用报表处理

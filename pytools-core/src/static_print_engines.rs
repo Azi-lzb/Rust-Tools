@@ -1,5 +1,5 @@
-//! 按配置生成静态打印报表（报表打印菜单：3-1 umya / 3-2 openpyxl；另有
-//! rust_xlsxwriter 引擎保留为内部实现）。
+//! 按配置生成静态打印报表（菜单 3-1/3-2 均通过 openpyxl worker 执行；
+//! rust_xlsxwriter 保留为内部实现，旧 umya 实现仅作历史对照，不再由菜单路由）。
 //!
 //! 三者共享同一份“打印配置”语义，差异只在复制/写出的引擎：
 //! - `umya`：umya 打开源工作簿整簿读入，在**同一包内**把源表复制到目标表
@@ -30,7 +30,6 @@ use std::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StaticPrintEngine {
     RustWriter,
-    Umya,
     Openpyxl,
 }
 
@@ -38,7 +37,6 @@ impl StaticPrintEngine {
     pub fn label(self) -> &'static str {
         match self {
             Self::RustWriter => "rust_xlsxwriter",
-            Self::Umya => "umya-spreadsheet",
             Self::Openpyxl => "openpyxl",
         }
     }
@@ -221,8 +219,7 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     Ok(run)
 }
 
-/// 3-4：umya。同一工作簿内 `new_sheet` 后逐单元格复制（样式随样式表同簿保留），
-/// 公式只写缓存值。
+/// 历史 umya 实现，保留供旧结果定位；菜单 3-1/3-2 不再调用此函数。
 pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     let mut run = StaticPrintRun::default();
     let enabled: Vec<&PrintTask> = tasks.iter().filter(|task| task.enabled).collect();
@@ -686,7 +683,7 @@ fn copy_raw_value_static(
     }
 }
 
-/// 3-5：openpyxl，逐属性复制样式，行为对齐原 PyTools `print_310.py`。
+/// 菜单 3-1/3-2：openpyxl，逐属性复制样式，行为对齐原 PyTools `print_310.py`。
 pub fn run_openpyxl_engine(
     tasks: &[PrintTask],
     python_exe: Option<&str>,
@@ -917,6 +914,9 @@ for t in plan['tasks']:
         apply_setup(ws, out_row - 1, max_cols, t.get('fit_wide'), t.get('fit_tall'),
                     parse_orientation(t.get('orientation')), t.get('center_h'), t.get('center_v'))
         stage = f'openpyxl 写入目标工作簿 {tgt_path}'
+        total_sheets = len(tgt_wb.worksheets)
+        for sheet_index, output_sheet in enumerate(tgt_wb.worksheets, start=1):
+            output_sheet.oddFooter.center.text = f'第 {sheet_index} 页 / 共 {total_sheets} 页'
         tgt_path.parent.mkdir(parents=True, exist_ok=True)
         if str(tgt_path) in outputs:
             tgt_wb.save(tgt_path)
@@ -1048,7 +1048,7 @@ pub fn probe_python_exe() -> Option<String> {
         .filter(|value| !value.trim().is_empty())
 }
 
-/// 读打印配置并执行指定引擎（菜单 3-3/3-4/3-5 共用入口）。
+/// 读打印配置并执行指定引擎。
 pub fn run_configured_static_print(
     config_path: &Path,
     engine: StaticPrintEngine,
@@ -1059,6 +1059,16 @@ pub fn run_configured_static_print(
             config_path.display()
         )
     })?;
+    for task in tasks.iter().filter(|task| task.enabled) {
+        if let Some(target) = task.target_wb.as_deref() {
+            ensure!(
+                is_xlsx(target),
+                "打印配置第 {} 行：打印目标只支持 .xlsx/.xlsm，当前路径为 {}",
+                task.row_no,
+                target.display()
+            );
+        }
+    }
     let enabled = tasks.iter().filter(|task| task.enabled).count();
     let mut rejected = StaticPrintRun::default();
     let tasks = tasks
@@ -1097,7 +1107,6 @@ pub fn run_configured_static_print(
     } else {
         match engine {
             StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
-            StaticPrintEngine::Umya => run_umya_engine(&tasks),
             StaticPrintEngine::Openpyxl => {
                 run_openpyxl_engine(&tasks, probe_python_exe().as_deref())
             }

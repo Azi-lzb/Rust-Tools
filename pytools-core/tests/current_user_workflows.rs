@@ -68,7 +68,7 @@ fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Res
         }
     }
     settings.save(&config)?;
-    let run = run_configured_static_print(&config, StaticPrintEngine::Umya)?;
+    let run = run_configured_static_print(&config, StaticPrintEngine::Openpyxl)?;
     assert_eq!((run.task_ok, run.task_failed, run.outputs.len()), (2, 0, 1));
     assert_eq!(run.outputs[0], target);
     let output = excel_reader::read_workbook(&target)?;
@@ -76,12 +76,10 @@ fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Res
     assert_eq!(output.sheets[0].values["A1"]["value"], "first");
     assert_eq!(output.sheets[1].values["A1"]["value"], "second");
     let before = fs::read(&target)?;
-    for engine in [StaticPrintEngine::Umya, StaticPrintEngine::Openpyxl] {
-        let rejected = run_configured_static_print(&config, engine)?;
-        assert_eq!((rejected.task_ok, rejected.task_failed), (0, 2));
-        assert!(rejected.outputs.is_empty());
-        assert_eq!(fs::read(&target)?, before);
-    }
+    let rejected = run_configured_static_print(&config, StaticPrintEngine::Openpyxl)?;
+    assert_eq!((rejected.task_ok, rejected.task_failed), (0, 2));
+    assert!(rejected.outputs.is_empty());
+    assert_eq!(fs::read(&target)?, before);
     assert_eq!(fs::read(&source)?, source_before);
     assert!(!temp.0.join("3-4-umya").exists());
     assert!(!temp.0.join("3-5-openpyxl").exists());

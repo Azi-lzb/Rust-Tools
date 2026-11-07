@@ -8,14 +8,14 @@ use serde_json::{json, Value};
 use std::{
     collections::BTreeSet,
     fs::{self, File},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
-use zip::ZipArchive;
+use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
-const PLATFORM: &str = "pt44-synthetic-probe";
+const PLATFORM: &str = "pt45-synthetic-probe";
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const OFFICE_REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -24,7 +24,7 @@ struct TestDir(PathBuf);
 impl TestDir {
     fn new(label: &str) -> Result<Self> {
         let path = std::env::temp_dir().join(format!(
-            "pytools-pt44-{label}-{}-{}",
+            "pytools-pt45-{label}-{}-{}",
             std::process::id(),
             TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
@@ -76,14 +76,37 @@ fn write_capability(path: &Path, plan: &ExcelEditPlan, status: CapabilityStatus)
     Ok(())
 }
 
+fn configure_source_openpyxl_worker(command: &mut Command) {
+    command.env(
+        "PYTOOLS_COM_WORKER",
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("python/pywin32_excel_conversion_worker.py"),
+    );
+}
+
 fn plan_for(config: &Path, input: &Path, output: &Path) -> Result<ExcelEditPlan> {
     build_sheet_rename_plan(config, input, output)?
         .plan
         .context("fixture should produce a non-empty sheet-rename plan")
 }
 
+fn write_legacy_sheet_mapping(path: &Path) -> Result<()> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let worksheet = workbook.add_worksheet();
+    worksheet.set_name("重命名配置")?;
+    worksheet.write_string(0, 9, "原表名")?;
+    worksheet.write_string(0, 10, "新表名")?;
+    worksheet.write_string(1, 9, "人民币")?;
+    worksheet.write_string(1, 10, "1人民币")?;
+    worksheet.write_string(2, 9, "外币")?;
+    worksheet.write_string(2, 10, "2外币")?;
+    workbook.save(path)?;
+    Ok(())
+}
+
 fn run_cli(config: &Path, capability: &Path, input: &Path) -> Result<std::process::Output> {
-    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    configure_source_openpyxl_worker(&mut command);
+    Ok(command
         .args(["rename-sheets", "--config"])
         .arg(config)
         .args(["--capabilities"])
@@ -93,18 +116,76 @@ fn run_cli(config: &Path, capability: &Path, input: &Path) -> Result<std::proces
         .output()?)
 }
 
-/// Default rename path (no capability file): Microsoft Excel updates cross-sheet
-/// references and named ranges while renaming. Requires local Excel.
+/// Default rename path (no capability file): the bundled Openpyxl worker
+/// updates cross-sheet references and named ranges while renaming.
 fn run_cli_excel(config: &Path, input: &Path) -> Result<std::process::Output> {
-    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    configure_source_openpyxl_worker(&mut command);
+    Ok(command
         .args(["rename-sheets", "--config"])
         .arg(config)
         .arg(input)
         .output()?)
 }
 
+fn fixture_with_formula_cache(source: &Path, output: &Path) -> Result<()> {
+    let mut archive = ZipArchive::new(File::open(source)?)?;
+    let mut writer = ZipWriter::new(File::create(output)?);
+    let mut formula_cache_injected = false;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let name = entry.name().to_owned();
+        let compression = entry.compression();
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes)?;
+        if name == "xl/worksheets/sheet2.xml" {
+            let mut xml = String::from_utf8(bytes)?;
+            let original = r#"<c r="B1"><f>'A'!A1</f><v /></c>"#;
+            let cached = r#"<c r="B1" t="str"><f>'A'!A1</f><v>cell-a</v></c>"#;
+            anyhow::ensure!(
+                xml.contains(original),
+                "formula cache fixture cell B1 missing"
+            );
+            xml = xml.replacen(original, cached, 1);
+            bytes = xml.into_bytes();
+            formula_cache_injected = true;
+        }
+        writer.start_file(
+            name,
+            SimpleFileOptions::default().compression_method(compression),
+        )?;
+        writer.write_all(&bytes)?;
+    }
+    anyhow::ensure!(
+        formula_cache_injected,
+        "formula cache fixture sheet missing"
+    );
+    writer.finish()?;
+    Ok(())
+}
+
+fn worksheet_cell_xml(path: &Path, part: &str, address: &str) -> Result<String> {
+    let mut archive = ZipArchive::new(File::open(path)?)?;
+    let mut sheet = String::new();
+    archive.by_name(part)?.read_to_string(&mut sheet)?;
+    let address_marker = format!("r=\"{address}\"");
+    let address_index = sheet
+        .find(&address_marker)
+        .with_context(|| format!("cell {address} missing from {part}"))?;
+    let cell_start = sheet[..address_index]
+        .rfind("<c ")
+        .context("cell start tag missing")?;
+    let cell_end = sheet[address_index..]
+        .find("</c>")
+        .map(|offset| address_index + offset + "</c>".len())
+        .context("cell end tag missing")?;
+    Ok(sheet[cell_start..cell_end].to_owned())
+}
+
 fn run_cli_excel_recursive(config: &Path, input: &Path) -> Result<std::process::Output> {
-    Ok(Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    configure_source_openpyxl_worker(&mut command);
+    Ok(command
         .args(["rename-sheets", "--config"])
         .arg(config)
         .arg("--recursive")
@@ -138,7 +219,7 @@ fn sheet_rename_cli_rewrites_references_and_protects_source_snapshot() -> Result
     assert_eq!(actual["rename_ok"], baseline["result"]["rename_ok"]);
     assert_eq!(actual["skip"], baseline["result"]["skip"]);
     assert_eq!(actual["files"][0]["status"], "renamed");
-    // Excel 改名路径不经过 umya 引擎，execution 计划报告为空。
+    // Openpyxl 改名路径不使用通用 ExcelEditPlan executor，execution 计划报告为空。
     assert!(actual["files"][0]["execution"].is_null());
     // 核心契约：跨表公式与命名区域引用随改名自动更新。
     let renamed_path = PathBuf::from(
@@ -210,18 +291,18 @@ fn sheet_rename_cli_rewrites_references_and_protects_source_snapshot() -> Result
         .count();
     assert_eq!(leaked_candidates, 0);
 
-    if let Some(report_path) = std::env::var_os("PYTOOLS_PT44_REPORT_PATH") {
+    if let Some(report_path) = std::env::var_os("PYTOOLS_PT45_REPORT_PATH") {
         let report_path = PathBuf::from(report_path);
         if let Some(parent) = report_path.parent() {
             fs::create_dir_all(parent)?;
         }
         let report = json!({
-            "suite": "pytools.pt_4_4_sheet_rename_candidate",
+            "suite": "pytools.pt_4_5_sheet_rename",
             "comparison_status": "passed_synthetic_projection",
             "python_baseline_report": "pytools-core/probe/reports/PT-4-4_python_baseline_20261023.json",
             "sample_class": "synthetic",
-            "engine": "umya_spreadsheet",
-            "capability_scope": "temporary test-only Passed capability; not production registration",
+            "engine": "openpyxl",
+            "capability_scope": "bundled Openpyxl worker; no production capability gate",
             "input_sha256_before": original_hash,
             "output_sha256_after": pytools_core::file_commit::sha256_file(&output_path)?,
             "comparison_note": "Print-area sheet quoting is normalized because quoted and unquoted simple sheet names are equivalent OOXML references.",
@@ -234,8 +315,53 @@ fn sheet_rename_cli_rewrites_references_and_protects_source_snapshot() -> Result
 }
 
 #[test]
-fn capability_path_refuses_formula_dependent_workbooks_before_source_change() -> Result<()> {
-    let dir = TestDir::new("rejected")?;
+fn sheet_rename_preserves_saved_formula_cache() -> Result<()> {
+    let dir = TestDir::new("formula-cache")?;
+    let config = fixture("config.xlsx");
+    let input = dir.path("input.xlsx");
+    fixture_with_formula_cache(&fixture("input.xlsx"), &input)?;
+    let input_formula_cache_cell = worksheet_cell_xml(&input, "xl/worksheets/sheet2.xml", "B1")?;
+    assert!(
+        input_formula_cache_cell.contains("<v>cell-a</v>"),
+        "test fixture did not contain a saved formula cache: {input_formula_cache_cell}"
+    );
+    let before_hash = pytools_core::file_commit::sha256_file(&input)?;
+
+    let output = run_cli_excel(&config, &input)?;
+    anyhow::ensure!(
+        output.status.success(),
+        "rename-sheets CLI failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let actual: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(actual["files"][0]["status"], "renamed");
+    let output_path = PathBuf::from(
+        actual["files"][0]["output"]
+            .as_str()
+            .context("renamed workbook path missing")?,
+    );
+    assert_eq!(
+        fs::canonicalize(&output_path)?,
+        fs::canonicalize(&input)?,
+        "sheet rename must modify the selected source copy in place"
+    );
+    assert_ne!(pytools_core::file_commit::sha256_file(&input)?, before_hash);
+
+    let formula_cache_cell = worksheet_cell_xml(&output_path, "xl/worksheets/sheet2.xml", "B1")?;
+    assert!(
+        formula_cache_cell.contains("<f>RenamedA!A1</f>"),
+        "formula reference was not rewritten: {formula_cache_cell}"
+    );
+    assert!(
+        formula_cache_cell.contains("<v>cell-a</v>"),
+        "saved formula cache was not retained: {formula_cache_cell}"
+    );
+    Ok(())
+}
+
+#[test]
+fn legacy_capability_does_not_route_sheet_rename_away_from_openpyxl() -> Result<()> {
+    let dir = TestDir::new("legacy-capability")?;
     let config = fixture("config.xlsx");
     let input = dir.path("input.xlsx");
     fs::copy(fixture("input.xlsx"), &input)?;
@@ -245,13 +371,28 @@ fn capability_path_refuses_formula_dependent_workbooks_before_source_change() ->
     write_capability(&capability, &plan, CapabilityStatus::Passed)?;
 
     let output = run_cli(&config, &capability, &input)?;
-    assert!(!output.status.success());
-    // umya capability 路径不保证公式/命名区域随改名更新，必须显式拒绝。
-    assert!(String::from_utf8_lossy(&output.stderr).contains("公式"));
-    assert_eq!(
+    anyhow::ensure!(
+        output.status.success(),
+        "legacy capability was not ignored: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let actual: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(actual["files"][0]["status"], "renamed");
+    assert_ne!(
         pytools_core::file_commit::sha256_file(&input)?,
         original_hash
     );
+    let renamed = excel_reader::read_workbook(&input)?;
+    assert!(renamed
+        .sheets
+        .iter()
+        .flat_map(|sheet| sheet.formulas.values())
+        .any(|formula| formula.contains("RenamedA")));
+    assert!(!renamed
+        .sheets
+        .iter()
+        .flat_map(|sheet| sheet.formulas.values())
+        .any(|formula| formula.contains("'A'!")));
     assert_eq!(
         fs::read_dir(&dir.0)?
             .filter_map(std::result::Result::ok)
@@ -277,7 +418,7 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     fs::create_dir_all(&nested)?;
     let first = input_dir.join("a.xlsx");
     let second = nested.join("b.xlsx");
-    let unsupported = input_dir.join("old.xls");
+    let unsupported = input_dir.join("old.xlsm");
     fs::copy(fixture("input.xlsx"), &first)?;
     fs::copy(fixture("input.xlsx"), &second)?;
     let first_hash = pytools_core::file_commit::sha256_file(&first)?;
@@ -311,8 +452,8 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
     };
     assert_eq!(status_for("a.xlsx")?, "renamed");
     assert_eq!(status_for("nested/b.xlsx")?, "renamed");
-    assert_eq!(status_for("old.xls")?, "skipped");
-    // 就地模式：两个 xlsx 都被改写，非法 xls 保持原样。
+    assert_eq!(status_for("old.xlsm")?, "skipped");
+    // 就地模式：两个 xlsx 都被改写，不支持的 xlsm 保持原样。
     assert_ne!(pytools_core::file_commit::sha256_file(&first)?, first_hash);
     assert_ne!(
         pytools_core::file_commit::sha256_file(&second)?,
@@ -357,6 +498,81 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
             );
         }
     }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn legacy_xls_sheet_rename_requires_windows_com() -> Result<()> {
+    let dir = TestDir::new("xls-convert-first")?;
+    let config = dir.path("config.xlsx");
+    write_legacy_sheet_mapping(&config)?;
+    let input = dir.path("input.xls");
+    fs::copy(fixture("com_input.xls"), &input)?;
+    let original_hash = pytools_core::file_commit::sha256_file(&input)?;
+
+    let output = run_cli_excel(&config, &input)?;
+    anyhow::ensure!(
+        output.status.success(),
+        ".xls should be reported as skipped without Windows COM: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(report["files"][0]["status"], "skipped");
+    let reason = report["files"][0]["reason"]
+        .as_str()
+        .context("skip reason missing")?;
+    assert!(
+        reason.contains("Windows Excel/WPS COM"),
+        "unexpected skip reason: {reason}"
+    );
+    assert_eq!(
+        pytools_core::file_commit::sha256_file(&input)?,
+        original_hash
+    );
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires an installed Excel or WPS COM server"]
+fn legacy_xls_sheet_rename_uses_dedicated_com_route() -> Result<()> {
+    let dir = TestDir::new("xls-com-rename")?;
+    let config = dir.path("config.xlsx");
+    write_legacy_sheet_mapping(&config)?;
+    let input = dir.path("input.xls");
+    fs::copy(fixture("com_input.xls"), &input)?;
+    let original_hash = pytools_core::file_commit::sha256_file(&input)?;
+
+    let output = run_cli_excel(&config, &input)?;
+    anyhow::ensure!(
+        output.status.success(),
+        ".xls COM rename failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(report["files"][0]["status"], "renamed");
+    assert_eq!(report["files"][0]["renamed"], 2);
+    let engine = report["files"][0]["engine"]
+        .as_str()
+        .context("COM application name missing")?;
+    assert!(
+        engine.contains("Application"),
+        "unexpected COM engine: {engine}"
+    );
+    assert_ne!(
+        pytools_core::file_commit::sha256_file(&input)?,
+        original_hash,
+        "successful in-place rename should update the isolated source copy"
+    );
+    let renamed = read_workbook(&input)?;
+    let names = renamed
+        .sheets
+        .iter()
+        .map(|sheet| sheet.name.as_str())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"1人民币"));
+    assert!(names.contains(&"2外币"));
     Ok(())
 }
 

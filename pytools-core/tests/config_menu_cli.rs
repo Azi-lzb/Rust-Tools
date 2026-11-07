@@ -341,7 +341,7 @@ fn default_menu_configuration_is_created_beside_executable_not_working_directory
 }
 
 #[test]
-fn existing_configuration_repair_menu_saves_a_plan_without_modifying_source() -> Result<()> {
+fn existing_configuration_repair_menu_uses_openpyxl_without_external_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = root.path().join("app/config/config.xlsx");
     write_incomplete_config(&config)?;
@@ -355,9 +355,9 @@ fn existing_configuration_repair_menu_saves_a_plan_without_modifying_source() ->
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[计划已生成]"));
-    assert!(stdout.contains("源配置未修改，也未生成候选"));
-    assert!(stdout.contains("实际读取组件: excel-reader / Calamine"));
-    assert!(stdout.contains("修改引擎: 未执行"));
+    assert!(stdout.contains("[候选已验证]"), "{stdout}");
+    assert!(stdout.contains("openpyxl"));
+    assert!(stdout.contains("未替换当前配置；候选文件保留"));
 
     let output_root = root.path().join("app/output");
     let action_dir = fs::read_dir(&output_root)?
@@ -376,7 +376,7 @@ fn existing_configuration_repair_menu_saves_a_plan_without_modifying_source() ->
         .operations
         .iter()
         .all(|operation| !matches!(operation, EditOperation::DeleteSheet { .. })));
-    assert!(!action_dir.join("config-candidate.xlsx").exists());
+    assert!(action_dir.join("config-candidate.xlsx").is_file());
     assert_eq!(fs::read(&config)?, source_before);
 
     let history_path = fs::read_dir(root.path().join("app/logs"))?
@@ -393,18 +393,19 @@ fn existing_configuration_repair_menu_saves_a_plan_without_modifying_source() ->
     let history: Value = serde_json::from_str(&history_text)?;
     assert_eq!(history["feature_id"], "PT-5-1");
     assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["metrics"]["operation"], "repair_plan");
+    assert_eq!(history["metrics"]["operation"], "candidate_retained");
     assert!(
         history["metrics"]["planned_operations"]
             .as_u64()
             .unwrap_or_default()
             > 0
     );
-    assert_eq!(history["plan_only"], true);
-    assert_eq!(history["excel_modifier_invoked"], false);
-    assert!(history["actual_engines"]
-        .as_array()
-        .is_some_and(|engines| engines.iter().any(|engine| engine == "calamine")));
+    assert_eq!(history["plan_only"], false);
+    assert_eq!(history["excel_modifier_invoked"], true);
+    assert!(history["actual_engines"].as_array().is_some_and(|engines| {
+        engines.iter().any(|engine| engine == "calamine")
+            && engines.iter().any(|engine| engine == "openpyxl")
+    }));
     Ok(())
 }
 
@@ -682,7 +683,29 @@ fn run_menu(config: &Path, input: &str, log_view: &str) -> Result<Output> {
         .and_then(Path::parent)
         .context("configuration app directory missing")?
         .join("logs");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .context("workspace root missing")?;
+    let worker = workspace.join("crates/excel-editor/python/openpyxl_worker.py");
+    let python_candidates = if cfg!(windows) {
+        [
+            workspace.join("dist/python/python.exe"),
+            workspace.join("dist/python/runtime/bin/python.exe"),
+        ]
+    } else {
+        [
+            workspace.join("dist/python/python3"),
+            workspace.join("dist/python/runtime/bin/python3"),
+        ]
+    };
+    let bundled_python = python_candidates.into_iter().find(|path| path.is_file());
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    if let Some(python) = bundled_python {
+        command
+            .env("PYTOOLS_OPENPYXL_PYTHON", python)
+            .env("PYTOOLS_OPENPYXL_WORKER", &worker);
+    }
+    let mut child = command
         .arg("menu")
         .arg("--config")
         .arg(config)

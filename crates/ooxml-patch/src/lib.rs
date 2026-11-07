@@ -1758,6 +1758,44 @@ pub struct CellRegionCopyReport {
     pub sheets_copied: Vec<String>,
 }
 
+/// Return the missing template sheets referenced by formula regions, including
+/// recursive formula dependencies. The result is intended for a narrowly
+/// scoped Openpyxl fallback when direct OOXML copying encounters an unsupported
+/// auxiliary-sheet relationship.
+pub fn missing_formula_dependency_sheets(
+    source: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+    requests: &[CellRegionCopyRequest],
+) -> Result<Vec<String>> {
+    ensure!(!requests.is_empty(), "cell region copy requires requests");
+    let source = source.as_ref();
+    let target = target.as_ref();
+    let source_sheets = sheet_parts(source)?;
+    let target_sheets = sheet_parts(target)?;
+    let mut source_zip = ZipArchive::new(fs::File::open(source)?)?;
+    let mut formulas_by_sheet = BTreeMap::new();
+    for request in requests {
+        let part = source_sheets
+            .get(&request.source_sheet)
+            .with_context(|| format!("template sheet {:?} is missing", request.source_sheet))?;
+        if !formulas_by_sheet.contains_key(&request.source_sheet) {
+            let xml = read_zip_part(&mut source_zip, part)?;
+            formulas_by_sheet.insert(
+                request.source_sheet.clone(),
+                region_formulas(&xml, &request.address)?,
+            );
+        }
+    }
+    let referenced = collect_referenced_sheets(&formulas_by_sheet);
+    let missing = discover_missing_template_sheets(
+        &mut source_zip,
+        &source_sheets,
+        &target_sheets,
+        &referenced,
+    )?;
+    Ok(missing.into_keys().collect())
+}
+
 /// Copy formula cells from one workbook's sheet region into another workbook's
 /// same-coordinate region, then write the target back in place.
 ///
@@ -1934,12 +1972,19 @@ fn collect_referenced_sheets(
     let mut referenced = BTreeSet::new();
     for formulas in formulas_by_sheet.values() {
         for text in formulas.values() {
-            for name in sheet_references_in_formula(text) {
+            for name in sheet_references_in_formula(text)
+                .into_iter()
+                .filter(|name| !is_external_sheet_reference(name))
+            {
                 referenced.insert(name);
             }
         }
     }
     referenced
+}
+
+fn is_external_sheet_reference(name: &str) -> bool {
+    name.contains('[') || name.contains(']')
 }
 
 /// Extract `Sheet!` prefixes from a formula, honouring quoted names.
@@ -2053,13 +2098,17 @@ fn copy_worksheet_with_dependencies(
         let Some(target) = relationship.attribute("Target") else {
             continue;
         };
+        if relationship.attribute("TargetMode") == Some("External") {
+            bail!(
+                "OPENPYXL_FALLBACK_REQUIRED: auxiliary worksheet {source_part:?} has external relationship {kind:?}"
+            );
+        }
         let resolved = normalize_part(source_dir, target);
-        // Only carry parts whose payload lives in this package.
-        let Ok(bytes) = read_zip_part(source_zip, &resolved) else {
-            // External or missing target: keep it out rather than copy a
-            // dangling reference.
-            continue;
-        };
+        let bytes = read_zip_part(source_zip, &resolved).with_context(|| {
+            format!(
+                "OPENPYXL_FALLBACK_REQUIRED: auxiliary worksheet relationship target {resolved:?} is unavailable"
+            )
+        })?;
         let file_name = resolved.rsplit('/').next().unwrap_or(&resolved);
         let (prefix, suffix) = match (
             file_name
@@ -2072,9 +2121,9 @@ fn copy_worksheet_with_dependencies(
             (Some(_), _) => ("comments", ".xml"),
             (_, Some(_)) => ("vmlDrawing", ".vml"),
             _ => {
-                // Anything else (drawings, tables) is not needed for a
-                // data-only sheet; skip instead of inventing a layout.
-                continue;
+                bail!(
+                    "OPENPYXL_FALLBACK_REQUIRED: auxiliary worksheet {source_part:?} uses relationship {kind:?} to {resolved:?}"
+                );
             }
         };
         let new_index = if prefix == "comments" && comments_index.is_none() {
@@ -2264,11 +2313,9 @@ fn read_shared_strings(source_zip: &mut ZipArchive<fs::File>) -> Result<Vec<Stri
 }
 
 /// Copy template sheets into the target when copied formulas reference them
-/// and the target lacks them.
-///
-/// Only data-only sheets are supported. A sheet carrying its own formulas would
-/// need its dependency graph evaluated too, so that case is refused with a
-/// clear message instead of silently importing stale caches.
+/// and the target lacks them. Formula-bearing helper sheets are copied too;
+/// their own references are walked recursively so the calculation workbook
+/// receives the full missing dependency chain before it is recalculated.
 fn plan_missing_template_sheets(
     source: &Path,
     output: &Path,
@@ -2276,22 +2323,18 @@ fn plan_missing_template_sheets(
     referenced: &BTreeSet<String>,
 ) -> Result<(BTreeMap<String, Vec<u8>>, Vec<String>)> {
     let target_sheets = sheet_parts(output)?;
-    let missing = referenced
-        .iter()
-        .filter(|name| {
-            !target_sheets
-                .keys()
-                .any(|existing| existing.eq_ignore_ascii_case(name))
-        })
-        .cloned()
-        .collect::<Vec<_>>();
     let mut changes = BTreeMap::new();
+    let mut source_zip = ZipArchive::new(fs::File::open(source)?)?;
+    let mut target_zip = ZipArchive::new(fs::File::open(output)?)?;
+    let missing = discover_missing_template_sheets(
+        &mut source_zip,
+        source_sheets,
+        &target_sheets,
+        referenced,
+    )?;
     if missing.is_empty() {
         return Ok((changes, Vec::new()));
     }
-
-    let mut source_zip = ZipArchive::new(fs::File::open(source)?)?;
-    let mut target_zip = ZipArchive::new(fs::File::open(output)?)?;
     let mut workbook = read_zip_part(&mut target_zip, "xl/workbook.xml")?;
     let mut workbook_rels = read_zip_part(&mut target_zip, "xl/_rels/workbook.xml.rels")?;
     let mut content_types = read_zip_part(&mut target_zip, "[Content_Types].xml")?;
@@ -2304,14 +2347,7 @@ fn plan_missing_template_sheets(
         .chain(target_zip.file_names())
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
-    for name in missing {
-        let Some(part) = source_sheets
-            .iter()
-            .find(|(sheet, _)| sheet.eq_ignore_ascii_case(&name))
-            .map(|(_, part)| part.clone())
-        else {
-            bail!("公式引用了工作表 {name:?}，但模板中也没有这个表，无法补装");
-        };
+    for (name, part) in missing {
         let sheet_xml = read_zip_part(&mut source_zip, &part)
             .with_context(|| format!("read template sheet {name:?}"))?;
         // The sheet's `<c t="s"><v>N</v></c>` indexes point into the TEMPLATE's
@@ -2322,11 +2358,6 @@ fn plan_missing_template_sheets(
         // own strings and needs no shared-table surgery.
         let sheet_xml = inline_shared_strings(&mut source_zip, &sheet_xml)
             .with_context(|| format!("inline shared strings for template sheet {name:?}"))?;
-        ensure!(
-            !has_formula_elements(&sheet_xml),
-            "公式引用的模板工作表 {name:?} 自身包含公式；请先在模板中把它改为数值表，\
-             或手动把该表加入源工作簿"
-        );
         // A fresh part name that cannot collide with the target's.
         let next_index = next_free_sheet_index(&used_parts);
         let new_part = format!("xl/worksheets/sheet{next_index}.xml");
@@ -2363,16 +2394,83 @@ fn plan_missing_template_sheets(
     Ok((changes, copied))
 }
 
-fn has_formula_elements(sheet_xml: &[u8]) -> bool {
-    Document::parse(std::str::from_utf8(sheet_xml).unwrap_or_default())
-        .map(|document| {
-            document.descendants().any(|node| {
-                node.is_element()
-                    && node.tag_name().namespace() == Some(MAIN_NS)
-                    && node.tag_name().name() == "f"
-            })
-        })
-        .unwrap_or(true)
+fn discover_missing_template_sheets(
+    source_zip: &mut ZipArchive<fs::File>,
+    source_sheets: &BTreeMap<String, String>,
+    target_sheets: &BTreeMap<String, String>,
+    referenced: &BTreeSet<String>,
+) -> Result<BTreeMap<String, String>> {
+    let mut pending = referenced.iter().cloned().collect::<BTreeSet<_>>();
+    let mut missing = BTreeMap::<String, String>::new();
+    // Resolve the dependency graph first. A formula-bearing auxiliary sheet is
+    // not a terminal dependency: its formulas may reference more template
+    // sheets that must also be installed.
+    while let Some(name) = pending.pop_first() {
+        if target_sheets
+            .keys()
+            .any(|existing| existing.eq_ignore_ascii_case(&name))
+            || missing
+                .keys()
+                .any(|existing| existing.eq_ignore_ascii_case(&name))
+        {
+            continue;
+        }
+        let Some(part) = source_sheets
+            .iter()
+            .find(|(sheet, _)| sheet.eq_ignore_ascii_case(&name))
+            .map(|(_, part)| part.clone())
+        else {
+            bail!("公式引用了工作表 {name:?}，但模板中也没有这个表，无法补装");
+        };
+        let sheet_xml = read_zip_part(source_zip, &part)
+            .with_context(|| format!("read template sheet {name:?}"))?;
+        for formula in all_sheet_formula_texts(&sheet_xml)
+            .with_context(|| format!("读取辅助工作表 {name:?} 的公式依赖"))?
+            .values()
+        {
+            pending.extend(
+                sheet_references_in_formula(formula)
+                    .into_iter()
+                    .filter(|reference| !is_external_sheet_reference(reference)),
+            );
+        }
+        missing.insert(name, part);
+    }
+    Ok(missing)
+}
+
+/// Formula text for every formula cell on a sheet, expanding shared formulas
+/// so dependency discovery sees the references used by each cell.
+fn all_sheet_formula_texts(sheet_xml: &[u8]) -> Result<BTreeMap<String, String>> {
+    let xml = std::str::from_utf8(sheet_xml).context("worksheet XML must be UTF-8")?;
+    let document = Document::parse(xml).context("parse worksheet formula dependencies")?;
+    let shared = shared_formula_groups(&document)?;
+    let mut formulas = BTreeMap::new();
+    for cell in formula_cells(&document) {
+        let Some(reference) = cell.attribute("r") else {
+            continue;
+        };
+        let Some(formula) = formula_node(cell) else {
+            continue;
+        };
+        let position = parse_a1_cell(reference)
+            .with_context(|| format!("parse auxiliary formula cell {reference}"))?;
+        let text = if formula.attribute("t") == Some("shared") {
+            effective_formula_text(formula, reference, position, &shared)?
+        } else {
+            // Array/data-table formulas are not interpreted here. Their text
+            // still participates in dependency discovery and their XML is
+            // copied verbatim; the external calculator remains responsible
+            // for evaluating them.
+            formula.text().unwrap_or_default().trim().to_owned()
+        };
+        ensure!(
+            !text.is_empty(),
+            "辅助工作表公式 {reference} 缺少公式文本，无法发现依赖"
+        );
+        formulas.insert(reference.to_owned(), text);
+    }
+    Ok(formulas)
 }
 
 fn next_relationship_id(workbook_rels: &[u8]) -> Result<u32> {
@@ -4844,7 +4942,7 @@ mod cell_region_copy_tests {
     use anyhow::Result;
     use std::{
         fs::{self, File},
-        io::Write,
+        io::{Read, Write},
         path::PathBuf,
     };
     use zip::{write::SimpleFileOptions, ZipWriter};
@@ -5010,6 +5108,70 @@ mod cell_region_copy_tests {
         Ok(())
     }
 
+    #[test]
+    fn recursively_copies_formula_bearing_helper_sheet_dependencies() -> Result<()> {
+        let template = temp_path("recursive_template");
+        let target = temp_path("recursive_target");
+        workbook_with_three_sheets(
+            &template,
+            r#"<sheetData><row r="5"><c r="A5"><f>参照表!D2</f><v>0</v></c></row></sheetData>"#,
+            "参照表",
+            r#"<sheetData><row r="2"><c r="D2"><f>基础参数!A1*2</f><v>0</v></c></row></sheetData>"#,
+            "基础参数",
+            r#"<sheetData><row r="1"><c r="A1"><v>21</v></c></row></sheetData>"#,
+        )?;
+        workbook(
+            &target,
+            r#"<sheetData><row r="5"><c r="A5"><v>0</v></c></row></sheetData>"#,
+        )?;
+
+        let report = copy_cell_region(
+            &template,
+            &target,
+            &[CellRegionCopyRequest {
+                source_sheet: "Sheet1".to_owned(),
+                target_sheet: "Sheet1".to_owned(),
+                address: "A5".to_owned(),
+            }],
+        )?;
+        assert_eq!(report.cells_with_formula, 1);
+        assert_eq!(report.sheets_copied.len(), 2);
+        assert!(report.sheets_copied.iter().any(|sheet| sheet == "参照表"));
+        assert!(report.sheets_copied.iter().any(|sheet| sheet == "基础参数"));
+
+        let bytes = fs::read(&target)?;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+        let mut workbook_xml = String::new();
+        {
+            use std::io::Read;
+            zip.by_name("xl/workbook.xml")?
+                .read_to_string(&mut workbook_xml)?;
+        }
+        assert!(workbook_xml.contains("参照表"), "{workbook_xml}");
+        assert!(workbook_xml.contains("基础参数"), "{workbook_xml}");
+        let formula_parts = zip
+            .file_names()
+            .filter(|name| name.starts_with("xl/worksheets/sheet"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        assert_eq!(formula_parts.len(), 3, "{formula_parts:?}");
+        let all_parts = formula_parts
+            .iter()
+            .map(|part| {
+                let mut xml = String::new();
+                zip.by_name(part)?.read_to_string(&mut xml)?;
+                Ok::<_, anyhow::Error>(xml)
+            })
+            .collect::<Result<Vec<_>>>()?
+            .join("\n");
+        assert!(all_parts.contains("参照表!D2"), "{all_parts}");
+        assert!(all_parts.contains("基础参数!A1*2"), "{all_parts}");
+
+        let _ = fs::remove_file(&template);
+        let _ = fs::remove_file(&target);
+        Ok(())
+    }
+
     /// Two-sheet workbook whose second sheet is registered in workbook.xml,
     /// its relationships and [Content_Types].xml.
     fn workbook_with_extra_sheet(
@@ -5041,6 +5203,50 @@ mod cell_region_copy_tests {
             (
                 "xl/worksheets/sheet2.xml",
                 format!(r#"<worksheet xmlns="{MAIN_NS}">{extra_sheet}</worksheet>"#),
+            ),
+        ] {
+            zip.start_file(name, SimpleFileOptions::default())?;
+            zip.write_all(content.as_bytes())?;
+        }
+        zip.finish()?;
+        Ok(())
+    }
+
+    fn workbook_with_three_sheets(
+        path: &PathBuf,
+        first_sheet: &str,
+        second_name: &str,
+        second_sheet: &str,
+        third_name: &str,
+        third_sheet: &str,
+    ) -> Result<()> {
+        let root_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#
+        );
+        let book = format!(
+            r#"<workbook xmlns="{MAIN_NS}" xmlns:r="{REL_NS}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="{second_name}" sheetId="2" r:id="rId2"/><sheet name="{third_name}" sheetId="3" r:id="rId3"/></sheets></workbook>"#
+        );
+        let book_rels = format!(
+            r#"<Relationships xmlns="{PACKAGE_REL_NS}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>"#
+        );
+        let types = r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#;
+        let mut zip = ZipWriter::new(File::create(path)?);
+        for (name, content) in [
+            ("_rels/.rels", root_rels),
+            ("xl/workbook.xml", book),
+            ("xl/_rels/workbook.xml.rels", book_rels),
+            ("[Content_Types].xml", types.to_owned()),
+            (
+                "xl/worksheets/sheet1.xml",
+                format!(r#"<worksheet xmlns="{MAIN_NS}">{first_sheet}</worksheet>"#),
+            ),
+            (
+                "xl/worksheets/sheet2.xml",
+                format!(r#"<worksheet xmlns="{MAIN_NS}">{second_sheet}</worksheet>"#),
+            ),
+            (
+                "xl/worksheets/sheet3.xml",
+                format!(r#"<worksheet xmlns="{MAIN_NS}">{third_sheet}</worksheet>"#),
             ),
         ] {
             zip.start_file(name, SimpleFileOptions::default())?;

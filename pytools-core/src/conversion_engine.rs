@@ -1,16 +1,17 @@
 //! Fidelity conversion engine (former `lo-convert` sidecar).
-//! Windows `.xls/.xlsb/.xlsm` conversion uses the bundled pywin32 COM worker;
-//! native ET and Word keep their existing Windows routes. LibreOffice uses the
-//! local `soffice` CLI. No separate `lo-convert` executable is required.
+//! Office format conversion uses the bundled pywin32 COM worker on Windows.
+//! Microsoft Excel is preferred for ordinary Office files and WPS COM is used
+//! when Excel is unavailable or for WPS-native formats. LibreOffice conversion
+//! is paused and is not selected by production routing.
 //!
-//! LibreOffice runs as a batch-scoped session: one shared isolated profile
-//! and one `soffice` process per conversion stage handle the whole batch
-//! (inputs are staged as uniquely named disposable copies). Direct
-//! single-file calls without a prepared batch keep the historical
-//! one-process-per-file behavior.
+//! The older LibreOffice batch implementation remains dormant for now.
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use encoding_rs::GBK;
+use excel_editor::{
+    BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId,
+    ExcelEditPlan, OpenpyxlWorkerConfig, PreservationRequirement, RangeStyleMode, WorkbookFormat,
+};
 use excel_reader::{
     read_value_columns_with_iso_dates, read_workbook, CellValue as ReaderCellValue, WorkbookDump,
 };
@@ -26,11 +27,16 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
     process::{Child, ChildStdin, ChildStdout},
 };
+#[cfg(target_os = "linux")]
+use std::{
+    io::{BufRead, BufReader, BufWriter, Write},
+    process::{Child, ChildStdin, ChildStdout},
+};
 
 /// Protocol version written by the bundled pywin32 worker. Bumped whenever the
 /// JSON-lines request/response contract changes (v2 added ET/ETT and Word).
 #[cfg(windows)]
-const PYWIN32_PROTOCOL_VERSION: u32 = 2;
+const PYWIN32_PROTOCOL_VERSION: u32 = 3;
 
 /// Lowest FileFormat WPS assigns to its own spreadsheet containers. Values
 /// below it come from Excel (56 = XLS, 51 = XLSX, ...), which would mean the
@@ -38,9 +44,11 @@ const PYWIN32_PROTOCOL_VERSION: u32 = 2;
 const WPS_NATIVE_FILE_FORMAT_MIN: i32 = 65_521;
 
 /// State scoped to one user conversion request or batch.
-pub(crate) struct ConversionRuntime {
+pub struct ConversionRuntime {
     #[cfg(windows)]
     pywin32: Option<PythonExcelWorker>,
+    #[cfg(target_os = "linux")]
+    libreoffice_calculator: Option<LibreOfficeCalcWorker>,
     libreoffice: Option<LibreOfficeBatchSession>,
     /// Test hook: replaces the real `soffice` process execution.
     libreoffice_executor: Option<LibreOfficeExecutor>,
@@ -51,6 +59,8 @@ impl Default for ConversionRuntime {
         Self {
             #[cfg(windows)]
             pywin32: None,
+            #[cfg(target_os = "linux")]
+            libreoffice_calculator: None,
             libreoffice: None,
             libreoffice_executor: None,
         }
@@ -67,6 +77,182 @@ pub(crate) struct LibreOfficeRunOutcome {
 
 pub(crate) type LibreOfficeExecutor =
     Box<dyn FnMut(&[String], &Path) -> Result<LibreOfficeRunOutcome> + Send>;
+
+#[cfg(target_os = "linux")]
+struct LibreOfficeCalcWorker {
+    child: Child,
+    input: BufWriter<ChildStdin>,
+    output: BufReader<ChildStdout>,
+}
+
+#[cfg(target_os = "linux")]
+impl LibreOfficeCalcWorker {
+    fn start() -> Result<Self> {
+        let worker = libreoffice_calc_worker_path()?;
+        let python = std::env::var_os("PYTOOLS_LO_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let system_python = PathBuf::from("/usr/bin/python3");
+                if system_python.is_file() {
+                    system_python
+                } else {
+                    PathBuf::from("python3")
+                }
+            });
+        let mut child = Command::new(&python)
+            .arg("-u")
+            .arg(&worker)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .with_context(|| {
+                format!(
+                    "启动 LibreOffice 计算 worker 失败（Python：{}，worker：{}）",
+                    python.display(),
+                    worker.display()
+                )
+            })?;
+        let input = child
+            .stdin
+            .take()
+            .context("LibreOffice 计算 worker stdin 不可用")?;
+        let output = child
+            .stdout
+            .take()
+            .context("LibreOffice 计算 worker stdout 不可用")?;
+        let mut worker = Self {
+            child,
+            input: BufWriter::new(input),
+            output: BufReader::new(output),
+        };
+        let ready = worker.read_response("启动 LibreOffice 计算会话")?;
+        ensure!(
+            ready.get("ok").and_then(serde_json::Value::as_bool) == Some(true)
+                && ready.get("ready").and_then(serde_json::Value::as_bool) == Some(true)
+                && ready.get("protocol").and_then(serde_json::Value::as_u64) == Some(1),
+            "LibreOffice 计算 worker 握手失败：{}",
+            ready
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("worker 协议版本或就绪状态不匹配")
+        );
+        Ok(worker)
+    }
+
+    fn recalculate(&mut self, source_copy: &Path) -> Result<()> {
+        serde_json::to_writer(
+            &mut self.input,
+            &serde_json::json!({
+                "op": "recalculate",
+                "source_copy": source_copy,
+            }),
+        )
+        .context("写入 LibreOffice 重算请求失败")?;
+        self.input
+            .write_all(b"\n")
+            .and_then(|()| self.input.flush())
+            .context("发送 LibreOffice 重算请求失败")?;
+        let response = self.read_response("读取 LibreOffice 重算结果")?;
+        ensure!(
+            response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
+            "LibreOffice 重算失败（阶段：{}）：{}",
+            response
+                .get("stage")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("未知阶段"),
+            response
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("worker 未提供错误详情")
+        );
+        ensure!(
+            response
+                .get("application")
+                .and_then(serde_json::Value::as_str)
+                == Some("LibreOffice Calc"),
+            "LibreOffice 重算 worker 未确认计算引擎"
+        );
+        Ok(())
+    }
+
+    fn read_response(&mut self, action: &str) -> Result<serde_json::Value> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .with_context(|| format!("检查 LibreOffice 计算 worker 进程失败：{action}"))?
+        {
+            bail!("LibreOffice 计算 worker 已退出（状态：{status}）：{action}");
+        }
+        let mut line = String::new();
+        let bytes = self
+            .output
+            .read_line(&mut line)
+            .with_context(|| format!("{action}失败"))?;
+        ensure!(bytes > 0, "LibreOffice 计算 worker 未返回结果：{action}");
+        serde_json::from_str(&line)
+            .with_context(|| format!("LibreOffice 计算 worker 返回的结果不是有效 JSON：{action}"))
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for LibreOfficeCalcWorker {
+    fn drop(&mut self) {
+        let _ = writeln!(self.input, "{{\"op\":\"shutdown\"}}");
+        let _ = self.input.flush();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                _ => {
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn libreoffice_calc_worker_path() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("PYTOOLS_LO_CALC_WORKER") {
+        let path = PathBuf::from(path);
+        ensure!(
+            path.is_file(),
+            "PYTOOLS_LO_CALC_WORKER 指向的 worker 不存在：{}",
+            path.display()
+        );
+        return Ok(path);
+    }
+    let executable = std::env::current_exe().context("定位当前 RustTools 程序失败")?;
+    let executable_dir = executable
+        .parent()
+        .context("当前 RustTools 程序没有父目录")?;
+    let manifest_worker = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("python")
+        .join("libreoffice_calc_worker.py");
+    let candidates = [
+        executable_dir
+            .join("python")
+            .join("libreoffice_calc_worker.py"),
+        executable_dir.join("../libexec/pytools/openpyxl/worker/libreoffice_calc_worker.py"),
+        manifest_worker,
+    ];
+    candidates
+        .iter()
+        .find(|path| path.is_file())
+        .cloned()
+        .with_context(|| {
+            format!(
+                "未找到 LibreOffice 计算 worker；已检查 {:?}，可用 PYTOOLS_LO_CALC_WORKER 指定路径",
+                candidates
+            )
+        })
+}
 
 /// One output file a fake or real runner is expected to have produced.
 struct LibreOfficeJob {
@@ -203,11 +389,7 @@ fn run_soffice_process(arguments: &[String]) -> Result<LibreOfficeRunOutcome> {
 /// alias for `pywin32`.
 pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
     if engine == "auto" {
-        if cfg!(windows) {
-            "pywin32"
-        } else {
-            "lo"
-        }
+        "pywin32"
     } else if engine == "lo" {
         "lo"
     } else {
@@ -219,46 +401,154 @@ fn select_conversion_engine(
     engine: &str,
     _source_ext: &str,
     _target: &str,
-    is_windows: bool,
+    _is_windows: bool,
 ) -> &'static str {
+    // All Office format conversions are currently restricted to the packaged
+    // pywin32 worker driving Microsoft Excel or WPS COM. On Linux the worker
+    // is unavailable and conversion fails explicitly instead of switching to
+    // LibreOffice.
     if engine != "auto" {
         return match engine {
             "lo" => "lo",
             "com" | "pywin32" => "pywin32",
-            _ => "lo",
+            _ => "pywin32",
         };
     }
-    if !is_windows {
-        return "lo";
-    }
-    // All Windows fidelity conversions (Excel/WPS spreadsheets and Word/WPS
-    // Writer documents) use one batch-scoped pywin32 worker.
+    // Excel/WPS spreadsheets and Word/WPS Writer documents use the same
+    // batch-scoped pywin32 worker on Windows.
     "pywin32"
 }
 
 /// Whether this source would run through LibreOffice under the requested
 /// engine, using the same source/target matrix the per-file path accepts.
 pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: &str) -> bool {
-    if select_fidelity_engine(engine) != "lo" {
-        return false;
-    }
-    // .et/.ett stay on the per-file path: their native WPS source format can
-    // only be verified by Office/WPS COM, so a LibreOffice result is rejected
-    // afterwards anyway.
-    (target == "xlsx" && matches!(source_ext, "xls" | "xlsb" | "xlsm"))
-        || (target == "docx" && source_ext == "doc")
+    let _ = (source_ext, target, engine);
+    // Office conversion is currently COM-only. Keep the batch session code
+    // available as dormant infrastructure, but never schedule `soffice`.
+    false
 }
 
 impl ConversionRuntime {
+    /// Run the dedicated 5-1 legacy XLS operation through Excel/WPS COM.
+    /// Callers pass an isolated target candidate; the source is committed only
+    /// after the worker succeeds and the caller rechecks its source snapshot.
+    pub fn village_split_com(
+        &mut self,
+        current: &Path,
+        previous: &Path,
+        candidate: &Path,
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                [current, previous, candidate].iter().all(|path| path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls"))),
+                "5-1 COM 路由要求本期、上期和目标候选均为 .xls"
+            );
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "village_split_com",
+                    "current": current,
+                    "previous": previous,
+                    "candidate": candidate,
+                }),
+                "5-1 Excel/WPS COM 拆分",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (current, previous, candidate);
+            bail!("5-1 的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
+    /// Run the dedicated 5-7 legacy XLS operation on an isolated current-file
+    /// candidate. The caller owns snapshot validation and safe replacement.
+    pub fn rural_loan_com(
+        &mut self,
+        current_candidate: &Path,
+        previous: &Path,
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                [current_candidate, previous].iter().all(|path| path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls"))),
+                "5-7 COM 路由要求本期候选和上期工作簿均为 .xls"
+            );
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "rural_loan_com",
+                    "current_candidate": current_candidate,
+                    "previous": previous,
+                }),
+                "5-7 Excel/WPS COM 涉农贷款修正",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (current_candidate, previous);
+            bail!("5-7 的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
+    /// Apply Rust-planned 5-2 institution-name updates to an isolated legacy
+    /// `.xls` candidate through the current Excel/WPS COM batch session.
+    pub fn institution_normalize_com(
+        &mut self,
+        candidate: &Path,
+        updates: &[(String, String, String)],
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            ensure!(
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
+                "5-2 COM 路由要求 .xls 候选"
+            );
+            ensure!(!updates.is_empty(), "5-2 COM 路由没有单元格更新");
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            let updates = updates
+                .iter()
+                .map(|(sheet, cell, value)| {
+                    serde_json::json!({"sheet": sheet, "cell": cell, "value": value})
+                })
+                .collect::<Vec<_>>();
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "institution_normalize_com",
+                    "candidate": candidate,
+                    "updates": updates,
+                }),
+                "5-2 Excel/WPS COM 机构名称规范化",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, updates);
+            bail!("5-2 的 .xls 处理需要 Windows Excel/WPS COM")
+        }
+    }
+
     pub(crate) fn rename_sheets_in_candidate(
         &mut self,
         candidate: &Path,
         changes: &[(String, String)],
     ) -> Result<()> {
-        ensure!(
-            std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none(),
-            "工作表改名需要启用随包 openpyxl 引擎；当前已禁用外部引擎"
-        );
         #[cfg(windows)]
         {
             if self.pywin32.is_none() {
@@ -284,10 +574,53 @@ impl ConversionRuntime {
         }
     }
 
+    /// Rename a legacy BIFF `.xls` candidate through the dedicated Excel/WPS
+    /// COM operation used by the old PyCode route. This is intentionally
+    /// limited to 4-5 sheet renaming; it is not a general workbook editor.
+    pub(crate) fn rename_sheets_com_in_candidate(
+        &mut self,
+        candidate: &Path,
+        changes: &[(String, String)],
+    ) -> Result<String> {
+        #[cfg(windows)]
+        {
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            let changes = changes
+                .iter()
+                .map(|(old_name, new_name)| {
+                    serde_json::json!({"old_name": old_name, "new_name": new_name})
+                })
+                .collect::<Vec<_>>();
+            let response = self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "rename_sheets_com",
+                    "candidate": candidate.to_string_lossy(),
+                    "changes": changes,
+                }),
+                "Excel/WPS COM 工作表改名",
+            )?;
+            ensure!(
+                response["validation"]["verified"].as_bool() == Some(true),
+                "Excel/WPS COM 工作表改名未通过回读校验"
+            );
+            Ok(response["application"]
+                .as_str()
+                .unwrap_or("Excel/WPS COM")
+                .to_owned())
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (candidate, changes);
+            bail!("BIFF .xls 工作表改名需要 Windows Excel/WPS COM")
+        }
+    }
+
     /// Copy template validation formulas into a disposable source-workbook copy,
-    /// recalculate it through the packaged Office/WPS COM worker, and return
-    /// matching formula results. One runtime reuses the same COM session for
-    /// every workbook in a batch.
+    /// recalculate it through the platform calculation worker, and return
+    /// matching formula results. One runtime reuses the same calculation
+    /// session for every workbook in a batch.
     ///
     /// The formulas are copied here in Rust (OOXML), so the COM host only ever
     /// opens the caller's working copy. Opening the template through COM as
@@ -301,7 +634,7 @@ impl ConversionRuntime {
     ) -> Result<NamedValidationCalculation> {
         ensure!(!regions.is_empty(), "校验区域请求不能为空");
         if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
-            bail!("校验区域计算需要 Excel/WPS COM；当前环境已禁用外部引擎");
+            bail!("校验区域计算需要 Excel/WPS COM 或 LibreOffice；当前环境已禁用外部引擎");
         }
         ensure!(
             source_copy
@@ -321,13 +654,53 @@ impl ConversionRuntime {
                 address: region.address.clone(),
             })
             .collect::<Vec<_>>();
-        let copied = ooxml_patch::copy_cell_region(template, source_copy, &copy_requests)
-            .with_context(|| {
-                format!(
-                    "把模板校验公式复制到工作副本失败（模板：{}）",
-                    template.display()
+        let (copied, dependency_copy_engine) = match ooxml_patch::copy_cell_region(
+            template,
+            source_copy,
+            &copy_requests,
+        ) {
+            Ok(copied) => (copied, "OOXML".to_owned()),
+            Err(primary) if format!("{primary:#}").contains("OPENPYXL_FALLBACK_REQUIRED") => {
+                let dependency_sheets = ooxml_patch::missing_formula_dependency_sheets(
+                    template,
+                    source_copy,
+                    &copy_requests,
                 )
-            })?;
+                .context("发现 OOXML 不支持的辅助表关系，但无法解析完整公式依赖")?;
+                ensure!(
+                    !dependency_sheets.is_empty(),
+                    "OOXML 请求 Openpyxl 回退，但没有找到缺失的辅助工作表"
+                );
+                let fallback_result = Self::import_validation_dependencies_openpyxl(
+                    template,
+                    source_copy,
+                    &dependency_sheets,
+                );
+                if let Err(fallback) = fallback_result {
+                    return Err(anyhow!(
+                        "OOXML 定点复制辅助表失败：{primary:#}；受保护的 Openpyxl 回退也未通过：{fallback:#}"
+                    ));
+                }
+                let mut copied =
+                    ooxml_patch::copy_cell_region(template, source_copy, &copy_requests)
+                        .with_context(|| {
+                            format!(
+                        "Openpyxl 已补装辅助表，但随后用 OOXML 复制校验区域公式失败（模板：{}）",
+                        template.display()
+                    )
+                        })?;
+                copied.sheets_copied = dependency_sheets;
+                (copied, "Openpyxl 回退 + OOXML".to_owned())
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "把模板校验公式复制到工作副本失败（模板：{}）",
+                        template.display()
+                    )
+                })
+            }
+        };
         #[cfg(windows)]
         {
             if self.pywin32.is_none() {
@@ -343,13 +716,208 @@ impl ConversionRuntime {
                 cells: calculation.cells,
                 copied_formula_cells: copied.cells_with_formula,
                 copied_template_sheets: copied.sheets_copied,
+                dependency_copy_engine,
             })
         }
         #[cfg(not(windows))]
         {
-            let _ = copied;
-            bail!("校验区域公式重算需要 Windows Excel/WPS COM 与随包 pywin32 Worker");
+            #[cfg(target_os = "linux")]
+            {
+                if self.libreoffice_calculator.is_none() {
+                    self.libreoffice_calculator = Some(LibreOfficeCalcWorker::start()?);
+                }
+                self.libreoffice_calculator
+                    .as_mut()
+                    .expect("LibreOffice calculator initialized")
+                    .recalculate(source_copy)?;
+                let workbook = read_workbook(source_copy)
+                    .context("LibreOffice 重算后使用 Calamine 回读公式缓存失败")?;
+                let cells = extract_named_validation_cells(&workbook, regions)?;
+                Ok(NamedValidationCalculation {
+                    application: "LibreOffice Calc".to_owned(),
+                    cells,
+                    copied_formula_cells: copied.cells_with_formula,
+                    copied_template_sheets: copied.sheets_copied,
+                    dependency_copy_engine,
+                })
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = copied;
+                bail!("校验区域公式重算仅在 Windows（Excel/WPS COM）和 Linux（LibreOffice）提供")
+            }
         }
+    }
+
+    /// Use the existing Openpyxl plan executor only when the narrow OOXML
+    /// worksheet copier cannot carry an auxiliary sheet relationship. The
+    /// target here is already an isolated working copy; the backend still
+    /// creates and validates a separate candidate, and its merged-payload
+    /// preflight refuses workbooks that Openpyxl would alter lossily.
+    fn import_validation_dependencies_openpyxl(
+        template: &Path,
+        working_copy: &Path,
+        dependency_sheets: &[String],
+    ) -> Result<()> {
+        let binary =
+            std::env::current_exe().context("定位 rustTools 程序以解析 Openpyxl 运行时")?;
+        let config = OpenpyxlWorkerConfig::resolve_runtime(&binary, "pytools")
+            .context("解析随包 Openpyxl Worker 运行时")?;
+        Self::import_validation_dependencies_with_config(
+            template,
+            working_copy,
+            dependency_sheets,
+            config,
+        )
+    }
+
+    fn import_validation_dependencies_with_config(
+        template: &Path,
+        working_copy: &Path,
+        dependency_sheets: &[String],
+        config: OpenpyxlWorkerConfig,
+    ) -> Result<()> {
+        ensure!(
+            !dependency_sheets.is_empty(),
+            "Openpyxl 回退没有需要补装的辅助表"
+        );
+        ensure!(
+            template.extension().and_then(|value| value.to_str()) == Some("xlsx")
+                && working_copy.extension().and_then(|value| value.to_str()) == Some("xlsx"),
+            "受保护的 Openpyxl 辅助表回退目前仅支持 .xlsx 模板和工作副本"
+        );
+
+        let template_dump = read_workbook(template).context("Openpyxl 回退读取模板工作簿")?;
+        let target_profile = excel_editor::inspect_xlsx_profile(working_copy)
+            .context("Openpyxl 回退检查工作副本 OOXML 结构")?;
+        ensure!(
+            target_profile.format == WorkbookFormat::Xlsx && target_profile.inventory_complete,
+            "Openpyxl 回退要求工作副本为结构清单完整的 .xlsx 工作簿"
+        );
+
+        let mut operations = Vec::new();
+        for sheet_name in dependency_sheets {
+            let source_sheet = template_dump
+                .sheets
+                .iter()
+                .find(|sheet| sheet.name.eq_ignore_ascii_case(sheet_name))
+                .with_context(|| format!("Openpyxl 回退模板缺少辅助工作表 {sheet_name:?}"))?;
+            let source_range = sheet_used_range(source_sheet);
+            operations.push(EditOperation::CreateSheet {
+                name: sheet_name.clone(),
+            });
+            operations.push(EditOperation::ImportRange {
+                source_workbook: template.to_path_buf(),
+                source_sheet: source_sheet.name.clone(),
+                source_range,
+                target_sheet: sheet_name.clone(),
+                target_start: "A1".to_owned(),
+                copy_values: true,
+                copy_formulas: true,
+                style_mode: RangeStyleMode::None,
+                copy_comments: false,
+                copy_merges: true,
+                copy_row_heights: false,
+                copy_column_widths: false,
+                copy_row_hidden: false,
+                copy_column_hidden: false,
+                copy_outline_levels: false,
+                copy_all_row_dimensions: false,
+                copy_all_column_dimensions: false,
+                materialize_blank_cells: false,
+                hide_zero: false,
+            });
+        }
+
+        let preserve: std::collections::BTreeSet<PreservationRequirement> = [
+            PreservationRequirement::CellValuesAndTypes,
+            PreservationRequirement::FormulaText,
+            PreservationRequirement::CommentsAndPositions,
+            PreservationRequirement::Styles,
+            PreservationRequirement::MergedRanges,
+            PreservationRequirement::ConditionalFormatting,
+            PreservationRequirement::DataValidations,
+            PreservationRequirement::DefinedNames,
+            PreservationRequirement::RowAndColumnDimensions,
+            PreservationRequirement::PageSettings,
+            PreservationRequirement::HeaderFooterText,
+            PreservationRequirement::Relationships,
+            PreservationRequirement::SheetIdentityAndOrder,
+            PreservationRequirement::FreezePanes,
+            PreservationRequirement::AutoFilter,
+        ]
+        .into_iter()
+        .collect();
+        let request_id = format!(
+            "validation-openpyxl-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        );
+        let output = unique_validation_fallback_output(working_copy)?;
+        let plan = ExcelEditPlan {
+            request_id,
+            input: working_copy.to_path_buf(),
+            output: output.clone(),
+            format: WorkbookFormat::Xlsx,
+            workbook: target_profile.clone(),
+            operations,
+            preserve: preserve.clone(),
+            drop_allowed: Default::default(),
+        };
+        plan.validate().context("校验 Openpyxl 辅助表回退计划")?;
+
+        let platform = crate::inplace_edit::platform_id();
+        let capability = BackendCapability {
+            engine: EngineId::OpenpyxlWorker,
+            status: CapabilityStatus::Passed,
+            format: WorkbookFormat::Xlsx,
+            operations: plan.operations.iter().map(EditOperation::kind).collect(),
+            supported_features: target_profile.features_present,
+            preserved: preserve,
+            platform: platform.clone(),
+            evidence: Some(CapabilityEvidence {
+                sample_id: "named-validation-auxiliary-sheet-fallback".to_owned(),
+                report_path: "pytools-core/src/conversion_engine.rs".to_owned(),
+                adapter_version: format!("pytools/{}", env!("CARGO_PKG_VERSION")),
+                engine_version: "bundled openpyxl worker".to_owned(),
+                platform: platform.clone(),
+            }),
+        };
+        let original_hash = crate::file_commit::sha256_file(working_copy)?;
+        let execution = match crate::edit_plan::apply_plan_with_openpyxl_config(
+            &plan, capability, config, &platform,
+        ) {
+            Ok(execution) => execution,
+            Err(error) => {
+                let _ = fs::remove_file(&output);
+                return Err(error).context("通过 Openpyxl 受保护回退复制模板辅助工作表");
+            }
+        };
+        ensure!(
+            execution.engine == EngineId::OpenpyxlWorker,
+            "辅助工作表回退实际使用了非 Openpyxl 引擎：{}",
+            execution.engine
+        );
+        let commit = match crate::file_commit::replace_target_from_candidate(
+            &output,
+            working_copy,
+            &original_hash,
+        ) {
+            Ok(commit) => commit,
+            Err(error) => {
+                let _ = fs::remove_file(&output);
+                return Err(error).context("将已验证的辅助工作表候选替换到隔离工作副本");
+            }
+        };
+        let _ = fs::remove_file(&output);
+        if let Some(backup) = commit.backup_path {
+            bail!(
+                "Openpyxl 回退已完成，但隔离工作副本的回滚备份未能清理：{}；{}",
+                backup.display(),
+                commit.cleanup_warning.unwrap_or_default()
+            );
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
@@ -706,6 +1274,204 @@ pub(crate) struct NamedValidationCalculation {
     /// Template sheets the patcher had to add because the copied formulas
     /// reference them and the working copy lacked them.
     pub copied_template_sheets: Vec<String>,
+    /// Engine used to bring auxiliary formula dependencies into the disposable
+    /// calculation copy before the platform calculator ran.
+    pub dependency_copy_engine: String,
+}
+
+fn unique_validation_fallback_output(working_copy: &Path) -> Result<PathBuf> {
+    let parent = working_copy
+        .parent()
+        .context("validation working copy has no parent directory")?;
+    for attempt in 0..256u32 {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let output = parent.join(format!(
+            ".named-validation-openpyxl-{}-{nonce}-{attempt}.xlsx",
+            std::process::id()
+        ));
+        if !output.exists() {
+            return Ok(output);
+        }
+    }
+    bail!("could not reserve an Openpyxl validation fallback candidate")
+}
+
+fn sheet_used_range(sheet: &excel_reader::SheetDump) -> String {
+    let mut max_row = 1u32;
+    let mut max_column = 1u32;
+    for address in sheet.values.keys().chain(sheet.formulas.keys()) {
+        if let Some((row, column)) = parse_a1_coordinate(address) {
+            max_row = max_row.max(row);
+            max_column = max_column.max(column);
+        }
+    }
+    for merge in &sheet.merges {
+        for address in merge.split(':') {
+            if let Some((row, column)) = parse_a1_coordinate(address) {
+                max_row = max_row.max(row);
+                max_column = max_column.max(column);
+            }
+        }
+    }
+    format!("A1:{}{}", excel_column_name(max_column), max_row)
+}
+
+fn parse_a1_coordinate(address: &str) -> Option<(u32, u32)> {
+    let address = address.trim().replace('$', "");
+    let split = address.find(|character: char| character.is_ascii_digit())?;
+    let (column, row) = address.split_at(split);
+    if column.is_empty() || !column.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+        return None;
+    }
+    let column = column.bytes().try_fold(0u32, |value, byte| {
+        value
+            .checked_mul(26)?
+            .checked_add(u32::from(byte.to_ascii_uppercase() - b'A' + 1))
+    })?;
+    let row = row.parse::<u32>().ok()?;
+    (row > 0 && column > 0).then_some((row, column))
+}
+
+fn excel_column_name(mut column: u32) -> String {
+    let mut name = String::new();
+    while column > 0 {
+        let remainder = ((column - 1) % 26) as u8;
+        name.insert(0, char::from(b'A' + remainder));
+        column = (column - 1) / 26;
+    }
+    name
+}
+
+pub(crate) fn named_validation_calculation_engine() -> &'static str {
+    #[cfg(windows)]
+    {
+        "Excel/WPS COM"
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "LibreOffice Calc"
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        "unavailable"
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn extract_named_validation_cells(
+    workbook: &WorkbookDump,
+    regions: &[NamedValidationRegionRequest],
+) -> Result<Vec<NamedValidationCellResult>> {
+    let mut matches = Vec::new();
+    for region in regions {
+        let sheet = workbook
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == region.source_sheet)
+            .with_context(|| format!("LibreOffice 重算结果缺少工作表 {:?}", region.source_sheet))?;
+        ensure!(
+            sheet.formula_status == "read_by_calamine",
+            "Calamine 无法读取工作表 {:?} 的公式位置：{}",
+            region.source_sheet,
+            sheet.formula_status
+        );
+        let bounds = parse_named_validation_region(&region.address).with_context(|| {
+            format!(
+                "不支持校验区域地址 {:?}（工作表 {:?}）",
+                region.address, region.source_sheet
+            )
+        })?;
+        for (address, formula) in &sheet.formulas {
+            // Calamine's worksheet_formula API returns formula text without
+            // Excel's leading '=' (unlike our JSON fixtures). Any non-empty
+            // formula at a validation-region cell is eligible for keyword
+            // extraction once its cached value is available.
+            if formula.trim().is_empty() || !named_validation_cell_in_bounds(address, bounds) {
+                continue;
+            }
+            let Some(value) = sheet
+                .values
+                .get(address)
+                .filter(|value| {
+                    value.get("type").and_then(serde_json::Value::as_str) == Some("string")
+                })
+                .and_then(|value| value.get("value"))
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            if ["错", "硬性", "软性", "校验失败"]
+                .iter()
+                .any(|keyword| value.contains(keyword))
+            {
+                matches.push(NamedValidationCellResult {
+                    sheet: region.source_sheet.clone(),
+                    address: address.clone(),
+                    value: value.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(matches)
+}
+
+#[cfg(target_os = "linux")]
+fn parse_named_validation_region(address: &str) -> Result<(u32, u32, u32, u32)> {
+    let address = address
+        .rsplit('!')
+        .next()
+        .unwrap_or(address)
+        .replace('$', "");
+    let (start, end) = address
+        .split_once(':')
+        .unwrap_or((address.as_str(), address.as_str()));
+    let (start_row, start_column) = parse_named_validation_cell(start)?;
+    let (end_row, end_column) = parse_named_validation_cell(end)?;
+    Ok((
+        start_row.min(end_row),
+        start_column.min(end_column),
+        start_row.max(end_row),
+        start_column.max(end_column),
+    ))
+}
+
+#[cfg(target_os = "linux")]
+fn parse_named_validation_cell(address: &str) -> Result<(u32, u32)> {
+    let split = address
+        .find(|character: char| character.is_ascii_digit())
+        .context("单元格地址缺少行号")?;
+    let (column_letters, row_text) = address.split_at(split);
+    ensure!(!column_letters.is_empty(), "单元格地址缺少列号");
+    ensure!(
+        column_letters
+            .bytes()
+            .all(|byte| byte.is_ascii_alphabetic()),
+        "单元格列号格式非法"
+    );
+    ensure!(
+        row_text.bytes().all(|byte| byte.is_ascii_digit()),
+        "单元格行号格式非法"
+    );
+    let mut column = 0u32;
+    for byte in column_letters.bytes() {
+        column = column
+            .checked_mul(26)
+            .and_then(|value| value.checked_add(u32::from(byte.to_ascii_uppercase() - b'A' + 1)))
+            .context("单元格列号超出支持范围")?;
+    }
+    let row = row_text.parse::<u32>().context("单元格行号格式非法")?;
+    ensure!(row > 0 && column > 0, "单元格行号和列号必须从 1 开始");
+    Ok((row, column))
+}
+
+#[cfg(target_os = "linux")]
+fn named_validation_cell_in_bounds(
+    address: &str,
+    (min_row, min_column, max_row, max_column): (u32, u32, u32, u32),
+) -> bool {
+    parse_named_validation_cell(address).is_ok_and(|(row, column)| {
+        (min_row..=max_row).contains(&row) && (min_column..=max_column).contains(&column)
+    })
 }
 
 #[cfg(windows)]
@@ -992,6 +1758,7 @@ impl PythonExcelWorker {
             cells,
             copied_formula_cells: 0,
             copied_template_sheets: Vec::new(),
+            dependency_copy_engine: "由调用方报告".to_owned(),
         })
     }
 }
@@ -1116,6 +1883,10 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         "engine must be auto, lo, com or pywin32"
     );
     ensure!(
+        engine != "lo",
+        "LibreOffice conversion is paused; use pywin32 with Microsoft Excel or WPS COM on Windows"
+    );
+    ensure!(
         input.is_file(),
         "input file does not exist: {}",
         input.display()
@@ -1123,25 +1894,16 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
     let source_ext = extension(input)?;
     ensure!(
         (matches!(target, "xlsx")
-            && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "et" | "ett"))
+            && matches!(
+                source_ext.as_str(),
+                "xls" | "xlsb" | "xlsm" | "et" | "ett" | "xlsx"
+            ))
             || (target == "docx" && matches!(source_ext.as_str(), "doc" | "wps" | "wpt")),
         "unsupported conversion: .{source_ext} -> .{target}"
     );
     if !cfg!(windows) {
-        // Every Windows fidelity conversion runs through the pywin32 worker
-        // (`com` is only a compatibility alias); non-Windows keeps LibreOffice.
-        ensure!(
-            (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm"))
-                || (target == "docx" && source_ext == "doc"),
-            "该功能需要外部引擎: .{source_ext} -> .{target} requires Windows Office/WPS COM; LibreOffice only supports .xls/.xlsb/.xlsm -> .xlsx and .doc -> .docx"
-        );
-    } else if engine == "lo" {
-        // LibreOffice cannot prove the native WPS container for .et/.ett/.wps/
-        // .wpt, and the WPS-specific validation would reject its result anyway.
-        ensure!(
-            (target == "xlsx" && matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm"))
-                || (target == "docx" && source_ext == "doc"),
-            "LibreOffice 引擎只支持 .xls/.xlsb/.xlsm → .xlsx 和 .doc → .docx；.{source_ext} → .{target} 需要 Windows Office/WPS COM（请用 --engine auto 或 --engine com）"
+        bail!(
+            "Office format conversion currently requires Windows pywin32 with Microsoft Excel or WPS COM; LibreOffice conversion is paused"
         );
     }
     if let Some(parent) = output.parent() {
@@ -1157,8 +1919,26 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         output.parent().unwrap_or_else(|| Path::new(".")),
     )?);
     let temp_dir = &temp_guard.0;
-    let converted = temp_dir.join(format!("{}.{}", file_stem(input), target));
     let selected = select_conversion_engine(engine, &source_ext, target, cfg!(windows));
+    // Office rewrites relative external-workbook links relative to the
+    // SaveAs destination. Keep a COM candidate beside its final output so
+    // validating it and atomically moving it do not change the link base.
+    // A candidate inside the disposable staging directory would leave links
+    // pointing into that directory after publication (or fail formula checks
+    // because Excel qualifies them with the temporary path).
+    let converted = if selected == "pywin32" {
+        unique_sibling_conversion_candidate(output, target)?
+    } else {
+        temp_dir.join(format!("{}.{}", file_stem(input), target))
+    };
+    let _candidate_guard =
+        (selected == "pywin32").then(|| ConversionCandidateGuard(converted.clone()));
+    if source_ext == "xlsx" && target == "xlsx" && selected == "lo" {
+        ensure!(
+            crate::conversion::is_ooxml_spreadsheet_package(input)?,
+            "同扩展名 .xlsx 的非 OOXML 文件需要 Excel/WPS COM 识别真实格式并另存；LibreOffice 仅接受有效 OOXML 工作簿"
+        );
+    }
     let com_execution = match selected {
         "lo" => {
             match runtime.libreoffice_batch_outcome(input, target) {
@@ -1180,7 +1960,7 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         }
         "pywin32" if cfg!(windows) => Some(run_pywin32(input, &converted, target, &source_ext, runtime)?),
         "pywin32" => bail!(
-            "该功能需要外部引擎: Windows Office/WPS COM conversion is only available on Windows; install LibreOffice or use --engine lo"
+            "该功能需要外部引擎: Excel/Word COM conversion requires Windows with Microsoft Office or WPS installed"
         ),
         _ => unreachable!(),
     };
@@ -1306,7 +2086,12 @@ fn run_pywin32(
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(output_parent)?;
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let com_input = output_parent.join(format!(
+    // Keep the private COM input beside the original so relative external
+    // workbook links resolve from the same directory as they do in PyCode.
+    // The automation host still receives only a disposable copy, never the
+    // caller's source file.
+    let source_parent = input.parent().unwrap_or_else(|| Path::new("."));
+    let com_input = source_parent.join(format!(
         ".pytools-convert-source-{}-{nonce}.{source_ext}",
         std::process::id()
     ));
@@ -1432,7 +2217,7 @@ fn validate_conversion(
             .get("verified")
             .and_then(serde_json::Value::as_bool)
             == Some(true);
-        if matches!(source_ext, "xls" | "xlsb" | "xlsm") {
+        if matches!(source_ext, "xls" | "xlsb" | "xlsm" | "xlsx") {
             ensure!(
                 engine == "pywin32" && verified,
                 "pywin32 external validation evidence is invalid for this conversion"
@@ -1703,6 +2488,29 @@ fn unique_temp_dir(parent: &Path) -> Result<PathBuf> {
     bail!("cannot allocate conversion work directory")
 }
 
+fn unique_sibling_conversion_candidate(output: &Path, target: &str) -> Result<PathBuf> {
+    let parent = output.parent().unwrap_or_else(|| Path::new("."));
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    for index in 0..100 {
+        let path = parent.join(format!(
+            ".pytools-convert-candidate-{}-{nanos}-{index}.{target}",
+            std::process::id()
+        ));
+        if !path.exists() {
+            return Ok(path);
+        }
+    }
+    bail!("cannot allocate sibling conversion candidate")
+}
+
+struct ConversionCandidateGuard(PathBuf);
+
+impl Drop for ConversionCandidateGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
 fn extension(path: &Path) -> Result<String> {
     path.extension()
         .and_then(|s| s.to_str())
@@ -1927,16 +2735,28 @@ impl Drop for TempDirGuard {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    use super::{
+        extract_named_validation_cells, parse_named_validation_region, NamedValidationRegionRequest,
+    };
     use super::{
         file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
-        select_conversion_engine, select_fidelity_engine, ConversionRuntime, LibreOfficeExecutor,
-        LibreOfficeRunOutcome,
+        select_conversion_engine, select_fidelity_engine, unique_sibling_conversion_candidate,
+        ConversionRuntime, LibreOfficeExecutor, LibreOfficeRunOutcome,
     };
     use anyhow::Result;
-    use std::fs;
+    use excel_editor::OpenpyxlWorkerConfig;
+    #[cfg(target_os = "linux")]
+    use excel_reader::{SheetDump, WorkbookDump};
+    use ooxml_patch::{copy_cell_region, CellRegionCopyRequest};
+    #[cfg(target_os = "linux")]
+    use std::collections::BTreeMap;
+    use std::fs::{self, File};
+    use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::{Arc, Mutex};
+    use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
     fn fake_input(dir: &Path, name: &str) -> PathBuf {
         let path = dir.join(name);
@@ -1954,6 +2774,159 @@ mod tests {
         ));
         fs::create_dir_all(&root)?;
         Ok(root)
+    }
+
+    fn add_formula_sheet_drawing_relation(path: &Path) -> Result<()> {
+        let staged = path.with_file_name(format!(
+            "{}.staged.xlsx",
+            path.file_stem().unwrap().to_string_lossy()
+        ));
+        let mut source = ZipArchive::new(File::open(path)?)?;
+        let mut target = ZipWriter::new(File::create(&staged)?);
+        for index in 0..source.len() {
+            let mut entry = source.by_index(index)?;
+            let name = entry.name().to_owned();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes)?;
+            if name == "xl/worksheets/sheet2.xml" {
+                let mut xml = String::from_utf8(bytes)?;
+                if !xml.contains("xmlns:r=") {
+                    xml = xml.replacen(
+                        "<worksheet ",
+                        "<worksheet xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ",
+                        1,
+                    );
+                }
+                xml = xml.replace(
+                    "</worksheet>",
+                    "<drawing r:id=\"rIdFallbackTest\"/></worksheet>",
+                );
+                bytes = xml.into_bytes();
+            } else if name == "[Content_Types].xml" {
+                let mut xml = String::from_utf8(bytes)?;
+                xml = xml.replace(
+                    "</Types>",
+                    "<Override PartName=\"/xl/drawings/drawing1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.drawing+xml\"/></Types>",
+                );
+                bytes = xml.into_bytes();
+            }
+            target.start_file(name, SimpleFileOptions::default())?;
+            target.write_all(&bytes)?;
+        }
+        target.start_file(
+            "xl/worksheets/_rels/sheet2.xml.rels",
+            SimpleFileOptions::default(),
+        )?;
+        target.write_all(
+            br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdFallbackTest" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#,
+        )?;
+        target.start_file("xl/drawings/drawing1.xml", SimpleFileOptions::default())?;
+        target.write_all(
+            br#"<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"></xdr:wsDr>"#,
+        )?;
+        target.finish()?;
+        fs::remove_file(path)?;
+        fs::rename(staged, path)?;
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "requires the packaged Openpyxl runtime; run explicitly for fallback verification"]
+    fn named_validation_uses_protected_openpyxl_fallback_for_unsupported_helper_relations(
+    ) -> Result<()> {
+        let root = unique_test_root("named-validation-openpyxl-fallback")?;
+        let template = root.join("template.xlsx");
+        let working_copy = root.join("source-copy.xlsx");
+
+        let mut template_book = rust_xlsxwriter::Workbook::new();
+        let validation = template_book.add_worksheet();
+        validation.set_name("模板")?;
+        validation.write_formula(1, 1, "='参照表'!D2")?;
+        let helper = template_book.add_worksheet();
+        helper.set_name("参照表")?;
+        helper.write_formula(1, 3, "='基础参数'!A1*2")?;
+        let parameters = template_book.add_worksheet();
+        parameters.set_name("基础参数")?;
+        parameters.write_number(0, 0, 21.0)?;
+        template_book.save(&template)?;
+        add_formula_sheet_drawing_relation(&template)?;
+
+        let mut source_book = rust_xlsxwriter::Workbook::new();
+        source_book.add_worksheet().set_name("检查表")?;
+        source_book.save(&working_copy)?;
+        let requests = [CellRegionCopyRequest {
+            source_sheet: "模板".to_owned(),
+            target_sheet: "检查表".to_owned(),
+            address: "B2".to_owned(),
+        }];
+
+        let direct_error = copy_cell_region(&template, &working_copy, &requests)
+            .expect_err("unsupported drawing relationship should select fallback");
+        assert!(
+            format!("{direct_error:#}").contains("OPENPYXL_FALLBACK_REQUIRED"),
+            "{direct_error:#}"
+        );
+        let dependencies =
+            ooxml_patch::missing_formula_dependency_sheets(&template, &working_copy, &requests)?;
+        assert_eq!(dependencies.len(), 2);
+
+        let dist_python = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist/python");
+        let config = OpenpyxlWorkerConfig::new(
+            dist_python.join("python.exe"),
+            dist_python.join("openpyxl_worker.py"),
+        )?;
+        ConversionRuntime::import_validation_dependencies_with_config(
+            &template,
+            &working_copy,
+            &dependencies,
+            config,
+        )?;
+        let copied = copy_cell_region(&template, &working_copy, &requests)?;
+        assert_eq!(copied.cells_with_formula, 1);
+        let output = super::read_workbook(&working_copy)?;
+        let names = output
+            .sheets
+            .iter()
+            .map(|sheet| sheet.name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"参照表"));
+        assert!(names.contains(&"基础参数"));
+        assert_eq!(
+            output.sheets[0].formulas.get("B2").map(String::as_str),
+            Some("'参照表'!D2")
+        );
+        assert_eq!(
+            output
+                .sheets
+                .iter()
+                .find(|sheet| sheet.name == "参照表")
+                .and_then(|sheet| sheet.formulas.get("D2"))
+                .map(String::as_str),
+            Some("'基础参数'!A1*2")
+        );
+        drop(output);
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn office_candidate_uses_the_final_output_directory_and_is_unique() -> Result<()> {
+        let root = unique_test_root("office-candidate")?;
+        let output = root.join("delivered.xlsx");
+        let first = unique_sibling_conversion_candidate(&output, "xlsx")?;
+        let second = unique_sibling_conversion_candidate(&output, "xlsx")?;
+
+        assert_eq!(first.parent(), output.parent());
+        assert_eq!(
+            first.extension().and_then(|value| value.to_str()),
+            Some("xlsx")
+        );
+        assert_ne!(first, second);
+        assert!(!first.exists());
+        assert!(!second.exists());
+
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     /// A fake `soffice` runner: records every invocation, derives the output
@@ -2215,32 +3188,140 @@ mod tests {
 
     #[test]
     fn libreoffice_batch_request_matrix_matches_per_file_routing() {
-        assert_eq!(
-            select_fidelity_engine("auto"),
-            if cfg!(windows) { "pywin32" } else { "lo" }
-        );
+        assert_eq!(select_fidelity_engine("auto"), "pywin32");
         assert_eq!(select_fidelity_engine("lo"), "lo");
         assert_eq!(select_fidelity_engine("com"), "pywin32");
         assert_eq!(select_fidelity_engine("pywin32"), "pywin32");
-        assert!(libreoffice_batch_request("xls", "xlsx", "lo"));
-        assert!(libreoffice_batch_request("xlsb", "xlsx", "lo"));
-        assert!(libreoffice_batch_request("xlsm", "xlsx", "lo"));
-        assert!(libreoffice_batch_request("doc", "docx", "lo"));
+        assert!(!libreoffice_batch_request("xls", "xlsx", "lo"));
+        assert!(!libreoffice_batch_request("xlsb", "xlsx", "lo"));
+        assert!(!libreoffice_batch_request("xlsm", "xlsx", "lo"));
+        assert!(!libreoffice_batch_request("doc", "docx", "lo"));
         // WPS-native containers stay per-file: only COM can prove the source
         // really is a native WPS file, so an LO result would be rejected.
         assert!(!libreoffice_batch_request("et", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("ett", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("wps", "docx", "lo"));
         assert!(!libreoffice_batch_request("wpt", "docx", "lo"));
-        // Same-category copies and other engines never batch.
+        // Excel format normalization remains COM-only as well.
         assert!(!libreoffice_batch_request("xlsx", "xlsx", "lo"));
         assert!(!libreoffice_batch_request("xls", "xlsx", "com"));
-        assert!(!libreoffice_batch_request("xls", "xlsx", "auto") || !cfg!(windows));
+        assert!(!libreoffice_batch_request("xls", "xlsx", "auto"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn named_validation_result_extraction_uses_only_formula_text_in_region() -> Result<()> {
+        let workbook = WorkbookDump {
+            schema_version: 1,
+            reader: "calamine",
+            elapsed_ms: 0,
+            sheets: vec![SheetDump {
+                name: "检查表".to_owned(),
+                values: BTreeMap::from([
+                    (
+                        "B2".to_owned(),
+                        serde_json::json!({"type": "string", "value": "错|校验项|差异"}),
+                    ),
+                    (
+                        "B4".to_owned(),
+                        serde_json::json!({"type": "string", "value": "硬性|校验项|差异"}),
+                    ),
+                    (
+                        "B8".to_owned(),
+                        serde_json::json!({"type": "string", "value": "软性|超出区域"}),
+                    ),
+                    (
+                        "C3".to_owned(),
+                        serde_json::json!({"type": "string", "value": "固定说明，不是公式"}),
+                    ),
+                ]),
+                formulas: BTreeMap::from([
+                    ("B2".to_owned(), "=A2".to_owned()),
+                    ("B4".to_owned(), "=A4".to_owned()),
+                    ("B8".to_owned(), "=A8".to_owned()),
+                ]),
+                formula_status: "read_by_calamine".to_owned(),
+                merges: Vec::new(),
+                merge_status: "read_by_calamine".to_owned(),
+                comments: BTreeMap::new(),
+                comments_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
+                conditional_formatting: Vec::new(),
+                conditional_formatting_status: "read_by_namespace_aware_ooxml_supplement"
+                    .to_owned(),
+                data_validations: Vec::new(),
+                data_validations_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
+            }],
+        };
+        let regions = [NamedValidationRegionRequest {
+            template_sheet: "模板".to_owned(),
+            source_sheet: "检查表".to_owned(),
+            address: "$B$2:$B$4".to_owned(),
+        }];
+
+        let cells = extract_named_validation_cells(&workbook, &regions)?;
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].address, "B2");
+        assert!(cells.iter().all(|cell| cell.sheet == "检查表"));
+        assert!(!cells.iter().any(|cell| cell.address == "B8"));
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn named_validation_region_parser_accepts_single_cells_and_sheet_qualified_ranges() -> Result<()>
+    {
+        assert_eq!(
+            parse_named_validation_region("'检查 表'!$B$2:$D$4")?,
+            (2, 2, 4, 4)
+        );
+        assert_eq!(parse_named_validation_region("C3")?, (3, 3, 3, 3));
+        assert!(parse_named_validation_region("A1,B2").is_err());
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires LibreOffice Calc and python3-uno; run explicitly on Linux"]
+    fn libreoffice_recalculates_validation_formula_cache_on_a_working_copy() -> Result<()> {
+        let root = unique_test_root("named-validation-lo")?;
+        let template = root.join("template.xlsx");
+        let source_copy = root.join("source-copy.xlsx");
+
+        let mut template_workbook = rust_xlsxwriter::Workbook::new();
+        let template_sheet = template_workbook.add_worksheet();
+        template_sheet.set_name("模板")?;
+        template_sheet.write_formula(1, 1, "=IF(A2>0,\"错|校验项|差异\",\"\")")?;
+        template_workbook.save(&template)?;
+
+        let mut source_workbook = rust_xlsxwriter::Workbook::new();
+        let source_sheet = source_workbook.add_worksheet();
+        source_sheet.set_name("检查表")?;
+        source_sheet.write_number(1, 0, 1)?;
+        source_workbook.save(&source_copy)?;
+
+        let regions = [NamedValidationRegionRequest {
+            template_sheet: "模板".to_owned(),
+            source_sheet: "检查表".to_owned(),
+            address: "B2:B2".to_owned(),
+        }];
+        let mut runtime = ConversionRuntime::default();
+        let calculation =
+            runtime.recalculate_named_validation_regions(&template, &source_copy, &regions)?;
+
+        assert_eq!(calculation.application, "LibreOffice Calc");
+        assert_eq!(calculation.copied_formula_cells, 1);
+        assert_eq!(calculation.cells.len(), 1);
+        assert_eq!(calculation.cells[0].sheet, "检查表");
+        assert_eq!(calculation.cells[0].address, "B2");
+        assert!(calculation.cells[0].value.contains("错|校验项|差异"));
+        drop(runtime);
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
     fn automatic_windows_conversion_uses_the_packaged_pywin32_worker() {
-        for source in ["xls", "xlsb", "xlsm", "et", "ett"] {
+        for source in ["xls", "xlsb", "xlsm", "et", "ett", "xlsx"] {
             assert_eq!(
                 select_conversion_engine("auto", source, "xlsx", true),
                 "pywin32",
@@ -2254,8 +3335,18 @@ mod tests {
                 "auto on Windows must route .{source} through pywin32"
             );
         }
-        assert_eq!(select_conversion_engine("auto", "xls", "xlsx", false), "lo");
-        assert_eq!(select_conversion_engine("auto", "doc", "docx", false), "lo");
+        assert_eq!(
+            select_conversion_engine("auto", "xls", "xlsx", false),
+            "pywin32"
+        );
+        assert_eq!(
+            select_conversion_engine("auto", "xlsx", "xlsx", false),
+            "pywin32"
+        );
+        assert_eq!(
+            select_conversion_engine("auto", "doc", "docx", false),
+            "pywin32"
+        );
         // The retired Rust COM channel is only kept as a CLI alias.
         assert_eq!(
             select_conversion_engine("com", "xls", "xlsx", true),

@@ -5,7 +5,6 @@
 //! behavior independently testable.
 
 use crate::config::ExtractTask;
-use crate::edit_plan::apply_plan_with_capability_file;
 use crate::file_commit::{replace_target_from_candidate, sha256_file, verify_planning_snapshot};
 use crate::summary_ops::{
     excel_error_value, is_openpyxl_timedelta_format, iso_duration_serial, patch_error_cells,
@@ -553,10 +552,9 @@ pub fn output_path_for_task(task: &ExtractTask, output_dir: &Path, default_name:
     }
 }
 
-/// Run extraction against XLSX outputs. Full-sheet tasks use an evidence-gated
-/// `ImportRange` batch per output workbook; area-only tasks use the Rust
-/// reader/writer path. Existing outputs are appended only when requested and
-/// when an ExcelModifier capability matches the workbook and operation batch.
+/// Run extraction against XLSX outputs. Full-sheet tasks use the bundled
+/// openpyxl worker; area-only tasks use the Rust reader/writer path. Existing
+/// outputs are appended only when the caller explicitly requests it.
 pub fn run_extract_sheets_area_candidate(
     source_workbooks: &[PathBuf],
     tasks: &[ExtractTask],
@@ -570,22 +568,18 @@ pub fn run_extract_sheets_area_candidate(
         output_dir,
         append_existing,
         default_output_name,
-        None,
-        None,
     )
 }
 
-/// Run ordinary worksheet extraction. Area-only tasks need only the shared
-/// reader/writer path. Full-sheet tasks additionally require a matching,
-/// evidence-backed ExcelModifier capability for XLSX `ImportRange`.
+/// Run worksheet extraction. Area-only tasks use the shared Calamine/Rust
+/// writer path; full-sheet imports and appends use the bundled openpyxl worker
+/// with candidate validation before publication.
 pub fn run_extract_sheets_candidate(
     source_workbooks: &[PathBuf],
     tasks: &[ExtractTask],
     output_dir: &Path,
     append_existing: bool,
     default_output_name: Option<&str>,
-    capability_path: Option<&Path>,
-    platform: Option<&str>,
 ) -> Result<ExtractSheetsAreaResult> {
     run_extract_sheets_candidate_with_progress(
         source_workbooks,
@@ -593,8 +587,6 @@ pub fn run_extract_sheets_candidate(
         output_dir,
         append_existing,
         default_output_name,
-        capability_path,
-        platform,
         |_| {},
     )
 }
@@ -605,8 +597,6 @@ pub fn run_extract_sheets_candidate_with_progress<F>(
     output_dir: &Path,
     append_existing: bool,
     default_output_name: Option<&str>,
-    capability_path: Option<&Path>,
-    platform: Option<&str>,
     mut on_event: F,
 ) -> Result<ExtractSheetsAreaResult>
 where
@@ -650,16 +640,6 @@ where
         );
         return Ok(result);
     }
-    ensure!(
-        capability_path.is_some() == platform.is_some(),
-        "--capabilities and --platform must be provided together"
-    );
-    if tasks.iter().any(is_full_sheet_task) && capability_path.is_none() {
-        bail!(
-            "full-sheet extraction requires an accepted XLSX ImportRange capability; provide --capabilities and --platform"
-        );
-    }
-
     for (index, source_path) in source_workbooks.iter().enumerate() {
         emitter.progress.current_file = Some(index + 1);
         emitter.progress.current_input_index = Some(index + 1);
@@ -980,10 +960,6 @@ where
                         let (existing_sha256, existing_sheet_names) = if append_existing
                             && output_path.exists()
                         {
-                            ensure!(
-                                    capability_path.is_some() && platform.is_some(),
-                                    "appending to an existing extraction output requires --capabilities and --platform"
-                                );
                             let expected_sha256 = sha256_file(&output_path).with_context(|| {
                                 format!(
                                     "snapshot existing extraction output {}",
@@ -1201,11 +1177,6 @@ where
             });
             temporary_files.push(stage_path.clone());
             if let Some(expected_sha256) = pending.existing_sha256.as_deref() {
-                let capability_path = capability_path.context(
-                    "appending to an existing extraction output requires a capability file",
-                )?;
-                let platform = platform
-                    .context("appending to an existing extraction output requires a platform id")?;
                 let skeleton_path = unique_stage_path(&pending.path)?;
                 temporary_files.push(skeleton_path.clone());
                 let skeleton_write_started = Instant::now();
@@ -1245,28 +1216,26 @@ where
                         &skeleton_path,
                         &ready_path,
                         &pending.import_operations,
-                        capability_path,
-                        platform,
                     ) {
                         Ok(engine) => engine,
                         Err(error) => {
                             emitter.emit(
-                                "excel_modifier",
+                                "openpyxl_import",
                                 "failed",
                                 format!("整表导入修改失败：{error:#}"),
                                 Some(&pending.path),
                                 Some(modifier_started.elapsed()),
                                 &["pytools-core", "excel-editor"],
                                 None,
-                                Some("excel_modifier_error"),
+                                Some("openpyxl_import_error"),
                             );
                             return Err(error);
                         }
                     };
                     emitter.emit(
-                        "excel_modifier",
+                        "openpyxl_import",
                         "succeeded",
-                        "ExcelModifier 已完成整表导入",
+                        "openpyxl 已完成整表导入",
                         Some(&pending.path),
                         Some(modifier_started.elapsed()),
                         &["pytools-core", "excel-editor"],
@@ -1286,28 +1255,26 @@ where
                     &stage_path,
                     expected_sha256,
                     &pending.sheets,
-                    capability_path,
-                    platform,
                 ) {
                     Ok(execution) => execution,
                     Err(error) => {
                         emitter.emit(
-                            "excel_modifier",
+                            "openpyxl_import",
                             "failed",
                             format!("追加提取工作表失败：{error:#}"),
                             Some(&pending.path),
                             Some(modifier_started.elapsed()),
                             &["pytools-core", "excel-editor"],
                             None,
-                            Some("excel_modifier_error"),
+                            Some("openpyxl_import_error"),
                         );
                         return Err(error);
                     }
                 };
                 emitter.emit(
-                    "excel_modifier",
+                    "openpyxl_import",
                     "succeeded",
-                    "ExcelModifier 已把提取工作表追加到既有输出簿候选",
+                    "openpyxl 已把提取工作表追加到既有输出簿候选",
                     Some(&pending.path),
                     Some(modifier_started.elapsed()),
                     &["pytools-core", "excel-editor"],
@@ -1367,9 +1334,6 @@ where
                     None,
                 );
             } else {
-                let capability_path =
-                    capability_path.context("full-sheet extraction requires a capability file")?;
-                let platform = platform.context("full-sheet extraction requires a platform id")?;
                 let skeleton_path = unique_stage_path(&pending.path)?;
                 temporary_files.push(skeleton_path.clone());
                 let skeleton_write_started = Instant::now();
@@ -1398,7 +1362,7 @@ where
                     Some("rust_xlsxwriter"),
                     None,
                 );
-                let mut workbook_profile = inspect_xlsx_profile(&skeleton_path)?;
+                let workbook_profile = inspect_xlsx_profile(&skeleton_path)?;
                 let mut imported_source_profiles =
                     BTreeMap::<String, excel_editor::WorkbookProfile>::new();
                 for operation in &pending.import_operations {
@@ -1426,9 +1390,6 @@ where
                             "full-sheet extraction source has an incomplete OOXML inventory: {}",
                             source_workbook.display()
                         );
-                        workbook_profile
-                            .features_present
-                            .extend(source_profile.features_present);
                     }
                 }
                 let plan = ExcelEditPlan {
@@ -1456,30 +1417,31 @@ where
                 plan.validate()?;
                 let import_operations = plan.operations.clone();
                 let modifier_started = Instant::now();
-                let execution =
-                    match apply_plan_with_capability_file(&plan, capability_path, platform) {
-                        Ok(execution) => execution,
-                        Err(error) => {
-                            emitter.emit(
-                                "excel_modifier",
-                                "failed",
-                                format!("整表导入修改失败：{error:#}"),
-                                Some(&pending.path),
-                                Some(modifier_started.elapsed()),
-                                &["pytools-core", "excel-editor"],
-                                None,
-                                Some("excel_modifier_error"),
-                            );
-                            return Err(error).with_context(|| {
-                                "apply full-sheet extraction through ExcelModifier"
-                            });
-                        }
-                    };
+                let execution = match crate::inplace_edit::execute_candidate(
+                    &plan,
+                    crate::inplace_edit::InPlaceEngine::Openpyxl,
+                ) {
+                    Ok(execution) => execution,
+                    Err(error) => {
+                        emitter.emit(
+                            "openpyxl_import",
+                            "failed",
+                            format!("整表导入修改失败：{error:#}"),
+                            Some(&pending.path),
+                            Some(modifier_started.elapsed()),
+                            &["pytools-core", "excel-editor"],
+                            None,
+                            Some("openpyxl_import_error"),
+                        );
+                        return Err(error)
+                            .with_context(|| "apply full-sheet extraction through openpyxl");
+                    }
+                };
                 let modifier_engine = execution.engine.to_string();
                 emitter.emit(
-                    "excel_modifier",
+                    "openpyxl_import",
                     "succeeded",
-                    "ExcelModifier 已完成整表导入",
+                    "openpyxl 已完成整表导入",
                     Some(&pending.path),
                     Some(modifier_started.elapsed()),
                     &["pytools-core", "excel-editor"],
@@ -2058,10 +2020,8 @@ fn apply_full_sheet_imports(
     skeleton_path: &Path,
     output_path: &Path,
     operations: &[EditOperation],
-    capability_path: &Path,
-    platform: &str,
 ) -> Result<String> {
-    let mut workbook_profile = inspect_xlsx_profile(skeleton_path)?;
+    let workbook_profile = inspect_xlsx_profile(skeleton_path)?;
     let mut imported_source_profiles = BTreeMap::<String, excel_editor::WorkbookProfile>::new();
     for operation in operations {
         if let EditOperation::ImportRange {
@@ -2086,9 +2046,6 @@ fn apply_full_sheet_imports(
                 "full-sheet extraction source has an incomplete OOXML inventory: {}",
                 source_workbook.display()
             );
-            workbook_profile
-                .features_present
-                .extend(source_profile.features_present);
         }
     }
     let plan = ExcelEditPlan {
@@ -2114,8 +2071,9 @@ fn apply_full_sheet_imports(
         drop_allowed: Default::default(),
     };
     plan.validate()?;
-    let execution = apply_plan_with_capability_file(&plan, capability_path, platform)
-        .context("apply full-sheet extraction through ExcelModifier")?;
+    let execution =
+        crate::inplace_edit::execute_candidate(&plan, crate::inplace_edit::InPlaceEngine::Openpyxl)
+            .context("apply full-sheet extraction through openpyxl")?;
     validate_full_sheet_imports(operations, output_path)?;
     Ok(execution.engine.to_string())
 }
@@ -2165,8 +2123,6 @@ fn apply_append_imports(
     output_path: &Path,
     expected_sha256: &str,
     sheets: &[ExpectedSheet],
-    capability_path: &Path,
-    platform: &str,
 ) -> Result<(String, Vec<EditOperation>)> {
     verify_planning_snapshot(existing_path, Some(expected_sha256))?;
     let mut workbook_profile = inspect_xlsx_profile(existing_path).with_context(|| {
@@ -2187,9 +2143,6 @@ fn apply_append_imports(
         "new extraction sheets have an incomplete OOXML inventory: {}",
         source_path.display()
     );
-    workbook_profile
-        .features_present
-        .extend(source_profile.features_present);
     let operations = append_import_operations(source_path, sheets);
     let plan = ExcelEditPlan {
         request_id: format!(
@@ -2224,8 +2177,9 @@ fn apply_append_imports(
         drop_allowed: Default::default(),
     };
     plan.validate()?;
-    let execution = apply_plan_with_capability_file(&plan, capability_path, platform)
-        .context("append extracted worksheets through ExcelModifier")?;
+    let execution =
+        crate::inplace_edit::execute_candidate(&plan, crate::inplace_edit::InPlaceEngine::Openpyxl)
+            .context("append extracted worksheets through openpyxl")?;
     Ok((execution.engine.to_string(), operations))
 }
 
