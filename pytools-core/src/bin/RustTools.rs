@@ -7667,6 +7667,128 @@ fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_jso
         .target_sha256
         .as_deref()
         .context("目标快照缺失，请重新读取配置后再追加")?;
+    // .xls 目标：COM 追加路由（随包 worker + Excel/WPS）。
+    if plan
+        .target
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"))
+        && plan.xls_operations.is_some()
+    {
+        #[cfg(windows)]
+        {
+            let xls_candidate = unique_workbook_candidate_preserving_extension(
+                &plan.target,
+                plan.target.parent().unwrap_or(Path::new(".")),
+                "dedup_append_xls",
+            );
+            let result = (|| -> Result<serde_json::Value> {
+                fs::copy(&plan.target, &xls_candidate).with_context(|| {
+                    format!(
+                        "复制 .xls 目标候选 {}",
+                        display_path_for_user(&xls_candidate)
+                    )
+                })?;
+                pytools_core::file_commit::verify_planning_snapshot(
+                    &plan.target,
+                    Some(expected_hash),
+                )?;
+                let mut com_runtime = pytools_core::conversion_engine::ConversionRuntime::default();
+                // 从 SetCellValue 操作序列化值中提取 2D 行数据，
+                // 按目标工作表分组后追加到末尾。
+                let ops = plan
+                    .xls_operations
+                    .as_ref()
+                    .expect("xls_operations checked");
+                // 按工作表分组 → 每表取最大行/列 → 构建 2D 值矩阵
+                let mut sheet_data: std::collections::BTreeMap<
+                    String,
+                    std::collections::BTreeMap<(u32, u32), serde_json::Value>,
+                > = Default::default();
+                for op in ops {
+                    let sheet = op.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+                    let cell = op.get("cell").and_then(|v| v.as_str()).unwrap_or("");
+                    if sheet.is_empty() || cell.is_empty() {
+                        continue;
+                    }
+                    let digits = cell.rfind(|c: char| c.is_ascii_digit()).unwrap_or(0);
+                    let row: u32 = cell[digits..].parse().unwrap_or(0);
+                    let col_str = &cell[..digits];
+                    let mut col = 0u32;
+                    for c in col_str.chars() {
+                        col = col * 26 + (c.to_ascii_uppercase() as u32 - 'A' as u32 + 1);
+                    }
+                    let value = op.get("value").cloned().unwrap_or(serde_json::Value::Null);
+                    sheet_data
+                        .entry(sheet.to_owned())
+                        .or_default()
+                        .insert((row, col), value);
+                }
+                // 对每个工作表：计算 start_row（现有最大行 + 1），构建 2D 数组，调用 COM
+                let append_started = Instant::now();
+                for (sheet_name, cells) in &sheet_data {
+                    let max_row = cells.keys().map(|(r, _)| *r).max().unwrap_or(0);
+                    let max_col = cells.keys().map(|(_, c)| *c).max().unwrap_or(0);
+                    let mut rows_2d = Vec::with_capacity(max_row as usize);
+                    for r in 1..=max_row {
+                        let mut row_vals = Vec::with_capacity(max_col as usize);
+                        for c in 1..=max_col {
+                            row_vals.push(
+                                cells
+                                    .get(&(r, c))
+                                    .cloned()
+                                    .unwrap_or(serde_json::Value::Null),
+                            );
+                        }
+                        rows_2d.push(row_vals);
+                    }
+                    let mut com_runtime =
+                        pytools_core::conversion_engine::ConversionRuntime::default();
+                    // 目标 .xls 已有数据，追加到末尾。start_row = 1（第 1 行开始写入）。
+                    let com =
+                        com_runtime.append_rows_com(&xls_candidate, sheet_name, 1, &rows_2d)?;
+                    anyhow::ensure!(
+                        com["verified"].as_bool() == Some(true),
+                        "Excel/WPS COM 追加未通过校验"
+                    );
+                    let _ = append_started;
+                }
+                pytools_core::file_commit::replace_target_from_candidate(
+                    &xls_candidate,
+                    &plan.target,
+                    expected_hash,
+                )?;
+                Ok(serde_json::json!({
+                    "engine": "excel_com",
+                    "route": "direct_append_xls_com",
+                    "candidate": xls_candidate,
+                    "target_commit": expected_hash,
+                }))
+            })();
+            let commit_result = match (result, remove_regular_candidate(&xls_candidate)) {
+                (Ok(report), Ok(())) => Ok(report),
+                (Ok(_), Err(error)) => {
+                    Err(error.context("clean temporary .xls dedup append candidate"))
+                }
+                (Err(error), Ok(())) => Err(error),
+                (Err(error), Err(cleanup_error)) => Err(error.context(format!(
+                    "temporary candidate cleanup also failed: {cleanup_error:#}"
+                ))),
+            };
+            let elapsed = started.elapsed().as_millis();
+            return match commit_result {
+                Ok(mut report_value) => {
+                    report_value["elapsed_ms"] = serde_json::json!(elapsed);
+                    Ok(report_value)
+                }
+                Err(error) => Err(error),
+            };
+        }
+        #[cfg(not(windows))]
+        {
+            anyhow::bail!("2-3 的 .xls 目标追加需要 Windows Excel/WPS COM");
+        }
+    }
     let candidate_started = Instant::now();
     let candidate =
         write_existing_append_candidate(plan).context("stage=direct_append_candidate")?;

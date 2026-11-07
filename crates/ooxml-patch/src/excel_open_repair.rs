@@ -122,6 +122,64 @@ fn quote_bare_refs(text: &str, name: &str) -> (String, u64) {
     (out, count)
 }
 
+/// 剥离公式中指向本地已存在表的 `[N]` 外部引用前缀；返回改写文本与次数。
+/// 形态：`[1]表名!`、`[1]'表名'!`（索引数字任意、表名可能带引号）。
+/// 仅当 N 后跟的表名存在于 `local_sheet_names` 时剥离（指向真正外部簿的不动）。
+fn strip_external_refs(text: &str, local_sheet_names: &[String]) -> (String, u64) {
+    if local_sheet_names.is_empty() {
+        return (text.to_owned(), 0);
+    }
+    // 找所有 `[N]` 模式（N 为纯数字），检查后续是否跟本地表名 + `!`
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    let mut count = 0u64;
+    while let Some(bracket_start) = rest.find('[') {
+        // 先推入 [ 之前的文本
+        out.push_str(&rest[..bracket_start]);
+        // 找到 `]` 结束的 [N]
+        let Some(bracket_end_rel) = rest[bracket_start..].find(']') else {
+            out.push_str(rest);
+            break;
+        };
+        let bracket_end = bracket_start + bracket_end_rel;
+        let index_text = &rest[bracket_start + 1..bracket_end];
+        if index_text.is_empty() || !index_text.chars().all(|c| c.is_ascii_digit()) {
+            // 非 [数字] 格式，原样推入 [ 并继续扫描
+            out.push_str(&rest[..bracket_start + 1]);
+            rest = &rest[bracket_start + 1..];
+            continue;
+        }
+        // 检查 ] 后是否跟本地表名 + !
+        let after_bracket = &rest[bracket_end + 1..];
+        let mut matched = false;
+        for name in local_sheet_names {
+            let escaped = name.replace(std::char::from_u32(39).unwrap(), "''");
+            let quoted_form = format!("'{}'!", escaped);
+            let bare_form = format!("{}!", name);
+            if after_bracket.starts_with(&quoted_form) {
+                out.push_str(&quoted_form);
+                rest = &rest[bracket_end + 1 + quoted_form.len()..];
+                matched = true;
+                count += 1;
+                break;
+            } else if after_bracket.starts_with(&bare_form) {
+                out.push_str(&bare_form);
+                rest = &rest[bracket_end + 1 + bare_form.len()..];
+                matched = true;
+                count += 1;
+                break;
+            }
+        }
+        if !matched {
+            // [N] 后面不跟本地表名，原样保留（out 已有前置文本，只需推入 [N] 本身）
+            out.push_str(&rest[bracket_start..bracket_end + 1]);
+            rest = &rest[bracket_end + 1..];
+        }
+    }
+    out.push_str(rest);
+    (out, count)
+}
+
 /// 在一段文本里找到 `<tag ...>inner</tag>` 载体（`<f>`、`<formula>`、
 /// `<c:f>`），对 inner 逐个补引号；返回改写后的文本与新增补引号数。
 fn quote_carriers(
@@ -251,11 +309,81 @@ pub struct ExcelOpenRepairReport {
     pub changed: bool,
     pub quoted: u64,
     pub pane_fixed: u64,
+    pub external_refs_stripped: u64,
     pub reason: String,
 }
 
+/// 对整个文本执行 [N] 外部引用前缀剥离；仅剥离指向本地表名的引用。
+///
+/// 走 roxmltree 解码（生成侧可能把表名写成 `&#23384;` 这类数字字符引用），
+/// 命中后用公式内容转义写回，保证输出仍是合法 XML。
+fn strip_text_external_refs(text: &str, local_sheet_names: &[String]) -> (String, u64) {
+    if local_sheet_names.is_empty() {
+        return (text.to_owned(), 0);
+    }
+    let Ok(document) = Document::parse(text) else {
+        return (text.to_owned(), 0);
+    };
+    let mut edits: Vec<(std::ops::Range<usize>, Vec<u8>)> = Vec::new();
+    let mut total = 0u64;
+    for node in document.descendants().filter(|node| {
+        node.is_element()
+            && matches!(
+                node.tag_name().name(),
+                "f" | "formula" | "c:f" | "definedName"
+            )
+    }) {
+        let Some(original) = node.text() else {
+            continue;
+        };
+        let (rewritten, count) = strip_external_refs(original, local_sheet_names);
+        if count == 0 {
+            continue;
+        }
+        total += count;
+        let range = node.range();
+        let open_end = match text[range.clone()].find('>') {
+            Some(offset) => offset,
+            None => continue,
+        };
+        let open_tag = text[range.start..range.start + open_end + 1].to_owned();
+        let replacement = format!(
+            "{open_tag}{}</{}>",
+            escape_formula_content(&rewritten),
+            node.tag_name().name()
+        );
+        edits.push((range, replacement.into_bytes()));
+    }
+    if edits.is_empty() {
+        return (text.to_owned(), 0);
+    }
+    let mut result = text.as_bytes().to_vec();
+    for (range, replacement) in edits.into_iter().rev() {
+        result.splice(range, replacement);
+    }
+    (String::from_utf8_lossy(&result).into_owned(), total)
+}
+
+/// 公式内容最小转义：只处理 `& < >`，单双引号保持原样。
+fn escape_formula_content(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
 /// 廉价预检：无裸引用嫌疑且无矛盾窗格的文件不重写。
-fn needs_repair(parts: &[(String, Vec<u8>)], special: &[String]) -> bool {
+fn needs_repair(
+    parts: &[(String, Vec<u8>)],
+    special: &[String],
+    local_sheet_names: &[String],
+) -> bool {
     for (name, data) in parts {
         if !is_repairable_part(name) {
             continue;
@@ -264,6 +392,10 @@ fn needs_repair(parts: &[(String, Vec<u8>)], special: &[String]) -> bool {
             continue;
         };
         if rewrite_all_names(text, special).1 > 0 {
+            return true;
+        }
+        let (_, stripped) = strip_text_external_refs(text, local_sheet_names);
+        if stripped > 0 {
             return true;
         }
         if name.starts_with("xl/worksheets/") && text.contains("<pane ") {
@@ -282,7 +414,10 @@ fn needs_repair(parts: &[(String, Vec<u8>)], special: &[String]) -> bool {
 /// 跳过。修复先写临时文件再原子替换；任何异常都返回 `changed=false` 且保持
 /// 文件原样。**调用方必须保证 `path` 是一次性副本**，本函数不做来源检查。
 pub fn repair_excel_com_open_issues(path: &Path) -> ExcelOpenRepairReport {
-    let mut report = ExcelOpenRepairReport::default();
+    let mut report = ExcelOpenRepairReport {
+        external_refs_stripped: 0,
+        ..Default::default()
+    };
     let temporary: PathBuf;
     match repair_inner(path, &mut report) {
         Ok(temp) => temporary = temp,
@@ -326,7 +461,9 @@ fn repair_inner(path: &Path, report: &mut ExcelOpenRepairReport) -> Result<PathB
             .context("read xl/workbook.xml")?;
         buffer
     };
-    let special: Vec<String> = sheet_names(&workbook_xml)
+    let all_sheet_names = sheet_names(&workbook_xml);
+    let special: Vec<String> = all_sheet_names
+        .clone()
         .into_iter()
         .filter(|name| !name.is_empty() && name_needs_quotes(name))
         .collect();
@@ -342,7 +479,13 @@ fn repair_inner(path: &Path, report: &mut ExcelOpenRepairReport) -> Result<PathB
     }
     drop(archive);
 
-    if !needs_repair(&parts, &special) {
+    // 本地表名 = 所有 <sheet> 名称（含纯中文、带括号等）
+    let local_sheet_names: Vec<String> = all_sheet_names
+        .iter()
+        .filter(|n| !n.is_empty())
+        .cloned()
+        .collect();
+    if !needs_repair(&parts, &special, &local_sheet_names) {
         report.reason = "未发现需要修复的内容".to_owned();
         anyhow::bail!(report.reason.clone());
     }
@@ -392,6 +535,11 @@ fn repair_inner(path: &Path, report: &mut ExcelOpenRepairReport) -> Result<PathB
                 rewritten = names_block;
                 report.quoted += total;
             }
+            // 剥离指向本地已存在表的 [N] 外部引用前缀（与表名是否需引号无关）
+            let (stripped_text, stripped_count) =
+                strip_text_external_refs(&rewritten, &local_sheet_names);
+            rewritten = stripped_text;
+            report.external_refs_stripped += stripped_count;
             let (pane_text, pane_fixed) = fix_frozen_panes(&rewritten);
             report.pane_fixed += pane_fixed;
             writer.write_all(pane_text.as_bytes())?;
@@ -629,6 +777,39 @@ mod excel_open_repair_tests {
     }
 
     #[test]
+    #[test]
+    fn strips_dangling_external_refs_to_local_sheets() {
+        // 带全角括号表名引用的 [N] 前缀 → 剥离 [1] 保留表名
+        let text = "SUM([1]单位贷款发生额信息（隐藏发放）!A1)+[1]'存量单位贷款信息'!B2";
+        let local = vec![
+            "单位贷款发生额信息（隐藏发放）".to_owned(),
+            "存量单位贷款信息".to_owned(),
+        ];
+        let (rewritten, count) = strip_external_refs(text, &local);
+        assert_eq!(count, 2);
+        assert!(
+            rewritten.contains("单位贷款发生额信息（隐藏发放）!A1"),
+            "{rewritten}"
+        );
+        assert!(rewritten.contains("'存量单位贷款信息'!B2"), "{rewritten}");
+        assert!(!rewritten.contains("[1]"), "{rewritten}");
+        // 幂等
+        let (r2, c2) = strip_external_refs(&rewritten, &local);
+        assert_eq!(c2, 0);
+        assert_eq!(r2, rewritten);
+    }
+
+    #[test]
+    fn external_refs_to_non_local_sheets_are_not_stripped() {
+        let text = "[99]外部簿!A1+[1]本地表!B2";
+        let local = vec!["本地表".to_owned()];
+        let (rewritten, count) = strip_external_refs(text, &local);
+        assert_eq!(count, 1);
+        assert!(rewritten.contains("[99]外部簿!A1"), "{rewritten}");
+        assert!(rewritten.contains("本地表!B2"), "{rewritten}");
+        assert!(!rewritten.contains("[1]本地表"), "{rewritten}");
+    }
+
     fn already_quoted_and_apostrophe_names_are_handled_once() {
         let text = "('个人贷款发生额信息（隐藏发放）'!A1)+个人贷款发生额信息（隐藏发放）!A2";
         let (rewritten, count) = quote_bare_refs(text, "个人贷款发生额信息（隐藏发放）");

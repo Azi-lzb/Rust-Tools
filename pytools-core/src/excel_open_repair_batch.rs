@@ -26,6 +26,7 @@ pub struct ExcelOpenRepairFileResult {
     pub status: String,
     pub quoted: u64,
     pub pane_fixed: u64,
+    pub external_refs_stripped: u64,
     pub reason: Option<String>,
     pub elapsed_ms: u128,
 }
@@ -39,6 +40,7 @@ pub struct ExcelOpenRepairRunReport {
     pub skipped: usize,
     pub quoted_total: u64,
     pub pane_fixed_total: u64,
+    pub external_refs_total: u64,
     pub elapsed_ms: u128,
     pub files: Vec<ExcelOpenRepairFileResult>,
 }
@@ -59,6 +61,7 @@ pub fn run_excel_open_repair_batch(
         skipped: 0,
         quoted_total: 0,
         pane_fixed_total: 0,
+        external_refs_total: 0,
         elapsed_ms: 0,
         files: Vec::with_capacity(files.len()),
     };
@@ -73,6 +76,7 @@ pub fn run_excel_open_repair_batch(
                 status: "skipped".to_owned(),
                 quoted: 0,
                 pane_fixed: 0,
+                external_refs_stripped: 0,
                 reason: Some("仅支持 .xlsx/.xlsm（ZIP 容器）；其它格式不在本修复范围".to_owned()),
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -89,6 +93,7 @@ pub fn run_excel_open_repair_batch(
                     status: "skipped".to_owned(),
                     quoted: 0,
                     pane_fixed: 0,
+                    external_refs_stripped: 0,
                     reason: Some(format!("无法创建修复副本：{error:#}")),
                     elapsed_ms: file_started.elapsed().as_millis(),
                 });
@@ -105,6 +110,7 @@ pub fn run_excel_open_repair_batch(
                 status: "skipped".to_owned(),
                 quoted: 0,
                 pane_fixed: 0,
+                external_refs_stripped: 0,
                 reason: Some(format!("{error:#}")),
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -115,12 +121,14 @@ pub fn run_excel_open_repair_batch(
             report.repaired += 1;
             report.quoted_total += repair.quoted;
             report.pane_fixed_total += repair.pane_fixed;
+            report.external_refs_total += repair.external_refs_stripped;
             report.files.push(ExcelOpenRepairFileResult {
                 input: input.clone(),
                 output: Some(candidate),
                 status: "repaired".to_owned(),
                 quoted: repair.quoted,
                 pane_fixed: repair.pane_fixed,
+                external_refs_stripped: repair.external_refs_stripped,
                 reason: None,
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -134,6 +142,7 @@ pub fn run_excel_open_repair_batch(
                 status: "unchanged".to_owned(),
                 quoted: 0,
                 pane_fixed: 0,
+                external_refs_stripped: 0,
                 reason: Some(if repair.reason.is_empty() {
                     "未发现需要修复的内容".to_owned()
                 } else {
