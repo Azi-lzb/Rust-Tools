@@ -408,6 +408,150 @@ fn needs_repair(
     false
 }
 
+/// 模板外部工作簿引用扫描结果。
+#[derive(Debug, Default, Clone, serde::Serialize)]
+pub struct ExternalReferenceScan {
+    /// `xl/externalLinks/*` 部件名（存在即代表工作簿带外链定义）。
+    pub external_link_parts: Vec<String>,
+    /// 公式中 `[N]` 前缀出现次数（`<f>` / `<formula>` / `<c:f>` / `<definedName>`）。
+    pub formula_hits: u64,
+    /// 命中样本（最多 3 条），用于错误信息定位。
+    pub samples: Vec<String>,
+}
+
+impl ExternalReferenceScan {
+    pub fn is_clean(&self) -> bool {
+        self.external_link_parts.is_empty() && self.formula_hits == 0
+    }
+
+    pub fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.external_link_parts.is_empty() {
+            parts.push(format!(
+                "外部链接部件 {} 个（{}）",
+                self.external_link_parts.len(),
+                self.external_link_parts.join("、")
+            ));
+        }
+        if self.formula_hits > 0 {
+            let mut detail = format!("公式含 [N] 外部工作簿引用 {} 处", self.formula_hits);
+            if !self.samples.is_empty() {
+                detail.push_str(&format!("，例如：{}", self.samples.join("；")));
+            }
+            parts.push(detail);
+        }
+        if parts.is_empty() {
+            "未发现外部工作簿引用".to_owned()
+        } else {
+            parts.join("；")
+        }
+    }
+}
+
+/// 扫描工作簿是否带外部工作簿引用（模板入口 fail-closed 检查用）。
+///
+/// 判定两类证据：`xl/externalLinks/` 部件存在；四类公式载体内出现 `[N]`
+/// 前缀（无论 N 后跟的表名是否在本地——带前缀即引用外部工作簿）。
+/// 非 ZIP / 非 OOXML 直接报错，由调用方决定如何处理。
+pub fn scan_external_workbook_references(path: &Path) -> Result<ExternalReferenceScan> {
+    let file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut archive = zip::ZipArchive::new(file).with_context(|| "read ZIP container")?;
+    let mut scan = ExternalReferenceScan::default();
+    let names: Vec<String> = (0..archive.len())
+        .filter_map(|index| {
+            archive
+                .by_index(index)
+                .ok()
+                .map(|entry| entry.name().to_owned())
+        })
+        .collect();
+    for name in &names {
+        if name.starts_with("xl/externalLinks/") && !name.contains("/_rels/") {
+            scan.external_link_parts.push(name.clone());
+        }
+    }
+    for name in names.iter().filter(|name| is_repairable_part(name)) {
+        let Ok(mut entry) = archive.by_name(name) else {
+            continue;
+        };
+        let mut data = Vec::new();
+        if entry.read_to_end(&mut data).is_err() {
+            continue;
+        }
+        let Ok(text) = std::str::from_utf8(&data) else {
+            continue;
+        };
+        let Ok(document) = Document::parse(text) else {
+            continue;
+        };
+        for node in document.descendants().filter(|node| {
+            node.is_element()
+                && matches!(
+                    node.tag_name().name(),
+                    "f" | "formula" | "c:f" | "definedName"
+                )
+        }) {
+            let Some(original) = node.text() else {
+                continue;
+            };
+            let hits = count_external_prefixes(original);
+            if hits == 0 {
+                continue;
+            }
+            scan.formula_hits += hits;
+            if scan.samples.len() < 3 {
+                if let Some(sample) = first_external_prefix(original) {
+                    scan.samples.push(sample);
+                }
+            }
+        }
+    }
+    Ok(scan)
+}
+
+/// 统计文本中 `[数字]` 前缀出现次数。
+fn count_external_prefixes(text: &str) -> u64 {
+    let mut count = 0u64;
+    let mut rest = text;
+    while let Some(start) = rest.find('[') {
+        let Some(end_rel) = rest[start..].find(']') else {
+            break;
+        };
+        let index_text = &rest[start + 1..start + end_rel];
+        if !index_text.is_empty() && index_text.chars().all(|c| c.is_ascii_digit()) {
+            count += 1;
+        }
+        rest = &rest[start + end_rel + 1..];
+    }
+    count
+}
+
+fn first_external_prefix(text: &str) -> Option<String> {
+    let mut rest = text;
+    while let Some(start) = rest.find('[') {
+        let Some(end_rel) = rest[start..].find(']') else {
+            return None;
+        };
+        let bracket_end = start + end_rel;
+        let index_text = &rest[start + 1..bracket_end];
+        if !index_text.is_empty() && index_text.chars().all(|c| c.is_ascii_digit()) {
+            let tail = &rest[bracket_end + 1..];
+            let tail_len = tail
+                .find(|c: char| {
+                    !(c.is_alphanumeric() || c == '_' || c == '\'' || c == '（' || c == '）')
+                })
+                .unwrap_or(tail.len().min(24));
+            let snippet: String = rest[start..bracket_end + 1 + tail_len.min(24)]
+                .chars()
+                .take(40)
+                .collect();
+            return Some(snippet);
+        }
+        rest = &rest[bracket_end + 1..];
+    }
+    None
+}
+
 /// 修复传入的工作簿副本使其可被 Excel 打开；返回统计。
 ///
 /// 只处理 .xlsx/.xlsm（ZIP 容器，必须含 `xl/workbook.xml`）；其余格式原样
@@ -808,6 +952,43 @@ mod excel_open_repair_tests {
         assert!(rewritten.contains("[99]外部簿!A1"), "{rewritten}");
         assert!(rewritten.contains("本地表!B2"), "{rewritten}");
         assert!(!rewritten.contains("[1]本地表"), "{rewritten}");
+    }
+
+    #[test]
+    fn scan_flags_external_prefixes_and_external_link_parts() {
+        let dir = std::env::temp_dir().join(format!("ooxml-scan-ext-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("with-external.xlsx");
+        let worksheet = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>[1]存量单位贷款信息!C5</f><v>0</v></c></row></sheetData></worksheet>"#;
+        let binding = base_parts("校验", worksheet, "");
+        let written: Vec<(&str, Vec<u8>)> = binding
+            .iter()
+            .map(|(name, data)| (name.as_str(), data.clone()))
+            .collect();
+        write_workbook(&path, &written);
+        let scan = scan_external_workbook_references(&path).unwrap();
+        assert!(!scan.is_clean(), "{scan:?}");
+        assert!(scan.formula_hits >= 1, "{scan:?}");
+        assert!(!scan.samples.is_empty(), "{scan:?}");
+        assert!(scan.describe().contains("[N]"), "{}", scan.describe());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn scan_accepts_local_only_formulas() {
+        let dir = std::env::temp_dir().join(format!("ooxml-scan-local-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("local-only.xlsx");
+        let worksheet = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>SUM(存量单位贷款信息!C5:C10)</f><v>0</v></c></row></sheetData></worksheet>"#;
+        let binding = base_parts("校验", worksheet, "");
+        let written: Vec<(&str, Vec<u8>)> = binding
+            .iter()
+            .map(|(name, data)| (name.as_str(), data.clone()))
+            .collect();
+        write_workbook(&path, &written);
+        let scan = scan_external_workbook_references(&path).unwrap();
+        assert!(scan.is_clean(), "{scan:?}");
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     fn already_quoted_and_apostrophe_names_are_handled_once() {

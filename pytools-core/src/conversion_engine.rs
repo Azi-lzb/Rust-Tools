@@ -786,6 +786,20 @@ impl ConversionRuntime {
         if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
             bail!("校验区域计算需要 Excel/WPS COM 或 LibreOffice；当前环境已禁用外部引擎");
         }
+        // 模板 fail-closed：带外部工作簿引用的模板一律拒绝。校验区域公式会被
+        // 原样复制到工作副本，而副本不会带上模板的 externalLink 部件；若公式
+        // 里有 [N] 前缀就变成悬空引用，Excel COM 会以 0x80020009 拒绝整个
+        // 工作簿（WPS 宽容但重算丢公式）。要求用户先清理模板，而不是静默剥离
+        // ——剥离会让规则指向非预期数据，改模板属于业务决策。
+        let reference_scan = ooxml_patch::scan_external_workbook_references(template)
+            .with_context(|| format!("扫描模板外部引用失败：{}", template.display()))?;
+        ensure!(
+            reference_scan.is_clean(),
+            "模板「{}」含外部工作簿引用，校验区域公式复制到工作副本后会变成悬空引用，\
+             Excel 将拒绝打开。请在模板中删除外部链接并把公式改为引用本地工作表后重试。\n详情：{}",
+            template.display(),
+            reference_scan.describe()
+        );
         ensure!(
             source_copy
                 .extension()
