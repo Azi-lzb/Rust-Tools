@@ -829,6 +829,7 @@ fn interactive_menu_writes_area_extraction_to_configured_target_sheet() -> anyho
 }
 
 #[test]
+#[ignore = "5-6 统一走值提取（不保留格式）；整表样式导入路径已移除，待人工确认后可删"]
 fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() -> anyhow::Result<()>
 {
     let baseline = full_sheet_baseline();
@@ -1372,6 +1373,7 @@ fn append_cli_keeps_previous_python_extraction_sheets() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "5-6 统一走值提取（不保留格式）；整表样式导入路径已移除，待人工确认后可删"]
 fn append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_layout(
 ) -> anyhow::Result<()> {
     let root = temporary_directory("sheet-extract-full-sheet-append");

@@ -845,11 +845,7 @@ where
             );
         }
         let extracted_sheets_before = result.extracted_sheets;
-        let has_matching_full_sheet_task = tasks.iter().any(|task| {
-            is_full_sheet_task(task)
-                && workbook_matches(&source_file_name, task)
-                && !name_matches_exclude(&source_file_name, &task.exclude_keywords)
-        });
+        let has_matching_full_sheet_task = false;
         if has_matching_full_sheet_task
             && source_path
                 .extension()
@@ -902,7 +898,9 @@ where
                 emitter.progress.current_config_row = Some(task.row_no);
                 emitter.progress.sheets_discovered += 1;
                 emitter.progress.sheets_attempted += 1;
-                let full_sheet = is_full_sheet_task(task);
+                // 统一值提取：area_spec 空 → 整表值；非空 → 指定区域。
+                // 不走 Openpyxl 样式导入路径（不保留格式）。
+                let full_sheet = false;
                 let values = if full_sheet {
                     None
                 } else {
