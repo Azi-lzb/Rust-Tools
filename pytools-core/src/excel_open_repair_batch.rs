@@ -27,6 +27,9 @@ pub struct ExcelOpenRepairFileResult {
     pub quoted: u64,
     pub pane_fixed: u64,
     pub external_refs_stripped: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_sheet_refs: Vec<String>,
+    pub external_links_dropped: bool,
     pub reason: Option<String>,
     pub elapsed_ms: u128,
 }
@@ -41,6 +44,9 @@ pub struct ExcelOpenRepairRunReport {
     pub quoted_total: u64,
     pub pane_fixed_total: u64,
     pub external_refs_total: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_sheet_refs: Vec<String>,
+    pub external_links_dropped_files: usize,
     pub elapsed_ms: u128,
     pub files: Vec<ExcelOpenRepairFileResult>,
 }
@@ -62,6 +68,8 @@ pub fn run_excel_open_repair_batch(
         quoted_total: 0,
         pane_fixed_total: 0,
         external_refs_total: 0,
+        missing_sheet_refs: Vec::new(),
+        external_links_dropped_files: 0,
         elapsed_ms: 0,
         files: Vec::with_capacity(files.len()),
     };
@@ -77,6 +85,8 @@ pub fn run_excel_open_repair_batch(
                 quoted: 0,
                 pane_fixed: 0,
                 external_refs_stripped: 0,
+                missing_sheet_refs: Vec::new(),
+                external_links_dropped: false,
                 reason: Some("仅支持 .xlsx/.xlsm（ZIP 容器）；其它格式不在本修复范围".to_owned()),
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -94,6 +104,8 @@ pub fn run_excel_open_repair_batch(
                     quoted: 0,
                     pane_fixed: 0,
                     external_refs_stripped: 0,
+                    missing_sheet_refs: Vec::new(),
+                    external_links_dropped: false,
                     reason: Some(format!("无法创建修复副本：{error:#}")),
                     elapsed_ms: file_started.elapsed().as_millis(),
                 });
@@ -111,6 +123,8 @@ pub fn run_excel_open_repair_batch(
                 quoted: 0,
                 pane_fixed: 0,
                 external_refs_stripped: 0,
+                missing_sheet_refs: Vec::new(),
+                external_links_dropped: false,
                 reason: Some(format!("{error:#}")),
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -122,6 +136,14 @@ pub fn run_excel_open_repair_batch(
             report.quoted_total += repair.quoted;
             report.pane_fixed_total += repair.pane_fixed;
             report.external_refs_total += repair.external_refs_stripped;
+            if repair.external_links_dropped {
+                report.external_links_dropped_files += 1;
+            }
+            for name in &repair.missing_sheet_refs {
+                if !report.missing_sheet_refs.contains(name) {
+                    report.missing_sheet_refs.push(name.clone());
+                }
+            }
             report.files.push(ExcelOpenRepairFileResult {
                 input: input.clone(),
                 output: Some(candidate),
@@ -129,6 +151,8 @@ pub fn run_excel_open_repair_batch(
                 quoted: repair.quoted,
                 pane_fixed: repair.pane_fixed,
                 external_refs_stripped: repair.external_refs_stripped,
+                missing_sheet_refs: repair.missing_sheet_refs.clone(),
+                external_links_dropped: repair.external_links_dropped,
                 reason: None,
                 elapsed_ms: file_started.elapsed().as_millis(),
             });
@@ -143,6 +167,8 @@ pub fn run_excel_open_repair_batch(
                 quoted: 0,
                 pane_fixed: 0,
                 external_refs_stripped: 0,
+                missing_sheet_refs: Vec::new(),
+                external_links_dropped: false,
                 reason: Some(if repair.reason.is_empty() {
                     "未发现需要修复的内容".to_owned()
                 } else {
