@@ -368,6 +368,7 @@ fn run() -> Result<()> {
         "open-latest-output" => run_quick_cli(arguments, "latest"),
         "open-output-dir" => run_quick_cli(arguments, "output"),
         "extract-sheets" | "extract-sheets-area" => run_extract_sheets(arguments, false),
+        "excel-open-repair" => run_excel_open_repair_cli(arguments, false),
         "region-sum-check" => run_region_sum(arguments, false),
         "file-sort-prefix" => run_file_sort_prefix(arguments, false),
         "remove-file-sort-prefix" => run_remove_file_sort_prefix(arguments, false),
@@ -5620,6 +5621,10 @@ where
             "  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】"
         )?;
         writeln!(output, "  6  机构提交完整性检查  【提交检查配置】")?;
+        writeln!(
+            output,
+            "  7  修复 Excel COM 无法打开的工作簿（生成修复副本；原件不变）  【自动补全角括号表名引号/修正冻结窗格矛盾】"
+        )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -5681,9 +5686,10 @@ where
             }
             "5" => "files.rename_sheets",
             "6" => "files.submission_check",
+            "7" => "files.excel_open_repair",
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2、3、4、5、6 或 0")?;
+                writeln!(output, "仅接受 1、2、3、4、5、6、7 或 0")?;
                 continue;
             }
         };
@@ -5707,6 +5713,10 @@ where
             }
             "files.rename_sheets" => ("批量修改 Sheet 名", NativeFileFilter::ExcelWorkbooks),
             "files.submission_check" => ("检查提交文件", NativeFileFilter::AllFiles),
+            "files.excel_open_repair" => (
+                "修复 Excel COM 无法打开的工作簿",
+                NativeFileFilter::ExcelWorkbooks,
+            ),
             _ => unreachable!("resolved stable file operation ID"),
         };
         let Some(paths) =
@@ -5836,6 +5846,37 @@ where
                         .map(|path| path.to_string_lossy().into_owned()),
                 );
                 run_submission_check_cli(arguments, true)?;
+            }
+            "files.excel_open_repair" => {
+                writeln!(
+                    output,
+                    "[确认] 将检测所选工作簿并修复 Excel 无法打开的两类问题：含全角括号表名的裸引用、冻结窗格坐标矛盾。"
+                )?;
+                writeln!(
+                    output,
+                    "[说明] 修复只写入源文件旁的“<名称>-Excel修复.<扩展名>”副本；原始文件保持不变，无需修复的文件不会产出副本。"
+                )?;
+                if !read_menu_choice(input, output, "输入 y/yes/是 执行；其他输入取消> ")?
+                    .is_some_and(|answer| {
+                        matches!(
+                            answer.trim().to_ascii_lowercase().as_str(),
+                            "y" | "yes" | "是"
+                        )
+                    })
+                {
+                    writeln!(output, "[已取消] 未执行修复，也未生成任何副本。")?;
+                    return Ok(());
+                }
+                arguments.push("--log-dir".to_owned());
+                arguments.push(global.log_dir.to_string_lossy().into_owned());
+                arguments.push("--log-view".to_owned());
+                arguments.push(log_view.to_owned());
+                arguments.extend(
+                    paths
+                        .into_iter()
+                        .map(|path| path.to_string_lossy().into_owned()),
+                );
+                run_excel_open_repair_cli(arguments, true)?;
             }
             "files.sort_prefix.add" | "files.sort_prefix.remove" => {
                 arguments.push("--output-dir".to_owned());
@@ -12621,6 +12662,150 @@ fn run_rename_sheets(arguments: Vec<String>, interactive: bool) -> Result<()> {
     );
     if interactive && log_view == "user" {
         println!("{}", pytools_core::run_logging::terminal_line(if report.skip > 0 { pytools_core::run_logging::Level::Warn } else { pytools_core::run_logging::Level::Info }, &format!( "Sheet 改名结束：扫描 {} 个文件，处理 {} 个工作簿，成功改名 {} 个工作表，跳过 {} 项；耗时 {:.3} 秒；运行编号 {}{}", report.files_scanned, report.workbooks, report.rename_ok, report.skip, (report.elapsed_ms) as f64 / 1000.0, summary.run_id, summary_path.as_ref().map(|path| format!("；运行记录 {}", display_path_for_user(&path))).unwrap_or_default())));
+    } else {
+        let mut value = serde_json::to_value(&report)?;
+        value["run_id"] = serde_json::json!(summary.run_id.clone());
+        if let Some(path) = summary_path {
+            value["run_summary_path"] = serde_json::json!(path);
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
+    }
+    Ok(())
+}
+
+fn run_excel_open_repair_cli(arguments: Vec<String>, interactive: bool) -> Result<()> {
+    let (recursive, arguments) = extract_boolean_flag(arguments, "recursive")?;
+    let options = parse_cli_arguments(arguments)?;
+    if options.positional.is_empty() {
+        bail!("provide at least one file or directory path");
+    }
+    let log_dir = options
+        .values
+        .get("log-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(pytools_core::run_logging::default_log_dir);
+    let log_view = options
+        .values
+        .get("log-view")
+        .map(String::as_str)
+        .unwrap_or("user");
+    anyhow::ensure!(
+        matches!(log_view, "user" | "developer" | "off"),
+        "--log-view must be user, developer, or off"
+    );
+    let mut unified = UnifiedRunSession::new(
+        &log_dir,
+        "PT-4-11",
+        "修复 Excel COM 无法打开的工作簿（菜单 4-7）",
+        log_view,
+        None,
+    );
+    unified.set_inputs(&options.positional, None);
+    let result = pytools_core::excel_open_repair_batch::run_excel_open_repair_batch(
+        &options.positional,
+        recursive,
+    );
+    let report = match result {
+        Ok(report) => report,
+        Err(error) => {
+            unified.mark_inputs_unavailable();
+            unified.operation_failure(
+                "excel_open_repair",
+                "EXCEL_OPEN_REPAIR_FAILED",
+                "Excel 打开修复失败",
+                &error,
+            );
+            let _ = unified.finish(true, false, false, &[], None, None, None);
+            return Err(error);
+        }
+    };
+    unified.set_discovered(report.files_scanned);
+    let mut output_paths = Vec::new();
+    for (index, item) in report.files.iter().enumerate() {
+        let status = match item.status.as_str() {
+            "repaired" => {
+                if let Some(path) = item.output.as_ref() {
+                    output_paths.push(path.clone());
+                }
+                pytools_core::run_logging::FileStatus::Succeeded
+            }
+            "unchanged" | "skipped" => pytools_core::run_logging::FileStatus::Skipped,
+            _ => pytools_core::run_logging::FileStatus::Failed,
+        };
+        let code = (status == pytools_core::run_logging::FileStatus::Failed)
+            .then_some("EXCEL_OPEN_REPAIR_FAILED");
+        let detail = item.reason.clone().unwrap_or_else(|| {
+            format!(
+                "已生成修复副本：引用补引号 {} 处、冻结窗格修正 {} 处",
+                item.quoted, item.pane_fixed
+            )
+        });
+        unified.discovered_file_event(
+            index + 1,
+            &item.input,
+            status,
+            "excel_open_repair",
+            &detail,
+            code,
+            None,
+        );
+    }
+    for index in 1..=options.positional.len() {
+        unified.file_result(
+            index,
+            pytools_core::run_logging::FileStatus::Succeeded,
+            true,
+            "input_scan",
+            "已完成所选范围的 Excel 打开修复扫描",
+            None,
+            None,
+        );
+    }
+    let output_stats =
+        (!output_paths.is_empty()).then_some(pytools_core::run_logging::OutputStats {
+            workbooks_saved: Some(output_paths.len()),
+            sheets_saved: None,
+            saved: Some(true),
+        });
+    let has_failure = report.files.iter().any(|item| item.status == "failed");
+    let (summary, summary_path) = unified.finish(
+        false,
+        false,
+        has_failure
+            || (report.repaired == 0
+                && report.workbooks > 0
+                && report.unchanged == report.workbooks
+                && report.skipped == 0),
+        &output_paths,
+        output_stats,
+        None,
+        None,
+    );
+    if interactive && log_view == "user" {
+        println!(
+            "{}",
+            pytools_core::run_logging::terminal_line(
+                if report.skipped > 0 {
+                    pytools_core::run_logging::Level::Warn
+                } else {
+                    pytools_core::run_logging::Level::Info
+                },
+                &format!(
+                    "Excel 打开修复结束：扫描 {} 个文件，修复 {} 个（引用补引号 {} 处、冻结窗格修正 {} 处），无需修复 {} 个，跳过 {} 个；耗时 {:.3} 秒；运行记录 {}",
+                    report.files_scanned,
+                    report.repaired,
+                    report.quoted_total,
+                    report.pane_fixed_total,
+                    report.unchanged,
+                    report.skipped,
+                    report.elapsed_ms as f64 / 1000.0,
+                    summary_path
+                        .as_ref()
+                        .map(|path| display_path_for_user(path))
+                        .unwrap_or_default()
+                )
+            )
+        );
     } else {
         let mut value = serde_json::to_value(&report)?;
         value["run_id"] = serde_json::json!(summary.run_id.clone());
@@ -22019,6 +22204,7 @@ fn print_usage() {
          summary-named-ranges --template <workbook.xlsx|xlsm> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx|xlsm>...\n\
          summary-named-validation --template <workbook.xlsx|xlsm> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xls|xlsx|xlsm>...\n\
          summary-comments --template <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
+         excel-open-repair [--recursive] [--log-dir <dir>] [--log-view user|developer|off] <file-or-directory>... (修复 Excel COM 无法打开的 .xlsx/.xlsm；只产出修复副本，原件不变)\n\
          dedup-comment-plan --input <workbook.xlsx> --output <candidate.xlsx> [--action check|mark|delete] [--plan-output <plan.json>] [--capabilities <json> --platform <id>]\n\
          dedup-config-plan --config <workbook.xlsx> [--output-dir <dir>] [--action check|mark|delete] [--capabilities <json> --platform <id>]\n\
          dedup-precheck --config <workbook.xlsx>\n\

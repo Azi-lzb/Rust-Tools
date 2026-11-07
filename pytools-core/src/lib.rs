@@ -15,6 +15,7 @@ pub mod dedup_ops;
 pub mod edit_plan;
 pub mod engine_diag;
 pub mod excel_core_diag;
+pub mod excel_open_repair_batch;
 pub mod file_commit;
 pub mod file_sort_prefix;
 pub mod fx_header;

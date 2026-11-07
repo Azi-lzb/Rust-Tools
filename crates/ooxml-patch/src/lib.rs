@@ -1,5 +1,8 @@
 //! Namespace-aware, minimal OOXML package patching primitives.
 
+pub mod excel_open_repair;
+pub use excel_open_repair::{repair_excel_com_open_issues, ExcelOpenRepairReport};
+
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use roxmltree::Document;
 use std::{

@@ -703,6 +703,13 @@ impl ConversionRuntime {
         };
         #[cfg(windows)]
         {
+            // Excel 会拒绝含全角括号表名裸引用/矛盾冻结窗格的工作簿；WPS 宽容。
+            // 只修一次性工作副本，且仅在 COM 走 Excel 时修（与随包 worker 的
+            // PYTOOLS_COM_PREFER_WPS 门控同一口径）；修复失败不阻断，错误原因
+            // 随 Err 上抛由统一运行日志记录。
+            if !com_prefers_wps() {
+                ooxml_patch::repair_excel_com_open_issues(source_copy);
+            }
             if self.pywin32.is_none() {
                 self.pywin32 = Some(PythonExcelWorker::start()?);
             }
@@ -1785,6 +1792,20 @@ impl Drop for PythonExcelWorker {
     }
 }
 
+/// 与随包 worker `_ensure_application` 的默认引擎选择同一口径：设置了
+/// `PYTOOLS_COM_PREFER_WPS` 时 COM 以 WPS 打开工作簿（WPS 能解析裸引用与
+/// 矛盾窗格），此时不做 Excel 打开修复。
+fn com_prefers_wps() -> bool {
+    matches!(
+        std::env::var("PYTOOLS_COM_PREFER_WPS")
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "1" | "true" | "yes" | "y"
+    )
+}
+
 #[cfg(windows)]
 fn pywin32_worker_paths() -> Result<(PathBuf, PathBuf)> {
     let current_exe = std::env::current_exe().context("定位当前 pytools.exe 失败")?;
@@ -2104,6 +2125,12 @@ fn run_pywin32(
             input.display()
         )
     })?;
+    // Excel 会拒绝含全角括号表名裸引用/矛盾冻结窗格的 .xlsx/.xlsm；WPS 宽容。
+    // 仅当 COM 将以 Excel 打开（非 WPS 优先）时修复这份一次性私有副本；
+    // .xls/.et 等二进制容器与 Word 文档不在该修复范围内。
+    if matches!(source_ext, "xlsx" | "xlsm") && target == "xlsx" && !com_prefers_wps() {
+        ooxml_patch::repair_excel_com_open_issues(&com_input);
+    }
     let result = match target {
         "xlsx" => {
             #[cfg(windows)]
