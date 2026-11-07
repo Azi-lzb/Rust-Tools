@@ -786,11 +786,17 @@ impl ConversionRuntime {
         if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
             bail!("校验区域计算需要 Excel/WPS COM 或 LibreOffice；当前环境已禁用外部引擎");
         }
-        // 模板 fail-closed：带外部工作簿引用的模板一律拒绝。校验区域公式会被
-        // 原样复制到工作副本，而副本不会带上模板的 externalLink 部件；若公式
-        // 里有 [N] 前缀就变成悬空引用，Excel COM 会以 0x80020009 拒绝整个
-        // 工作簿（WPS 宽容但重算丢公式）。要求用户先清理模板，而不是静默剥离
-        // ——剥离会让规则指向非预期数据，改模板属于业务决策。
+        // 模板 fail-closed：带外部工作簿引用的模板一律拒绝。
+        //
+        // 注意本功能的复制来源与旧 audit 不同：1-4 缺依赖表时是**从模板文件
+        // 自身**复制同名工作表（plan_missing_template_sheets(template, …)），
+        // 而不是像 audit 那样把一份外部工作簿导入为本地表。但悬空引用的成因
+        // 相同：校验区域公式被原样复制到工作副本，副本不会带上模板的
+        // externalLink 部件与 <externalReferences>；模板公式里只要残留
+        // [N] 前缀，指向的就是工作副本里不存在的外链索引，Excel COM 会以
+        // 0x80020009 拒绝整个工作簿（WPS 宽容但重算丢公式）。要求用户先清理
+        // 模板，而不是静默剥离——剥离会让规则指向非预期数据，改模板属于
+        // 业务决策。
         let reference_scan = ooxml_patch::scan_external_workbook_references(template)
             .with_context(|| format!("扫描模板外部引用失败：{}", template.display()))?;
         ensure!(

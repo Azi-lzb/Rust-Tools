@@ -14,6 +14,18 @@
 
 则公式指向"不存在的外部工作簿 1"。Excel COM `Workbooks.Open` 直接拒绝，HRESULT `0x80020009`（"Open 方法无效"）。WPS 宽松忽略、LibreOffice 同样受影响。
 
+### 1.1 两个仓库的复制来源不同（不要混淆）⚠️
+
+| | 旧 open-data-audit / Rust-Audit | Rust-Tools 1-4 |
+| --- | --- | --- |
+| 工作表来源 | **外部文件**（独立的 external workbook，按配置导入为本地 sheet） | **模板文件自身**（`plan_missing_template_sheets(template, …)`，把模板里同名依赖表复制进工作副本） |
+| 触发 `[N]` 悬空的路径 | 导入外部表后丢弃 externalLink 部件，公式仍带 `[N]` | 校验区域公式原样复制到工作副本，模板的 externalLink 部件与 `<externalReferences>` 不随复制；公式残留 `[N]` 即指向不存在的索引 |
+| 本地表名判定基准 | 导入后副本的 `<sheets>`（含新导入的表） | 复制后工作副本的 `<sheets>`（含从模板复制来的表） |
+
+共同点：**只要副本里公式带 `[N]` 而副本没有对应 externalLink 定义，Excel 就拒绝打开**。所以两边都需要处理，但处理位置与判定基准要按各自的复制来源取。
+
+1-4 的处置（2026-11-07 用户决策）：**模板 fail-closed**——扫描到模板含 externalLink 部件或 `[N]` 前缀即拒绝执行，要求用户先清理模板，不做静默剥离（剥离会让规则指向非预期数据，改模板属业务决策）。
+
 ## 2. 两处与初始假设相反的实测结论 ⚠️
 
 ### 2.1 openpyxl 完整读写周期**不会**剥离 `[N]`
@@ -55,14 +67,18 @@ openpyxl load_workbook → save 后：
 
 ## 4. 风险面清单
 
-| 仓库 | 路径 | 是否剥离 `[N]` | 状态 |
-| --- | --- | --- | --- |
-| Rust-Tools | `ooxml-patch::copy_cell_region`（1-4 工作副本） | 依赖 4-7 前置修复；副本生成本身不剥离 | 需确认调用顺序 |
-| Rust-Tools | `ooxml-patch::repair_excel_com_open_issues`（4-7） | ✅ **已实现** | 已验收 |
-| Rust-Tools | `ooxml-patch` 表头补丁 / calcChain 清理 | 不涉及公式原文改写 | 无风险 |
-| 旧 audit | `formula_region_writer.py` | ❌ 原样保留 | **未修（建议同口径补齐）** |
-| 旧 audit | `external_sheet_writer.py`（DIRECT_OOXML） | ❌ 原样保留 | **未修（建议同口径补齐）** |
-| Rust-Audit | `audit-core/src/excel_open_repair.rs::strip_external_refs` | ✅ 已实现 | 已验收（28/28） |
+| 仓库 | 复制来源 | 路径 | 处置 | 状态 |
+| --- | --- | --- | --- | --- |
+| Rust-Tools 1-4 | 模板文件自身 | `recalculate_named_validation_regions` 入口 | ✅ **模板 fail-closed**：含 externalLink 或 `[N]` 即拒绝 | 已验收 |
+| Rust-Tools 1-4 | 模板文件自身 | `ooxml-patch::copy_cell_region` → 工作副本 | 兜底：随后调用 4-7 剥离（顺序已确认 copy → repair → COM） | 已实现 |
+| Rust-Tools 4-7 | 调用方副本 | `repair_excel_com_open_issues` | ✅ 剥离 `[N]`（仅指向本包本地表） | 已验收 |
+| Rust-Tools | — | 表头补丁 / calcChain 清理 | 不改写公式原文 | 无风险 |
+| 旧 audit | **外部文件** | `formula_region_writer.py`（DirectOoxml） | ✅ 生成侧剥离 | 已修（`ba69b35`） |
+| 旧 audit | **外部文件** | `external_sheet_writer.py`（DIRECT_OOXML） | ✅ 生成侧剥离 | 已修（`ba69b35`） |
+| 旧 audit | — | `excel_open_repair.py`（事后修复） | ✅ 剥离（既有实现） | 已存在 |
+| Rust-Audit | **外部文件** | `audit-core/src/excel_open_repair.rs::strip_external_refs` | ✅ 剥离 | 已验收（28/28） |
+
+**关键区别**：旧 audit / Rust-Audit 的 `[N]` 来自"外部文件导入为本地表"；Rust-Tools 1-4 的 `[N]` 来自"模板公式原样复制 + 模板依赖表复制"——模板自己的 `<sheets>` 就是本地表名判定基准，不存在外部工作簿参与。
 
 ## 5. 验收
 
@@ -75,8 +91,12 @@ Rust-Tools 合成样本实测（2026-11-07）：
 | `[1]` 前缀 | 已剥离，公式 `=SUM(存量单位贷款信息!C5:C10)` |
 | `[99]` 真外部引用 | 保留不动 |
 | 原件保护 | 只写 `-Excel修复` 副本 |
+| 1-4 真实模板（无外链） | ✅ 放行，3 条命中 |
+| 1-4 注入 `[1]外部簿!` 的模板 | ✅ 拒绝（exit 2，错误含定位） |
+| 旧 audit `_strip_external_prefixes` | ✅ 本地表剥离 / `''` 转义 / 真外链保留 三例通过 |
 
 ## 6. 待办
 
-1. 旧 audit 补齐 `strip_external_refs`（`formula_region_writer` + `external_sheet_writer` 两条路径）。
-2. Rust-Tools 确认 1-4 管线在 `copy_cell_region` 之后确实经过修复（当前 1-4 已有 `repair_excel_com_open_issues` 调用，需验证顺序）。
+1. ~~旧 audit 补齐 `strip_external_refs`~~ — 已完成（`ba69b35`，含 `formula_region_writer` 与 `external_sheet_writer` 两条生成侧路径）。
+2. ~~Rust-Tools 确认 1-4 管线顺序~~ — 已确认：`copy_cell_region` → `repair_excel_com_open_issues` → COM 重算。
+3. 旧 audit 仓库存在**既存未提交改动**（`excel_open_repair.py`、`test_excel_open_repair.py`，非本次工作），提交时需与本次改动分开处理。
