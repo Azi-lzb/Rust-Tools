@@ -874,7 +874,10 @@ impl ConversionRuntime {
         // ① betteroffice（纯 Rust）首选路由：配置开启即尝试；超限/未实现函数/
         // 循环引用时按配置回退 COM/LibreOffice，`none` 则明确报错，绝不静默
         // 采用受限结果。回退原因拼进 application，随统一运行日志留痕。
-        let bo_config = crate::bo_calc::BoCalcConfig::from_env();
+        // 配置优先级：config.xlsx 全局配置（校验计算* 键）> 环境变量 > 默认。
+        let bo_config = crate::bo_calc::BoCalcConfig::load(
+            crate::config::default_config_workbook_path().as_deref(),
+        );
         if bo_config.enabled {
             match crate::bo_calc::recalculate(source_copy, &bo_config) {
                 Ok(outcome) => {

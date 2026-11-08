@@ -55,6 +55,21 @@ vendor 自带测试：model **100 passed**，calc **257 lib + 全部集成测试
 
 ## 4. 配置项
 
+### 4.1 config.xlsx 全局配置（业务配置入口，优先）
+
+| 键 | 默认值 | C 列备注（写入表内，用户可见） |
+| --- | --- | --- |
+| `校验计算引擎` | betteroffice | 1-4 校验区域重算用哪个引擎：betteroffice=纯Rust优先（快，推荐）；com=直接用Excel/WPS；off=同com |
+| `校验计算预算上限` | （空=默认1000万） | 重算时全簿共享的公式求值次数上限；留空=默认1000万；算不完会自动按回退策略处理 |
+| `校验计算轮数` | 2 | 重算跑几轮：1~5；第2轮起跨表动态引用（INDIRECT）才收敛；保持2即可 |
+| `校验计算剥离样式空格` | 否 | 是=重算前删掉工作副本里只有格式没有内容的空格子（大表更快）；否=不删 |
+| `校验计算回退策略` | auto | betteroffice算不动时怎么办：auto=Windows回Excel/WPS、Linux回LibreOffice；com=只回Excel/WPS；libreoffice=只回LibreOffice；none=不回退直接报错 |
+
+解析在 `config.rs::parse_global_config`；键清单在 `config_admin.rs::GLOBAL_DEFAULTS`
+（三元组：键/默认值/备注，init 与 repair 都会把备注写进 C 列）。
+
+### 4.2 环境变量（应急覆盖，config 未配置时生效）
+
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PYTOOLS_BO_CALC` | `auto`（启用） | `off` 完全回到 COM/LibreOffice 旧路由 |
@@ -62,6 +77,11 @@ vendor 自带测试：model **100 passed**，calc **257 lib + 全部集成测试
 | `PYTOOLS_BO_CALC_ROUNDS` | `2` | 重算轮数，上限 5 |
 | `PYTOOLS_BO_CALC_STRIP_STYLE` | `off` | `on` 时**一次性**剥离纯样式空格（不做事后重试） |
 | `PYTOOLS_BO_CALC_FALLBACK` | `auto` | `auto`/`com`/`libreoffice`/`none`；`none` 时超限明确报错 |
+
+**优先级**：config.xlsx 全局配置的键值**优先**；该键缺失或为空时才读对应环境变量；
+两者都没有时用内置默认。落点在 `bo_calc.rs::BoCalcConfig::load(config_path)`，
+config 路径由 `config.rs::default_config_workbook_path()` 探测（与交互菜单同口径，
+支持 `PYTOOLS_CONFIG_PATH` 显式指定）。
 
 ### 为什么默认 2 轮
 

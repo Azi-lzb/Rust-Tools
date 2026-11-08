@@ -182,22 +182,29 @@ const SHEET_SPECS: &[(&str, &[&str])] = &[
     ),
 ];
 
-const GLOBAL_DEFAULTS: &[(&str, &str)] = &[
-    ("输入目录", "input"),
-    ("输出目录", "output"),
+/// 全局配置的键、默认值与 C 列备注。备注必须让用户不看文档就知道怎么填；
+/// 修改时三处消费点（init、repair 补行、repair 整表重建）会同步带出备注。
+const GLOBAL_DEFAULTS: &[(&str, &str, &str)] = &[
+    ("输入目录", "input", "待处理的源文件目录；相对路径基于本配置文件所在目录"),
+    ("输出目录", "output", "结果输出目录；相对路径基于本配置文件所在目录"),
     // Blank selects run_logging::default_log_dir() at runtime; an explicit
     // user value remains relative to the configuration workbook as before.
-    ("日志目录", ""),
-    ("日志模式", "普通"),
-    ("日志保留天数", ""),
-    ("日志最大占用MB", ""),
-    ("源文件扩展名", ".xlsx;.xlsm;.csv"),
-    ("错误策略", "continue"),
-    ("默认编码", "utf-8"),
-    ("打印零值不输出", "否"),
-    ("时序规则命中策略", "all_match"),
-    ("excel目的格式", "xlsx"),
-    ("word目的格式", "docx"),
+    ("日志目录", "", "运行日志目录；留空用系统默认位置"),
+    ("日志模式", "普通", "普通=用户视图；详细=developer；关闭=off"),
+    ("日志保留天数", "", "自动清理多少天前的运行日志；留空不清理"),
+    ("日志最大占用MB", "", "运行日志最大占用（MB）；超出时清理最旧日志；留空不限制"),
+    ("源文件扩展名", ".xlsx;.xlsm;.csv", "批量扫描时认哪些扩展名；分号分隔"),
+    ("错误策略", "continue", "continue=出错继续下一个；stop=出错即停"),
+    ("默认编码", "utf-8", "读取 CSV 等文本的编码，如 utf-8 或 gbk"),
+    ("打印零值不输出", "否", "是=打印输出时零值留空；否=输出 0"),
+    ("时序规则命中策略", "all_match", "all_match=所有关键词都命中才取；first_match=取第一条命中的规则"),
+    ("excel目的格式", "xlsx", "4-4 转 Excel 的目标格式：xlsx"),
+    ("word目的格式", "docx", "4-4 转 Word 的目标格式：docx"),
+    ("校验计算引擎", "betteroffice", "1-4 校验区域重算用哪个引擎：betteroffice=纯Rust优先（快，推荐）；com=直接用Excel/WPS；off=同com"),
+    ("校验计算预算上限", "", "重算时全簿共享的公式求值次数上限；留空=默认1000万；算不完会自动按回退策略处理"),
+    ("校验计算轮数", "2", "重算跑几轮：1~5；第2轮起跨表动态引用（INDIRECT）才收敛；保持2即可"),
+    ("校验计算剥离样式空格", "否", "是=重算前删掉工作副本里只有格式没有内容的空格子（大表更快）；否=不删"),
+    ("校验计算回退策略", "auto", "betteroffice算不动时怎么办：auto=Windows回Excel/WPS、Linux回LibreOffice；com=只回Excel/WPS；libreoffice=只回LibreOffice；none=不回退直接报错"),
 ];
 
 /// Create a new configuration workbook without overwriting user data. Existing
@@ -230,9 +237,12 @@ pub fn initialize_new_config(path: impl AsRef<Path>) -> Result<ConfigInitResult>
     let global = workbook
         .worksheet_from_name("全局配置")
         .context("global worksheet missing")?;
-    for (row, (key, value)) in GLOBAL_DEFAULTS.iter().enumerate() {
+    for (row, (key, value, remark)) in GLOBAL_DEFAULTS.iter().enumerate() {
         global.write_string((row + 1) as u32, 0, *key)?;
         global.write_string((row + 1) as u32, 1, *value)?;
+        if !remark.is_empty() {
+            global.write_string((row + 1) as u32, 2, *remark)?;
+        }
     }
     let rename = workbook
         .worksheet_from_name("重命名配置")
@@ -426,7 +436,7 @@ pub fn build_config_repair_plan(
             }
         }
         let mut next = sheet_max_row(sheet, &extents) + 1;
-        for (key, value) in GLOBAL_DEFAULTS {
+        for (key, value, remark) in GLOBAL_DEFAULTS {
             if let Some(row) = rows.get(*key).copied() {
                 if cell_is_blank(sheet, &format!("B{row}")) {
                     operations.push(EditOperation::SetCellValue {
@@ -446,11 +456,18 @@ pub fn build_config_repair_plan(
                     cell: format!("B{next}"),
                     value: PlannedCellValue::Text((*value).to_owned()),
                 });
+                if !remark.is_empty() {
+                    operations.push(EditOperation::SetCellValue {
+                        sheet: "全局配置".into(),
+                        cell: format!("C{next}"),
+                        value: PlannedCellValue::Text((*remark).to_owned()),
+                    });
+                }
                 next += 1;
             }
         }
     } else {
-        for (row, (key, value)) in GLOBAL_DEFAULTS.iter().enumerate() {
+        for (row, (key, value, remark)) in GLOBAL_DEFAULTS.iter().enumerate() {
             let target_row = row + 2;
             operations.push(EditOperation::SetCellValue {
                 sheet: "全局配置".into(),
@@ -462,6 +479,13 @@ pub fn build_config_repair_plan(
                 cell: format!("B{target_row}"),
                 value: PlannedCellValue::Text((*value).to_owned()),
             });
+            if !remark.is_empty() {
+                operations.push(EditOperation::SetCellValue {
+                    sheet: "全局配置".into(),
+                    cell: format!("C{target_row}"),
+                    value: PlannedCellValue::Text((*remark).to_owned()),
+                });
+            }
         }
     }
     let examples: [(&str, Vec<Vec<&str>>); 3] = [

@@ -38,6 +38,17 @@ pub struct GlobalConfig {
     /// `--log-dir` 显式覆盖。交互菜单在启动、配置初始化与重载之间必须
     /// 保留它，否则重新加载配置会把日志目录悄悄改回配置值或用户状态目录。
     pub log_dir_override: Option<PathBuf>,
+    /// 1-4 校验区域重算的计算引擎：`betteroffice`（纯 Rust 优先，默认）、
+    /// `com`/`off`（直接走 Excel/WPS COM 或 LibreOffice 旧路由）。
+    pub validation_calc_engine: String,
+    /// 1-4 重算共享预算上限；`None` 用库默认（10,000,000）。
+    pub validation_calc_max_visits: Option<u64>,
+    /// 1-4 重算轮数，1~5；2 轮才能让 INDIRECT 动态链收敛。
+    pub validation_calc_rounds: u32,
+    /// 1-4 重算前是否剥离工作副本的纯样式空单元格。
+    pub validation_calc_strip_style: bool,
+    /// 1-4 重算不可用时的回退：`auto`/`com`/`libreoffice`/`none`。
+    pub validation_calc_fallback: String,
 }
 
 impl GlobalConfig {
@@ -54,6 +65,11 @@ impl GlobalConfig {
             source_exts: vec![".xlsx".to_owned(), ".xlsm".to_owned(), ".csv".to_owned()],
             timeline_rule_match_mode: "all_match".to_owned(),
             emit_plan_files: true,
+            validation_calc_engine: "betteroffice".to_owned(),
+            validation_calc_max_visits: None,
+            validation_calc_rounds: 2,
+            validation_calc_strip_style: false,
+            validation_calc_fallback: "auto".to_owned(),
             log_dir_override: None,
         }
     }
@@ -201,6 +217,33 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
             .get("输出附带计划文件")
             .map(|value| !matches!(value.trim(), "否" | "N" | "n" | "false" | "FALSE"))
             .unwrap_or(true),
+        validation_calc_engine: values
+            .get("校验计算引擎")
+            .map(|value| value.trim().to_lowercase())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "betteroffice".to_owned()),
+        validation_calc_max_visits: values
+            .get("校验计算预算上限")
+            .and_then(|value| positive_config_integer(value)),
+        validation_calc_rounds: values
+            .get("校验计算轮数")
+            .and_then(|value| positive_config_integer(value))
+            .map(|value| value.clamp(1, 5) as u32)
+            .unwrap_or(2),
+        validation_calc_strip_style: values
+            .get("校验计算剥离样式空格")
+            .map(|value| {
+                matches!(
+                    value.trim(),
+                    "是" | "Y" | "y" | "true" | "TRUE" | "True" | "1" | "on" | "ON"
+                )
+            })
+            .unwrap_or(false),
+        validation_calc_fallback: values
+            .get("校验计算回退策略")
+            .map(|value| value.trim().to_lowercase())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "auto".to_owned()),
     })
 }
 
@@ -958,6 +1001,32 @@ fn valid_a1_cell(address: &str) -> bool {
 
 fn non_empty_option(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
+}
+
+/// Locate the configuration workbook the same way the interactive menu does:
+/// `PYTOOLS_CONFIG_PATH` wins, then the executable directory, its parent, and
+/// the current directory each probe `config\config.xlsx` then `config.xlsx`.
+/// `None` when nothing is found (fresh deployments before config-init).
+pub fn default_config_workbook_path() -> Option<PathBuf> {
+    if let Some(config_path) = std::env::var_os("PYTOOLS_CONFIG_PATH") {
+        let path = PathBuf::from(config_path);
+        return path.is_file().then_some(path);
+    }
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|executable| executable.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let exe_parent = exe_dir
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| exe_dir.clone());
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut candidates = Vec::new();
+    for base in [exe_dir, exe_parent, cwd] {
+        candidates.push(base.join("config").join("config.xlsx"));
+        candidates.push(base.join("config.xlsx"));
+    }
+    candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
 fn resolve_config_path(base: &Path, configured: &str, default: &str) -> PathBuf {

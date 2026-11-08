@@ -60,6 +60,31 @@ pub(crate) struct BoCalcOutcome {
     pub save_elapsed: std::time::Duration,
 }
 
+/// the five raw strings as read from the 全局配置 sheet. Empty strings mean
+/// "not configured"; parsing happens in [`BoCalcConfig::from_parts`].
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ValidationCalcSettings {
+    engine: Option<String>,
+    max_visits: Option<String>,
+    rounds: Option<String>,
+    strip_style: Option<String>,
+    fallback: Option<String>,
+}
+
+/// read the five 校验计算* keys from the 全局配置 sheet; missing keys come
+/// back as `None`.
+fn read_validation_settings(config_path: &std::path::Path) -> Result<ValidationCalcSettings> {
+    let load =
+        |key: &str| -> Result<String> { crate::config::load_global_value(config_path, key, "") };
+    Ok(ValidationCalcSettings {
+        engine: Some(load("校验计算引擎")?),
+        max_visits: Some(load("校验计算预算上限")?),
+        rounds: Some(load("校验计算轮数")?),
+        strip_style: Some(load("校验计算剥离样式空格")?),
+        fallback: Some(load("校验计算回退策略")?),
+    })
+}
+
 /// routing configuration, read once per call from the process environment.
 #[derive(Debug, Clone)]
 pub(crate) struct BoCalcConfig {
@@ -72,26 +97,66 @@ pub(crate) struct BoCalcConfig {
 }
 
 impl BoCalcConfig {
-    pub(crate) fn from_env() -> Self {
-        let mode = std::env::var("PYTOOLS_BO_CALC").unwrap_or_default();
-        let enabled = !mode.eq_ignore_ascii_case("off");
-        let max_visits = std::env::var("PYTOOLS_BO_CALC_MAX_VISITS")
-            .ok()
-            .and_then(|value| value.trim().parse::<u64>().ok())
-            .filter(|value| *value > 0);
-        let rounds = std::env::var("PYTOOLS_BO_CALC_ROUNDS")
-            .ok()
-            .and_then(|value| value.trim().parse::<u32>().ok())
-            .filter(|value| *value >= 1)
-            .unwrap_or(2)
-            .min(5);
-        let strip_style_cells = std::env::var("PYTOOLS_BO_CALC_STRIP_STYLE")
-            .map(|value| value.trim().eq_ignore_ascii_case("on"))
-            .unwrap_or(false);
-        let fallback = std::env::var("PYTOOLS_BO_CALC_FALLBACK")
-            .unwrap_or_default()
-            .trim()
-            .to_ascii_lowercase();
+    /// 配置优先级：config.xlsx 全局配置 > 环境变量 > 内置默认。
+    ///
+    /// `config_path` 传 `None`（或文件不存在）时跳过配置表，只看环境变量。
+    pub(crate) fn load(config_path: Option<&std::path::Path>) -> Self {
+        let global = config_path
+            .filter(|path| path.is_file())
+            .and_then(|path| read_validation_settings(path).ok());
+        Self::from_parts(global.as_ref(), &|key| std::env::var(key).ok())
+    }
+
+    /// 纯函数入口，便于测试配置与环境变量的优先级。
+    fn from_parts(
+        global: Option<&ValidationCalcSettings>,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Self {
+        // 每个键：config 非空值优先；否则环境变量非空值；否则 None。
+        let pick = |config_value: Option<&String>, env_key: &str| -> Option<String> {
+            config_value
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .or_else(|| env(env_key).filter(|value| !value.trim().is_empty()))
+        };
+        let engine = pick(
+            global.and_then(|global| global.engine.as_ref()),
+            "PYTOOLS_BO_CALC",
+        )
+        .unwrap_or_else(|| "betteroffice".to_owned());
+        // off 与 com 都表示不启用 betteroffice 路由（直接走平台引擎）。
+        let enabled = !matches!(engine.trim().to_ascii_lowercase().as_str(), "off" | "com");
+        let max_visits = pick(
+            global.and_then(|global| global.max_visits.as_ref()),
+            "PYTOOLS_BO_CALC_MAX_VISITS",
+        )
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0);
+        let rounds = pick(
+            global.and_then(|global| global.rounds.as_ref()),
+            "PYTOOLS_BO_CALC_ROUNDS",
+        )
+        .and_then(|value| value.trim().parse::<u32>().ok())
+        .filter(|value| (1..=5).contains(value))
+        .unwrap_or(2);
+        let strip_style_cells = pick(
+            global.and_then(|global| global.strip_style.as_ref()),
+            "PYTOOLS_BO_CALC_STRIP_STYLE",
+        )
+        .map(|value| {
+            matches!(
+                value.trim(),
+                "是" | "Y" | "y" | "true" | "TRUE" | "True" | "1" | "on" | "ON"
+            )
+        })
+        .unwrap_or(false);
+        let fallback = pick(
+            global.and_then(|global| global.fallback.as_ref()),
+            "PYTOOLS_BO_CALC_FALLBACK",
+        )
+        .unwrap_or_else(|| "auto".to_owned())
+        .trim()
+        .to_ascii_lowercase();
         let fallback_com = fallback != "none" && fallback != "libreoffice";
         let fallback_libreoffice = fallback != "none" && fallback != "com";
         Self {
@@ -311,37 +376,89 @@ fn fs_rename(from: &Path, to: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::BoCalcConfig;
+    use super::{BoCalcConfig, ValidationCalcSettings};
 
-    #[test]
-    fn config_defaults_enable_auto_routing() {
-        // 环境未设置时的缺省：启用、库默认预算、2 轮、不剥样式、允许回退。
-        // 只断言与 env 无关的字段组合逻辑（变量可能被外层测试污染）。
-        let config = BoCalcConfig {
-            enabled: true,
-            max_visits: None,
-            rounds: 2,
-            strip_style_cells: false,
-            fallback_com: true,
-            fallback_libreoffice: true,
-        };
-        assert!(config.enabled);
-        assert!(config.max_visits.is_none());
-        assert!(config.fallback_available());
+    fn no_env(_key: &str) -> Option<String> {
+        None
+    }
+
+    fn env_of<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |key: &str| {
+            pairs
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| value.to_string())
+        }
     }
 
     #[test]
-    fn rounds_above_five_are_clamped() {
-        // min(5) 的上限写在 from_env；这里只验证配置结构接受合法轮数。
-        let config = BoCalcConfig {
-            enabled: true,
-            max_visits: Some(1),
-            rounds: 1,
-            strip_style_cells: true,
-            fallback_com: false,
-            fallback_libreoffice: false,
+    fn defaults_enable_betteroffice_with_two_rounds() {
+        let config = BoCalcConfig::from_parts(None, &no_env);
+        assert!(config.enabled);
+        assert!(config.max_visits.is_none());
+        assert_eq!(config.rounds, 2);
+        assert!(!config.strip_style_cells);
+        assert!(config.fallback_com && config.fallback_libreoffice);
+    }
+
+    #[test]
+    fn config_sheet_takes_priority_over_env() {
+        let global = ValidationCalcSettings {
+            engine: Some("com".into()),
+            max_visits: Some("123456".into()),
+            rounds: Some("3".into()),
+            strip_style: Some("是".into()),
+            fallback: Some("none".into()),
         };
-        assert!(!config.fallback_available());
-        assert_eq!(config.rounds, 1);
+        let env = env_of(&[
+            ("PYTOOLS_BO_CALC", "betteroffice"),
+            ("PYTOOLS_BO_CALC_MAX_VISITS", "999"),
+            ("PYTOOLS_BO_CALC_ROUNDS", "1"),
+            ("PYTOOLS_BO_CALC_STRIP_STYLE", "off"),
+            ("PYTOOLS_BO_CALC_FALLBACK", "auto"),
+        ]);
+        let config = BoCalcConfig::from_parts(Some(&global), &env);
+        assert!(!config.enabled, "config 的 com 优先于 env 的 betteroffice");
+        assert_eq!(config.max_visits, Some(123456));
+        assert_eq!(config.rounds, 3);
+        assert!(config.strip_style_cells);
+        assert!(!config.fallback_com && !config.fallback_libreoffice);
+    }
+
+    #[test]
+    fn env_used_when_config_key_missing() {
+        let global = ValidationCalcSettings {
+            engine: None,
+            max_visits: None,
+            rounds: Some("".into()),
+            strip_style: None,
+            fallback: None,
+        };
+        let env = env_of(&[
+            ("PYTOOLS_BO_CALC", "off"),
+            ("PYTOOLS_BO_CALC_ROUNDS", "4"),
+            ("PYTOOLS_BO_CALC_STRIP_STYLE", "on"),
+        ]);
+        let config = BoCalcConfig::from_parts(Some(&global), &env);
+        assert!(!config.enabled, "env 的 off 在 config 缺失时生效");
+        assert_eq!(config.rounds, 4);
+        assert!(config.strip_style_cells);
+    }
+
+    #[test]
+    fn builtin_defaults_survive_bad_values() {
+        let global = ValidationCalcSettings {
+            engine: Some("".into()),
+            max_visits: Some("abc".into()),
+            rounds: Some("99".into()),
+            strip_style: Some("随便".into()),
+            fallback: Some("".into()),
+        };
+        let config = BoCalcConfig::from_parts(Some(&global), &no_env);
+        assert!(config.enabled, "空引擎名回落 betteroffice");
+        assert_eq!(config.max_visits, None, "非法预算回落默认");
+        assert_eq!(config.rounds, 2, "越界轮数回落默认 2");
+        assert!(!config.strip_style_cells);
+        assert!(config.fallback_com && config.fallback_libreoffice);
     }
 }
