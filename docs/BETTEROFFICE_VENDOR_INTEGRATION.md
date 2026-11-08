@@ -244,6 +244,52 @@ S1F1 四模板仍为 99.70% / 99.90% / 99.26% / 100%。vendor 测试 model 101�
 - ！100：命中 20/20 相同，排序后单元格集合完全相同，**实质差异 0**（34 处仅浮点显示）
 - 省信贷大表：1,327 处差异中，**含判错关键词的结论格差异为 0**
 
+## 5.8 组级批量编排：并行 betteroffice + 回退项统一处理（2026-11-09）
+
+### 问题
+
+首版是逐文件流：每个副本独立 `bo_calc::recalculate` → 拒绝时当场回退平台引擎。
+多模板场景下平台引擎被逐个启动，浪费在进程启动与重复加载上。
+
+### 实现
+
+三阶段编排（`pytools-core/src/bo_calc_batch.rs` + `summary_ops`）：
+
+1. **准备阶段**（循环内，逐文件）：每个源创建校验副本、复制模板校验公式，
+   只登记 `PendingValidationCalculation`，不计算。
+2. **批量计算**（循环后一次）：`bo_calc_batch::recalculate_parallel` 用 rayon
+   对所有副本并行跑 betteroffice（每本独立 `Workbook`，无共享可变状态）；
+   成功项直接采用，`BoCalcRefusal` 项进待处理集合。
+3. **回退阶段**：只有拒绝项交给平台引擎（COM/Linux 用既有 worker，会话复用，
+   不重复启动）；回退引擎整簿重算，不依赖 betteroffice 残留缓存。
+
+`PYTOOLS_BO_CALC=off` 时跳过批量阶段，全部副本走平台引擎（旧行为）。
+fail-closed 语义不变：`FALLBACK=none` 时拒绝项直接报错；`application` 字段格式
+与单文件路径逐字一致。
+
+### 验收
+
+| 场景 | 结果 |
+| --- | --- |
+| 3 副本全成功 | betteroffice 成功 3 / 拒绝 0，**平台引擎零启动**；耗时 5.47 s |
+| 4 副本全成功（并行） | 5.88 s；串行基线 ~21.2 s ⇒ **并行提速 3.6×** |
+| 2 副本全拒（MAX_VISITS=10） | 成功 0 / 拒绝 2；`application` = `Excel.Application；betteroffice 回退（重算预算耗尽（1329 个公式格未求值，保留旧值不可信））`，命中仍 20 条 |
+| 4 副本全拒 | 全部回退平台引擎，4 份结果各 20 条命中 |
+| 预算阈值 | 1300（<1331 格）全拒；1400 仍拒（含预算外余量），行为与单文件一致 |
+| 单文件路径 | 与批量前一致：！100 命中 20 条 / betteroffice；！140 命中 1 条 |
+| 全量回归 | **559 passed / 0 failed / 15 ignored**（+2 为批量编排单测） |
+
+单元测试 `bo_calc_batch::tests`：
+- `all_copies_succeed_and_order_is_preserved`：4 副本全成功、索引完整、顺序保持
+- `a_broken_copy_is_refused_without_failing_the_group`：2 成 1 拒，坏副本被拒绝
+  且不中断整组（这是端到端无法构造的"部分成/部分拒"混合场景的唯一覆盖）
+
+### 未验证
+
+- 未构造出**端到端**的"同组部分成功、部分拒绝"（同一模板的副本行为一致，
+  预算阈值只能全成或全拒）；该路径由上述单元测试覆盖。
+- Linux 上批量并行 + LibreOffice 会话复用未实测。
+
 ## 6. 修复的一个真 bug
 
 `strip_style_only_cells` 首版在重建被改动的 `<row>` 时：

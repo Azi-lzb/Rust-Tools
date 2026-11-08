@@ -108,7 +108,7 @@ impl BoCalcConfig {
     }
 
     /// 纯函数入口，便于测试配置与环境变量的优先级。
-    fn from_parts(
+    pub(crate) fn from_parts(
         global: Option<&ValidationCalcSettings>,
         env: &dyn Fn(&str) -> Option<String>,
     ) -> Self {

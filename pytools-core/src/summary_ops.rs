@@ -3,7 +3,7 @@
 use crate::conversion_engine::{
     named_validation_calculation_engine, ConversionRuntime, NamedValidationRegionRequest,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
@@ -123,6 +123,223 @@ pub struct SummaryRunEvent {
     pub actual_engine: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_type: Option<String>,
+}
+
+/// 循环内已准备好的待算副本：公式已复制进工作副本，计算尚未执行。
+struct PendingValidationCalculation {
+    input_index: usize,
+    source: PathBuf,
+    file_name: String,
+    source_copy: PathBuf,
+    regions: Vec<NamedValidationRegionRequest>,
+    routes: BTreeMap<String, (String, String)>,
+    prepared: crate::conversion_engine::PreparedValidationCopy,
+    routed_sheets: Vec<String>,
+    validation_started: Instant,
+}
+
+/// 组级批量编排：一次并行跑完所有副本的 betteroffice，再只对拒绝项启动平台引擎。
+///
+/// 这样多模板场景下 LibreOffice/COM 只被拒绝项触发，不再逐文件启动。
+/// 计算引擎与回退语义与单文件路径逐条一致（`application` 字段格式不变）。
+fn run_pending_validation_calculations(
+    runtime: &mut ConversionRuntime,
+    template_path: &Path,
+    pending: &mut Vec<PendingValidationCalculation>,
+    emitter: &mut SummaryProgressEmitter<'_>,
+    progress: &mut SummaryProgress,
+    output_rows: &mut Vec<NamedValidationOutputRow>,
+    files_processed: &mut usize,
+    platform_default_engine: &str,
+) -> Result<()> {
+    let bo_config = crate::bo_calc::BoCalcConfig::load(
+        crate::config::default_config_workbook_path().as_deref(),
+    );
+    // 只有 betteroffice 启用时才走批量；否则全部副本都交给平台引擎（保持旧行为）。
+    let mut successes: BTreeMap<usize, crate::bo_calc::BoCalcOutcome> = BTreeMap::new();
+    let mut refusals: BTreeMap<usize, String> = BTreeMap::new();
+    let batch_elapsed;
+    if bo_config.enabled {
+        let copies: Vec<PathBuf> = pending
+            .iter()
+            .map(|item| item.source_copy.clone())
+            .collect();
+        let started = Instant::now();
+        progress.current_input_index = None;
+        progress.current_sheet = None;
+        let results = crate::bo_calc_batch::recalculate_parallel(&copies, &bo_config);
+        batch_elapsed = started.elapsed();
+        for (index, outcome, _elapsed) in results {
+            match outcome {
+                crate::bo_calc_batch::BatchOutcome::Succeeded(outcome) => {
+                    successes.insert(index, outcome);
+                }
+                crate::bo_calc_batch::BatchOutcome::Refused { reason } => {
+                    refusals.insert(index, reason);
+                }
+            }
+        }
+        emitter.emit(
+            "validation_calculation",
+            "succeeded",
+            format!(
+                "组级批量重算完成：betteroffice 成功 {} 本、拒绝 {} 本；耗时 {} ms",
+                successes.len(),
+                refusals.len(),
+                batch_elapsed.as_millis()
+            ),
+            progress,
+            None,
+            Some(batch_elapsed),
+            &["pytools-core", "betteroffice (pure Rust)"],
+            Some("betteroffice (pure Rust)"),
+            None,
+        );
+    } else {
+        batch_elapsed = Duration::ZERO;
+    }
+
+    for (index, item) in pending.drain(..).enumerate() {
+        let file_name = item.file_name.clone();
+        let source = item.source.clone();
+        progress.current_input_index = Some(item.input_index + 1);
+        progress.current_sheet = None;
+        emitter.emit(
+            "validation_calculation",
+            "started",
+            format!(
+                "正在通过 {platform_default_engine} 路由重算「{file_name}」的校验区域（{} 个区域）；最终引擎见完成事件",
+                item.regions.len()
+            ),
+            progress,
+            Some(&source),
+            None,
+            &["pytools-core"],
+            Some(platform_default_engine),
+            None,
+        );
+        let calculation = match successes.get(&index) {
+            Some(outcome) => ConversionRuntime::calculation_from_batch_success(
+                &item.source_copy,
+                &item.regions,
+                &item.prepared,
+                outcome,
+            )
+            .with_context(|| format!("读取「{file_name}」的 betteroffice 批量重算结果")),
+            None => {
+                let forced = refusals
+                    .get(&index)
+                    .map(|reason| format!("betteroffice 回退（{reason}）"));
+                if forced.is_some() && !bo_config.fallback_available() {
+                    bail!(
+                        "betteroffice 校验区域重算不可采用且未配置可用回退：{}",
+                        refusals.get(&index).cloned().unwrap_or_default()
+                    );
+                }
+                runtime.compute_prepared_copy(
+                    &item.source_copy,
+                    &item.regions,
+                    &item.prepared,
+                    forced,
+                )
+            }
+        };
+        let calculation = match calculation {
+            Ok(calculation) => calculation,
+            Err(error) => {
+                progress.failed_files += 1;
+                let cause = error.root_cause().to_string();
+                emitter.emit(
+                    "validation_calculation",
+                    "failed",
+                    format!(
+                        "公式重算校验区域失败：「{file_name}」/「{}」；原因：{cause}",
+                        item.routed_sheets.join("、")
+                    ),
+                    progress,
+                    Some(&source),
+                    Some(item.validation_started.elapsed()),
+                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                    Some(platform_default_engine),
+                    Some("named_validation_calculation_error"),
+                );
+                return Err(error).with_context(|| format!("重算「{file_name}」的命名校验区域"));
+            }
+        };
+
+        let workbook_name = source
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let matched = calculation
+            .cells
+            .iter()
+            .filter_map(|cell| {
+                parse_named_validation_result(
+                    &workbook_name,
+                    &cell.sheet,
+                    &cell.address,
+                    &cell.value,
+                )
+                .map(|row| (cell, row))
+            })
+            .map(|(cell, mut row)| {
+                let (route, template) = item
+                    .routes
+                    .get(&cell.sheet)
+                    .with_context(|| format!("校验结果工作表 {:?} 缺少模板路由记录", cell.sheet))?;
+                row.route = route.clone();
+                row.template = template.clone();
+                Ok(row)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let hit_count = matched.len();
+        output_rows.extend(matched);
+        progress.completed_files += 1;
+        *files_processed += 1;
+        let copied_sheets = if calculation.copied_template_sheets.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "；已从模板补装公式引用的工作表：{}（{} 个）",
+                calculation.copied_template_sheets.join("、"),
+                calculation.copied_template_sheets.len()
+            )
+        };
+        let calculation_application = calculation.application.clone();
+        let (calculation_engine, success_components): (&str, &[&str]) =
+            if calculation_application.starts_with("betteroffice") {
+                (
+                    "betteroffice (pure Rust)",
+                    &["pytools-core", "betteroffice (pure Rust)"],
+                )
+            } else if calculation_application.starts_with("LibreOffice") {
+                ("LibreOffice Calc", &["pytools-core", "LibreOffice Calc"])
+            } else {
+                (
+                    platform_default_engine,
+                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                )
+            };
+        emitter.emit(
+            "validation_calculation",
+            "succeeded",
+            format!(
+                "校验区域重算完成：「{file_name}」/「{}」；计算引擎：{}；校验公式/辅助表复制：{}；提取命中结果 {hit_count} 条{copied_sheets}",
+                item.routed_sheets.join("、"),
+                calculation_application,
+                calculation.dependency_copy_engine
+            ),
+            progress,
+            Some(&source),
+            Some(item.validation_started.elapsed()),
+            success_components,
+            Some(calculation_engine),
+            None,
+        );
+    }
+    Ok(())
 }
 
 struct SummaryProgressEmitter<'a> {
@@ -2067,6 +2284,11 @@ fn extract_named_validation_regions_inner(
     let mut files_processed = 0usize;
     let mut read_elapsed = Duration::ZERO;
     let mut normalized_cells = 0usize;
+    // 组级批量编排：循环内只准备副本（复制模板校验公式），计算推迟到循环后
+    // 用 rayon 并行跑 betteroffice，只把拒绝项交给平台引擎。
+    let mut pending_calculations = Vec::<PendingValidationCalculation>::new();
+    // 引擎名在重算返回后才最终确定；此处只保留平台默认作为占位与日志前缀。
+    let platform_default_engine = named_validation_calculation_engine();
     for (input_index, source) in sources.iter().enumerate() {
         progress.current_input_index = Some(input_index + 1);
         progress.current_sheet = None;
@@ -2389,9 +2611,6 @@ fn extract_named_validation_regions_inner(
             format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；计算引擎仅处理副本，原文件不变"),
             &progress, Some(source), None, &["pytools-core"], None, None);
         let mut source_copy_created = false;
-        // 引擎名在重算返回后才最终确定（betteroffice 可能回退 COM/LibreOffice），
-        // 因此在重算调用后按 application 取值；此处只保留平台默认作为占位。
-        let platform_default_engine = named_validation_calculation_engine();
         let calculation = (|runtime: &mut ConversionRuntime| -> Result<_> {
             // 校验副本保留在输出目录的“副本/”下（用户要求）：便于事后
             // 核对公式重算时实际读取的数据；同名副本按序号追加。
@@ -2497,14 +2716,15 @@ fn extract_named_validation_regions_inner(
                 Some(platform_default_engine),
                 None,
             );
-            runtime.recalculate_named_validation_regions(
+            let prepared = ConversionRuntime::prepare_named_validation_copy(
                 template_path,
                 &source_copy,
                 &file_requests,
-            )
+            )?;
+            Ok::<_, anyhow::Error>((source_copy, prepared))
         })(&mut runtime);
-        let calculation = match calculation {
-            Ok(calculation) => calculation,
+        let (source_copy, prepared) = match calculation {
+            Ok(prepared_pair) => prepared_pair,
             Err(error) => {
                 progress.failed_files += 1;
                 let cause = error.root_cause().to_string();
@@ -2544,67 +2764,32 @@ fn extract_named_validation_regions_inner(
                 return Err(error).context(context);
             }
         };
-        let workbook_name = source
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let matched = calculation
-            .cells
-            .iter()
-            .filter_map(|cell| {
-                parse_named_validation_result(
-                    &workbook_name,
-                    &cell.sheet,
-                    &cell.address,
-                    &cell.value,
-                )
-                .map(|row| (cell, row))
-            })
-            .map(|(cell, mut row)| {
-                let (route, template) = file_routes
-                    .get(&cell.sheet)
-                    .with_context(|| format!("校验结果工作表 {:?} 缺少模板路由记录", cell.sheet))?;
-                row.route = route.clone();
-                row.template = template.clone();
-                Ok(row)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let hit_count = matched.len();
-        output_rows.extend(matched);
-        progress.completed_files += 1;
-        files_processed += 1;
-        let copied_sheets = if calculation.copied_template_sheets.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "；已从模板补装公式引用的工作表：{}（{} 个）",
-                calculation.copied_template_sheets.join("、"),
-                calculation.copied_template_sheets.len()
-            )
-        };
-        let calculation_application = calculation.application.clone();
-        // 实际引擎按 application 判定（betteroffice / COM / LibreOffice），
-        // 与应用名一起写进日志，避免"用了 betteroffice 但日志写 COM"。
-        let (calculation_engine, success_components): (&str, &[&str]) =
-            if calculation_application.starts_with("betteroffice") {
-                (
-                    "betteroffice (pure Rust)",
-                    &["pytools-core", "betteroffice (pure Rust)"],
-                )
-            } else if calculation_application.starts_with("LibreOffice") {
-                ("LibreOffice Calc", &["pytools-core", "LibreOffice Calc"])
-            } else {
-                (
-                    platform_default_engine,
-                    &["pytools-core", "pywin32", "Excel/WPS COM"],
-                )
-            };
-        emitter.emit("validation_calculation", "succeeded",
-            format!("校验区域重算完成：「{file_name}」/「{}」；计算引擎：{}；校验公式/辅助表复制：{}；提取命中结果 {hit_count} 条{copied_sheets}",
-                routed_sheets.join("、"), calculation_application, calculation.dependency_copy_engine),
-            &progress, Some(source), Some(validation_started.elapsed()), success_components,
-            Some(calculation_engine), None);
+        // 计算推迟到循环之后：这里只登记待算副本，由组级批量编排统一处理。
+        pending_calculations.push(PendingValidationCalculation {
+            input_index,
+            source: (*source).clone(),
+            file_name: file_name.clone(),
+            source_copy,
+            regions: file_requests,
+            routes: file_routes,
+            prepared,
+            routed_sheets,
+            validation_started,
+        });
+    }
+
+    // ── 组级批量编排：[1] 全部副本并行跑 betteroffice；[2] 只把拒绝项交给平台引擎 ──
+    if !pending_calculations.is_empty() {
+        run_pending_validation_calculations(
+            &mut runtime,
+            template_path,
+            &mut pending_calculations,
+            &mut emitter,
+            &mut progress,
+            &mut output_rows,
+            &mut files_processed,
+            platform_default_engine,
+        )?;
     }
 
     anyhow::ensure!(

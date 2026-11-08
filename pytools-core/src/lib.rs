@@ -7,6 +7,7 @@ pub mod archive_ops;
 pub mod batch_ops;
 pub mod batch_rename;
 pub mod bo_calc;
+pub mod bo_calc_batch;
 pub mod config;
 pub mod config_admin;
 pub mod conversion;

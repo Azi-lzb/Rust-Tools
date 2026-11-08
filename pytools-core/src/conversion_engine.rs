@@ -428,6 +428,65 @@ pub(crate) fn libreoffice_batch_request(source_ext: &str, target: &str, engine: 
     false
 }
 
+/// 已把模板校验公式复制进工作副本的阶段结果；组级批量编排在并行计算前用它
+/// 记录每本副本的复制统计，无需重复扫描。
+#[derive(Debug, Clone)]
+pub(crate) struct PreparedValidationCopy {
+    pub copied_formula_cells: usize,
+    pub copied_template_sheets: Vec<String>,
+    pub dependency_copy_engine: String,
+}
+
+/// 把模板的校验区域公式（含必要的辅助工作表）复制进工作副本。
+///
+/// 从 [`ConversionRuntime::prepare_named_validation_copy`] 抽出，供批量编排在
+/// 并行阶段直接调用：只读模板、只写自己的副本，没有共享可变状态。
+fn copy_template_regions(
+    template: &Path,
+    source_copy: &Path,
+    copy_requests: &[ooxml_patch::CellRegionCopyRequest],
+) -> Result<(ooxml_patch::CellRegionCopyReport, String)> {
+    match ooxml_patch::copy_cell_region(template, source_copy, copy_requests) {
+        Ok(copied) => Ok((copied, "OOXML".to_owned())),
+        Err(primary) if format!("{primary:#}").contains("OPENPYXL_FALLBACK_REQUIRED") => {
+            let dependency_sheets = ooxml_patch::missing_formula_dependency_sheets(
+                template,
+                source_copy,
+                copy_requests,
+            )
+            .context("发现 OOXML 不支持的辅助表关系，但无法解析完整公式依赖")?;
+            ensure!(
+                !dependency_sheets.is_empty(),
+                "OOXML 请求 Openpyxl 回退，但没有找到缺失的辅助工作表"
+            );
+            if let Err(fallback) = ConversionRuntime::import_validation_dependencies_openpyxl(
+                template,
+                source_copy,
+                &dependency_sheets,
+            ) {
+                return Err(anyhow!(
+                    "OOXML 定点复制辅助表失败：{primary:#}；受保护的 Openpyxl 回退也未通过：{fallback:#}"
+                ));
+            }
+            let mut copied = ooxml_patch::copy_cell_region(template, source_copy, copy_requests)
+                .with_context(|| {
+                    format!(
+                        "Openpyxl 已补装辅助表，但随后用 OOXML 复制校验区域公式失败（模板：{}）",
+                        template.display()
+                    )
+                })?;
+            copied.sheets_copied = dependency_sheets;
+            Ok((copied, "Openpyxl 回退 + OOXML".to_owned()))
+        }
+        Err(error) => Err(error).with_context(|| {
+            format!(
+                "把模板校验公式复制到工作副本失败（模板：{}）",
+                template.display()
+            )
+        }),
+    }
+}
+
 impl ConversionRuntime {
     /// Run the dedicated 5-1 legacy XLS operation through Excel/WPS COM.
     /// Callers pass an isolated target candidate; the source is committed only
@@ -776,36 +835,16 @@ impl ConversionRuntime {
     /// opens the caller's working copy. Opening the template through COM as
     /// well doubled the failure surface: the template usually lives in a user
     /// directory, and any state Excel dislikes there aborted the whole file.
-    pub(crate) fn recalculate_named_validation_regions(
-        &mut self,
+    /// 校验区域重算的第一阶段：安全检查 + 把模板校验公式复制进工作副本。
+    ///
+    /// 组级批量编排会先对所有副本调用本方法（可并行：只写各自副本、只读模板），
+    /// 再统一并行跑 betteroffice，最后只把拒绝项交给平台引擎。
+    pub(crate) fn prepare_named_validation_copy(
         template: &Path,
         source_copy: &Path,
         regions: &[NamedValidationRegionRequest],
-    ) -> Result<NamedValidationCalculation> {
+    ) -> Result<PreparedValidationCopy> {
         ensure!(!regions.is_empty(), "校验区域请求不能为空");
-        if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
-            bail!("校验区域计算需要 Excel/WPS COM 或 LibreOffice；当前环境已禁用外部引擎");
-        }
-        // 模板 fail-closed：带外部工作簿引用的模板一律拒绝。
-        //
-        // 注意本功能的复制来源与旧 audit 不同：1-4 缺依赖表时是**从模板文件
-        // 自身**复制同名工作表（plan_missing_template_sheets(template, …)），
-        // 而不是像 audit 那样把一份外部工作簿导入为本地表。但悬空引用的成因
-        // 相同：校验区域公式被原样复制到工作副本，副本不会带上模板的
-        // externalLink 部件与 <externalReferences>；模板公式里只要残留
-        // [N] 前缀，指向的就是工作副本里不存在的外链索引，Excel COM 会以
-        // 0x80020009 拒绝整个工作簿（WPS 宽容但重算丢公式）。要求用户先清理
-        // 模板，而不是静默剥离——剥离会让规则指向非预期数据，改模板属于
-        // 业务决策。
-        let reference_scan = ooxml_patch::scan_external_workbook_references(template)
-            .with_context(|| format!("扫描模板外部引用失败：{}", template.display()))?;
-        ensure!(
-            reference_scan.is_clean(),
-            "模板「{}」含外部工作簿引用，校验区域公式复制到工作副本后会变成悬空引用，\
-             Excel 将拒绝打开。请在模板中删除外部链接并把公式改为引用本地工作表后重试。\n详情：{}",
-            template.display(),
-            reference_scan.describe()
-        );
         ensure!(
             source_copy
                 .extension()
@@ -816,6 +855,15 @@ impl ConversionRuntime {
             "校验区域重算需要 .xlsx/.xlsm 工作副本（当前 {}）",
             source_copy.display()
         );
+        let reference_scan = ooxml_patch::scan_external_workbook_references(template)
+            .with_context(|| format!("扫描模板外部引用失败：{}", template.display()))?;
+        ensure!(
+            reference_scan.is_clean(),
+            "模板「{}」含外部工作簿引用，校验区域公式复制到工作副本后会变成悬空引用，\
+             Excel 将拒绝打开。请在模板中删除外部链接并把公式改为引用本地工作表后重试。\n详情：{}",
+            template.display(),
+            reference_scan.describe()
+        );
         let copy_requests = regions
             .iter()
             .map(|region| ooxml_patch::CellRegionCopyRequest {
@@ -824,56 +872,86 @@ impl ConversionRuntime {
                 address: region.address.clone(),
             })
             .collect::<Vec<_>>();
-        let (copied, dependency_copy_engine) = match ooxml_patch::copy_cell_region(
-            template,
-            source_copy,
-            &copy_requests,
-        ) {
-            Ok(copied) => (copied, "OOXML".to_owned()),
-            Err(primary) if format!("{primary:#}").contains("OPENPYXL_FALLBACK_REQUIRED") => {
-                let dependency_sheets = ooxml_patch::missing_formula_dependency_sheets(
-                    template,
-                    source_copy,
-                    &copy_requests,
-                )
-                .context("发现 OOXML 不支持的辅助表关系，但无法解析完整公式依赖")?;
-                ensure!(
-                    !dependency_sheets.is_empty(),
-                    "OOXML 请求 Openpyxl 回退，但没有找到缺失的辅助工作表"
-                );
-                let fallback_result = Self::import_validation_dependencies_openpyxl(
-                    template,
-                    source_copy,
-                    &dependency_sheets,
-                );
-                if let Err(fallback) = fallback_result {
-                    return Err(anyhow!(
-                        "OOXML 定点复制辅助表失败：{primary:#}；受保护的 Openpyxl 回退也未通过：{fallback:#}"
-                    ));
-                }
-                let mut copied =
-                    ooxml_patch::copy_cell_region(template, source_copy, &copy_requests)
-                        .with_context(|| {
-                            format!(
-                        "Openpyxl 已补装辅助表，但随后用 OOXML 复制校验区域公式失败（模板：{}）",
-                        template.display()
-                    )
-                        })?;
-                copied.sheets_copied = dependency_sheets;
-                (copied, "Openpyxl 回退 + OOXML".to_owned())
-            }
-            Err(error) => {
-                return Err(error).with_context(|| {
-                    format!(
-                        "把模板校验公式复制到工作副本失败（模板：{}）",
-                        template.display()
-                    )
-                })
-            }
+        let (copied, dependency_copy_engine) =
+            copy_template_regions(template, source_copy, &copy_requests)?;
+        Ok(PreparedValidationCopy {
+            copied_formula_cells: copied.cells_with_formula,
+            copied_template_sheets: copied.sheets_copied,
+            dependency_copy_engine,
+        })
+    }
+
+    /// 第二阶段：只做计算（副本的公式已由 [`Self::prepare_named_validation_copy`]
+    /// 复制好）。引擎路由与回退语义与单文件路径完全一致。
+    pub(crate) fn compute_named_validation_regions(
+        &mut self,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+        prepared: &PreparedValidationCopy,
+    ) -> Result<NamedValidationCalculation> {
+        if std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_some() {
+            bail!("校验区域计算需要 Excel/WPS COM 或 LibreOffice；当前环境已禁用外部引擎");
+        }
+        self.compute_prepared_copy(source_copy, regions, prepared, None)
+    }
+
+    pub(crate) fn recalculate_named_validation_regions(
+        &mut self,
+        template: &Path,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+    ) -> Result<NamedValidationCalculation> {
+        let prepared = Self::prepare_named_validation_copy(template, source_copy, regions)?;
+        self.compute_named_validation_regions(source_copy, regions, &prepared)
+    }
+
+    /// 组级批量编排已用 betteroffice 算完的副本 → 回读缓存并提取校验区域。
+    ///
+    /// 与 [`Self::compute_prepared_copy`] 的 betteroffice 成功分支等价，只是
+    /// 重算在批量阶段已完成，这里不再重算第二遍。
+    pub(crate) fn calculation_from_batch_success(
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+        prepared: &PreparedValidationCopy,
+        outcome: &crate::bo_calc::BoCalcOutcome,
+    ) -> Result<NamedValidationCalculation> {
+        let workbook = read_workbook(source_copy)
+            .context("betteroffice 批量重算后使用 Calamine 回读公式缓存失败")?;
+        let cells = extract_named_validation_cells(&workbook, regions)?;
+        Ok(NamedValidationCalculation {
+            application: outcome.application.to_owned(),
+            cells,
+            copied_formula_cells: prepared.copied_formula_cells,
+            copied_template_sheets: prepared.copied_template_sheets.clone(),
+            dependency_copy_engine: prepared.dependency_copy_engine.clone(),
+        })
+    }
+
+    /// 已复制好公式的副本 → 计算 + 回退。`forced_fallback` 用于组级批量编排：
+    /// betteroffice 已在批量阶段拒绝过的副本直接带原因进平台引擎，避免重算两遍。
+    pub(crate) fn compute_prepared_copy(
+        &mut self,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+        prepared: &PreparedValidationCopy,
+        forced_fallback: Option<String>,
+    ) -> Result<NamedValidationCalculation> {
+        let dependency_copy_engine = prepared.dependency_copy_engine.clone();
+        let copied = ooxml_patch::CellRegionCopyReport {
+            cells_with_formula: prepared.copied_formula_cells,
+            sheets_copied: prepared.copied_template_sheets.clone(),
+            ..ooxml_patch::CellRegionCopyReport::default()
         };
-        // ① betteroffice（纯 Rust）首选路由：配置开启即尝试；超限/未实现函数/
-        // 循环引用时按配置回退 COM/LibreOffice，`none` 则明确报错，绝不静默
-        // 采用受限结果。回退原因拼进 application，随统一运行日志留痕。
+        if let Some(reason) = forced_fallback {
+            // 批量阶段已判定 betteroffice 不可采用：直接交给平台引擎整簿重算。
+            return self.recalculate_named_validation_regions_platform(
+                source_copy,
+                regions,
+                copied,
+                dependency_copy_engine,
+                Some(reason),
+            );
+        }
         // 配置优先级：config.xlsx 全局配置（校验计算* 键）> 环境变量 > 默认。
         let bo_config = crate::bo_calc::BoCalcConfig::load(
             crate::config::default_config_workbook_path().as_deref(),
@@ -887,8 +965,8 @@ impl ConversionRuntime {
                     return Ok(NamedValidationCalculation {
                         application: outcome.application.to_owned(),
                         cells,
-                        copied_formula_cells: copied.cells_with_formula,
-                        copied_template_sheets: copied.sheets_copied,
+                        copied_formula_cells: prepared.copied_formula_cells,
+                        copied_template_sheets: prepared.copied_template_sheets.clone(),
                         dependency_copy_engine,
                     });
                 }
@@ -899,15 +977,12 @@ impl ConversionRuntime {
                             "betteroffice 校验区域重算不可采用且未配置可用回退：{refusal_reason}"
                         );
                     }
-                    let bo_fallback_reason = format!("betteroffice 回退（{refusal_reason}）");
-                    // 落到下方既有平台分支；它们整簿重算，不受本副本残留值影响。
-                    // 原因经 bo_fallback_reason 拼入最终 application。
                     return self.recalculate_named_validation_regions_platform(
                         source_copy,
                         regions,
                         copied,
                         dependency_copy_engine,
-                        Some(bo_fallback_reason),
+                        Some(format!("betteroffice 回退（{refusal_reason}）")),
                     );
                 }
             }
