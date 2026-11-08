@@ -1405,6 +1405,10 @@ fn validate_native_conversion(
         source_names == converted_names,
         "native conversion changed worksheet count, names or order"
     );
+    let sheet_name_refs = source_names
+        .iter()
+        .map(|name| name.as_str())
+        .collect::<Vec<_>>();
     for (source_sheet, output_sheet) in source.sheets.iter().zip(&converted.sheets) {
         anyhow::ensure!(
             source_sheet.formulas.len() == output_sheet.formulas.len(),
@@ -1418,9 +1422,14 @@ fn validate_native_conversion(
                     source_sheet.name, address
                 )
             })?;
+            // 与 Rust-Audit 同口径：只容忍引擎重存会做的规范化（布尔字面量
+            // 的 TRUE()/TRUE、已知内部表名的可选引号、前导 = 与首尾空白）。
             anyhow::ensure!(
-                formula.trim_start_matches('=').trim()
-                    == output_formula.trim_start_matches('=').trim(),
+                excel_reader::formula_text_equivalent_after_recalculation(
+                    formula,
+                    output_formula,
+                    &sheet_name_refs,
+                ),
                 "native conversion changed formula text at {}!{}",
                 source_sheet.name,
                 address

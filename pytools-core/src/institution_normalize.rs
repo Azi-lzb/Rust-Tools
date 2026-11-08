@@ -1999,12 +1999,21 @@ fn validate_institution_normalize_candidate(
                 ),
             }
         }
-        let normalize_formula = |formula: &str| formula.trim_start_matches('=').trim().to_owned();
+        // 与 Rust-Audit 同口径：只容忍引擎重存会做的规范化。
+        let sheet_names = source
+            .sheets
+            .iter()
+            .map(|sheet| sheet.name.as_str())
+            .collect::<Vec<_>>();
         ensure!(
             expected_formulas.len() == output_sheet.formulas.len()
                 && expected_formulas.iter().all(|(address, formula)| {
                     output_sheet.formulas.get(address).is_some_and(|actual| {
-                        normalize_formula(formula) == normalize_formula(actual)
+                        excel_reader::formula_text_equivalent_after_recalculation(
+                            formula,
+                            actual,
+                            &sheet_names,
+                        )
                     })
                 }),
             "new workbook changed formula text in {:?}",

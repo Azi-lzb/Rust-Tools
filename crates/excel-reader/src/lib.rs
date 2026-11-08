@@ -2112,12 +2112,289 @@ fn extract_ooxml_metadata(path: &Path) -> Result<BTreeMap<String, OoxmlSheetMeta
     Ok(result)
 }
 
+/// Compare two formula texts while allowing only the rewrites a calculation
+/// engine may legitimately perform when it re-saves a package:
+///
+/// - boolean literals spelled `TRUE()`/`FALSE()` versus `TRUE`/`FALSE`;
+/// - optional quotes around references to *known internal* worksheets
+///   (`'汇总 表'!A1` versus `汇总 表!A1`);
+/// - a leading `=` and surrounding whitespace.
+///
+/// Everything else — cell references, ranges, functions, external workbook
+/// links — stays significant. This mirrors Rust-Audit's
+/// `canonicalize_formula_for_recalculation` so both tools judge formula
+/// fidelity by the same rule.
+pub fn formula_text_equivalent_after_recalculation(
+    source_formula: &str,
+    result_formula: &str,
+    sheet_names: &[&str],
+) -> bool {
+    canonicalize_formula_for_recalculation(source_formula, sheet_names)
+        == canonicalize_formula_for_recalculation(result_formula, sheet_names)
+}
+
+/// Canonical form used by [`formula_text_equivalent_after_recalculation`].
+pub fn canonicalize_formula_for_recalculation(formula: &str, sheet_names: &[&str]) -> String {
+    // 先去掉首尾空白，再剥前导 '='（"  =  X  " 这种写法也要能对上）。
+    let trimmed = formula.trim();
+    let trimmed = trimmed.trim_start_matches('=').trim_start();
+    let trimmed = canonicalize_formula_boolean_literals(trimmed);
+    canonicalize_formula_sheet_reference_quoting(&trimmed, sheet_names)
+}
+
+/// Canonicalize only the boolean literal spelling known to differ after an
+/// engine saves an XLSX. Quoted formula strings are copied byte-for-byte.
+fn canonicalize_formula_boolean_literals(formula: &str) -> String {
+    let chars = formula.chars().collect::<Vec<_>>();
+    let mut normalized = String::with_capacity(formula.len());
+    let mut index = 0usize;
+    let mut in_string = false;
+    let mut in_sheet_name = false;
+
+    while index < chars.len() {
+        let current = chars[index];
+        if current == '"' && !in_sheet_name {
+            normalized.push(current);
+            if in_string && chars.get(index + 1) == Some(&'"') {
+                normalized.push('"');
+                index += 2;
+                continue;
+            }
+            in_string = !in_string;
+            index += 1;
+            continue;
+        }
+
+        if current == '\'' && !in_string {
+            normalized.push(current);
+            if in_sheet_name && chars.get(index + 1) == Some(&'\'') {
+                normalized.push('\'');
+                index += 2;
+                continue;
+            }
+            in_sheet_name = !in_sheet_name;
+            index += 1;
+            continue;
+        }
+
+        if !in_string && !in_sheet_name {
+            let remaining = &chars[index..];
+            let token_len = if remaining.len() >= 4
+                && remaining[..4]
+                    .iter()
+                    .copied()
+                    .collect::<String>()
+                    .eq_ignore_ascii_case("TRUE")
+            {
+                4
+            } else if remaining.len() >= 5
+                && remaining[..5]
+                    .iter()
+                    .copied()
+                    .collect::<String>()
+                    .eq_ignore_ascii_case("FALSE")
+            {
+                5
+            } else {
+                0
+            };
+            let previous_is_identifier = index > 0
+                && (chars[index - 1].is_alphanumeric() || matches!(chars[index - 1], '_' | '.'));
+            let next_is_identifier = chars.get(index + token_len).is_some_and(|character| {
+                character.is_alphanumeric() || matches!(character, '_' | '.')
+            });
+            let followed_by_empty_call = token_len > 0
+                && chars.get(index + token_len) == Some(&'(')
+                && chars.get(index + token_len + 1) == Some(&')');
+            if token_len > 0
+                && !previous_is_identifier
+                && !next_is_identifier
+                && followed_by_empty_call
+            {
+                normalized.extend(chars[index..index + token_len].iter());
+                index += token_len + 2;
+                continue;
+            }
+        }
+
+        normalized.push(current);
+        index += 1;
+    }
+    normalized
+}
+
+/// Quote (or unquote) worksheet references so both spellings compare equal for
+/// known internal sheets. A reference after `]` belongs to an external workbook
+/// and is left untouched.
+fn canonicalize_formula_sheet_reference_quoting(formula: &str, sheet_names: &[&str]) -> String {
+    let mut candidates = sheet_names
+        .iter()
+        .copied()
+        .map(|name| (name, name.chars().collect::<Vec<_>>()))
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|(_, characters)| std::cmp::Reverse(characters.len()));
+
+    let characters = formula.chars().collect::<Vec<_>>();
+    let mut output = String::with_capacity(formula.len());
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < characters.len() {
+        let character = characters[index];
+        if character == '"' {
+            output.push(character);
+            if in_string && characters.get(index + 1) == Some(&'"') {
+                output.push('"');
+                index += 2;
+                continue;
+            }
+            in_string = !in_string;
+            index += 1;
+            continue;
+        }
+        if in_string {
+            output.push(character);
+            index += 1;
+            continue;
+        }
+
+        if character == '\'' {
+            let mut quoted_name = Vec::new();
+            let mut cursor = index + 1;
+            let mut closing_quote = None;
+            while cursor < characters.len() {
+                if characters[cursor] == '\'' {
+                    if characters.get(cursor + 1) == Some(&'\'') {
+                        quoted_name.push('\'');
+                        cursor += 2;
+                    } else {
+                        closing_quote = Some(cursor);
+                        break;
+                    }
+                } else {
+                    quoted_name.push(characters[cursor]);
+                    cursor += 1;
+                }
+            }
+            if let Some(closing_quote) = closing_quote {
+                if characters.get(closing_quote + 1) == Some(&'!') {
+                    let name = quoted_name.iter().collect::<String>();
+                    if let Some((canonical, _)) = candidates
+                        .iter()
+                        .find(|(candidate, _)| candidate.eq_ignore_ascii_case(&name))
+                    {
+                        output.push('\'');
+                        output.push_str(&canonical.replace('\'', "''"));
+                        output.push_str("'!");
+                        index = closing_quote + 2;
+                        continue;
+                    }
+                }
+            }
+            output.push(character);
+            index += 1;
+            continue;
+        }
+
+        let external_reference_boundary = index > 0 && characters[index - 1] == ']';
+        let identifier_boundary = index == 0
+            || !(characters[index - 1].is_alphanumeric()
+                || matches!(characters[index - 1], '_' | '.'));
+        let matched_name = if !external_reference_boundary && identifier_boundary {
+            candidates.iter().find(|(_, name)| {
+                index + name.len() < characters.len()
+                    && characters[index..index + name.len()]
+                        .iter()
+                        .zip(name)
+                        .all(|(left, right)| left.eq_ignore_ascii_case(right))
+                    && characters[index + name.len()] == '!'
+            })
+        } else {
+            None
+        };
+        if let Some((name, _)) = matched_name {
+            output.push('\'');
+            output.push_str(&name.replace('\'', "''"));
+            output.push_str("'!");
+            index += name.chars().count() + 1;
+        } else {
+            output.push(character);
+            index += 1;
+        }
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
     use std::path::PathBuf;
     use zip::{write::SimpleFileOptions, ZipWriter};
+
+    // ── 公式文本规范化（与 Rust-Audit 同源口径） ──
+
+    #[test]
+    fn boolean_literals_and_equals_prefix_compare_equal() {
+        let sheets: [&str; 1] = ["数据"];
+        for (left, right) in [
+            ("=TRUE()", "TRUE"),
+            ("=TRUE", "TRUE()"),
+            ("=FALSE()", "=FALSE"),
+            ("  =  TRUE()  ", "TRUE"),
+            ("=IF(TRUE(),1,0)", "IF(TRUE,1,0)"),
+        ] {
+            assert!(
+                formula_text_equivalent_after_recalculation(left, right, &sheets),
+                "{left:?} should equal {right:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn internal_sheet_quoting_is_optional() {
+        let sheets: [&str; 2] = ["汇总 表", "数据"];
+        for (left, right) in [
+            ("='汇总 表'!A1", "=汇总 表!A1"),
+            ("=SUM('汇总 表'!A1:A9)", "=SUM(汇总 表!A1:A9)"),
+            ("=数据!B2*2", "='数据'!B2*2"),
+        ] {
+            assert!(
+                formula_text_equivalent_after_recalculation(left, right, &sheets),
+                "{left:?} should equal {right:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn real_differences_are_still_rejected() {
+        let sheets: [&str; 1] = ["数据"];
+        for (left, right) in [
+            // 单元格引用变了（shared formula ref 错位的真实症状）
+            ("=IF($D15>0,1,0)", "=IF($D16>0,1,0)"),
+            // 函数名不同
+            ("=SUM(A1:A2)", "=AVERAGE(A1:A2)"),
+            // 外部工作簿引用：']' 之后的引用名不得被加上引号而"抹平"
+            ("=[1]External!A1", "=External!A1"),
+            // 文本字面量里的 TRUE 不应被当作布尔字面量
+            (r#"=IF(A1="TRUE()","x","y")"#, r#"=IF(A1="TRUE","x","y")"#),
+        ] {
+            assert!(
+                !formula_text_equivalent_after_recalculation(left, right, &sheets),
+                "{left:?} must NOT equal {right:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_sheet_names_are_not_quoted() {
+        // 未登记在 sheet_names 里的表名来自外部簿或已丢失：不能擅自加引号。
+        let sheets: [&str; 1] = ["数据"];
+        assert!(!formula_text_equivalent_after_recalculation(
+            "=OTHER!A1",
+            "='OTHER'!A1",
+            &sheets
+        ));
+    }
 
     // Fixture names must stay unique across parallel test threads: a shared
     // pid+timestamp tick previously let one thread delete the file another
