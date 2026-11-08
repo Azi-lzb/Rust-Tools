@@ -245,6 +245,23 @@ impl PartialEq for CellStyles {
     }
 }
 
+/// memoized [`Sheet::content_range`]. Not part of sheet equality, like
+/// [`CellStyles`]: the cache only ever mirrors what the cells already say.
+///
+/// vendor change (see the workspace `vendor/VENDOR_NOTES.md`): without it a
+/// whole-column reference rescans every stored cell each time a formula asks
+/// for the sheet's extent. A styled-to-the-last-row report sheet stores
+/// hundreds of thousands of cells, so a workbook with a few thousand
+/// whole-column formulas spends billions of map steps per recalculation.
+#[derive(Debug, Clone, Default)]
+struct ContentExtent(std::sync::OnceLock<Option<CellRange>>);
+
+impl PartialEq for ContentExtent {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Sheet {
     pub name: String,
@@ -268,6 +285,9 @@ pub struct Sheet {
     /// anchors of `t="array"` formulas mapped to the rectangle their result
     /// occupies. authored from the file, then kept current by recalc.
     array_formulas: BTreeMap<(RowId, ColId), CellRange>,
+    /// memoized [`Sheet::content_range`]; emptied whenever a cell gains or
+    /// loses content, so recalculated values never invalidate it.
+    content_extent: ContentExtent,
 }
 
 /// every sheet row may carry its own style, as a column-wide fill or border
@@ -533,6 +553,16 @@ impl Sheet {
         if self.cell(at).and_then(|cell| cell.style) != cell.style {
             self.cell_styles.0.take();
         }
+        // Only a gain or loss of content can move the extent; recalculating an
+        // existing formula cell leaves it warm.
+        let had_content = self
+            .cells
+            .get(&(at.row, at.col))
+            .is_some_and(cell_has_content);
+        let keeps_content = cell_has_content(&cell);
+        if had_content != keeps_content {
+            self.content_extent.0.take();
+        }
         if cell == Cell::default() {
             self.cells.remove(&(at.row, at.col));
         } else {
@@ -549,6 +579,7 @@ impl Sheet {
         remap: impl Fn(CellRef) -> Option<CellRef>,
     ) -> Vec<(CellRef, Cell)> {
         self.cell_styles.0.take();
+        self.content_extent.0.take();
         self.remap_array_formulas(&remap);
         let mut dropped = Vec::new();
         self.cells.retain(|_, cell| *cell != Cell::default());
@@ -781,12 +812,18 @@ impl Sheet {
     /// at row 68 reports the data extent. whole-column and whole-row formula
     /// references are cut to this.
     pub fn content_range(&self) -> Option<CellRange> {
+        *self
+            .content_extent
+            .0
+            .get_or_init(|| self.compute_content_range())
+    }
+
+    /// the uncached extent scan behind [`Sheet::content_range`].
+    fn compute_content_range(&self) -> Option<CellRange> {
         let mut bounds = self
             .cells
             .iter()
-            .filter(|(_, cell)| {
-                cell.formula.is_some() || !matches!(cell.value, CellValue::Empty)
-            })
+            .filter(|(_, cell)| cell_has_content(cell))
             .map(|(&(row, col), _)| {
                 CellRange::new(CellRef::new(row, col), CellRef::new(row, col))
             })
@@ -811,6 +848,11 @@ impl Sheet {
             CellRef::new(max_r, max_c),
         ))
     }
+}
+
+/// whether a stored cell holds anything a whole-column reference could read.
+fn cell_has_content(cell: &Cell) -> bool {
+    cell.formula.is_some() || !matches!(cell.value, CellValue::Empty)
 }
 
 fn no_extent(extent: f64) -> bool {
@@ -1146,6 +1188,38 @@ mod tests {
         sheet.set_cell(CellRef::parse_a1("A1").unwrap(), style_only_cell());
         assert!(sheet.content_range().is_none());
         assert!(sheet.used_range().is_some());
+    }
+
+    #[test]
+    fn content_range_cache_invalidates_only_on_content_change() {
+        let mut sheet = Sheet::new("Sheet1");
+        sheet.set_cell(
+            CellRef::parse_a1("B3").unwrap(),
+            cell_value(CellValue::Number { value: 1.0 }),
+        );
+        assert_eq!(sheet.content_range().unwrap().to_a1(), "B3");
+
+        // formatting far below the data must not move a warm extent
+        sheet.set_cell(CellRef::parse_a1("A200").unwrap(), style_only_cell());
+        assert_eq!(sheet.content_range().unwrap().to_a1(), "B3");
+
+        // rewriting an existing cell's value keeps it warm
+        sheet.set_cell(
+            CellRef::parse_a1("B3").unwrap(),
+            cell_value(CellValue::Number { value: 2.0 }),
+        );
+        assert_eq!(sheet.content_range().unwrap().to_a1(), "B3");
+
+        // gaining content beyond the extent invalidates the cache
+        sheet.set_cell(
+            CellRef::parse_a1("D9").unwrap(),
+            cell_value(CellValue::Text { value: "x".into() }),
+        );
+        assert_eq!(sheet.content_range().unwrap().to_a1(), "B3:D9");
+
+        // losing the outermost content cell shrinks it again
+        sheet.set_cell(CellRef::parse_a1("D9").unwrap(), Cell::default());
+        assert_eq!(sheet.content_range().unwrap().to_a1(), "B3");
     }
 
     // --- end vendor tests ---
