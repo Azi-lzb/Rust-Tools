@@ -51,10 +51,42 @@ vendor 源码在 C:\Users\AZI\Desktop\VibeCode\Rust-Tools\vendor\
   回退原因写进运行日志的 actual_engine 字段（形如
   Excel.Application；betteroffice 回退（重算预算耗尽（N 个公式格未求值…）））。
 
-- 配置项（建议与 Rust-Tools 同名，便于两边统一）：
-  PYTOOLS_BO_CALC（auto/off）、PYTOOLS_BO_CALC_MAX_VISITS、
-  PYTOOLS_BO_CALC_ROUNDS（默认 2）、PYTOOLS_BO_CALC_STRIP_STYLE（默认 off）、
-  PYTOOLS_BO_CALC_FALLBACK（auto/com/libreoffice/none）。
+- 配置项（与 Rust-Tools 同名同义，两边保持统一）：
+  GUI 高级配置 5 项（见下文"GUI 高级配置"段）映射到同名键；环境变量
+  PYTOOLS_BO_CALC、PYTOOLS_BO_CALC_MAX_VISITS、PYTOOLS_BO_CALC_ROUNDS、
+  PYTOOLS_BO_CALC_STRIP_STYLE、PYTOOLS_BO_CALC_FALLBACK 作为应急覆盖。
+  优先级：GUI/配置存储 > 环境变量 > 内置默认（与 Rust-Tools 的
+  config.xlsx 全局配置 > env > default 完全一致）。
+
+GUI 高级配置（Rust-Audit 的设置界面必须同步）：
+
+- 在 S1F1 的 GUI 高级配置界面暴露这 5 个设置，命名与语义与 Rust-Tools 完全一致：
+  1. 校验计算引擎：betteroffice（默认）｜com｜off —— 下拉选择
+  2. 校验计算预算上限：留空=默认 1000 万 —— 数字输入
+  3. 校验计算轮数：1~5，默认 2 —— 数字输入
+  4. 校验计算剥离样式空格：是/否，默认 否 —— 开关
+  5. 校验计算回退策略：auto（默认）｜com｜libreoffice｜none —— 下拉选择
+- 每项旁边放一句用户可读的说明（可直接抄 Rust-Tools config.xlsx 全局配置 C 列备注：
+  引擎="betteroffice=纯Rust优先（快，推荐）；com=直接用Excel/WPS"；
+  回退="betteroffice算不动时怎么办：auto=Windows回Excel/WPS、Linux回LibreOffice；
+  com=只回Excel/WPS；libreoffice=只回LibreOffice；none=不回退直接报错"）。
+- GUI 修改写回配置存储后的优先级与 Rust-Tools 一致：GUI/配置文件 > 环境变量 > 默认。
+- GUI 保存的值必须实际生效：改引擎为 com 后重跑一次 S1F1 应看到路由切换，
+  改回 betteroffice 应切回（两端都要做这个闭环验证）。
+
+回退机制对齐（与 Rust-Tools 逐条一致，这是本任务的核心，不只是引擎本身）：
+
+- 触发回退的条件（任一命中即整簿回退，不得部分采用）：
+  a. budget_exhausted=true 或 limited_cells 非空（预算耗尽，保留旧值不可信）
+  b. 出现 #NAME?（betteroffice 未实现的函数）
+  c. 存在循环引用格
+- 回退目标按平台：Windows → Excel/WPS COM；Linux → LibreOffice；两边回退引擎都
+  要整簿重算，不依赖 betteroffice 留下的半新半旧缓存。
+- 回退原因必须进运行日志（actual_engine 或等价字段），格式：
+  "Excel.Application；betteroffice 回退（重算预算耗尽（N 个公式格未求值，保留旧值不可信））"
+- FALLBACK=none 时：不回退，整次任务明确失败并给出原因；绝不允许静默采用受限结果。
+- COM 侧保留既有保护：Excel COM 打开失败时先跑 Excel 修复（补全角括号表名引号/
+  修正冻结窗格矛盾），再回 WPS——与 Rust-Tools 的 com_prefers_wps 门控同一口径。
 
 验收标准（用 测试数据/S1F1_新旧对比_20261105_231620/business_templates 全部 20 个模板）：
 

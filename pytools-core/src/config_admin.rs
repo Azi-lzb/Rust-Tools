@@ -438,7 +438,9 @@ pub fn build_config_repair_plan(
         let mut next = sheet_max_row(sheet, &extents) + 1;
         for (key, value, remark) in GLOBAL_DEFAULTS {
             if let Some(row) = rows.get(*key).copied() {
-                if cell_is_blank(sheet, &format!("B{row}")) {
+                // 空默认值的键（如 日志保留天数）补空串没有意义，还会让
+                // 修复计划永不收敛；只有非空默认值才需要补。
+                if cell_is_blank(sheet, &format!("B{row}")) && !value.is_empty() {
                     operations.push(EditOperation::SetCellValue {
                         sheet: "全局配置".into(),
                         cell: format!("B{row}"),
