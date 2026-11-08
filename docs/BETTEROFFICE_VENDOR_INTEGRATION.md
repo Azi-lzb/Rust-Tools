@@ -290,6 +290,41 @@ fail-closed 语义不变：`FALLBACK=none` 时拒绝项直接报错；`applicati
   预算阈值只能全成或全拒）；该路径由上述单元测试覆盖。
 - Linux 上批量并行 + LibreOffice 会话复用未实测。
 
+## 5.9 .xls 另存为 .xlsx 后修复：COM 与 LibreOffice 对比（2026-11-09）
+
+### 4-7 扩展
+
+4-7 原本对非 ZIP 容器直接记 skipped。现在 `.xls` 可走"另存为 .xlsx → 修复"
+路由（`run_excel_open_repair_batch_with_legacy_conversion`）：
+
+- Windows：Excel/WPS COM（与 4-4 同一条 pywin32 路由）
+- Linux：LibreOffice 无头转换（`soffice --convert-to xlsx`；`PYTOOLS_SOFFICE`
+  可指定 soffice 路径）
+- 另存产物直接落到 `-Excel修复.xlsx` 候选名；另存后无修复点时保留副本
+  （状态 unchanged，转换本身即修复价值）；转换失败记 skipped 带原因
+- `.et` 等其它格式仍 skipped；默认不传引擎时 .xls 也 skipped（带指引）
+
+### LO 另存可靠性实测（决定路由的依据）
+
+| 样本 | 公式数 | 公式文本 COM vs LO | 值差异 | Excel 可开（两产物） |
+| --- | ---: | --- | ---: | --- |
+| 单位贷款202607.xls（真实，纯数据） | 0 | —（两侧均无公式） | 0 | ✅ / ✅ |
+| wei40.xls（！40 模板往返，787 公式） | 787 | **零差异**（787:787） | **0** | ✅ / ✅ |
+| 合成共享公式样本（IF 布尔结果） | 21 | 零差异（21:21） | 20（见下） | ✅ / ✅ |
+
+结构差异（不影响打开与计算）：
+
+- COM 另存保留 shared formula 结构（wei40：552 个 shared）；
+  **LO 另存把 shared formula 全部展开为逐格公式**（0 个 shared）——语义相同、
+  文件略大，对后续 calamine 读取与公式比对反而更简单。
+- **布尔结果的缓存表示不同**：`IF(...,TRUE(),FALSE())` COM 缓存 `True`、
+  LO 缓存 `1`。公式语义一致（Excel 打开后重算即为布尔），但 calamine
+  `data_only` 回读会读到 1 而非 TRUE。1-4 的校验公式返回文本（"错|…"），
+  不受影响；业务模板若有裸布尔结果需注意此差异。
+
+结论：LO 另存与 COM 另存在公式文本与值上**一致**（布尔缓存表示除外），
+已加入路由（Linux 侧）。Windows 侧仍优先 COM。
+
 ## 6. 修复的一个真 bug
 
 `strip_style_only_cells` 首版在重建被改动的 `<row>` 时：

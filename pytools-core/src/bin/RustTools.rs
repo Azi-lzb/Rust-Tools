@@ -13097,10 +13097,21 @@ fn run_excel_open_repair_cli(arguments: Vec<String>, interactive: bool) -> Resul
         None,
     );
     unified.set_inputs(&options.positional, None);
-    let result = pytools_core::excel_open_repair_batch::run_excel_open_repair_batch(
-        &options.positional,
-        recursive,
-    );
+    // 非 ZIP 的 .xls：按平台选择另存引擎（Windows=Excel/WPS COM，
+    // Linux=LibreOffice 无头转换），另存为 .xlsx 后再修复。
+    let legacy_engine = if cfg!(windows) {
+        Some(pytools_core::excel_open_repair_batch::LegacyConversionEngine::WindowsCom)
+    } else if cfg!(target_os = "linux") {
+        Some(pytools_core::excel_open_repair_batch::LegacyConversionEngine::LinuxLibreOffice)
+    } else {
+        None
+    };
+    let result =
+        pytools_core::excel_open_repair_batch::run_excel_open_repair_batch_with_legacy_conversion(
+            &options.positional,
+            recursive,
+            legacy_engine,
+        );
     let report = match result {
         Ok(report) => report,
         Err(error) => {
