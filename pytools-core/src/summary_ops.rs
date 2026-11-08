@@ -2389,12 +2389,9 @@ fn extract_named_validation_regions_inner(
             format!("正在为「{file_name}」创建校验副本（保留在「副本」文件夹）；计算引擎仅处理副本，原文件不变"),
             &progress, Some(source), None, &["pytools-core"], None, None);
         let mut source_copy_created = false;
-        let calculation_engine = named_validation_calculation_engine();
-        let calculation_components: &[&str] = if cfg!(windows) {
-            &["pytools-core", "pywin32", "Excel/WPS COM"]
-        } else {
-            &["pytools-core", "LibreOffice Calc"]
-        };
+        // 引擎名在重算返回后才最终确定（betteroffice 可能回退 COM/LibreOffice），
+        // 因此在重算调用后按 application 取值；此处只保留平台默认作为占位。
+        let platform_default_engine = named_validation_calculation_engine();
         let calculation = (|runtime: &mut ConversionRuntime| -> Result<_> {
             // 校验副本保留在输出目录的“副本/”下（用户要求）：便于事后
             // 核对公式重算时实际读取的数据；同名副本按序号追加。
@@ -2490,14 +2487,14 @@ fn extract_named_validation_regions_inner(
                 "validation_calculation",
                 "started",
                 format!(
-                    "正在通过 {calculation_engine} 重算「{file_name}」的校验区域（{} 个区域）",
+                    "正在通过 {platform_default_engine} 路由重算「{file_name}」的校验区域（{} 个区域）；最终引擎见完成事件",
                     file_requests.len()
                 ),
                 &progress,
                 Some(source),
                 None,
-                calculation_components,
-                Some(calculation_engine),
+                &["pytools-core"],
+                Some(platform_default_engine),
                 None,
             );
             runtime.recalculate_named_validation_regions(
@@ -2522,8 +2519,8 @@ fn extract_named_validation_regions_inner(
                         &progress,
                         Some(source),
                         Some(validation_started.elapsed()),
-                        calculation_components,
-                        Some(calculation_engine),
+                        &["pytools-core", "pywin32", "Excel/WPS COM"],
+                        Some(platform_default_engine),
                         Some("named_validation_calculation_error"),
                     );
                 } else {
@@ -2587,11 +2584,22 @@ fn extract_named_validation_regions_inner(
             )
         };
         let calculation_application = calculation.application.clone();
-        let success_components: &[&str] = if calculation_application == "LibreOffice Calc" {
-            &["pytools-core", "LibreOffice Calc"]
-        } else {
-            &["pytools-core", "pywin32", "Excel/WPS COM"]
-        };
+        // 实际引擎按 application 判定（betteroffice / COM / LibreOffice），
+        // 与应用名一起写进日志，避免"用了 betteroffice 但日志写 COM"。
+        let (calculation_engine, success_components): (&str, &[&str]) =
+            if calculation_application.starts_with("betteroffice") {
+                (
+                    "betteroffice (pure Rust)",
+                    &["pytools-core", "betteroffice (pure Rust)"],
+                )
+            } else if calculation_application.starts_with("LibreOffice") {
+                ("LibreOffice Calc", &["pytools-core", "LibreOffice Calc"])
+            } else {
+                (
+                    platform_default_engine,
+                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                )
+            };
         emitter.emit("validation_calculation", "succeeded",
             format!("校验区域重算完成：「{file_name}」/「{}」；计算引擎：{}；校验公式/辅助表复制：{}；提取命中结果 {hit_count} 条{copied_sheets}",
                 routed_sheets.join("、"), calculation_application, calculation.dependency_copy_engine),

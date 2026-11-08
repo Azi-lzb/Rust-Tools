@@ -1,0 +1,45 @@
+//! formula engine: lexer -> parser -> `Expr` ast -> evaluator, plus dependency
+//! extraction. reads cells exclusively through `xlsx_model::CellProvider`.
+//!
+//! ```
+//! use xlsx_calc::{evaluate, parse_formula, EvalContext};
+//! use xlsx_model::{Sheet, SheetId, Workbook};
+//!
+//! let mut wb = Workbook::default();
+//! wb.sheets.push(Sheet::new("Sheet1"));
+//! let expr = parse_formula("1 + 2 * 3").unwrap();
+//! let ctx = EvalContext::new(&wb, SheetId(0));
+//! assert_eq!(evaluate(&expr, &ctx), xlsx_model::CellValue::Number { value: 7.0 });
+//! ```
+
+pub mod array;
+mod coercion;
+pub mod deps;
+pub mod engine;
+pub mod eval;
+pub mod functions;
+pub mod graph;
+pub mod lexer;
+pub mod parser;
+pub mod printer;
+mod reference;
+
+pub use array::{Array, MAX_ARRAY_CELLS, Spill, Value, evaluate_array, evaluate_spill};
+pub use deps::references;
+pub use engine::{
+    RecalcResult, rebuild_and_recalc_all, rebuild_and_recalc_all_with_seed, recalc_after,
+    recalc_after_with_recomputed, recalc_after_with_seed, set_progress_hook,
+};
+pub use eval::{EvalContext, evaluate};
+pub use lexer::{ParseError, TokKind, Token, lex};
+pub use parser::{BinaryOp, Expr, MAX_DEPTH, UnaryOp, parse_formula};
+pub use reference::{ColumnRange, RowRange, TableBand, TableSpec};
+
+/// the currency symbols whose text arithmetic coerces in `wb`; an edit that
+/// changes them changes formula results anywhere in the workbook.
+#[doc(hidden)]
+pub fn currency_symbols(wb: &xlsx_model::Workbook) -> Vec<char> {
+    coercion::CurrencyCoercion::from_workbook(wb)
+        .symbols()
+        .to_vec()
+}

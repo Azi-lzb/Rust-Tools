@@ -871,6 +871,68 @@ impl ConversionRuntime {
                 })
             }
         };
+        // ① betteroffice（纯 Rust）首选路由：配置开启即尝试；超限/未实现函数/
+        // 循环引用时按配置回退 COM/LibreOffice，`none` 则明确报错，绝不静默
+        // 采用受限结果。回退原因拼进 application，随统一运行日志留痕。
+        let bo_config = crate::bo_calc::BoCalcConfig::from_env();
+        if bo_config.enabled {
+            match crate::bo_calc::recalculate(source_copy, &bo_config) {
+                Ok(outcome) => {
+                    let workbook = read_workbook(source_copy)
+                        .context("betteroffice 重算后使用 Calamine 回读公式缓存失败")?;
+                    let cells = extract_named_validation_cells(&workbook, regions)?;
+                    return Ok(NamedValidationCalculation {
+                        application: outcome.application.to_owned(),
+                        cells,
+                        copied_formula_cells: copied.cells_with_formula,
+                        copied_template_sheets: copied.sheets_copied,
+                        dependency_copy_engine,
+                    });
+                }
+                Err(refusal) => {
+                    let refusal_reason = format!("{:#}", refusal);
+                    if !bo_config.fallback_available() {
+                        bail!(
+                            "betteroffice 校验区域重算不可采用且未配置可用回退：{refusal_reason}"
+                        );
+                    }
+                    let bo_fallback_reason = format!("betteroffice 回退（{refusal_reason}）");
+                    // 落到下方既有平台分支；它们整簿重算，不受本副本残留值影响。
+                    // 原因经 bo_fallback_reason 拼入最终 application。
+                    return self.recalculate_named_validation_regions_platform(
+                        source_copy,
+                        regions,
+                        copied,
+                        dependency_copy_engine,
+                        Some(bo_fallback_reason),
+                    );
+                }
+            }
+        }
+        self.recalculate_named_validation_regions_platform(
+            source_copy,
+            regions,
+            copied,
+            dependency_copy_engine,
+            None,
+        )
+    }
+
+    /// The platform engine branch: Excel/WPS COM on Windows, LibreOffice on
+    /// Linux. Also the fallback target when betteroffice refuses a workbook;
+    /// `fallback_reason` then records why, so the run log keeps one trace.
+    fn recalculate_named_validation_regions_platform(
+        &mut self,
+        source_copy: &Path,
+        regions: &[NamedValidationRegionRequest],
+        copied: ooxml_patch::CellRegionCopyReport,
+        dependency_copy_engine: String,
+        fallback_reason: Option<String>,
+    ) -> Result<NamedValidationCalculation> {
+        let decorate = |application: String| match &fallback_reason {
+            Some(reason) => format!("{application}；{reason}"),
+            None => application,
+        };
         #[cfg(windows)]
         {
             // Excel 会拒绝含全角括号表名裸引用/矛盾冻结窗格的工作簿；WPS 宽容。
@@ -889,7 +951,7 @@ impl ConversionRuntime {
                 .expect("pywin32 worker initialized")
                 .recalculate_named_validation_regions(source_copy, regions)?;
             Ok(NamedValidationCalculation {
-                application: calculation.application,
+                application: decorate(calculation.application),
                 cells: calculation.cells,
                 copied_formula_cells: copied.cells_with_formula,
                 copied_template_sheets: copied.sheets_copied,
@@ -911,7 +973,7 @@ impl ConversionRuntime {
                     .context("LibreOffice 重算后使用 Calamine 回读公式缓存失败")?;
                 let cells = extract_named_validation_cells(&workbook, regions)?;
                 Ok(NamedValidationCalculation {
-                    application: "LibreOffice Calc".to_owned(),
+                    application: decorate("LibreOffice Calc".to_owned()),
                     cells,
                     copied_formula_cells: copied.cells_with_formula,
                     copied_template_sheets: copied.sheets_copied,
@@ -920,7 +982,7 @@ impl ConversionRuntime {
             }
             #[cfg(not(target_os = "linux"))]
             {
-                let _ = copied;
+                let _ = (copied, decorate);
                 bail!("校验区域公式重算仅在 Windows（Excel/WPS COM）和 Linux（LibreOffice）提供")
             }
         }
@@ -1534,7 +1596,6 @@ pub(crate) fn named_validation_calculation_engine() -> &'static str {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn extract_named_validation_cells(
     workbook: &WorkbookDump,
     regions: &[NamedValidationRegionRequest],
@@ -1592,7 +1653,6 @@ fn extract_named_validation_cells(
     Ok(matches)
 }
 
-#[cfg(target_os = "linux")]
 fn parse_named_validation_region(address: &str) -> Result<(u32, u32, u32, u32)> {
     let address = address
         .rsplit('!')
@@ -1612,7 +1672,6 @@ fn parse_named_validation_region(address: &str) -> Result<(u32, u32, u32, u32)> 
     ))
 }
 
-#[cfg(target_os = "linux")]
 fn parse_named_validation_cell(address: &str) -> Result<(u32, u32)> {
     let split = address
         .find(|character: char| character.is_ascii_digit())
@@ -1641,7 +1700,6 @@ fn parse_named_validation_cell(address: &str) -> Result<(u32, u32)> {
     Ok((row, column))
 }
 
-#[cfg(target_os = "linux")]
 fn named_validation_cell_in_bounds(
     address: &str,
     (min_row, min_column, max_row, max_column): (u32, u32, u32, u32),

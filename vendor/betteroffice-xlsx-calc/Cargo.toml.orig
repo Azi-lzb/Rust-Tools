@@ -1,0 +1,21 @@
+[package]
+name = "betteroffice-xlsx-calc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish = ["crates-io"]
+description = "Formula parser, dependency graph, and recalc engine for BetterOffice XLSX workbooks."
+readme = "README.md"
+keywords = ["xlsx", "excel", "formula", "spreadsheet", "ooxml"]
+categories = ["parser-implementations", "mathematics"]
+
+[lib]
+name = "xlsx_calc"
+
+[features]
+test-counters = []
+
+[dependencies]
+xlsx-model.workspace = true

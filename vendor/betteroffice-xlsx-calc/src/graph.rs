@@ -1,0 +1,1338 @@
+//! dependency graph: which formula cells read which cells, answering "when this
+//! cell changes, which formulas must re-evaluate?".
+
+mod builder;
+mod snapshot;
+mod snapshot_growth;
+
+#[doc(hidden)]
+pub use builder::DepGraphBuilder;
+#[doc(hidden)]
+pub use snapshot::SnapshotGraphBuilder;
+
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
+
+use xlsx_model::{CellRange, CellRef, ColId, DefinedName, RowId, SheetId, Table, Workbook};
+
+use crate::TableSpec;
+use crate::deps::{offset_target, positional_argument, range_join_span, references};
+use crate::eval::{ParseCache, parse_cached};
+use crate::functions::Func;
+use crate::parser::Expr;
+use crate::reference::table_rect;
+
+/// a formula cell, normalized so `$`-anchoring never splits a node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct NodeKey {
+    sheet: SheetId,
+    row: RowId,
+    col: ColId,
+}
+
+impl NodeKey {
+    fn new(sheet: SheetId, cell: CellRef) -> Self {
+        Self {
+            sheet,
+            row: cell.row,
+            col: cell.col,
+        }
+    }
+
+    fn cell(&self) -> CellRef {
+        CellRef::new(self.row, self.col)
+    }
+}
+
+/// case-insensitive names of functions whose value can change with no input
+/// edit; cells calling them re-evaluate on every recalc. OFFSET joins them per
+/// call site, but only where its target is not statically resolvable; INDIRECT
+/// always does, since its target is a string the graph cannot read.
+const VOLATILE_FNS: [&str; 5] = ["TODAY", "NOW", "RAND", "RANDBETWEEN", "INDIRECT"];
+
+pub struct DepGraph {
+    pub(crate) currency_coercion: std::sync::Mutex<Option<crate::coercion::CurrencyCoercion>>,
+    /// sheet name -> id, snapshot at build time.
+    names: HashMap<String, SheetId>,
+    defined_names: Vec<DefinedName>,
+    defined_name_indices: HashMap<(Option<SheetId>, String), usize>,
+    /// table definitions keyed by lowercased name, snapshot at build time.
+    tables: HashMap<String, Table>,
+    /// forward edges: formula node -> the cells/ranges it reads (sheets resolved).
+    deps: HashMap<NodeKey, NodeEntry>,
+    /// reverse index by sheet: `(range, dependent)` pairs read into that sheet.
+    by_sheet: HashMap<SheetId, Vec<(CellRange, NodeKey)>>,
+    /// formula cells that must re-evaluate every recalc regardless of edits.
+    volatile: HashSet<NodeKey>,
+    /// array anchors whose result fills more than their own cell: a formula
+    /// reading anywhere in that rectangle depends on the anchor.
+    spills: HashMap<NodeKey, CellRange>,
+    /// the same rectangles grouped by sheet, for scanning them per read range.
+    spills_by_sheet: HashMap<SheetId, Vec<(NodeKey, CellRange)>>,
+    /// parsed formula text -> ast, shared with recalc eval so each formula
+    /// parses once across graph construction and every subsequent recalc.
+    asts: ParseCache,
+}
+
+/// rows per band of a [`ReaderIndex`]. a range is filed under the band its
+/// first row falls in when it spans at most `MAX_RANGE_BANDS` bands, and in
+/// one list per sheet otherwise.
+const BAND_ROWS: u32 = 16;
+const MAX_RANGE_BANDS: u32 = 16;
+
+/// the reverse edges into one sheet by cell: single-cell reads by address,
+/// short ranges by the band they start in, tall ones in a list.
+pub(crate) struct ReaderIndex<'g> {
+    graph: &'g DepGraph,
+    sheet: SheetId,
+    cells: HashMap<(RowId, ColId), Vec<NodeKey>>,
+    bands: HashMap<u32, Vec<(CellRange, NodeKey)>>,
+    tall: Vec<(CellRange, NodeKey)>,
+}
+
+impl ReaderIndex<'_> {
+    /// the readers [`DepGraph::dependents_of`] yields for a cell of the
+    /// indexed sheet.
+    pub(crate) fn dependents_of(&self, cell: CellRef, out: &mut Vec<(SheetId, CellRef)>) {
+        let at = NodeKey::new(self.sheet, cell);
+        if self.graph.spills.contains_key(&at) {
+            out.extend(self.graph.dependents_of(self.sheet, cell));
+            return;
+        }
+        let target = at.cell();
+        let band = cell.row / BAND_ROWS;
+        let first = band.saturating_sub(MAX_RANGE_BANDS - 1);
+        let readers = self.cells.get(&(cell.row, cell.col)).into_iter().flatten();
+        let banded = (first..=band)
+            .filter_map(|band| self.bands.get(&band))
+            .flatten();
+        let ranged = banded
+            .chain(&self.tall)
+            .filter(|(range, _)| range.contains(target));
+        let nodes = readers.copied().chain(ranged.map(|&(_, node)| node));
+        out.extend(nodes.map(|node| (node.sheet, node.cell())));
+    }
+}
+
+/// one formula node: its parsed ast and the cells/ranges it reads.
+struct NodeEntry {
+    ast: Arc<Expr>,
+    edges: Vec<(SheetId, CellRange)>,
+}
+
+/// what evaluating a formula resolves by sheet name.
+#[derive(Default)]
+struct SheetResolution {
+    /// in walk order: the sheet each qualifier names, positional ones and
+    /// those of defined names too, and the definition each defined name binds
+    /// to, through their bodies.
+    bindings: Vec<SheetBinding>,
+    /// whether it shows a cell's formula text, which names sheets.
+    shows_formula_text: bool,
+}
+
+#[derive(PartialEq, Eq)]
+enum SheetBinding {
+    Sheet(Option<SheetId>),
+    Name(Option<(SheetId, usize)>),
+}
+
+/// a defined name's formula without the `=` some producers store.
+fn definition_source(defined: &DefinedName) -> &str {
+    defined
+        .formula
+        .strip_prefix('=')
+        .unwrap_or(&defined.formula)
+}
+
+impl DepGraph {
+    /// record that the values this graph will recalculate were computed with
+    /// `wb`'s currency evidence, for a graph built over an already edited copy.
+    #[doc(hidden)]
+    pub fn computed_with_currency_of(&self, wb: &Workbook) {
+        *self
+            .currency_coercion
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) =
+            Some(crate::coercion::CurrencyCoercion::from_workbook(wb));
+    }
+
+    /// build the whole graph from a workbook's stored formulas; unparseable
+    /// formulas are skipped.
+    pub fn build(wb: &Workbook) -> Self {
+        Self::build_with(wb, ParseCache::default())
+    }
+
+    fn build_with(wb: &Workbook, asts: ParseCache) -> Self {
+        let names = wb
+            .sheets
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.name.to_lowercase(), SheetId(i as u32)))
+            .collect();
+        let defined_names = wb.defined_names.clone();
+        let mut defined_name_indices = HashMap::with_capacity(defined_names.len());
+        for (index, defined) in defined_names.iter().enumerate() {
+            defined_name_indices
+                .entry((defined.local_sheet, defined.name.to_ascii_lowercase()))
+                .or_insert(index);
+        }
+        let tables = wb
+            .tables
+            .iter()
+            .map(|table| (table.name.to_lowercase(), table.clone()))
+            .collect();
+        let mut g = DepGraph {
+            // the values a graph is built over were computed with this
+            // evidence, so only a later change recomputes every formula
+            currency_coercion: std::sync::Mutex::new(Some(
+                crate::coercion::CurrencyCoercion::from_workbook(wb),
+            )),
+            names,
+            defined_names,
+            defined_name_indices,
+            tables,
+            deps: HashMap::new(),
+            by_sheet: HashMap::new(),
+            volatile: HashSet::new(),
+            spills: HashMap::new(),
+            spills_by_sheet: HashMap::new(),
+            asts,
+        };
+        for (i, sheet) in wb.sheets.iter().enumerate() {
+            let sid = SheetId(i as u32);
+            for (cell, c) in sheet.iter_cells() {
+                if let Some(src) = &c.formula {
+                    g.install(NodeKey::new(sid, cell), src);
+                    xlsx_model::progress::tick();
+                }
+            }
+        }
+        g.refresh_spills(wb);
+        g
+    }
+
+    /// re-resolve every reference after sheets were renamed, reusing the asts of
+    /// formula text the rename left alone. `rewritten` are the cells whose
+    /// formula text the rename rewrote, whether or not it parses. returns, in
+    /// address order, the formula cells whose result the rename can change:
+    /// those whose references or defined names now resolve elsewhere, and
+    /// those showing the text of a rewritten formula.
+    pub fn rename_sheets(
+        &mut self,
+        wb: &Workbook,
+        rewritten: &[(SheetId, CellRef)],
+    ) -> Vec<(SheetId, CellRef)> {
+        let asts = std::mem::take(&mut self.asts);
+        let previous = std::mem::replace(self, Self::build_with(wb, asts));
+        let mut seeds = BTreeSet::new();
+        let mut text_readers = HashSet::new();
+        for (key, node) in &self.deps {
+            let resolution = self.sheet_resolution(&self.asts, key.sheet, &node.ast);
+            if resolution.shows_formula_text {
+                text_readers.insert(*key);
+            }
+            let Some(old) = previous.deps.get(key) else {
+                seeds.insert(*key);
+                continue;
+            };
+            let resolved = previous.sheet_resolution(&self.asts, key.sheet, &old.ast);
+            if old.edges != node.edges || resolved.bindings != resolution.bindings {
+                seeds.insert(*key);
+            }
+        }
+        drop(previous);
+        for &(sheet, cell) in rewritten {
+            let readers = self
+                .dependents_of(sheet, cell)
+                .map(|(sheet, cell)| NodeKey::new(sheet, cell))
+                .filter(|reader| text_readers.contains(reader));
+            seeds.extend(readers);
+        }
+        self.retain_live_asts(wb);
+        seeds
+            .into_iter()
+            .map(|key| (key.sheet, key.cell()))
+            .collect()
+    }
+
+    /// drop the asts of formula text no cell or defined name holds any more.
+    fn retain_live_asts(&self, wb: &Workbook) {
+        let live: HashSet<&str> = wb
+            .sheets
+            .iter()
+            .flat_map(|sheet| sheet.iter_cells())
+            .filter_map(|(_, cell)| cell.formula.as_deref())
+            .chain(wb.defined_names.iter().map(definition_source))
+            .collect();
+        self.asts
+            .lock()
+            .expect("parse cache poisoned")
+            .retain(|source, _| live.contains(source.as_str()));
+    }
+
+    /// what evaluating `ast` from `owner` resolves by sheet name, through the
+    /// bodies of the defined names it reaches, which `asts` parses.
+    fn sheet_resolution(
+        &self,
+        asts: &ParseCache,
+        owner: SheetId,
+        ast: &Arc<Expr>,
+    ) -> SheetResolution {
+        let mut resolution = SheetResolution::default();
+        let mut expanded = HashSet::new();
+        let mut bodies = vec![(owner, Arc::clone(ast))];
+        while let Some((owner, body)) = bodies.pop() {
+            let mut expressions = vec![&*body];
+            while let Some(expression) = expressions.pop() {
+                match expression {
+                    Expr::Ref { sheet, .. }
+                    | Expr::Range { sheet, .. }
+                    | Expr::ColumnRange { sheet, .. }
+                    | Expr::RowRange { sheet, .. } => {
+                        if let Some(name) = sheet {
+                            let id = self.names.get(&name.to_lowercase()).copied();
+                            resolution.bindings.push(SheetBinding::Sheet(id));
+                        }
+                    }
+                    Expr::Name { scope, name } => {
+                        if let Some(scope) = scope {
+                            let id = self.names.get(&scope.to_lowercase()).copied();
+                            resolution.bindings.push(SheetBinding::Sheet(id));
+                        }
+                        let bound = self.defined_name_index(owner, scope, name);
+                        resolution.bindings.push(SheetBinding::Name(bound));
+                        let Some((sheet, index)) = bound else {
+                            continue;
+                        };
+                        let defined = &self.defined_names[index];
+                        if expanded.insert((sheet, index))
+                            && let Some(parsed) = parse_cached(asts, definition_source(defined))
+                        {
+                            bodies.push((defined.local_sheet.unwrap_or(sheet), parsed));
+                        }
+                    }
+                    Expr::FuncCall { func, args, .. } => {
+                        resolution.shows_formula_text |= *func == Some(Func::FormulaText);
+                        expressions.extend(args.iter().rev());
+                    }
+                    Expr::ArrayLiteral { values, .. } => expressions.extend(values.iter().rev()),
+                    Expr::RangeJoin { start, end } => {
+                        expressions.push(end);
+                        expressions.push(start);
+                    }
+                    Expr::Unary { expr, .. } | Expr::Percent(expr) => expressions.push(expr),
+                    Expr::Binary { lhs, rhs, .. } => {
+                        expressions.push(rhs);
+                        expressions.push(lhs);
+                    }
+                    Expr::Number(_)
+                    | Expr::Literal(_)
+                    | Expr::Text(_)
+                    | Expr::Bool(_)
+                    | Expr::Error(_)
+                    | Expr::TableRef { .. } => {}
+                }
+            }
+        }
+        resolution
+    }
+
+    /// re-derive one node's edges after its formula changed, without touching
+    /// the rest of the graph. `None` clears the node (cell no longer a formula).
+    pub fn set_formula(&mut self, sheet: SheetId, cell: CellRef, formula: Option<&str>) {
+        let key = NodeKey::new(sheet, cell);
+        self.uninstall(key);
+        if let Some(src) = formula {
+            self.install(key, src);
+        }
+    }
+
+    /// re-index the spill rectangles from the workbook's current extents, which
+    /// recalc moves as results grow and shrink.
+    pub fn refresh_spills(&mut self, wb: &Workbook) {
+        self.spills.clear();
+        self.spills_by_sheet.clear();
+        for (index, sheet) in wb.sheets.iter().enumerate() {
+            let sid = SheetId(index as u32);
+            for (anchor, range) in sheet.array_formulas() {
+                self.install_spill(NodeKey::new(sid, anchor), range);
+            }
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            currency_coercion: std::sync::Mutex::new(None),
+            names: HashMap::new(),
+            defined_names: Vec::new(),
+            defined_name_indices: HashMap::new(),
+            tables: HashMap::new(),
+            deps: HashMap::new(),
+            by_sheet: HashMap::new(),
+            volatile: HashSet::new(),
+            spills: HashMap::new(),
+            spills_by_sheet: HashMap::new(),
+            asts: ParseCache::default(),
+        }
+    }
+
+    fn install_spill(&mut self, key: NodeKey, range: CellRange) {
+        if range.start != range.end && self.deps.contains_key(&key) {
+            self.spills.insert(key, range);
+            self.spills_by_sheet
+                .entry(key.sheet)
+                .or_default()
+                .push((key, range));
+        }
+    }
+
+    /// array anchors on `sheet` whose rectangle a read of `range` touches, so
+    /// the reader is ordered after the anchor that fills those cells.
+    pub(crate) fn spill_sources(
+        &self,
+        sheet: SheetId,
+        range: CellRange,
+    ) -> impl Iterator<Item = (SheetId, CellRef)> + '_ {
+        self.spills_by_sheet
+            .get(&sheet)
+            .into_iter()
+            .flatten()
+            .filter(move |(_, spill)| spill.overlaps(&range))
+            .map(|(anchor, _)| (anchor.sheet, anchor.cell()))
+    }
+
+    pub(crate) fn has_spilled_cells(&self, sheet: SheetId, range: CellRange) -> bool {
+        self.spills_by_sheet
+            .get(&sheet)
+            .into_iter()
+            .flatten()
+            .any(|(_, spill)| spill.start != spill.end && spill.overlaps(&range))
+    }
+
+    pub(crate) fn is_volatile_cell(&self, sheet: SheetId, cell: CellRef) -> bool {
+        self.volatile.contains(&NodeKey::new(sheet, cell))
+    }
+
+    /// coarse invalidation for a sheet insert: ids shift, so rebuild wholesale.
+    pub fn add_sheet(&mut self, wb: &Workbook) {
+        *self = Self::build(wb);
+    }
+
+    /// coarse invalidation for a sheet removal: ids shift, so rebuild wholesale.
+    pub fn remove_sheet(&mut self, wb: &Workbook) {
+        *self = Self::build(wb);
+    }
+
+    /// every stored edge as `(range's sheet, range, dependent cell)`.
+    pub(crate) fn edges(
+        &self,
+    ) -> impl Iterator<Item = (SheetId, CellRange, SheetId, CellRef)> + '_ {
+        self.by_sheet.iter().flat_map(|(&sheet, edges)| {
+            edges
+                .iter()
+                .map(move |(range, node)| (sheet, *range, node.sheet, node.cell()))
+        })
+    }
+
+    /// formula cells that directly read `cell` on `sheet`; may contain
+    /// duplicates, callers dedup.
+    pub fn dependents_of(
+        &self,
+        sheet: SheetId,
+        cell: CellRef,
+    ) -> impl Iterator<Item = (SheetId, CellRef)> + '_ {
+        let target = CellRef::new(cell.row, cell.col);
+        let anchor = NodeKey::new(sheet, cell);
+        let spill = self.spills.get(&anchor).copied();
+        self.by_sheet
+            .get(&sheet)
+            .into_iter()
+            .flatten()
+            .filter(move |(range, node)| {
+                range.contains(target)
+                    || (*node != anchor && spill.is_some_and(|spill| range.overlaps(&spill)))
+            })
+            .map(|(_, node)| (node.sheet, node.cell()))
+    }
+
+    /// an index over the reverse edges into `sheet` that answers
+    /// [`Self::dependents_of`] without scanning every edge of the sheet.
+    pub(crate) fn reader_index(&self, sheet: SheetId) -> ReaderIndex<'_> {
+        let mut index = ReaderIndex {
+            graph: self,
+            sheet,
+            cells: HashMap::new(),
+            bands: HashMap::new(),
+            tall: Vec::new(),
+        };
+        for &(range, node) in self.by_sheet.get(&sheet).into_iter().flatten() {
+            let (first, last) = (range.start.row / BAND_ROWS, range.end.row / BAND_ROWS);
+            if range.start.row == range.end.row && range.start.col == range.end.col {
+                let at = (range.start.row, range.start.col);
+                index.cells.entry(at).or_default().push(node);
+            } else if last - first < MAX_RANGE_BANDS {
+                index.bands.entry(first).or_default().push((range, node));
+            } else {
+                index.tall.push((range, node));
+            }
+        }
+        index
+    }
+
+    /// whether a cell is a (parseable) formula node.
+    pub fn is_formula(&self, sheet: SheetId, cell: CellRef) -> bool {
+        self.deps.contains_key(&NodeKey::new(sheet, cell))
+    }
+
+    /// every formula cell, in unspecified order.
+    pub fn formula_cells(&self) -> impl Iterator<Item = (SheetId, CellRef)> + '_ {
+        self.deps.keys().map(|k| (k.sheet, k.cell()))
+    }
+
+    /// every volatile formula cell, in unspecified order.
+    pub fn volatile_cells(&self) -> impl Iterator<Item = (SheetId, CellRef)> + '_ {
+        self.volatile.iter().map(|k| (k.sheet, k.cell()))
+    }
+
+    /// parsed asts shared with `engine::run_recalc` evaluation.
+    pub(crate) fn asts(&self) -> &ParseCache {
+        &self.asts
+    }
+
+    /// the node's parsed ast; `None` when the cell carries no (parseable)
+    /// formula.
+    pub(crate) fn ast(&self, sheet: SheetId, cell: CellRef) -> Option<Arc<Expr>> {
+        self.deps
+            .get(&NodeKey::new(sheet, cell))
+            .map(|n| Arc::clone(&n.ast))
+    }
+
+    /// parse a formula and register its edges + volatility. no-op on parse error.
+    fn install(&mut self, key: NodeKey, src: &str) {
+        let Some(expr) = parse_cached(&self.asts, src) else {
+            return;
+        };
+        let edges = self.resolve_edges(key, &expr);
+        for (sid, range) in &edges {
+            self.by_sheet.entry(*sid).or_default().push((*range, key));
+        }
+        if self.is_volatile(key.sheet, &expr) {
+            self.volatile.insert(key);
+        }
+        self.deps.insert(key, NodeEntry { ast: expr, edges });
+    }
+
+    /// drop a node's edges from every index it appears in.
+    fn uninstall(&mut self, key: NodeKey) {
+        if let Some(entry) = self.deps.remove(&key) {
+            for (sid, _) in &entry.edges {
+                if let Some(list) = self.by_sheet.get_mut(sid) {
+                    list.retain(|(_, node)| *node != key);
+                }
+            }
+        }
+        self.volatile.remove(&key);
+        self.spills.remove(&key);
+        if let Some(anchors) = self.spills_by_sheet.get_mut(&key.sheet) {
+            anchors.retain(|(anchor, _)| *anchor != key);
+        }
+    }
+
+    /// resolve refs to concrete sheet ids; unqualified refs bind to the owning
+    /// sheet, unknown sheet names drop the edge.
+    fn resolve_edges(&self, owner: NodeKey, expr: &Expr) -> Vec<(SheetId, CellRange)> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        self.add_references(owner.sheet, expr, &mut out, &mut seen);
+        self.add_defined_name_references(owner, expr, &mut out, &mut seen);
+        self.add_table_references(owner, expr, &mut out, &mut seen);
+        out
+    }
+
+    /// edges for the structured references a formula reads, resolved against
+    /// the workbook's tables; `#This Row` binds to the owning cell's row.
+    fn add_table_references(
+        &self,
+        owner: NodeKey,
+        expr: &Expr,
+        out: &mut Vec<(SheetId, CellRange)>,
+        seen: &mut HashSet<(SheetId, u32, u32, u32, u32)>,
+    ) {
+        let mut uses = Vec::new();
+        push_table_uses(expr, &mut uses);
+        for (name, spec) in uses {
+            let Some(table) = self.tables.get(&name.to_lowercase()) else {
+                continue;
+            };
+            let Ok(range) = table_rect(table, spec, Some(owner.cell())) else {
+                continue;
+            };
+            let key = (
+                table.sheet,
+                range.start.row,
+                range.start.col,
+                range.end.row,
+                range.end.col,
+            );
+            if seen.insert(key) {
+                out.push((table.sheet, range));
+            }
+        }
+    }
+
+    fn add_references(
+        &self,
+        owner: SheetId,
+        expr: &Expr,
+        out: &mut Vec<(SheetId, CellRange)>,
+        seen: &mut HashSet<(SheetId, u32, u32, u32, u32)>,
+    ) {
+        for (sheet, range) in references(expr) {
+            let sid = match sheet {
+                None => owner,
+                Some(name) => match self.names.get(&name.to_lowercase()) {
+                    Some(id) => *id,
+                    None => continue,
+                },
+            };
+            let key = (
+                sid,
+                range.start.row,
+                range.start.col,
+                range.end.row,
+                range.end.col,
+            );
+            if seen.insert(key) {
+                out.push((sid, range));
+            }
+        }
+    }
+
+    fn add_defined_name_references(
+        &self,
+        node: NodeKey,
+        expr: &Expr,
+        out: &mut Vec<(SheetId, CellRange)>,
+        seen: &mut HashSet<(SheetId, u32, u32, u32, u32)>,
+    ) {
+        let mut pending = Vec::new();
+        push_defined_name_uses(node.sheet, expr, &mut pending);
+        let mut expanded = HashSet::new();
+        while let Some((owner, scope, name)) = pending.pop() {
+            let Some((lookup_sheet, defined)) = self.resolve_defined_name(owner, &scope, &name)
+            else {
+                continue;
+            };
+            let key = (lookup_sheet, name.to_ascii_lowercase());
+            if !expanded.insert(key) {
+                continue;
+            }
+            let Some(expression) = parse_cached(&self.asts, definition_source(defined)) else {
+                continue;
+            };
+            let definition_sheet = defined.local_sheet.unwrap_or(lookup_sheet);
+            self.add_references(definition_sheet, &expression, out, seen);
+            // a name's body reads structured references of its own
+            self.add_table_references(node, &expression, out, seen);
+            push_defined_name_uses(definition_sheet, &expression, &mut pending);
+        }
+    }
+
+    fn resolve_defined_name<'a>(
+        &'a self,
+        owner: SheetId,
+        scope: &Option<String>,
+        name: &str,
+    ) -> Option<(SheetId, &'a DefinedName)> {
+        let (lookup_sheet, index) = self.defined_name_index(owner, scope, name)?;
+        Some((lookup_sheet, &self.defined_names[index]))
+    }
+
+    /// what `Workbook::defined_name` finds among the names snapshot at build,
+    /// through the index instead of a scan.
+    pub(crate) fn defined_name(&self, sheet: SheetId, name: &str) -> Option<&DefinedName> {
+        let normalized = name.to_ascii_lowercase();
+        let index = self
+            .defined_name_indices
+            .get(&(Some(sheet), normalized.clone()))
+            .or_else(|| self.defined_name_indices.get(&(None, normalized)))?;
+        self.defined_names.get(*index)
+    }
+
+    /// whether the names snapshot at build are still `names`.
+    pub(crate) fn names_match(&self, names: &[DefinedName]) -> bool {
+        self.defined_names == names
+    }
+
+    /// the sheet a name's lookup resolves against, and the definition it binds.
+    fn defined_name_index(
+        &self,
+        owner: SheetId,
+        scope: &Option<String>,
+        name: &str,
+    ) -> Option<(SheetId, usize)> {
+        let lookup_sheet = match scope {
+            Some(scope) => *self.names.get(&scope.to_lowercase())?,
+            None => owner,
+        };
+        let normalized = name.to_ascii_lowercase();
+        let index = self
+            .defined_name_indices
+            .get(&(Some(lookup_sheet), normalized.clone()))
+            .or_else(|| self.defined_name_indices.get(&(None, normalized)))?;
+        Some((lookup_sheet, *index))
+    }
+
+    fn is_volatile(&self, owner: SheetId, expr: &Expr) -> bool {
+        let mut pending = Vec::new();
+        if push_volatile_name_uses(owner, expr, &mut pending) {
+            return true;
+        }
+        let mut expanded = HashSet::new();
+        while let Some((owner, scope, name)) = pending.pop() {
+            let Some((lookup_sheet, defined)) = self.resolve_defined_name(owner, &scope, &name)
+            else {
+                continue;
+            };
+            let key = (lookup_sheet, name.to_ascii_lowercase());
+            if !expanded.insert(key) {
+                continue;
+            }
+            let Some(expression) = parse_cached(&self.asts, definition_source(defined)) else {
+                continue;
+            };
+            let definition_sheet = defined.local_sheet.unwrap_or(lookup_sheet);
+            if push_volatile_name_uses(definition_sheet, &expression, &mut pending) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+impl DepGraph {
+    fn assert_matches(&self, other: &Self) {
+        let Self {
+            names,
+            defined_names,
+            defined_name_indices,
+            tables,
+            deps,
+            by_sheet,
+            volatile,
+            spills,
+            spills_by_sheet,
+            asts,
+            ..
+        } = self;
+        let Self {
+            names: other_names,
+            defined_names: other_defined_names,
+            defined_name_indices: other_defined_name_indices,
+            tables: other_tables,
+            deps: other_deps,
+            by_sheet: other_by_sheet,
+            volatile: other_volatile,
+            spills: other_spills,
+            spills_by_sheet: other_spills_by_sheet,
+            asts: other_asts,
+            ..
+        } = other;
+        assert_eq!(names, other_names);
+        assert_eq!(defined_names, other_defined_names);
+        assert_eq!(defined_name_indices, other_defined_name_indices);
+        assert_eq!(tables, other_tables);
+        assert_eq!(by_sheet, other_by_sheet);
+        assert_eq!(volatile, other_volatile);
+        assert_eq!(spills, other_spills);
+        assert_eq!(spills_by_sheet, other_spills_by_sheet);
+        assert_eq!(deps.len(), other_deps.len());
+        for (key, NodeEntry { ast, edges }) in deps {
+            let NodeEntry {
+                ast: other_ast,
+                edges: other_edges,
+            } = &other_deps[key];
+            assert_eq!(edges, other_edges);
+            assert_expr_matches(ast, other_ast);
+        }
+        let asts = asts.lock().expect("parse cache poisoned");
+        let other_asts = other_asts.lock().expect("parse cache poisoned");
+        assert_eq!(asts.len(), other_asts.len());
+        for (source, ast) in asts.iter() {
+            assert_expr_matches(ast, &other_asts[source]);
+        }
+    }
+}
+
+#[cfg(test)]
+fn assert_expr_matches(actual: &Expr, expected: &Expr) {
+    let mut pending = vec![(actual, expected)];
+    while let Some((actual, expected)) = pending.pop() {
+        match (actual, expected) {
+            (Expr::Number(actual), Expr::Number(expected)) => {
+                assert_eq!(actual.to_bits(), expected.to_bits());
+            }
+            (Expr::Literal(actual), Expr::Literal(expected)) => {
+                if let (
+                    xlsx_model::CellValue::Number { value: actual },
+                    xlsx_model::CellValue::Number { value: expected },
+                ) = (actual, expected)
+                {
+                    assert_eq!(actual.to_bits(), expected.to_bits());
+                } else {
+                    assert_eq!(actual, expected);
+                }
+            }
+            (
+                Expr::ArrayLiteral { cols, values },
+                Expr::ArrayLiteral {
+                    cols: other_cols,
+                    values: other_values,
+                },
+            ) => {
+                assert_eq!(cols, other_cols);
+                assert_eq!(values.len(), other_values.len());
+                pending.extend(values.iter().zip(other_values));
+            }
+            (
+                Expr::Unary { op, expr },
+                Expr::Unary {
+                    op: other_op,
+                    expr: other_expr,
+                },
+            ) => {
+                assert_eq!(op, other_op);
+                pending.push((expr, other_expr));
+            }
+            (
+                Expr::Binary { op, lhs, rhs },
+                Expr::Binary {
+                    op: other_op,
+                    lhs: other_lhs,
+                    rhs: other_rhs,
+                },
+            ) => {
+                assert_eq!(op, other_op);
+                pending.push((rhs, other_rhs));
+                pending.push((lhs, other_lhs));
+            }
+            (Expr::Percent(expr), Expr::Percent(other_expr)) => {
+                pending.push((expr, other_expr));
+            }
+            (
+                Expr::RangeJoin { start, end },
+                Expr::RangeJoin {
+                    start: other_start,
+                    end: other_end,
+                },
+            ) => {
+                pending.push((end, other_end));
+                pending.push((start, other_start));
+            }
+            (
+                Expr::FuncCall { name, func, args },
+                Expr::FuncCall {
+                    name: other_name,
+                    func: other_func,
+                    args: other_args,
+                },
+            ) => {
+                assert_eq!(name, other_name);
+                assert_eq!(func, other_func);
+                assert_eq!(args.len(), other_args.len());
+                pending.extend(args.iter().zip(other_args));
+            }
+            (Expr::Text(_), Expr::Text(_))
+            | (Expr::Bool(_), Expr::Bool(_))
+            | (Expr::Error(_), Expr::Error(_))
+            | (Expr::Ref { .. }, Expr::Ref { .. })
+            | (Expr::Range { .. }, Expr::Range { .. })
+            | (Expr::ColumnRange { .. }, Expr::ColumnRange { .. })
+            | (Expr::RowRange { .. }, Expr::RowRange { .. })
+            | (Expr::TableRef { .. }, Expr::TableRef { .. })
+            | (Expr::Name { .. }, Expr::Name { .. }) => assert_eq!(actual, expected),
+            _ => panic!("different expressions: {actual:?} and {expected:?}"),
+        }
+    }
+}
+
+fn push_table_uses<'a>(expr: &'a Expr, uses: &mut Vec<(&'a str, &'a TableSpec)>) {
+    let mut expressions = vec![expr];
+    while let Some(expression) = expressions.pop() {
+        match expression {
+            Expr::TableRef { table, spec } => uses.push((table.as_str(), spec)),
+            Expr::ArrayLiteral { values, .. } => expressions.extend(values),
+            Expr::RangeJoin { start, end } => {
+                expressions.push(end);
+                expressions.push(start);
+            }
+            Expr::Unary { expr, .. } | Expr::Percent(expr) => expressions.push(expr),
+            Expr::Binary { lhs, rhs, .. } => {
+                expressions.push(rhs);
+                expressions.push(lhs);
+            }
+            Expr::FuncCall { name, args, .. } => expressions.extend(
+                args.iter()
+                    .enumerate()
+                    .rev()
+                    .filter(|(index, arg)| !positional_argument(name, *index, arg))
+                    .map(|(_, arg)| arg),
+            ),
+            _ => {}
+        }
+    }
+}
+
+type DefinedNameUse = (SheetId, Option<String>, String);
+
+fn push_defined_name_uses(owner: SheetId, expr: &Expr, pending: &mut Vec<DefinedNameUse>) {
+    let mut expressions = vec![expr];
+    let mut uses = Vec::new();
+    while let Some(expression) = expressions.pop() {
+        match expression {
+            Expr::Name { scope, name } => uses.push((owner, scope.clone(), name.clone())),
+            Expr::Literal(_) => {}
+            Expr::ArrayLiteral { values, .. } => expressions.extend(values),
+            Expr::RangeJoin { start, end } => {
+                expressions.push(end);
+                expressions.push(start);
+            }
+            Expr::Unary { expr, .. } | Expr::Percent(expr) => expressions.push(expr),
+            Expr::Binary { lhs, rhs, .. } => {
+                expressions.push(rhs);
+                expressions.push(lhs);
+            }
+            Expr::FuncCall { name, args, .. } => expressions.extend(
+                args.iter()
+                    .enumerate()
+                    .rev()
+                    .filter(|(index, arg)| !positional_argument(name, *index, arg))
+                    .map(|(_, arg)| arg),
+            ),
+            Expr::Number(_)
+            | Expr::Text(_)
+            | Expr::Bool(_)
+            | Expr::Error(_)
+            | Expr::Ref { .. }
+            | Expr::Range { .. }
+            | Expr::TableRef { .. }
+            | Expr::ColumnRange { .. }
+            | Expr::RowRange { .. } => {}
+        }
+    }
+    pending.extend(uses.into_iter().rev());
+}
+
+fn push_volatile_name_uses(owner: SheetId, expr: &Expr, pending: &mut Vec<DefinedNameUse>) -> bool {
+    let mut expressions = vec![expr];
+    let mut uses = Vec::new();
+    while let Some(expression) = expressions.pop() {
+        match expression {
+            Expr::FuncCall { name, args, .. } => {
+                let upper = name.to_ascii_uppercase();
+                if VOLATILE_FNS.contains(&upper.as_str())
+                    || (upper == "OFFSET" && offset_target(args).is_none())
+                {
+                    return true;
+                }
+                expressions.extend(args.iter().rev());
+            }
+            Expr::Name { scope, name } => uses.push((owner, scope.clone(), name.clone())),
+            Expr::Literal(_) => {}
+            Expr::ArrayLiteral { values, .. } => expressions.extend(values),
+            Expr::RangeJoin { start, end } => {
+                // a span the source cannot bound would under-report, so the
+                // formula recomputes every pass instead
+                if range_join_span(start, end).is_none() {
+                    return true;
+                }
+                expressions.push(end);
+                expressions.push(start);
+            }
+            Expr::Unary { expr, .. } | Expr::Percent(expr) => expressions.push(expr),
+            Expr::Binary { lhs, rhs, .. } => {
+                expressions.push(rhs);
+                expressions.push(lhs);
+            }
+            Expr::Number(_)
+            | Expr::Text(_)
+            | Expr::Bool(_)
+            | Expr::Error(_)
+            | Expr::Ref { .. }
+            | Expr::Range { .. }
+            | Expr::TableRef { .. }
+            | Expr::ColumnRange { .. }
+            | Expr::RowRange { .. } => {}
+        }
+    }
+    pending.extend(uses.into_iter().rev());
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use xlsx_model::{Cell, CellValue, Sheet};
+
+    fn a1(s: &str) -> CellRef {
+        CellRef::parse_a1(s).unwrap()
+    }
+
+    fn formula_cell(f: &str) -> Cell {
+        Cell {
+            value: CellValue::Empty,
+            formula: Some(f.to_string()),
+            style: None,
+        }
+    }
+
+    /// workbook with two sheets; caller populates cells.
+    fn wb2() -> Workbook {
+        let mut wb = Workbook::default();
+        wb.sheets.push(Sheet::new("Sheet1"));
+        wb.sheets.push(Sheet::new("Data"));
+        wb
+    }
+
+    fn deps_a1(g: &DepGraph, sheet: &str, cell: &str, wb: &Workbook) -> Vec<String> {
+        let sid = wb.sheet_by_name(sheet).unwrap().0;
+        let mut out: Vec<String> = g
+            .dependents_of(sid, a1(cell))
+            .map(|(s, c)| format!("{}!{}", wb.sheet(s).unwrap().name, c.to_a1()))
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn reader_index_answers_like_the_edge_scan() {
+        let mut wb = wb2();
+        let sheet = wb.sheet_mut(SheetId(0)).unwrap();
+        for (cell, formula) in [
+            ("C1", "A1+A2"),
+            ("C2", "SUM(A1:B3)"),
+            ("C3", "SUM(A10:A90)"),
+            ("C4", "SUM(A15:A17)"),
+            ("C5", "SUM(A1:A300)"),
+            ("C6", "SUM(A:A)"),
+            ("C7", "SUM(2:3)"),
+            ("C8", "A1+A1"),
+            ("C9", "Data!A1"),
+            ("D1", "SUM(A250:B300)"),
+            ("D2", "SUM(A1:A256)"),
+            ("D3", "SUM(A1:A257)"),
+            ("D4", "SUM($A$33:$B$48)"),
+        ] {
+            sheet.set_cell(a1(cell), formula_cell(formula));
+        }
+        wb.sheet_mut(SheetId(1))
+            .unwrap()
+            .set_cell(a1("B1"), formula_cell("Sheet1!A16+Sheet1!A2:B2"));
+        let g = DepGraph::build(&wb);
+        for sheet in [SheetId(0), SheetId(1)] {
+            let index = g.reader_index(sheet);
+            for row in 0..320 {
+                for col in 0..4 {
+                    let cell = CellRef::new(row, col);
+                    let mut scanned: Vec<_> = g.dependents_of(sheet, cell).collect();
+                    let mut indexed = Vec::new();
+                    index.dependents_of(cell, &mut indexed);
+                    scanned.sort_by_key(|(s, c)| (*s, c.row, c.col));
+                    indexed.sort_by_key(|(s, c)| (*s, c.row, c.col));
+                    assert_eq!(indexed, scanned, "{sheet:?} {}", cell.to_a1());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rename_reresolves_references_and_reports_the_ones_that_moved() {
+        let mut wb = wb2();
+        let data = wb.sheet_mut(SheetId(1)).unwrap();
+        data.set_cell(a1("A1"), formula_cell("Sheet1!A1+1"));
+        data.set_cell(a1("B1"), formula_cell("Other!A1"));
+        let mut g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1", &wb), vec!["Data!A1"]);
+        wb.sheets[0].name = "Other".into();
+        wb.sheet_mut(SheetId(1))
+            .unwrap()
+            .set_cell(a1("A1"), formula_cell("Other!A1+1"));
+        let rewritten = [(SheetId(1), a1("A1"))];
+        assert_eq!(
+            g.rename_sheets(&wb, &rewritten),
+            vec![(SheetId(1), a1("B1"))]
+        );
+        assert_eq!(deps_a1(&g, "Other", "A1", &wb), vec!["Data!A1", "Data!B1"]);
+    }
+
+    #[test]
+    fn rename_keeps_the_parsed_bodies_of_live_defined_names() {
+        let mut wb = wb2();
+        wb.defined_names.push(DefinedName {
+            name: "Tick".into(),
+            formula: "TODAY()".into(),
+            local_sheet: None,
+            hidden: false,
+        });
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("A1"), formula_cell("Tick"));
+        let mut g = DepGraph::build(&wb);
+        let body = Arc::downgrade(&g.asts.lock().unwrap()["TODAY()"]);
+        wb.sheets[1].name = "Other".into();
+        g.rename_sheets(&wb, &[]);
+        let cached = g.asts.lock().unwrap().get("TODAY()").cloned();
+        let body = body.upgrade().expect("the body's ast was dropped");
+        assert!(cached.is_some_and(|cached| Arc::ptr_eq(&cached, &body)));
+    }
+
+    #[test]
+    fn single_cell_dependents() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("B1"), formula_cell("A1+1"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1", &wb), vec!["Sheet1!B1"]);
+        assert!(deps_a1(&g, "Sheet1", "Z9", &wb).is_empty());
+    }
+
+    #[test]
+    fn range_dependents_without_materializing_edges() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("C1"), formula_cell("SUM(A1:A1000)"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A5", &wb), vec!["Sheet1!C1"]);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1000", &wb), vec!["Sheet1!C1"]);
+        assert!(deps_a1(&g, "Sheet1", "A1001", &wb).is_empty());
+        assert_eq!(
+            g.deps
+                .get(&NodeKey::new(SheetId(0), a1("C1")))
+                .unwrap()
+                .edges
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn whole_column_dependencies_cover_future_rows() {
+        let mut wb = wb2();
+        wb.sheets[0].set_cell(a1("A1"), formula_cell("VLOOKUP(2,Data!$S:$V,4,FALSE)"));
+        let graph = DepGraph::build(&wb);
+        for cell in ["S1", "T999999", "V1048576"] {
+            assert_eq!(deps_a1(&graph, "Data", cell, &wb), vec!["Sheet1!A1"]);
+        }
+        assert!(deps_a1(&graph, "Data", "W1", &wb).is_empty());
+        assert!(deps_a1(&graph, "Sheet1", "S1", &wb).is_empty());
+        assert_eq!(graph.by_sheet[&SheetId(1)].len(), 1);
+        assert_eq!(wb.sheets[1].iter_cells().count(), 0);
+    }
+
+    #[test]
+    fn cross_sheet_edges_resolve_and_unknown_sheets_drop() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(1))
+            .unwrap()
+            .set_cell(a1("A1"), formula_cell("Sheet1!A1 + Ghost!B2"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1", &wb), vec!["Data!A1"]);
+        assert_eq!(
+            g.deps
+                .get(&NodeKey::new(SheetId(1), a1("A1")))
+                .unwrap()
+                .edges
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn set_formula_swaps_edges() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("C1"), formula_cell("A1"));
+        let mut g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1", &wb), vec!["Sheet1!C1"]);
+
+        g.set_formula(SheetId(0), a1("C1"), Some("B1"));
+        assert!(deps_a1(&g, "Sheet1", "A1", &wb).is_empty());
+        assert_eq!(deps_a1(&g, "Sheet1", "B1", &wb), vec!["Sheet1!C1"]);
+
+        g.set_formula(SheetId(0), a1("C1"), None);
+        assert!(deps_a1(&g, "Sheet1", "B1", &wb).is_empty());
+        assert!(!g.is_formula(SheetId(0), a1("C1")));
+    }
+
+    #[test]
+    fn volatile_detection() {
+        let mut wb = wb2();
+        let s = wb.sheet_mut(SheetId(0)).unwrap();
+        s.set_cell(a1("A1"), formula_cell("NOW()"));
+        s.set_cell(a1("A2"), formula_cell("A1 + TODAY()"));
+        s.set_cell(a1("A3"), formula_cell("A1 + 1"));
+        let g = DepGraph::build(&wb);
+        let mut vol: Vec<String> = g.volatile_cells().map(|(_, c)| c.to_a1()).collect();
+        vol.sort();
+        assert_eq!(vol, vec!["A1", "A2"]);
+    }
+
+    /// a join whose span the source can bound is an ordinary edge; one whose
+    /// end moves with a value has to recompute every pass instead.
+    #[test]
+    fn range_join_is_an_edge_when_its_span_is_static() {
+        let mut wb = wb2();
+        let s = wb.sheet_mut(SheetId(0)).unwrap();
+        s.set_cell(a1("E1"), formula_cell("SUM(A1:INDEX(A1:A9,3))"));
+        s.set_cell(a1("E2"), formula_cell("SUM(B4:OFFSET(B4,0,C1))"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A5", &wb), vec!["Sheet1!E1"]);
+        let vol: Vec<String> = g.volatile_cells().map(|(_, c)| c.to_a1()).collect();
+        assert_eq!(vol, vec!["E2"]);
+    }
+
+    #[test]
+    fn static_offset_target_is_an_edge_and_not_volatile() {
+        let mut wb = wb2();
+        let s = wb.sheet_mut(SheetId(0)).unwrap();
+        s.set_cell(a1("C1"), formula_cell("OFFSET($A$1, 0, 1)"));
+        s.set_cell(a1("C2"), formula_cell("SUM(OFFSET(A1, 1, 0, 3, 1))"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "B1", &wb), vec!["Sheet1!C1"]);
+        assert_eq!(deps_a1(&g, "Sheet1", "A3", &wb), vec!["Sheet1!C2"]);
+        assert!(g.volatile_cells().next().is_none());
+    }
+
+    #[test]
+    fn only_a_computed_offset_is_volatile() {
+        let mut wb = wb2();
+        let s = wb.sheet_mut(SheetId(0)).unwrap();
+        s.set_cell(a1("C1"), formula_cell("OFFSET($A$1, B1, 0)"));
+        s.set_cell(a1("C2"), formula_cell("OFFSET($A$1, 0, 1)"));
+        s.set_cell(a1("C3"), formula_cell("OFFSET($A$1, -1, 0)"));
+        let g = DepGraph::build(&wb);
+        let vol: Vec<String> = g.volatile_cells().map(|(_, c)| c.to_a1()).collect();
+        assert_eq!(vol, vec!["C1"]);
+    }
+
+    #[test]
+    fn anchored_refs_normalize_to_same_node() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("B1"), formula_cell("$A$1 + 1"));
+        let g = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&g, "Sheet1", "A1", &wb), vec!["Sheet1!B1"]);
+    }
+
+    #[test]
+    fn resolved_sheet_aliases_deduplicate() {
+        let mut wb = wb2();
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("C1"), formula_cell("A1+$A$1+sheet1!A1"));
+        let graph = DepGraph::build(&wb);
+        assert_eq!(
+            graph
+                .deps
+                .get(&NodeKey::new(SheetId(0), a1("C1")))
+                .unwrap()
+                .edges
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn defined_name_edges_and_volatility_are_expanded() {
+        let mut wb = wb2();
+        wb.defined_names.extend([
+            DefinedName {
+                name: "Inputs".into(),
+                formula: "Data!A1:A3".into(),
+                local_sheet: None,
+                hidden: false,
+            },
+            DefinedName {
+                name: "Clock".into(),
+                formula: "NOW()".into(),
+                local_sheet: None,
+                hidden: false,
+            },
+        ]);
+        let sheet = wb.sheet_mut(SheetId(0)).unwrap();
+        sheet.set_cell(a1("B1"), formula_cell("SUM(Inputs)"));
+        sheet.set_cell(a1("B2"), formula_cell("Clock"));
+
+        let graph = DepGraph::build(&wb);
+        assert_eq!(deps_a1(&graph, "Data", "A2", &wb), vec!["Sheet1!B1"]);
+        assert_eq!(
+            graph.volatile_cells().collect::<Vec<_>>(),
+            vec![(SheetId(0), a1("B2"))]
+        );
+    }
+
+    #[test]
+    fn deep_defined_name_chain_is_expanded_iteratively() {
+        const NAME_COUNT: usize = 100_000;
+
+        let mut wb = wb2();
+        wb.defined_names.reserve(NAME_COUNT);
+        for index in 0..NAME_COUNT {
+            wb.defined_names.push(DefinedName {
+                name: format!("Chain_{index}"),
+                formula: if index + 1 == NAME_COUNT {
+                    "Data!A1".into()
+                } else {
+                    format!("Chain_{}", index + 1)
+                },
+                local_sheet: None,
+                hidden: false,
+            });
+        }
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("B1"), formula_cell("Chain_0"));
+
+        let graph = DepGraph::build(&wb);
+
+        assert_eq!(deps_a1(&graph, "Data", "A1", &wb), vec!["Sheet1!B1"]);
+        assert!(graph.volatile_cells().next().is_none());
+    }
+
+    #[test]
+    fn defined_name_cycles_terminate() {
+        let mut wb = wb2();
+        wb.defined_names.extend([
+            DefinedName {
+                name: "First".into(),
+                formula: "Second".into(),
+                local_sheet: None,
+                hidden: false,
+            },
+            DefinedName {
+                name: "Second".into(),
+                formula: "First".into(),
+                local_sheet: None,
+                hidden: false,
+            },
+        ]);
+        wb.sheet_mut(SheetId(0))
+            .unwrap()
+            .set_cell(a1("B1"), formula_cell("First"));
+
+        let graph = DepGraph::build(&wb);
+
+        assert!(
+            graph.deps[&NodeKey::new(SheetId(0), a1("B1"))]
+                .edges
+                .is_empty()
+        );
+        assert!(graph.volatile_cells().next().is_none());
+    }
+}

@@ -12,6 +12,8 @@ encoding_rs.workspace = true
 excel-editor = { path = "../crates/excel-editor" }
 excel-reader = { path = "../crates/excel-reader" }
 excel-writer = { path = "../crates/excel-writer" }
+betteroffice-xlsx = { version = "0.5.1", default-features = false }
+xlsx_calc = { version = "0.5.1", default-features = false, package = "betteroffice-xlsx-calc" }
 ooxml-patch = { path = "../crates/ooxml-patch" }
 rayon.workspace = true
 roxmltree.workspace = true

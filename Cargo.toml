@@ -7,6 +7,11 @@ members = [
     "crates/ooxml-patch",
     "pytools-core",
 ]
+# vendor 修改版不作为成员（依赖图独立），仅通过 [patch.crates-io] 生效。
+exclude = [
+    "vendor/betteroffice-xlsx-model",
+    "vendor/betteroffice-xlsx-calc",
+]
 
 [workspace.package]
 edition = "2021"
@@ -33,3 +38,9 @@ umya-spreadsheet = "=3.1.1"
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 zip = "6"
 
+
+# vendor 修改版 betteroffice 计算引擎（见 vendor/VENDOR_NOTES.md）：
+# 修复 used_range 被纯样式空格撑大 + 重算预算上限可配置。
+[patch.crates-io]
+betteroffice-xlsx-model = { path = "vendor/betteroffice-xlsx-model" }
+betteroffice-xlsx-calc = { path = "vendor/betteroffice-xlsx-calc" }
