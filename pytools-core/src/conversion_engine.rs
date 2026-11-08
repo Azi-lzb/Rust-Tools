@@ -874,6 +874,12 @@ impl ConversionRuntime {
             .collect::<Vec<_>>();
         let (copied, dependency_copy_engine) =
             copy_template_regions(template, source_copy, &copy_requests)?;
+        // shared formula 的 ref 起点归一必须发生在**任何引擎打开该副本之前**，
+        // 且与路由无关：Excel/COM/LibreOffice 打开保存都会把 ref 起点归一到
+        // 主格，而 betteroffice 不重写公式文本。若只修 COM 分支，两条路由的
+        // 副本口径就不一致，公式文本比对会报"重算改变公式"的假阳性。
+        // 该修复也顺带处理表名引号与矛盾冻结窗格，失败不阻断计算。
+        ooxml_patch::repair_excel_com_open_issues(source_copy);
         Ok(PreparedValidationCopy {
             copied_formula_cells: copied.cells_with_formula,
             copied_template_sheets: copied.sheets_copied,
@@ -1013,13 +1019,9 @@ impl ConversionRuntime {
         };
         #[cfg(windows)]
         {
-            // Excel 会拒绝含全角括号表名裸引用/矛盾冻结窗格的工作簿；WPS 宽容。
-            // 只修一次性工作副本，且仅在 COM 走 Excel 时修（与随包 worker 的
-            // PYTOOLS_COM_PREFER_WPS 门控同一口径）；修复失败不阻断，错误原因
-            // 随 Err 上抛由统一运行日志记录。
-            if !com_prefers_wps() {
-                ooxml_patch::repair_excel_com_open_issues(source_copy);
-            }
+            // 表名引号/冻结窗格/shared formula ref 的修复已在
+            // prepare_named_validation_copy 阶段对工作副本统一做过（路由无关），
+            // 这里不再重复。
             if self.pywin32.is_none() {
                 self.pywin32 = Some(PythonExcelWorker::start()?);
             }

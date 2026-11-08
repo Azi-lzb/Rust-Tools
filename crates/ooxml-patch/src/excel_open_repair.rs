@@ -497,6 +497,10 @@ pub struct ExcelOpenRepairReport {
     /// 是否已彻底断开外链定义（清 externalReferences / 关系 / Content_Types / 部件）。
     pub external_links_dropped: bool,
     pub external_links_removed: u64,
+    /// shared formula 的 `ref` 起点与主格地址不一致、已按 Excel 口径归一的个数。
+    /// 未归一会让 calamine 按 ref 起点换算从属格相对引用（整体错行），
+    /// 与引擎重存后的产物比对时产生"公式文本改变"的假阳性。
+    pub shared_formula_ref_fixed: u64,
     pub reason: String,
 }
 
@@ -591,6 +595,95 @@ fn escape_formula_content(text: &str) -> String {
     escaped
 }
 
+/// shared formula 的 `ref` 起点归一。
+///
+/// Excel / COM / LibreOffice 打开保存时会把 `t="shared" ref="C13:C48" si="7"`
+/// 的主格（实际在 C14）的 ref 改写为 `C14:C48`——即起点必须是主格自身地址。
+/// 模板里可能留下 `ref` 起点早于主格的写法；若原样传给计算引擎，
+/// 引擎会归一、源副本不会，两边用同一 reader（calamine 按 ref 起点换算从属格
+/// 相对引用）就会整体错行，比对时报"公式文本改变"的假阳性。
+///
+/// 本函数只改 `ref` 属性的起点，公式体与从属格一律不动，语义与 Excel 一致。
+/// 返回 (新 XML, 归一计数)。
+fn normalize_shared_formula_refs(text: &str) -> (String, u64) {
+    // 快速排除：没有 shared formula 就不必解析。
+    if !text.contains("t=\"shared\"") && !text.contains("t='shared'") {
+        return (text.to_owned(), 0);
+    }
+    let Ok(document) = Document::parse(text) else {
+        return (text.to_owned(), 0);
+    };
+    let mut edits: Vec<(std::ops::Range<usize>, String)> = Vec::new();
+    let mut fixed = 0u64;
+    for cell in document.descendants().filter(|node| node.is_element()) {
+        if cell.tag_name().name() != "c" {
+            continue;
+        }
+        let Some(cell_ref) = cell.attribute("r") else {
+            continue;
+        };
+        // 主格内部必须恰好有一个带 ref 的 shared formula。
+        let mut shared: Option<roxmltree::Node<'_, '_>> = None;
+        for child in cell.children().filter(|node| node.is_element()) {
+            if child.tag_name().name() != "f" {
+                continue;
+            }
+            let is_shared = child
+                .attribute("t")
+                .is_some_and(|value| value.eq_ignore_ascii_case("shared"));
+            if is_shared && child.attribute("ref").is_some() {
+                shared = Some(child);
+                break;
+            }
+        }
+        let Some(formula) = shared else {
+            continue;
+        };
+        let Some(reference) = formula.attribute("ref") else {
+            continue;
+        };
+        let Some((start, end)) = reference.split_once(':') else {
+            continue;
+        };
+        if start.eq_ignore_ascii_case(cell_ref) {
+            continue; // 已经是 Excel 口径
+        }
+        let normalized = format!("{cell_ref}:{end}");
+        // 定位 ref="..." 属性值在原文中的字节范围，只替换值本身。
+        let formula_range = formula.range();
+        let formula_source = &text[formula_range.clone()];
+        let Some(value_offset) = find_attribute_value_offset(formula_source, "ref", reference)
+        else {
+            continue;
+        };
+        let start_byte = formula_range.start + value_offset;
+        let end_byte = start_byte + reference.len();
+        edits.push((start_byte..end_byte, normalized));
+        fixed += 1;
+    }
+    if edits.is_empty() {
+        return (text.to_owned(), 0);
+    }
+    edits.sort_by_key(|(range, _)| range.start);
+    let mut rewritten = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    for (range, replacement) in edits {
+        rewritten.push_str(&text[cursor..range.start]);
+        rewritten.push_str(&replacement);
+        cursor = range.end;
+    }
+    rewritten.push_str(&text[cursor..]);
+    (rewritten, fixed)
+}
+
+/// 在一个元素（其源文本以 `<f` 开头）里定位 `name="value"` 中 value 的字节偏移。
+fn find_attribute_value_offset(element_text: &str, name: &str, value: &str) -> Option<usize> {
+    let needle = format!("{name}=\"");
+    let attribute_start = element_text.find(&needle)? + needle.len();
+    let candidate = &element_text[attribute_start..attribute_start + value.len()];
+    (candidate == value).then_some(attribute_start)
+}
+
 /// 廉价预检：无裸引用嫌疑且无矛盾窗格的文件不重写。
 fn needs_repair(
     parts: &[(String, Vec<u8>)],
@@ -622,6 +715,14 @@ fn needs_repair(
         if name.starts_with("xl/worksheets/") && text.contains("<pane ") {
             let (_, fixed) = fix_frozen_panes(text);
             if fixed > 0 {
+                return true;
+            }
+        }
+        // shared formula 的 ref 起点与主格不一致 → 需要归一，否则引擎重存后
+        // 两侧口径不同，公式文本比对会假阳性。
+        if name.starts_with("xl/worksheets/") {
+            let (_, normalized) = normalize_shared_formula_refs(text);
+            if normalized > 0 {
                 return true;
             }
         }
@@ -1059,7 +1160,10 @@ fn repair_inner(path: &Path, report: &mut ExcelOpenRepairReport) -> Result<PathB
             }
             let (pane_text, pane_fixed) = fix_frozen_panes(&rewritten);
             report.pane_fixed += pane_fixed;
-            writer.write_all(pane_text.as_bytes())?;
+            // shared formula 的 ref 起点归一（与 Excel 打开保存口径一致）。
+            let (shared_text, shared_fixed) = normalize_shared_formula_refs(&pane_text);
+            report.shared_formula_ref_fixed += shared_fixed;
+            writer.write_all(shared_text.as_bytes())?;
         }
         Ok(())
     })();
@@ -1137,6 +1241,65 @@ fn quote_defined_names(text: &str, special: &[String]) -> (String, u64) {
 mod excel_open_repair_tests {
     use super::*;
     use std::io::Write as _;
+
+    // ── shared formula ref 归一（Excel 打开保存口径） ──
+
+    #[test]
+    fn shared_formula_ref_is_normalized_to_its_master_cell() {
+        // ref 从 C13 开始，但主格实际在 C14：Excel 保存会写成 C14:C48。
+        let xml = r#"<worksheet><sheetData><row r="14"><c r="C14"><f t="shared" ref="C13:C48" si="7">IF($D14&gt;0,1,0)</f><v/></c></row><row r="15"><c r="C15"><f t="shared" si="7"/><v/></c></row></sheetData></worksheet>"#;
+        let (out, fixed) = normalize_shared_formula_refs(xml);
+        assert_eq!(fixed, 1, "one master needed normalization");
+        assert!(
+            out.contains(r#"ref="C14:C48""#),
+            "ref start follows the master cell: {out}"
+        );
+        assert!(!out.contains(r#"ref="C13:C48""#));
+        // 公式体与从属格不动
+        assert!(
+            out.contains("IF($D14&gt;0,1,0)"),
+            "formula body untouched: {out}"
+        );
+        assert!(
+            out.contains(r#"<c r="C15"><f t="shared" si="7"/>"#),
+            "dependent cell untouched"
+        );
+        // 仍然可解析
+        roxmltree::Document::parse(&out).expect("normalized worksheet parses");
+    }
+
+    #[test]
+    fn shared_formula_ref_already_correct_is_left_alone() {
+        let xml = r#"<worksheet><sheetData><row r="14"><c r="C14"><f t="shared" ref="C14:C48" si="7">SUM(A1:A2)</f><v/></c></row></sheetData></worksheet>"#;
+        let (out, fixed) = normalize_shared_formula_refs(xml);
+        assert_eq!(fixed, 0, "already canonical: nothing to do");
+        assert_eq!(out, xml, "byte-identical when no normalization is needed");
+    }
+
+    #[test]
+    fn shared_formula_ref_handles_multiple_sheets_and_mixed_cases() {
+        let xml = r#"<worksheet><sheetData><row r="3"><c r="B3"><f t="shared" ref="B1:B9" si="1">X</f></c><c r="D3"><f t="shared" ref="D3:D9" si="2">Y</f></c></row><row r="5"><c r="E5"><f t="shared" ref="E1:E9" si="3">Z</f></c></row></sheetData></worksheet>"#;
+        let (out, fixed) = normalize_shared_formula_refs(xml);
+        assert_eq!(fixed, 2, "B3 and E5 normalized; D3 already correct");
+        assert!(out.contains(r#"ref="B3:B9""#));
+        assert!(out.contains(r#"ref="D3:D9""#));
+        assert!(out.contains(r#"ref="E5:E9""#));
+        assert!(!out.contains(r#"ref="B1:B9""#) && !out.contains(r#"ref="E1:E9""#));
+    }
+
+    #[test]
+    fn needs_repair_notices_a_misaligned_shared_ref() {
+        // 只有这一处问题：needs_repair 必须报 true，否则修复会被短路跳过。
+        let worksheet = r#"<worksheet><sheetData><row r="14"><c r="C14"><f t="shared" ref="C13:C48" si="7">1</f><v/></c></row></sheetData></worksheet>"#;
+        let parts = vec![(
+            "xl/worksheets/sheet1.xml".to_owned(),
+            worksheet.as_bytes().to_vec(),
+        )];
+        assert!(
+            needs_repair(&parts, &[], &["SomeSheet".to_owned()]),
+            "a misaligned shared ref alone must request repair"
+        );
+    }
 
     const CONTENT_TYPES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/></Types>"#;
     const ROOT_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
