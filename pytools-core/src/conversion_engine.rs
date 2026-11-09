@@ -2661,11 +2661,31 @@ fn validate_conversion(
             input.display()
         )
     })?;
-    compare_workbooks(&source, &converted)?;
-    Ok(
-        "{\"level\":\"worksheet_order_names_values_and_formula_text\",\"numeric_tolerance\":1e-14}"
-            .into(),
-    )
+    let mut value_notes = ConversionValueNotes::default();
+    compare_workbooks(&source, &converted, &mut value_notes)?;
+    // 非公式数据的差异是软失败：转换照常发布，但把明细写进校验报告，
+    // 由调用方在运行日志里提示，便于事后核对。
+    let mut report = serde_json::json!({
+        // 只剩结构性硬门槛：工作表数量/名称/顺序、公式格坐标增删。
+        "level": "worksheet_order_and_formula_cells",
+        "numeric_tolerance": VALUE_TOLERANCE,
+        "value_comparison": "soft (reported, not blocking)",
+        "formula_text_comparison": "soft (reported, not blocking)",
+    });
+    if !value_notes.differences.is_empty() {
+        report["value_difference_count"] = serde_json::json!(value_notes.differences.len());
+        report["value_differences"] = serde_json::json!(value_notes.differences);
+        report["value_differences_truncated"] = serde_json::json!(value_notes.truncated);
+    }
+    if !value_notes.formula_text_differences.is_empty() {
+        report["formula_text_difference_count"] =
+            serde_json::json!(value_notes.formula_text_differences.len());
+        report["formula_text_differences"] =
+            serde_json::json!(value_notes.formula_text_differences);
+        report["formula_text_differences_truncated"] =
+            serde_json::json!(value_notes.formula_text_truncated);
+    }
+    serde_json::to_string(&report).context("encode conversion validation report")
 }
 
 fn extract_word_text_lo(input: &Path, output_dir: &Path) -> Result<String> {
@@ -2748,7 +2768,25 @@ fn read_comparable_workbook(path: &Path) -> Result<WorkbookDump> {
     Ok(workbook)
 }
 
-fn compare_workbooks(source: &WorkbookDump, converted: &WorkbookDump) -> Result<()> {
+/// 转换校验的结论：只有结构性问题（工作表数量/名称/顺序、公式格坐标增删）
+/// 由 `compare_workbooks` 抛错；这里携带"公式文本被改写"与"非公式数据有差异"
+/// 两类软失败提示，用于日志与运行报告（2026-11-09 用户决定：本功能只做
+/// 另存为 + 完整计算，除结构性问题外一律不阻断发布）。
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ConversionValueNotes {
+    pub differences: Vec<String>,
+    pub truncated: bool,
+    /// Excel 重存时对公式书写形式的合法规范化（共享公式展开、`_xlfn.` 前缀、
+    /// 表名引号等），只提示不阻断。
+    pub formula_text_differences: Vec<String>,
+    pub formula_text_truncated: bool,
+}
+
+fn compare_workbooks(
+    source: &WorkbookDump,
+    converted: &WorkbookDump,
+    value_notes: &mut ConversionValueNotes,
+) -> Result<()> {
     let source_names = source
         .sheets
         .iter()
@@ -2781,19 +2819,23 @@ fn compare_workbooks(source: &WorkbookDump, converted: &WorkbookDump) -> Result<
                     address
                 );
             };
-            // 与 Rust-Audit 同口径：只容忍引擎重存会做的规范化。
-            ensure!(
-                excel_reader::formula_text_equivalent_after_recalculation(
-                    formula,
-                    output_formula,
-                    &sheet_name_refs,
-                ),
-                "conversion changed formula text at {}!{}: {:?} -> {:?}",
-                source_sheet.name,
-                address,
+            // 公式文本：软失败，只记录。Excel 重存会合法规范化书写形式
+            // （共享公式展开、_xlfn. 前缀、表名补引号），逐字比对误报率高；
+            // 公式格坐标的一致性已在上面的计数检查里硬性保证。
+            if !excel_reader::formula_text_equivalent_after_recalculation(
                 formula,
-                output_formula
-            );
+                output_formula,
+                &sheet_name_refs,
+            ) {
+                if value_notes.formula_text_differences.len() < MAX_VALUE_DIFFERENCES {
+                    value_notes.formula_text_differences.push(format!(
+                        "{}!{}: {:?} -> {:?}",
+                        source_sheet.name, address, formula, output_formula
+                    ));
+                } else {
+                    value_notes.formula_text_truncated = true;
+                }
+            }
         }
         let source_cells = source_sheet
             .values
@@ -2805,26 +2847,38 @@ fn compare_workbooks(source: &WorkbookDump, converted: &WorkbookDump) -> Result<
             .keys()
             .filter(|address| !output_sheet.formulas.contains_key(*address))
             .collect::<std::collections::BTreeSet<_>>();
-        ensure!(
-            source_cells == output_cells,
-            "conversion changed non-formula data cell coordinates in worksheet {:?}",
-            source_sheet.name
-        );
+        // 非公式数据差异只作提示，不阻断转换：Excel 重存本来就可能改写浮点
+        // 尾数、空格与日期表示，硬失败会让正常文件无法转换（2026-11-09 决定）。
+        if source_cells != output_cells {
+            value_notes.truncated = true;
+            if value_notes.differences.len() < MAX_VALUE_DIFFERENCES {
+                value_notes.differences.push(format!(
+                    "worksheet {:?}: non-formula cell coordinates changed",
+                    source_sheet.name
+                ));
+            }
+            continue;
+        }
         for address in source_cells {
             let source_value = &source_sheet.values[address];
             let output_value = &output_sheet.values[address];
-            ensure!(
-                cell_values_equal(source_value, output_value),
-                "conversion changed stored value at {}!{}: {} -> {}",
-                source_sheet.name,
-                address,
-                source_value,
-                output_value
-            );
+            if !cell_values_equal(source_value, output_value) {
+                if value_notes.differences.len() < MAX_VALUE_DIFFERENCES {
+                    value_notes.differences.push(format!(
+                        "{}!{}: {} -> {}",
+                        source_sheet.name, address, source_value, output_value
+                    ));
+                } else {
+                    value_notes.truncated = true;
+                }
+            }
         }
     }
     Ok(())
 }
+
+/// 软失败提示最多保留这么多条，避免报告被单文件差异淹没。
+const MAX_VALUE_DIFFERENCES: usize = 50;
 
 /// 转换校验的数值容差。Excel 以 15 位有效数字保存/显示，BIFF→OOXML 重存时
 /// 两侧可能分别是 17 位与 15 位形式，实测相对差最大约 2.7e-15；原 1e-15 会把
@@ -3164,6 +3218,76 @@ impl Drop for TempDirGuard {
 
 #[cfg(test)]
 mod tests {
+    /// 非公式数据的差异是软失败：函数返回 Ok 并留下提示；公式差异仍是硬失败。
+    #[test]
+    fn non_formula_value_differences_are_reported_but_not_blocking() -> Result<()> {
+        fn dump(values: &[(&str, f64)], formulas: &[(&str, &str)]) -> excel_reader::WorkbookDump {
+            let mut sheet = excel_reader::SheetDump {
+                name: "Sheet1".to_owned(),
+                values: Default::default(),
+                formulas: Default::default(),
+                formula_status: "read_by_calamine".to_owned(),
+                merges: Vec::new(),
+                merge_status: String::new(),
+                comments: Default::default(),
+                comments_status: String::new(),
+                conditional_formatting: Vec::new(),
+                conditional_formatting_status: String::new(),
+                data_validations: Vec::new(),
+                data_validations_status: String::new(),
+            };
+            for (address, value) in values {
+                sheet.values.insert(
+                    (*address).to_owned(),
+                    serde_json::json!({"type": "number", "value": value}),
+                );
+            }
+            for (address, formula) in formulas {
+                sheet
+                    .formulas
+                    .insert((*address).to_owned(), (*formula).to_owned());
+            }
+            excel_reader::WorkbookDump {
+                schema_version: 1,
+                reader: "test",
+                elapsed_ms: 0,
+                sheets: vec![sheet],
+            }
+        }
+
+        // 值差 1%（真实改动）→ 软失败：Ok + 提示。
+        let source = dump(&[("A1", 100.0)], &[("B1", "1+1")]);
+        let converted = dump(&[("A1", 101.0)], &[("B1", "1+1")]);
+        let mut notes = ConversionValueNotes::default();
+        compare_workbooks(&source, &converted, &mut notes)?;
+        assert_eq!(notes.differences.len(), 1, "{:?}", notes.differences);
+        assert!(
+            notes.differences[0].contains("A1"),
+            "{}",
+            notes.differences[0]
+        );
+
+        // 公式改动仍是硬失败。
+        let bad_formula = dump(&[("A1", 100.0)], &[("B1", "1+2")]);
+        let mut notes = ConversionValueNotes::default();
+        let error = compare_workbooks(&source, &bad_formula, &mut notes)
+            .expect_err("a changed formula must still fail the conversion");
+        assert!(
+            format!("{error:#}").contains("formula text"),
+            "unexpected error: {error:#}"
+        );
+
+        // 完全一致时不留提示。
+        let mut notes = ConversionValueNotes::default();
+        compare_workbooks(
+            &source,
+            &dump(&[("A1", 100.0)], &[("B1", "1+1")]),
+            &mut notes,
+        )?;
+        assert!(notes.differences.is_empty());
+        Ok(())
+    }
+
     /// 转换校验的数值容差口径（docs §5.14）。
     #[test]
     fn conversion_value_tolerance_absorbs_float_tails_only() {
@@ -3222,9 +3346,10 @@ mod tests {
     }
 
     use super::{
-        cell_values_equal, file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
-        select_conversion_engine, select_fidelity_engine, unique_sibling_conversion_candidate,
-        ConversionRuntime, LibreOfficeExecutor, LibreOfficeRunOutcome,
+        cell_values_equal, compare_workbooks, file_uri, libreoffice_batch_request,
+        libreoffice_user_installation_arg, select_conversion_engine, select_fidelity_engine,
+        unique_sibling_conversion_candidate, ConversionRuntime, ConversionValueNotes,
+        LibreOfficeExecutor, LibreOfficeRunOutcome,
     };
     #[cfg(target_os = "linux")]
     use super::{

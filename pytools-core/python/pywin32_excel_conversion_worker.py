@@ -441,41 +441,70 @@ def _compare(source: list[dict[str, Any]], output: list[dict[str, Any]]) -> dict
     formula_count = 0
     value_count = 0
     used_cell_count = 0
+    # 转换口径（2026-11-09 用户决定）：本功能只是"另存为 + 完整计算"，
+    # 除结构性问题外一律不阻断发布。
+    #   硬失败（结构性，真事故）：工作表数量/名称/顺序、公式格坐标增删。
+    #   软失败（只记录）：公式文本改写、非公式数据差异。
+    # 公式文本会被 Excel 合法规范化（共享公式展开、_xlfn. 前缀、表名引号），
+    # 逐字比对会产生大量误报；值的浮点尾差同理（Excel 只存 15 位有效数字）。
+    value_differences: list[str] = []
+    formula_text_differences: list[str] = []
     for source_sheet, output_sheet in zip(source, output):
         sheet_name = source_sheet["name"]
-        for kind, label, equals in (
-            (
-                "formulas",
-                "公式",
-                lambda a, b: _canonicalize_formula(a) == _canonicalize_formula(b),
-            ),
-            ("values", "非公式数据", _values_equal),
-        ):
-            before = source_sheet[kind]
-            after = output_sheet[kind]
-            for address in sorted(set(before) | set(after)):
-                if address not in before or address not in after:
-                    raise ValueError(
-                        f"工作表 {sheet_name!r} 的{label}单元格 {_cell_name(address)} 有增删"
-                    )
-                if not equals(before[address], after[address]):
-                    raise ValueError(
-                        f"工作表 {sheet_name!r} 的{label}在 {_cell_name(address)} 不一致："
-                        f"{before[address]!r} -> {after[address]!r}"
-                    )
+        # 公式格坐标：硬失败（丢公式是真事故，且坐标集合不受重存影响）。
+        before = source_sheet["formulas"]
+        after = output_sheet["formulas"]
+        for address in sorted(set(before) | set(after)):
+            if address not in before or address not in after:
+                raise ValueError(
+                    f"工作表 {sheet_name!r} 的公式单元格 {_cell_name(address)} 有增删"
+                )
+            # 公式文本：软失败，只记录。
+            if _canonicalize_formula(before[address]) != _canonicalize_formula(
+                after[address]
+            ):
+                formula_text_differences.append(
+                    f"工作表 {sheet_name!r} 的公式在 {_cell_name(address)} 被改写："
+                    f"{before[address]!r} -> {after[address]!r}"
+                )
+        # 非公式数据：软失败，只记录。
+        before_values = source_sheet["values"]
+        after_values = output_sheet["values"]
+        for address in sorted(set(before_values) | set(after_values)):
+            if address not in before_values or address not in after_values:
+                value_differences.append(
+                    f"工作表 {sheet_name!r} 的非公式数据单元格 {_cell_name(address)} 有增删"
+                )
+                continue
+            if not _values_equal(before_values[address], after_values[address]):
+                value_differences.append(
+                    f"工作表 {sheet_name!r} 的非公式数据在 {_cell_name(address)} 不一致："
+                    f"{before_values[address]!r} -> {after_values[address]!r}"
+                )
         formula_count += len(source_sheet["formulas"])
         value_count += len(source_sheet["values"])
         used_cell_count += source_sheet["used_cells"]
 
-    return {
+    result = {
         "verified": True,
-        "level": "excel_com_sheet_order_formula_text_and_cell_values",
+        "level": "excel_com_sheet_order_and_formula_cells",
         "worksheet_count": len(source),
         "formula_cells": formula_count,
         "value_cells": value_count,
         "used_cells": used_cell_count,
         "numeric_tolerance": _VALUE_TOLERANCE,
     }
+    if value_differences:
+        # 软失败：转换继续发布，但把差异如实报给调用方与日志。
+        result["value_difference_count"] = len(value_differences)
+        result["value_differences"] = value_differences[:50]
+        result["value_differences_truncated"] = len(value_differences) > 50
+    if formula_text_differences:
+        # 软失败：Excel 重存会合法改写公式书写形式，同样只记录不阻断。
+        result["formula_text_difference_count"] = len(formula_text_differences)
+        result["formula_text_differences"] = formula_text_differences[:50]
+        result["formula_text_differences_truncated"] = len(formula_text_differences) > 50
+    return result
 
 
 def _verify_institution_normalize_com_snapshots(

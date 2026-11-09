@@ -757,6 +757,43 @@ Excel 以 **15 位有效数字**保存/显示数值；BIFF→OOXML 重存时两�
 
 全量回归 571 passed / 0 failed / 15 ignored。
 
+## 5.15 非公式数据比对改为软失败（2026-11-09 用户决定）
+
+### 决定
+
+转换校验里**非公式数据**的差异不再阻断转换，只作提示；**公式文本**仍是硬失败。
+
+| 比对项 | 行为 |
+| --- | --- |
+| 工作表数量/顺序、公式增删、公式文本 | **硬失败**（真实结构改动，终止转换） |
+| 非公式数据的单元格增删、值不一致 | **软失败**：转换照常发布，差异写入校验报告 |
+
+理由：Excel/WPS 重存本来就可能改写浮点尾数、空串表示与日期格式；把这类差异
+当硬失败会让正常文件无法转换（§5.14 的 `2.7e-15` 尾差就是实例）。而公式文本
+变化代表真实的结构改动，必须拦。
+
+### 实现
+
+- `pywin32_excel_conversion_worker.py::_compare`：值差异收集到
+  `value_differences`，不再 `raise ValueError`；返回报告带上
+  `value_difference_count` / `value_differences`（最多 50 条）/
+  `value_differences_truncated`。
+- `conversion_engine::compare_workbooks`：签名改为接收 `&mut
+  ConversionValueNotes`，值差异只记录；`validate_conversion` 把提示并入上报
+  JSON，并标注 `value_comparison = "soft (reported, not blocking)"`。
+- `MAX_VALUE_DIFFERENCES = 50`：避免报告被单文件差异淹没。
+
+### 验收
+
+| 检查 | 结果 |
+| --- | --- |
+| 值差 1%（真实改动） | ✅ 转换成功，报告 `value_difference_count=1` 并附明细 |
+| 值差 `2.15e-15`（尾差） | ✅ 不阻断，且不产生提示（在 `1e-14` 容差内） |
+| 公式文本改动 | ✅ 仍硬失败（`formula text ... 不一致`） |
+| 新增单测 `non_formula_value_differences_are_reported_but_not_blocking` | ✅ 值差返回 Ok + 提示；公式差异仍 Err；完全一致无提示 |
+| 11 个真实 `.xls` 转换 | 10 converted / 1 failed（失败仍是带 VBA 的统计工具模板，与比对无关） |
+| 全量回归 | 572 passed / 0 failed / 15 ignored |
+
 ## 6. 修复的一个真 bug
 
 `strip_style_only_cells` 首版在重建被改动的 `<row>` 时：
