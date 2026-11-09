@@ -656,11 +656,47 @@ Rust 的最短往返表示（最多 17 位）。
 
 1-4 回归：！100 / ！50 / ！90 命中 20 / 11 / 70 条，与基准一致。
 
-### 未验证
+### 已验证（2026-11-09 补充）：betteroffice 在 Linux 可编译、可运行、求值正确
+
+三项此前"未验证"中的一项已完成：
+
+1. **Linux 编译**：`cargo zigbuild --target x86_64-unknown-linux-gnu.2.28`
+   （zig 来自 pip `ziglang` 0.16）在 Windows 侧交叉编译通过，产物 5.3 MB
+   ELF x86-64（glibc 2.28 目标）。
+2. **Linux 运行**：WSL Ubuntu（x86_64，glibc 2.39）直接执行成功——
+   `INDIRECT` 专项测试簿 15 格全部重算，`exhausted=false`，calc 1.7 ms。
+3. **求值正确**：全部 15 格（静态跨表/字面 INDIRECT/拼接构造/单元格间接/
+   整列 INDEX/中文表名/SUM 聚合）与 Excel 基准逐格一致。
+
+结论：**betteroffice 在 Linux 可用**。1-4 Linux 的求值链路可以从 LO 切换到
+betteroffice（与 Windows 同源同行为），LO 保留为格式转换与兜底。
+
+### 附带澄清（2026-11-09 复核 INDIRECT 构造）
+
+`xlsx → LO calculateAll → INDIRECT` 构造专项测试（4 链路同源对拍）：
+
+| 构造 | COM | LO | betteroffice(Win) | betteroffice(Linux/WSL) |
+| --- | --- | --- | --- | --- |
+| 静态跨表 `Data!A2` | ✅ | ✅ | ✅ | ✅ |
+| 字面 `INDIRECT("Data!A2")` | ✅ | ✅ | ✅ | ✅ |
+| 拼接 `INDIRECT("Data"&"!A2")` | ✅ | ✅ | ✅ | ✅ |
+| 单元格间接 `INDIRECT($E$1&"!A2")` | ✅ | ✅ | ✅ | ✅ |
+| 整列 `INDEX(Data!$1:$1048576,…)` | ✅ | ✅ | ✅ | ✅ |
+| 中文表名 `INDIRECT("参照表!B2")` | ✅ | ✅ | ✅ | ✅ |
+| `SUM` 聚合（直引/间接） | ✅ | ✅ | ✅ | ✅ |
+
+**LO 在 xlsx（OOXML 导入）路径下对这些 INDIRECT 构造求值全部正确**——此前的
+`#REF!` 缓存问题**只发生在 BIFF 导入路径**（.xls/.et 源）。含义：
+- 1-4 Linux（工作副本恒为 xlsx）用 LO 计算是安全的；
+- 4-4/4-7 从 BIFF 源转换时才需要 betteroffice 刷缓存（当前实现已如此）。
+
+### 未验证（更新）
 
 - Windows 上未装 LibreOffice，LO 链路的端到端（转换+重算）只在组件层面验证
   （WSL 转换 + Windows 重算），未在单一进程内跑通 `--engine lo`。
 - `betteroffice` 重算失败的回滚分支未构造样本触发。
+- ~~betteroffice Linux 编译运行~~ → 已验证（本节）。
+- 原生 WPS ET（65521）样本仍缺，.et 原生路径未验证。
 
 ## 6. 修复的一个真 bug
 
