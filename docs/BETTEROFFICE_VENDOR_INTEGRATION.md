@@ -502,6 +502,37 @@ BIFF 单表上限 65536 行、OOXML 上限 1048576 行；Excel 的 SaveAs 会把
 - 若用户确认口径为 1，改动量很小：去掉 `ensure_wps_source_format_verified`
   的强校验 + 在 `select_conversion_engine` 加回 et/ett。
 
+### 5.11.6 .et 口径落地（方案 A，2026-11-09）
+
+用户又提供 3 个新建 `.et`（工作簿1、工作簿21、测试测是）＋此前 2 个，共 5 个，
+`Workbook.FileFormat` 全部是 **56（xlExcel8）**。结论：**WPS 2019 专业版通过
+COM 另存 `.et` 时不写 WPS 原生格式（65521），一律写 BIFF 内容。**
+
+因此按"内容决定"落地（方案 A）：
+
+| 源内容 | 处理 |
+| --- | --- |
+| `.et`/`.ett` + 原生 WPS（65521/65522） | 保持原校验（`source_format_verified=true`），Windows COM |
+| `.et`/`.ett` + BIFF（56/8/16） | **放行**，按 `.xls` 同样处理；worker 记 `source_content_kind="biff"` |
+| 其它（如 OOXML 改名成 .et） | 仍拒绝 |
+
+改动四处：
+1. worker 的 ET 校验：`FileFormat < 65521` 时不再直接拒绝，仅当不在
+   `BIFF_FILE_FORMATS={56,8,16}` 时才报错；校验证据新增 `source_content_kind`。
+2. worker 的 `source_format_verified` 改为"仅原生为 true"（BIFF 时 false + kind=biff）。
+3. Rust `ensure_wps_source_format_verified`：原生或 BIFF（且 kind=biff）都通过。
+4. Rust `validate_conversion` 的 et/ett 分支：同样接受 BIFF 证据。
+5. Linux `select_conversion_engine` 加回 `et`/`ett`。
+
+#### 验收
+
+| 检查 | 结果 |
+| --- | --- |
+| 5 个 .et（工作簿1/工作簿21/测试测是/5k01/5k05）CLI 转换 | **5/5 converted** |
+| 产物 Excel COM 可打开 | **5/5**（2/2/1/2/2 表，公式 3/3/11/47/67 全保留） |
+| CLI 产物 vs COM 直接转换（Excel COM 读值逐格） | 公式差 **0**、值差 **0** |
+| 此前"B5=#REF!"差异复核 | **是 openpyxl `data_only` 误判**；Excel COM 读值两侧均为 `'fdaf '`，零差异 |
+
 ### 5.11.3 顺带修的一处健壮性缺陷
 
 `_snapshot()` 原先一次读取 `UsedRange.Formula`，在 154x40 的「基本配置」表上

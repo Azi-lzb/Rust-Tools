@@ -32,6 +32,9 @@ DOCX_FILE_FORMAT = 12
 # before anything is published. WPS reports its own formats in a private range
 # starting at 65521 (ET workbook); any value below that is an Excel container.
 WPS_NATIVE_FILE_FORMAT_MIN = 65521
+# BIFF workbook formats an `.et`/`.ett` file may legitimately carry: xlExcel8
+# (56) and the older BIFF5/95 variants. Content decides the route.
+BIFF_FILE_FORMATS = {56, 8, 16}  # xlExcel8, xlExcel4/5, xlExcel2/3/95
 ET_FILE_FORMAT = 65521
 SPREADSHEET_SUFFIXES = (".xls", ".xlsb", ".xlsm", ".et", ".ett")
 WORD_SUFFIXES = (".doc", ".wps", ".wpt")
@@ -735,18 +738,28 @@ class ConversionSession:
             # .xlsx, and rejects non-Excel or WPS-native containers there.
             source_file_format = int(workbook.FileFormat)
             source_link_sources = _excel_link_sources(workbook)
-            # `.et` / `.ett` are CFB containers: a rename to `.xls` would still
-            # open with a plausible FileFormat, so require a WPS-native format
-            # before publishing anything.
+            # `.et` / `.ett` come in two shapes:
+            #   * WPS-native ET/ETT (FileFormat >= 65521) — the original target,
+            #     still validated strictly before publishing;
+            #   * a BIFF workbook carrying an .et suffix, which is what WPS 2019
+            #     actually writes when the user picks "save as .et" through the
+            #     COM automation layer (measured 2026-11-09 on four samples,
+            #     all FileFormat=56). Content decides: a BIFF payload is
+            #     converted like .xls, and the evidence records that it was not
+            #     native WPS so Rust can gate on it.
             if suffix in WPS_SPREADSHEET_SUFFIXES:
-                stage = "校验源文件确为原生 ET/ETT 工作簿"
+                stage = "校验源文件格式（原生 ET 或 BIFF 内容）"
                 if source_file_format < WPS_NATIVE_FILE_FORMAT_MIN:
-                    raise ValueError(
-                        f"Input has {suffix} extension but the application opened "
-                        f"FileFormat {source_file_format}; expected a WPS-native "
-                        f"FileFormat >= {WPS_NATIVE_FILE_FORMAT_MIN} "
-                        f"(native ET is {ET_FILE_FORMAT})"
-                    )
+                    # Accept BIFF only; anything else (e.g. an OOXML workbook
+                    # renamed to .et) is still refused.
+                    if source_file_format not in BIFF_FILE_FORMATS:
+                        raise ValueError(
+                            f"Input has {suffix} extension but the application opened "
+                            f"FileFormat {source_file_format}; expected a WPS-native "
+                            f"FileFormat >= {WPS_NATIVE_FILE_FORMAT_MIN} "
+                            f"(native ET is {ET_FILE_FORMAT}) or a BIFF workbook "
+                            f"({sorted(BIFF_FILE_FORMATS)})"
+                        )
             stage = "调用 Excel/WPS 完整重算工作簿"
             recalc_method, recalc_errors = _force_recalc(application)
             stage = "读取源工作簿公式和值"
@@ -801,7 +814,18 @@ class ConversionSession:
                 validation["source_file_format"] = source_file_format
             if suffix in WPS_SPREADSHEET_SUFFIXES:
                 validation["source_extension"] = suffix.lstrip(".")
-                validation["source_format_verified"] = True
+                # Native ET/ETT keeps the original meaning of this flag; a BIFF
+                # payload records that it was verified *as BIFF* instead, so
+                # Rust can tell the two apart.
+                validation["source_format_verified"] = (
+                    source_file_format is not None
+                    and source_file_format >= WPS_NATIVE_FILE_FORMAT_MIN
+                )
+                validation["source_content_kind"] = (
+                    "wps_native"
+                    if validation["source_format_verified"]
+                    else "biff"
+                )
             reopened.Close(SaveChanges=False)
             reopened = None
             return {

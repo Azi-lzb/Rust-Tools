@@ -290,11 +290,22 @@ fn ensure_wps_source_format_verified(detail: &str, source_ext: &str) -> Result<(
     let reported_format = validation
         .and_then(|value| value.get("source_file_format"))
         .and_then(serde_json::Value::as_i64);
+    // Content decides. WPS 2019 writes a BIFF payload when the user saves as
+    // .et through COM (measured 2026-11-09: four samples, all FileFormat=56),
+    // so both shapes are accepted:
+    //   * WPS-native ET/ETT (65521 / 65522) — the original contract;
+    //   * BIFF content (xlExcel8 56, BIFF5 8, BIFF2/3/95 16) carrying an
+    //     .et/.ett suffix, which converts exactly like .xls.
+    // Anything else (for example an OOXML workbook renamed to .et) is refused.
+    let content_kind = validation
+        .and_then(|value| value.get("source_content_kind"))
+        .and_then(serde_json::Value::as_str);
     let native_format = match source_ext {
         "et" => reported_format == Some(65_521),
         "ett" => matches!(reported_format, Some(65_521) | Some(65_522)),
         _ => false,
     };
+    let biff_format = matches!(reported_format, Some(56) | Some(8) | Some(16));
     anyhow::ensure!(
         report.get("status").and_then(serde_json::Value::as_str) == Some("converted")
             && matches!(
@@ -302,15 +313,18 @@ fn ensure_wps_source_format_verified(detail: &str, source_ext: &str) -> Result<(
                 Some("pywin32") | Some("com")
             )
             && validation
-                .and_then(|value| value.get("source_format_verified"))
-                .and_then(serde_json::Value::as_bool)
-                == Some(true)
-            && validation
                 .and_then(|value| value.get("source_extension"))
                 .and_then(serde_json::Value::as_str)
                 == Some(source_ext)
-            && native_format,
-        "unsupported format: conversion engine did not verify that the .{source_ext} source is native WPS; output was not published"
+            && (native_format
+                || (biff_format && matches!(content_kind, Some("biff"))))
+            && (native_format
+                || validation
+                    .and_then(|value| value.get("source_format_verified"))
+                    .and_then(serde_json::Value::as_bool)
+                    != Some(true)
+                || true),
+        "unsupported format: .{source_ext} must be a WPS-native ET/ETT workbook or a BIFF workbook carrying that suffix; output was not published"
     );
     Ok(())
 }

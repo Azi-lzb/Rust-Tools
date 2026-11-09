@@ -410,13 +410,16 @@ fn select_conversion_engine(
             _ => "pywin32",
         };
     }
-    // Linux：电子表格 .xls/.xlsm/.xlsb → .xlsx 由 LibreOffice 另存。2026-11-09
-    // 用 11 个 .xls 与 2 个 .xlsb 实测：公式文本与 COM 零差异、值零差异（布尔
-    // 与 =NA() 缓存表示除外），详见 docs/BETTEROFFICE_VENDOR_INTEGRATION.md
-    // §5.10 / §5.11.4。.et/.ett 不在此列——WPS 2019 存出的 .et 实际是 BIFF
-    // （FileFormat=56），拿不到原生 ET 样本，LO 保真度未验证；Word 目标仍仅
-    // Windows pywin32。
-    if !is_windows && target == "xlsx" && matches!(source_ext, "xls" | "xlsm" | "xlsb") {
+    // Linux：电子表格 .xls/.xlsm/.xlsb/.et/.ett → .xlsx 由 LibreOffice 另存。
+    // 2026-11-09 实测：11 个 .xls、2 个 .xlsb、4 个真实 .et（BIFF 内容）在
+    // 公式文本与值上与 COM 零差异（布尔/=NA() 缓存表示除外），详见
+    // docs/BETTEROFFICE_VENDOR_INTEGRATION.md §5.10 / §5.11.4 / §5.11.6。
+    // 原生 WPS ET（65521）在 Linux 上仍无验证样本，Rust 侧对 et/ett 只放行
+    // BIFF 内容（见 ensure_wps_source_format_verified）。Word 仍仅 Windows。
+    if !is_windows
+        && target == "xlsx"
+        && matches!(source_ext, "xls" | "xlsm" | "xlsb" | "et" | "ett")
+    {
         return "lo";
     }
     // Windows：Excel/WPS 表格与 Word/WPS 文档共用批量 pywin32 worker。
@@ -2576,13 +2579,24 @@ fn validate_conversion(
             );
             let native_format =
                 source_file_format.is_some_and(|format| format >= WPS_NATIVE_FILE_FORMAT_MIN);
+            // 内容口径：原生 WPS ET/ETT，或带该后缀的 BIFF 工作簿（WPS 2019
+            // 通过 COM 另存 .et 实测写出的就是 BIFF，见 docs §5.11.6）。
+            let biff_format = source_file_format
+                .is_some_and(|format| matches!(format, 56 | 8 | 16))
+                && validation
+                    .get("source_content_kind")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("biff");
             ensure!(
-                native_format
-                    && source_extension == Some(source_ext)
+                (native_format
                     && validation
                         .get("source_format_verified")
                         .and_then(serde_json::Value::as_bool)
-                        == Some(true)
+                        == Some(true))
+                    || biff_format
+            );
+            ensure!(
+                source_extension == Some(source_ext)
                     && validation
                         .get("source_extension")
                         .and_then(serde_json::Value::as_str)
