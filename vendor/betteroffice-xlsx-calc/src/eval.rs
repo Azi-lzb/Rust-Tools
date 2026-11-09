@@ -1236,8 +1236,15 @@ pub(crate) fn parse_clock(s: &str) -> Option<f64> {
     Some((hour * 3600.0 + minute * 60.0 + second) / 86400.0)
 }
 
-/// excel "general" number formatting, good enough for text coercion: integers
-/// print without a decimal, everything else uses rust's shortest round-trip.
+/// excel "general" number formatting for text coercion.
+///
+/// vendor change (see the workspace `vendor/VENDOR_NOTES.md`): Excel converts a
+/// number to text with **15 significant digits**, while Rust's shortest
+/// round-trip form keeps up to 17. Measured against Excel's `&` operator on
+/// real report workbooks: `901777.4199999999` becomes `901777.42` and
+/// `1111.1100000000001` becomes `1111.11`, which the 17-digit form misses.
+/// Formulas that concatenate numbers into validation text therefore differed
+/// from Excel by a trailing digit.
 pub(crate) fn format_number(n: f64) -> String {
     if n == 0.0 {
         return "0".to_string();
@@ -1245,7 +1252,20 @@ pub(crate) fn format_number(n: f64) -> String {
     if n == n.trunc() && n.abs() < 1e15 {
         return format!("{}", n as i64);
     }
-    format!("{n}")
+    // 15 significant digits, trailing zeros trimmed, plain decimal notation
+    // (Excel's text coercion does not use exponent form at these magnitudes).
+    let magnitude = n.abs().log10().floor() as i32;
+    let decimals = (14 - magnitude).clamp(0, 17) as usize;
+    let mut formatted = format!("{n:.decimals$}");
+    if formatted.contains('.') {
+        while formatted.ends_with('0') {
+            formatted.pop();
+        }
+        if formatted.ends_with('.') {
+            formatted.pop();
+        }
+    }
+    formatted
 }
 
 /// a reference cut to the extent the sheet uses, so a whole-column or

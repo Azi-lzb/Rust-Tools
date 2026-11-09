@@ -17,6 +17,7 @@
 | 1b | xlsx-model `src/workbook.rs` | `content_range()` 加 `OnceLock` 记忆化（`ContentExtent`，同 `CellStyles` 范式）；`set_cell` 仅在内容有无转换时失效，`remap_cells` 无条件失效 | 每次调用都全表扫描 `cells`，大簿 12,162 公式 × 771,721 存储格 ≈ 94 亿次遍历；省信贷 1 轮由 112.5s 降至 3.5s（32×），正确性零变化 |
 | 2 | xlsx-model `src/workbook.rs` | `impl CellProvider for Workbook` 的 `used_rows/used_cols` 改为基于 `content_range`（数组公式 spill 逻辑保留） | 计算 provider 是整列引用截断的唯一入口 |
 | 3 | xlsx-calc `src/eval.rs` | `MAX_RECALCULATION_CELL_VISITS` 常量改为 `AtomicU64` 全局默认值 + `pub fn set_max_recalculation_visits(u64)` | 上限原为编译期 const 10,000,000 不可配置；业务侧需按 `PYTOOLS_BO_CALC_MAX_VISITS` 配置 |
+| 4 | xlsx-calc `src/eval.rs` | `format_number` 改为 Excel 的 **15 位有效数字**（原用 Rust 最短往返表示，最多 17 位） | Excel 的 `&` 文本拼接只保留 15 位有效数字；17 位会让校验描述文字出现尾数差异（实测 8/8 样本按 15 位格式化即与 Excel 一致） |
 
 ## 配套测试（登记于各 crate tests）
 

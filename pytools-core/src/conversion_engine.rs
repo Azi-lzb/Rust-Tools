@@ -2294,6 +2294,19 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
                 Some(Err(reason)) => bail!("{reason}"),
                 None => run_libreoffice(input, temp_dir, target)?,
             }
+            // LibreOffice 负责格式转换，求值交给纯 Rust 的 betteroffice：
+            // 它对 INDIRECT 的缓存与 Excel 一致，而 LO 会算出 #REF!（§5.13）。
+            // 电子表格目标才重算；Word 不涉及。
+            if target == "xlsx" {
+                let stage_candidate = if converted.exists() {
+                    converted.clone()
+                } else {
+                    locate_converted(temp_dir, target)?
+                };
+                if let Some(note) = refresh_converted_caches_with_betteroffice(&stage_candidate) {
+                    eprintln!("{note}");
+                }
+            }
             None
         }
         "pywin32" if cfg!(windows) => Some(run_pywin32(input, &converted, target, &source_ext, runtime)?),
@@ -2370,6 +2383,41 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
     fs::rename(&candidate, output)
         .with_context(|| format!("commit validated output {}", output.display()))?;
     Ok(report.to_string())
+}
+
+/// LibreOffice 的电子表格转换会重算并把结果写进 `<v>` 缓存，但它对
+/// `INDIRECT` 动态引用的求值与 Excel 不一致：实测把本应为 `0` 的格算成
+/// `#REF!`（docs §5.13）。公式文本仍然正确，只是缓存错了；而 Calamine 的
+/// data-only 读法会拿到这些错值。
+///
+/// 这里用 betteroffice（纯 Rust）把转换产物再算一遍，让缓存回到 Excel 口径。
+/// 失败时**回滚**到 LO 的原始产物——LO 的公式文本是对的，不能因为重算失败
+/// 就留下半新半旧的缓存。
+fn refresh_converted_caches_with_betteroffice(candidate: &Path) -> Option<String> {
+    let original = fs::read(candidate).ok()?;
+    let config = crate::bo_calc::BoCalcConfig {
+        enabled: true,
+        max_visits: None,
+        rounds: 2,
+        strip_style_cells: false,
+        // 转换路径没有回退引擎：重算不可用时保持 LO 的产物。
+        fallback_com: false,
+        fallback_libreoffice: false,
+    };
+    match crate::bo_calc::recalculate(candidate, &config) {
+        Ok(outcome) => Some(format!(
+            "betteroffice 已重算转换产物缓存（{} 轮，改动 {} 格）",
+            outcome.rounds_used, outcome.changed_cells_total
+        )),
+        Err(error) => {
+            if fs::write(candidate, &original).is_err() {
+                return Some(format!("betteroffice 缓存重算失败且无法回滚：{error:#}"));
+            }
+            Some(format!(
+                "betteroffice 缓存重算跳过（保留 LibreOffice 缓存）：{error:#}"
+            ))
+        }
+    }
 }
 
 fn run_libreoffice(input: &Path, temp_dir: &Path, target: &str) -> Result<()> {
