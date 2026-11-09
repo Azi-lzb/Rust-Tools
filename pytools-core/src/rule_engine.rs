@@ -313,7 +313,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     };
     // 固定行区域（配置填写「数据结束行」）：结束时使用配置值，区域内每行都
     // 输出，数据为空就留空行——用户靠行数核对报表数量、发现漏提取。
-    // 动态区域（结束行留空）：结束行取数据列最后一个有值的行，空行没有意义。
+    // 动态区域（结束行留空）：扫描到工作表实际末尾，避免漏掉靠后的数据。
     let fixed_row_end = rule
         .data_row_end
         .filter(|end| *end > 0)
@@ -346,26 +346,9 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     if row_start > row_end || col_start > col_end {
         return Ok(empty_output());
     }
-    // 动态区域：结束行收敛到「数据列里最后一个有值的行」，避免把 A 列的
-    // 备注文字当成数据行。固定区域保持配置的结束行，不收敛。
-    let row_end = match fixed_row_end {
-        Some(fixed) => fixed.min(rows.saturating_sub(1)),
-        None => (row_start..=row_end)
-            .rev()
-            .find(|row| {
-                (col_start..=col_end).any(|column| {
-                    sheet
-                        .get(*row)
-                        .and_then(|cells| cells.get(column))
-                        .and_then(Option::as_ref)
-                        .is_some_and(|value| !value.is_missing())
-                })
-            })
-            .unwrap_or(row_start.wrapping_sub(1)),
-    };
-    if row_start > row_end {
-        return Ok(empty_output());
-    }
+    // 动态区域扫描到工作表实际末尾（用户 2026-11-10 口径）：宁可让行范围
+    // 被备注等文字撑大，也不要因为提前收敛而漏掉靠后的数据行。没有行标识
+    // 的行本来就被跳过，因此备注行不会变成输出数据行。
 
     let header_texts = collect_header_rows(
         sheet,

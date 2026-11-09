@@ -2030,6 +2030,10 @@ fn run_wide_summary_inner(
                     .map(|(_, address)| value_at_merged_address(&matrix, &merges, address))
                     .collect::<Vec<_>>();
                 let (row_count, column_count) = matrix_shape(&matrix);
+                // 本工作表的列头顺序先缓存在局部，等确认它真的有数据单元格
+                // 再并入规则输出列。否则「只印了表头、没填数」的占位工作表
+                // 会把各自那一套表头也塞进来，形成一堆永远为空的列。
+                let mut sheet_columns: Vec<String> = Vec::new();
                 if row_count > 0 && column_count > 0 {
                     let header_rows = rule
                         .col_header_rows
@@ -2083,11 +2087,7 @@ fn run_wide_summary_inner(
                                 &header_rows,
                                 &HashMap::new(),
                             );
-                            for column in ordered_columns {
-                                if state.seen_columns.insert(column.clone()) {
-                                    state.columns.push(column);
-                                }
-                            }
+                            sheet_columns = ordered_columns;
                         }
                     }
                 }
@@ -2123,6 +2123,18 @@ fn run_wide_summary_inner(
                     }
                 };
                 let worksheet_cells = output.cells.len();
+                // 只有真正提取到数据单元格的工作表才贡献列头顺序；纯占位
+                // （只有表头/科目名、没有数值）的工作表不参与列并集。
+                if worksheet_cells > 0 {
+                    let state = rule_states
+                        .get_mut(&rule_name)
+                        .expect("wide rule state initialized before extraction");
+                    for column in sheet_columns {
+                        if state.seen_columns.insert(column.clone()) {
+                            state.columns.push(column);
+                        }
+                    }
+                }
                 emitter.progress.extracted_cells += worksheet_cells;
                 // 固定行区域补出的空行：先登记桶（保持模板行序），再按普通
                 // 单元格流程填值，这样输出里就是「有科目名、数据空白」的一行。
