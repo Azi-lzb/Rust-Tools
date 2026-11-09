@@ -399,14 +399,10 @@ pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
 
 fn select_conversion_engine(
     engine: &str,
-    _source_ext: &str,
-    _target: &str,
-    _is_windows: bool,
+    source_ext: &str,
+    target: &str,
+    is_windows: bool,
 ) -> &'static str {
-    // All Office format conversions are currently restricted to the packaged
-    // pywin32 worker driving Microsoft Excel or WPS COM. On Linux the worker
-    // is unavailable and conversion fails explicitly instead of switching to
-    // LibreOffice.
     if engine != "auto" {
         return match engine {
             "lo" => "lo",
@@ -414,8 +410,14 @@ fn select_conversion_engine(
             _ => "pywin32",
         };
     }
-    // Excel/WPS spreadsheets and Word/WPS Writer documents use the same
-    // batch-scoped pywin32 worker on Windows.
+    // Linux：电子表格 .xls/.xlsm → .xlsx 由 LibreOffice 另存。2026-11-09 用
+    // 11 个真实/合成 .xls 实测：公式文本与 COM 另存零差异、值零差异（布尔
+    // 结果缓存表示除外），详见 docs/BETTEROFFICE_VENDOR_INTEGRATION.md §5.10。
+    // Word 与 WPS 原生格式仍仅 Windows pywin32。
+    if !is_windows && target == "xlsx" && matches!(source_ext, "xls" | "xlsm") {
+        return "lo";
+    }
+    // Windows：Excel/WPS 表格与 Word/WPS 文档共用批量 pywin32 worker。
     "pywin32"
 }
 
@@ -2211,9 +2213,11 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         engine == "auto" || engine == "lo" || engine == "com" || engine == "pywin32",
         "engine must be auto, lo, com or pywin32"
     );
+    // LibreOffice（lo）仅用于 Linux 电子表格 .xls/.xlsm → .xlsx（2026-11-09
+    // 实测与 COM 另存一致，见 docs §5.10）；Word 与 WPS 原生格式仍仅 Windows。
     ensure!(
-        engine != "lo",
-        "LibreOffice conversion is paused; use pywin32 with Microsoft Excel or WPS COM on Windows"
+        engine != "lo" || target == "xlsx",
+        "LibreOffice conversion is available for spreadsheet .xls/.xlsm -> .xlsx on Linux; Word targets require Windows pywin32"
     );
     ensure!(
         input.is_file(),
@@ -2230,9 +2234,13 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
             || (target == "docx" && matches!(source_ext.as_str(), "doc" | "wps" | "wpt")),
         "unsupported conversion: .{source_ext} -> .{target}"
     );
-    if !cfg!(windows) {
+    if !cfg!(windows)
+        && (engine == "pywin32"
+            || target == "docx"
+            || matches!(source_ext.as_str(), "et" | "ett" | "xlsb"))
+    {
         bail!(
-            "Office format conversion currently requires Windows pywin32 with Microsoft Excel or WPS COM; LibreOffice conversion is paused"
+            "Office format conversion on Linux is limited to LibreOffice spreadsheet .xls/.xlsm -> .xlsx; Word/WPS-native/.xlsb formats require Windows pywin32"
         );
     }
     if let Some(parent) = output.parent() {
@@ -3678,18 +3686,28 @@ mod tests {
                 "auto on Windows must route .{source} through pywin32"
             );
         }
+        // Linux：电子表格 .xls/.xlsm → .xlsx 走 LibreOffice（2026-11-09 实测
+        // 与 COM 另存一致）。其余格式仍要求 Windows pywin32。
+        assert_eq!(select_conversion_engine("auto", "xls", "xlsx", false), "lo");
         assert_eq!(
-            select_conversion_engine("auto", "xls", "xlsx", false),
+            select_conversion_engine("auto", "xlsm", "xlsx", false),
+            "lo"
+        );
+        // 同扩展名 .xlsx 规范化与 .xlsb/.et 仍不在 Linux LO 路由内。
+        assert_eq!(
+            select_conversion_engine("auto", "xlsx", "xlsx", false),
             "pywin32"
         );
         assert_eq!(
-            select_conversion_engine("auto", "xlsx", "xlsx", false),
+            select_conversion_engine("auto", "xlsb", "xlsx", false),
             "pywin32"
         );
         assert_eq!(
             select_conversion_engine("auto", "doc", "docx", false),
             "pywin32"
         );
+        // 显式 lo 在 Windows 上仍被选中（由调用方给出），显式 com 保持 pywin32。
+        assert_eq!(select_conversion_engine("lo", "xls", "xlsx", true), "lo");
         // The retired Rust COM channel is only kept as a CLI alias.
         assert_eq!(
             select_conversion_engine("com", "xls", "xlsx", true),

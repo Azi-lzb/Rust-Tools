@@ -205,9 +205,11 @@ pub(crate) fn convert_one_with_runtime(
         matches!(engine, "auto" | "lo" | "com" | "pywin32" | "native"),
         "--engine must be auto, lo, com, pywin32 or native"
     );
+    // LibreOffice（lo）仅用于 Linux 电子表格 .xls/.xlsm → .xlsx；Word 目标
+    // 与 Windows 默认路由仍走 pywin32（实际执行在 conversion_engine 分流）。
     anyhow::ensure!(
-        engine != "lo",
-        "LibreOffice conversion is paused; Office format conversion requires Windows pywin32 with Microsoft Excel or WPS COM"
+        engine != "lo" || target == "xlsx",
+        "LibreOffice conversion is available for spreadsheet .xls/.xlsm -> .xlsx on Linux; Word targets require Windows pywin32"
     );
     anyhow::ensure!(
         !xlsx_save_as_normalization || engine != "native",

@@ -21,18 +21,20 @@ fn test_root() -> Result<PathBuf> {
 }
 
 #[test]
-fn explicit_libreoffice_office_conversion_is_rejected_without_output() -> Result<()> {
+fn explicit_libreoffice_office_conversion_rejects_word_targets_without_output() -> Result<()> {
+    // 2026-11-09：Linux 的 .xls/.xlsm → .xlsx 已放开给 LibreOffice；
+    // Word 目标仍明确拒绝（未实测 LO 的 Word 保真度）。
     let root = test_root()?;
-    for (extension, target) in [("xls", "xlsx"), ("xlsx", "xlsx"), ("doc", "docx")] {
+    for (extension, target) in [("doc", "docx")] {
         let input = root.join(format!("input.{extension}"));
         let output = root.join(format!("output-{extension}.{target}"));
         fs::write(&input, b"isolated route-only fixture")?;
 
         let error = conversion::convert_one(&input, &output, target, "lo")
-            .expect_err("Office conversion must reject the paused LO engine");
+            .expect_err("Word targets must still reject the LO engine");
         let message = format!("{error:#}");
         assert!(
-            message.contains("LibreOffice conversion is paused"),
+            message.contains("Word targets require Windows pywin32"),
             "unexpected route error for .{extension} -> .{target}: {message}"
         );
         assert!(
@@ -40,6 +42,29 @@ fn explicit_libreoffice_office_conversion_is_rejected_without_output() -> Result
             "rejected route must not create a candidate"
         );
     }
+    fs::remove_dir_all(&root)?;
+    Ok(())
+}
+
+#[test]
+fn explicit_libreoffice_spreadsheet_conversion_is_routed_to_lo() -> Result<()> {
+    // 电子表格 .xls → .xlsx 现在由 LO 承接：路由阶段不得再以"paused"拒绝。
+    // 用伪造字节只验证路由放行（真正的转换由真实样本覆盖，见 docs §5.10）。
+    let root = test_root()?;
+    let input = root.join("input.xls");
+    let output = root.join("output.xlsx");
+    fs::write(&input, b"not a real workbook")?;
+    let error = conversion::convert_one(&input, &output, "xlsx", "lo")
+        .expect_err("a bogus container still fails during conversion");
+    let message = format!("{error:#}");
+    assert!(
+        !message.contains("LibreOffice conversion is paused"),
+        "spreadsheet xls -> xlsx must no longer be rejected as paused: {message}"
+    );
+    assert!(
+        !output.exists(),
+        "failed conversion must not create a candidate"
+    );
     fs::remove_dir_all(&root)?;
     Ok(())
 }
