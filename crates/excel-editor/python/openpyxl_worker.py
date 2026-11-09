@@ -511,54 +511,12 @@ def _formula_cache_write_conflict(
             return "a formula-sensitive cell write has an invalid address: " + address
         writes.append((sheet, row, column))
 
-    needs_dynamic_values = any(
-        "INDIRECT(" in formula.upper() or "OFFSET(" in formula.upper()
-        for formula in formulas.values()
-    )
-    cached_workbook = None
-    if needs_dynamic_values:
-        try:
-            import openpyxl
-            cached_workbook = openpyxl.load_workbook(
-                str(path), read_only=True, data_only=True, keep_links=True
-            )
-        except Exception as error:
-            return "could not inspect saved values used by dynamic formula references: " + str(error)
-    try:
-        for (formula_sheet, formula_address), formula in formulas.items():
-            if _formula_cache_destination(formula_sheet, formula_address, operations) is None:
-                continue
-            if cached_workbook is None:
-                # Pass a sentinel for formulas that contain no supported dynamic
-                # reference; the direct-reference tokenizer does not use it.
-                class EmptyWorkbook:
-                    sheetnames: List[str] = []
-                dependency_context: Any = EmptyWorkbook()
-            else:
-                dependency_context = cached_workbook
-            dependencies = _formula_dependencies(
-                formula_sheet, formula_address, formula, dependency_context
-            )
-            if dependencies is None:
-                return "cannot prove whether cached formula {}!{} depends on the planned writes".format(
-                    formula_sheet, formula_address
-                )
-            for write_sheet, write_row, write_column in writes:
-                for dependency_sheet, min_row, max_row, min_column, max_column in dependencies:
-                    if (
-                        write_sheet == dependency_sheet
-                        and min_row <= write_row <= max_row
-                        and min_column <= write_column <= max_column
-                    ):
-                        return "cached formula {}!{} depends on planned write {}!{}".format(
-                            formula_sheet,
-                            formula_address,
-                            write_sheet,
-                            _format_cell_address(write_row, write_column),
-                        )
-    finally:
-        if cached_workbook is not None:
-            cached_workbook.close()
+    # 2026-11-10 用户口径：单元格写入与公式依赖相交时不再拒绝整个计划。
+    # 依赖这些写入的公式缓存改由 _preserve_formula_caches 跳过恢复（输出里
+    # 不带旧缓存值），执行路径已设置 fullCalcOnLoad/forceFullCalc，Excel/WPS
+    # 打开时统一重算；其他读取方看到的是「无缓存」而不是「过期数值」。
+    # 行/区间操作（delete_rows/insert_rows/copy_range/import_range）仍然
+    # 保持严格拒绝：坐标位移下「跳过恢复」不足以证明缓存安全。
     return None
 
 
@@ -705,11 +663,95 @@ def _restore_formula_cache_cell(
     return worksheet_xml[: match.start()] + cell_xml + worksheet_xml[match.end() :]
 
 
+def _planned_write_cells(operations: List[Dict[str, Any]]) -> List[Tuple[str, int, int]]:
+    """Collect set_cell_value / set_formula_text targets as (sheet, row, column)."""
+    from openpyxl.utils.cell import coordinate_to_tuple
+
+    writes: List[Tuple[str, int, int]] = []
+    for operation in operations:
+        if operation.get("operation") not in ("set_cell_value", "set_formula_text"):
+            continue
+        sheet = operation.get("sheet")
+        address = operation.get("cell")
+        if not isinstance(sheet, str) or not isinstance(address, str):
+            continue
+        try:
+            row, column = coordinate_to_tuple(address.replace("$", "").upper())
+        except ValueError:
+            continue
+        writes.append((sheet, row, column))
+    return writes
+
+
+def _cache_depends_on_planned_writes(
+    formula_sheet: str,
+    formula_address: str,
+    formula: str,
+    writes: List[Tuple[str, int, int]],
+    dependency_context: Any,
+) -> bool:
+    """Whether restoring this cache would leave a value invalidated by the plan.
+
+    Returns True (skip the restore) when dependencies cannot be proven, so the
+    output never carries a stale cached value; Excel/WPS recalculates it on
+    open because the execute path sets fullCalcOnLoad/forceFullCalc.
+    """
+    if "INDIRECT(" in formula.upper() or "OFFSET(" in formula.upper():
+        # Dynamic references are only provably safe when the tokenizer resolves
+        # them against the saved workbook; anything else stays conservative.
+        dependencies = _formula_dependencies(
+            formula_sheet, formula_address, formula, dependency_context
+        )
+        if dependencies is None:
+            return True
+    else:
+        class EmptyWorkbook:
+            sheetnames: List[str] = []
+
+        dependencies = _formula_dependencies(
+            formula_sheet, formula_address, formula, EmptyWorkbook()
+        )
+        if dependencies is None:
+            return True
+    for write_sheet, write_row, write_column in writes:
+        for dependency_sheet, min_row, max_row, min_column, max_column in dependencies:
+            if (
+                write_sheet == dependency_sheet
+                and min_row <= write_row <= max_row
+                and min_column <= write_column <= max_column
+            ):
+                return True
+    return False
+
+
 def _preserve_formula_caches(input_path: Path, output_path: Path, operations: List[Dict[str, Any]]) -> None:
     cached_values = {}
-    for key, value in _formula_cache_values(input_path).items():
-        destination = _formula_cache_destination(key[0], key[1], operations)
-        if destination is not None:
+    writes = _planned_write_cells(operations)
+    formulas = _formula_cache_formulas(input_path)
+    cached_workbook = None
+    if any("INDIRECT(" in formula.upper() or "OFFSET(" in formula.upper() for formula in formulas.values()):
+        try:
+            import openpyxl
+            cached_workbook = openpyxl.load_workbook(
+                str(input_path), read_only=True, data_only=True, keep_links=True
+            )
+        except Exception:
+            cached_workbook = None
+    skipped_stale = 0
+    try:
+        for key, value in _formula_cache_values(input_path).items():
+            destination = _formula_cache_destination(key[0], key[1], operations)
+            if destination is None:
+                continue
+            formula = formulas.get(key)
+            if writes and formula and _cache_depends_on_planned_writes(
+                key[0], key[1], formula, writes, cached_workbook
+            ):
+                # The plan writes into this formula's dependency range: the old
+                # cached value would be stale. Leave the cell uncached instead;
+                # Excel/WPS recalculates it on open (fullCalcOnLoad is set).
+                skipped_stale += 1
+                continue
             if destination in cached_values:
                 raise WorkerError(
                     "formula_cache_restore_failed",
@@ -719,6 +761,9 @@ def _preserve_formula_caches(input_path: Path, output_path: Path, operations: Li
                     + destination[1],
                 )
             cached_values[destination] = value
+    finally:
+        if cached_workbook is not None:
+            cached_workbook.close()
     if not cached_values:
         return
     replacement = output_path.with_name(output_path.name + ".formula-cache.tmp")

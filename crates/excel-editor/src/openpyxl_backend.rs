@@ -4394,6 +4394,21 @@ fn validate_preserved_values(
             if cell_value_is_modified(&old_sheet.name, &output_address, &plan.operations) {
                 continue;
             }
+            // 公式单元格的缓存值是上一次保存时的派生结果：计划写入其依赖
+            // 区间时，worker 有意不恢复旧缓存（输出不带过期数值），Excel/WPS
+            // 打开时按 fullCalcOnLoad/forceFullCalc 重算。公式文本本身由
+            // validate_preserved_formulas 单独校验，因此这里豁免缓存值比较。
+            // 仅在计划真的写入单元格时豁免；行位移计划保持原严格口径。
+            if old_sheet.formulas.contains_key(address)
+                && plan.operations.iter().any(|operation| {
+                    matches!(
+                        operation,
+                        EditOperation::SetCellValue { .. } | EditOperation::SetFormulaText { .. }
+                    )
+                })
+            {
+                continue;
+            }
             let actual = new_sheet.values.get(&output_address);
             if actual.is_none()
                 && output_address == *address

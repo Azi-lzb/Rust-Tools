@@ -328,7 +328,13 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertEqual(saved["Notes"]["A1"].value, "keep")
         saved.close()
 
-    def test_formula_cache_is_rejected_before_write(self):
+    def test_formula_cache_dependent_on_write_is_left_uncached(self):
+        """2026-11-10 用户口径：依赖被写入单元格的公式缓存不再拒绝整个计划。
+
+        计划写入 Data!A1，而 C2 的公式 `=A1&"!"` 依赖 A1。旧行为是写前拒绝；
+        新行为是正常写入，但 C2 的旧缓存值（过期）不恢复——输出里该单元格
+        没有缓存值，Excel/WPS 打开时按 fullCalcOnLoad/forceFullCalc 重算。
+        """
         cached = self.root / "cached.xlsx"
         with zipfile.ZipFile(self.source, "r") as original, zipfile.ZipFile(cached, "w", zipfile.ZIP_DEFLATED) as patched:
             for item in original.infolist():
@@ -349,10 +355,25 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         output = self.root / "cached-output.xlsx"
         plan = self.base_plan(output, [operation("set_cell_value", sheet="Data", cell="A1", value={"type": "text", "value": "changed"})])
         process, response = run_worker(plan, output)
-        self.assertEqual(process.returncode, 0)
-        self.assertEqual(response["status"], "unsupported_before_write")
-        self.assertEqual(response["error"]["kind"], "formula_cache_not_preserved")
-        self.assertFalse(output.exists())
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        self.assertTrue(output.exists())
+
+        # 写入生效。
+        saved_formulas = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved_formulas["Data"]["A1"].value, "changed")
+        # 公式保留；依赖计划写入的旧缓存值不再恢复（data_only 读不到旧值）。
+        self.assertEqual(saved_formulas["Data"]["C2"].value, '=A1&"!"')
+        saved_formulas.close()
+        saved_values = openpyxl.load_workbook(output, data_only=True)
+        self.assertIsNone(saved_values["Data"]["C2"].value)
+        saved_values.close()
+
+        # 输出被标记为打开时全量重算。
+        with zipfile.ZipFile(str(output), "r") as package:
+            workbook_xml = package.read("xl/workbook.xml").decode("utf-8")
+        self.assertIn('fullCalcOnLoad="1"', workbook_xml)
+        self.assertIn('forceFullCalc="1"', workbook_xml)
 
     def test_pycode_openpyxl_parity_feature_keeps_formula_cache_and_requests_recalc(self):
         cached = self.root / "pycode-parity-cached.xlsx"
