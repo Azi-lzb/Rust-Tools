@@ -576,7 +576,7 @@ fn conversion_cli_converts_verified_native_et_and_preserves_source() -> Result<(
     assert_eq!(sidecar_report["validation"]["source_file_format"], 65521);
     assert_eq!(
         sidecar_report["validation"]["level"],
-        "excel_com_sheet_order_and_formula_cells"
+        "excel_com_sheet_order_and_formula_count"
     );
 
     let converted = output_dir.join("native.xlsx");
