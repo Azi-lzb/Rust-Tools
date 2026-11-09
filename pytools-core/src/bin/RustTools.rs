@@ -699,14 +699,21 @@ where
             output,
             "  3  按模板命名区域汇总  【表头区域生成列名；表结构区域校验；汇总区域提取数据】"
         )?;
-        writeln!(output, "  4  按模板校验区域提取校验  【临时复制源文件并调用 Excel/WPS COM 重算；原文件不修改】")?;
         writeln!(
             output,
-            "  5  表头路径比对与映射  【时序提取规则；路径标准化映射】"
+            "  4  按批注汇总（模板+源文件）  【模板批注标注行区域/列区域/set字段；源文件按工作表名匹配】"
         )?;
         writeln!(
             output,
-            "  6  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】"
+            "  5  按模板校验区域提取校验  【临时复制源文件并调用 Excel/WPS COM 重算；原文件不修改】"
+        )?;
+        writeln!(
+            output,
+            "  6  表头路径比对与映射  【时序提取规则；路径标准化映射】"
+        )?;
+        writeln!(
+            output,
+            "  7  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】"
         )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "--------------------------")?;
@@ -718,12 +725,13 @@ where
             "1" => "data.timeline_wide_summary",
             "2" => "data.used_range_summary",
             "3" => "data.named_range_summary",
-            "4" => "data.named_validation_extract",
-            "5" => "data.header_path_compare",
-            "6" => "data.timeline_precheck",
+            "4" => "data.comment_summary",
+            "5" => "data.named_validation_extract",
+            "6" => "data.header_path_compare",
+            "7" => "data.timeline_precheck",
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2、3、4、5、6 或 0")?;
+                writeln!(output, "仅接受 1、2、3、4、5、6、7 或 0")?;
                 continue;
             }
         };
@@ -847,6 +855,10 @@ where
                         continue;
                     }
                 }
+            }
+            "data.comment_summary" => {
+                run_comment_summary_menu(input, output, global, log_view, allow_native_dialog)?;
+                return Ok(());
             }
             "data.named_validation_extract" => {
                 let Some(template) = choose_workbooks(
@@ -5144,16 +5156,16 @@ where
     W: Write,
 {
     // 打印改为“按配置直接生成”：不再需要 y 确认，也不再提供仅出计划的入口。
-    // 保留旧菜单编号；3-1 与 3-2 当前统一调用 openpyxl。
+    // 旧 3-1（umya）与 3-2（openpyxl）已统一到 openpyxl，只保留一个生成入口；
+    // 菜单编号 1 沿用原 3-1，预校验由 3 改为 2。
     let _ = (allow_native_dialog, capabilities, platform);
     loop {
         writeln!(output, "------ 报表打印 ------")?;
-        writeln!(output, "  1  按打印配置生成：openpyxl（旧 3-1 入口）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】")?;
         writeln!(
             output,
-            "  2  按打印配置生成：openpyxl（旧 3-2 入口）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
+            "  1  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
         )?;
-        writeln!(output, "  3  打印配置预校验  【打印配置】")?;
+        writeln!(output, "  2  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -5171,16 +5183,6 @@ where
                 )?;
             }
             "2" => {
-                run_configured_static_print_menu(
-                    output,
-                    config_path,
-                    global,
-                    "3-2",
-                    pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
-                    log_view,
-                )?;
-            }
-            "3" => {
                 run_print_menu_action(
                     output,
                     global,
@@ -5197,7 +5199,7 @@ where
             }
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2、3 或 0")?;
+                writeln!(output, "仅接受 1、2 或 0")?;
             }
         }
     }
@@ -5902,7 +5904,12 @@ where
     }
 }
 
-fn run_interactive_summary_menu<R, W>(
+/// 菜单 1-4：按批注汇总（模板+源文件）。
+///
+/// 行为对齐原 PyTools `summary_321_322.run_summary_by_comment`：模板批注里的
+/// `行区域N`/`行区域#N`、`列区域N`/`列区域#N` 定出数据块，`set(名称)` 采集
+/// 表头常量；源工作簿按工作表名匹配模板工作表，无同名时用「模板」兜底。
+fn run_comment_summary_menu<R, W>(
     input: &mut R,
     output: &mut W,
     global: &GlobalConfig,
@@ -5913,73 +5920,64 @@ where
     R: BufRead,
     W: Write,
 {
-    loop {
-        writeln!(output, "------ 汇总工具 ------")?;
-        writeln!(output, "  1  按使用区域汇总（全量）")?;
-        writeln!(output, "  2  按批注汇总（模板+源文件）")?;
-        writeln!(output, "  0  返回")?;
-        writeln!(output, "----------------------")?;
-        let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
-            return Ok(());
-        };
-        match choice.as_str() {
-            "1" => {
-                let Some(sources) = choose_workbooks(
-                    "选择按使用区域汇总的源文件（可多选）",
-                    true,
-                    input,
-                    output,
-                    allow_native_dialog,
-                )?
-                else {
-                    writeln!(output, "[已取消]")?;
-                    return Ok(());
-                };
-                let mut arguments = summary_cli_arguments(global, log_view);
-                arguments.extend(
-                    sources
-                        .into_iter()
-                        .map(|path| path.to_string_lossy().into_owned()),
-                );
-                run_summary_used_range_cli(arguments, true)?;
-                return Ok(());
-            }
-            "2" => {
-                let Some(template) = choose_workbooks(
-                    "选择批注汇总模板文件",
-                    false,
-                    input,
-                    output,
-                    allow_native_dialog,
-                )?
-                .and_then(|paths| paths.into_iter().next()) else {
-                    writeln!(output, "[已取消]")?;
-                    return Ok(());
-                };
-                let Some(sources) = choose_workbooks(
-                    "选择按批注汇总的源文件（可多选）",
-                    true,
-                    input,
-                    output,
-                    allow_native_dialog,
-                )?
-                else {
-                    writeln!(output, "[已取消]")?;
-                    return Ok(());
-                };
-                let mut arguments = summary_cli_arguments(global, log_view);
-                arguments.push("--template".to_owned());
-                arguments.push(template.to_string_lossy().into_owned());
-                arguments.extend(
-                    sources
-                        .into_iter()
-                        .map(|path| path.to_string_lossy().into_owned()),
-                );
-                run_summary_comments_cli(arguments, true)?;
-                return Ok(());
-            }
-            "0" => return Ok(()),
-            _ => writeln!(output, "输入无效，请重试。")?,
+    let Some(template) = choose_workbooks(
+        "选择批注汇总模板文件",
+        false,
+        input,
+        output,
+        allow_native_dialog,
+    )?
+    .and_then(|paths| paths.into_iter().next()) else {
+        writeln!(output, "[已取消]")?;
+        return Ok(());
+    };
+    let Some(mut sources) = choose_source_files_or_folders_impl(
+        "选择按批注汇总的源文件或文件夹",
+        NativeFileFilter::ExcelWorkbooks,
+        input,
+        output,
+        allow_native_dialog,
+        true,
+        true,
+    )?
+    else {
+        writeln!(output, "[已取消]")?;
+        return Ok(());
+    };
+    let selected_count = sources.len();
+    sources.retain(|path| {
+        !path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with("~$"))
+            && !path
+                .file_stem()
+                .is_some_and(|name| name.to_string_lossy().contains("_审核版"))
+            && !path.components().any(|part| part.as_os_str() == "执行结果")
+    });
+    if sources.len() != selected_count {
+        writeln!(
+            output,
+            "→ 按汇总规则排除 {} 个临时文件、审核副本或执行结果",
+            selected_count - sources.len()
+        )?;
+    }
+    if sources.is_empty() {
+        writeln!(output, "没有可汇总的源工作簿。")?;
+        return Ok(());
+    }
+    let mut arguments = summary_cli_arguments(global, log_view);
+    arguments.push("--template".to_owned());
+    arguments.push(template.to_string_lossy().into_owned());
+    arguments.extend(
+        sources
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned()),
+    );
+    match run_summary_comments_cli(arguments, true) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            writeln!(output, "按批注汇总失败：{error:#}")?;
+            Ok(())
         }
     }
 }

@@ -219,9 +219,9 @@ fn interactive_v2_named_range_summary_uses_optional_structure_to_skip_mismatchin
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("3  按模板命名区域汇总"));
-    assert!(stdout.contains("4  按模板校验区域提取校验"));
-    assert!(stdout.contains("5  表头路径比对与映射"));
-    assert!(stdout.contains("6  时序配置预校验"));
+    assert!(stdout.contains("5  按模板校验区域提取校验"));
+    assert!(stdout.contains("6  表头路径比对与映射"));
+    assert!(stdout.contains("7  时序配置预校验"));
     assert!(stdout.contains("已选择文件 3 个"));
     assert!(stdout.contains(r#""saved": true"#));
     assert!(!stdout.contains("尚未实现"));
@@ -231,7 +231,7 @@ fn interactive_v2_named_range_summary_uses_optional_structure_to_skip_mismatchin
     assert_eq!(history["feature_id"], "PT-6-2");
     assert_eq!(history["function"], "summary-named-ranges");
     assert_eq!(history["status"], "succeeded");
-    assert_eq!(history["summary"]["rows"], 6);
+    assert_eq!(history["summary"]["rows"], 8);
     assert_eq!(history["summary"]["files"], 2);
     assert_eq!(history["input_stats"]["selected"], 3);
     assert_eq!(history["input_stats"]["attempted"], 3);
@@ -283,8 +283,15 @@ fn interactive_v2_named_range_summary_uses_optional_structure_to_skip_mismatchin
     assert_eq!(fixed.values["D1"]["value"], "金额");
     assert_eq!(fixed.values["C2"]["value"], "总计");
     assert_eq!(fixed.values["D2"]["value"], 3.0);
-    assert_eq!(fixed.values["C3"]["value"], "总计");
-    assert!(!fixed.values.contains_key("C4"));
+    // 固定行区域 F10:G11 声明两行，第二行在源表里整行为空。按「固定区域全输出、
+    // 空行留空」口径这一行仍然占位（行数与模板科目行数一致）。`values` 是稀疏
+    // 映射，空单元格不会出现在里面，因此用「来源文件」列判定该行存在。
+    assert!(
+        fixed.values["A3"]["value"] == "source branch"
+            || fixed.values["A4"]["value"] == "source branch short",
+        "固定区域第二行应存在（来源文件列），实际 keys: {:?}",
+        fixed.values.keys().collect::<Vec<_>>()
+    );
     assert!(!fixed.values.contains_key("C5"));
     assert!(!sheet
         .values
@@ -684,7 +691,10 @@ fn named_summary_fallback_merges_source_sheets_and_modes_into_one_tab() -> Resul
         &[source.clone()],
         &root.path().join("output"),
     )?;
-    assert_eq!(result.rows, 5);
+    // 任意行区域按有数据的行收敛（北区甲、北区乙、南区丙 = 3 行），
+    // 固定行区域把声明的 B2:C3 两行全输出（北区 2 + 南区 2 = 4 行）；
+    // 完全无数据的 Meta 工作表被兜底路由兜进来但不产出空行。
+    assert_eq!(result.rows, 7);
     let output = read_workbook(result.path.context("summary output missing")?)?;
     assert_eq!(
         output
@@ -1113,7 +1123,7 @@ fn summary_named_ranges_cli_is_a_real_standalone_entry() -> Result<()> {
     );
     let result: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(result["saved"], true);
-    assert_eq!(result["rows"], 4);
+    assert_eq!(result["rows"], 5);
     assert_eq!(result["execution"]["reader_engine"], "calamine");
     assert_eq!(result["execution"]["writer_engine"], "rust_xlsxwriter");
     assert_eq!(fs::read(&template)?, template_before);
@@ -1121,15 +1131,25 @@ fn summary_named_ranges_cli_is_a_real_standalone_entry() -> Result<()> {
     Ok(())
 }
 
+/// 2026-11-09 用户要求把按批注汇总纳入工具（原为明确的排除项）。
+/// 入口挂在数据菜单 1-4，原 1-4/1-5/1-6 顺延为 1-5/1-6/1-7。
 #[test]
-fn legacy_comment_summary_is_not_exposed_by_the_v2_data_menu() -> Result<()> {
+fn comment_summary_is_exposed_by_the_data_menu() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_app_config(root.path())?;
     let output = run_menu(&config, "1\n0\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.contains("按批注汇总"));
-    assert!(!stdout.contains("comment summary"));
+    assert!(stdout.contains("4  按批注汇总（模板+源文件）"), "{stdout}");
+    // 编号顺延后不能出现两个同名入口。
+    assert_eq!(
+        stdout
+            .lines()
+            .filter(|line| line.contains("按批注汇总（模板+源文件）"))
+            .count(),
+        1,
+        "{stdout}"
+    );
     Ok(())
 }
 

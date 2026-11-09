@@ -319,8 +319,8 @@ fn summary_comments_cli_preserves_formula_and_blank_template_headers() -> Result
     );
     assert_eq!(
         sheet.values.get("G1").and_then(|value| value.get("value")),
-        Some(&serde_json::json!("2026-06-30 00:00:00")),
-        "date template header should use Python's datetime string representation"
+        Some(&serde_json::json!("2026-06-30")),
+        "date template header must be written as a date only (yyyy-MM-dd)"
     );
     for (address, expected) in [("H1", "1e-05"), ("I1", "1e+20"), ("J1", "0.0001")] {
         assert_eq!(

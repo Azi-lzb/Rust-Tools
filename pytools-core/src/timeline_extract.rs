@@ -546,9 +546,11 @@ fn extract_one_file(
                     rule.name, sheet.name
                 )
             })?;
-            if !extracted.is_empty() {
+            // 1-2 候选路径（不在确认迁移范围内）沿用「只输出有值单元格」语义：
+            // 固定区域补出的空行标记在此丢弃。
+            if !extracted.cells.is_empty() {
                 matched_rule_sheets += 1;
-                cells.extend(extracted);
+                cells.extend(extracted.cells);
             }
         }
     }

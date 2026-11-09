@@ -14,6 +14,40 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// 3-1 只认随包 openpyxl 运行时（不做 PATH 回退）。测试二进制在
+/// `target/debug/deps/`，其旁边没有 `python/`，因此指向发行包的 dist/python。
+fn bundled_python() -> Option<PathBuf> {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()?
+        .to_path_buf();
+    let names: &[&str] = if cfg!(windows) {
+        &[
+            "dist/python/python.exe",
+            "dist/python/runtime/bin/python.exe",
+        ]
+    } else {
+        &["dist/python/python3", "dist/python/runtime/bin/python3"]
+    };
+    names
+        .iter()
+        .map(|relative| workspace.join(relative))
+        .find(|path| path.is_file())
+}
+
+/// 打印任务的公共入口；运行时缺失时返回 None 由调用方跳过。
+fn print_once(config: &Path) -> Result<Option<pytools_core::static_print_engines::StaticPrintRun>> {
+    let Some(python) = bundled_python() else {
+        eprintln!("skipping: dist/python openpyxl runtime not staged");
+        return Ok(None);
+    };
+    pytools_core::static_print_engines::run_configured_static_print_with_python(
+        config,
+        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
+        Some(&python),
+    )
+    .map(Some)
+}
+
 struct TestDir(PathBuf);
 
 impl TestDir {
@@ -169,10 +203,9 @@ fn openpyxl_print_preserves_formula_cached_values_and_formats() -> Result<()> {
     make_source(&source)?;
     let config = make_config(&dir.0, &source, &target)?;
 
-    let run = pytools_core::static_print_engines::run_configured_static_print(
-        &config,
-        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
-    )?;
+    let Some(run) = print_once(&config)? else {
+        return Ok(());
+    };
     assert_eq!(run.task_ok, 1, "issues: {:?}", run.issues);
     let printed_path = run.outputs.first().context("no output")?.clone();
     assert!(printed_path.is_file(), "missing {:?}", printed_path);
@@ -239,10 +272,9 @@ fn openpyxl_print_copies_column_widths_and_row_heights() -> Result<()> {
     make_source(&source)?;
     let config = make_config(&dir.0, &source, &target)?;
 
-    let run = pytools_core::static_print_engines::run_configured_static_print(
-        &config,
-        pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
-    )?;
+    let Some(run) = print_once(&config)? else {
+        return Ok(());
+    };
     assert_eq!(run.task_ok, 1, "issues: {:?}", run.issues);
     let printed_path = run.outputs.first().context("no output")?.clone();
     let printed = read_workbook(&printed_path)?;

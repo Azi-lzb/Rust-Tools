@@ -69,17 +69,82 @@ impl WorkbookCell {
 impl SheetValue for WorkbookCell {
     fn to_sheet_text(&self) -> String {
         match self {
-            Self::Text(value)
-            | Self::DateTimeIso(value)
-            | Self::DurationIso(value)
-            | Self::Error(value) => value.clone(),
+            Self::Text(value) | Self::Error(value) | Self::DurationIso(value) => value.clone(),
             Self::Integer(value) => value.to_string(),
-            Self::Number(value) | Self::DateTimeSerial(value) | Self::DurationSerial(value) => {
-                format!("{value:?}")
+            Self::Number(value) | Self::DurationSerial(value) => format!("{value:?}"),
+            // 表头/行头里的日期按用户口径只取日期部分（`yyyy-MM-dd`）；
+            // 纯时间序列号（< 1）保留时间，避免落成 1899-12-31。
+            Self::DateTimeSerial(value) => {
+                excel_serial_date_text(*value).unwrap_or_else(|| format!("{value:?}"))
+            }
+            Self::DateTimeIso(value) => {
+                iso_datetime_date_text(value).unwrap_or_else(|| value.clone())
             }
             Self::Boolean(value) => (if *value { "True" } else { "False" }).to_owned(),
         }
     }
+}
+
+/// Excel 1900 日期系统序列号 → `yyyy-MM-dd`；纯时间序列号 → `HH:MM:SS`。
+fn excel_serial_date_text(serial: f64) -> Option<String> {
+    use chrono::{Duration, NaiveDate, Timelike};
+
+    if !serial.is_finite() || serial < 0.0 {
+        return None;
+    }
+    let milliseconds = (serial * 86_400_000.0).round();
+    if milliseconds < 0.0 || milliseconds > i64::MAX as f64 {
+        return None;
+    }
+    let milliseconds = milliseconds as i64;
+    const DAY_MILLISECONDS: i64 = 86_400_000;
+    let days = milliseconds.div_euclid(DAY_MILLISECONDS);
+    let day_milliseconds = milliseconds.rem_euclid(DAY_MILLISECONDS);
+    let time = chrono::NaiveTime::from_num_seconds_from_midnight_opt(
+        (day_milliseconds / 1_000) as u32,
+        ((day_milliseconds % 1_000) * 1_000_000) as u32,
+    )?;
+    if days == 0 {
+        // 0 < serial < 1 是当天时刻，不是日期。
+        let mut text = time.format("%H:%M:%S").to_string();
+        let micros = time.nanosecond() / 1_000;
+        if micros != 0 {
+            text.push('.');
+            text.push_str(&format!("{micros:06}"));
+        }
+        return Some(text);
+    }
+    // Excel 1900 系统的闰年缺陷：序列号 60 是不存在的 1900-02-29。
+    let epoch = if days < 60 {
+        NaiveDate::from_ymd_opt(1900, 1, 1)?
+    } else {
+        NaiveDate::from_ymd_opt(1899, 12, 30)?
+    };
+    let date = epoch.checked_add_signed(Duration::days(if days < 60 {
+        days.saturating_sub(1)
+    } else {
+        days
+    }))?;
+    Some(date.format("%Y-%m-%d").to_string())
+}
+
+/// ISO 日期时间 → `yyyy-MM-dd`（丢弃时间部分）。
+fn iso_datetime_date_text(text: &str) -> Option<String> {
+    use chrono::{DateTime, NaiveDate, NaiveDateTime};
+
+    let trimmed = text.trim();
+    if let Ok(date) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return Some(date.format("%Y-%m-%d").to_string());
+    }
+    if let Ok(datetime) = DateTime::parse_from_rfc3339(trimmed) {
+        return Some(datetime.naive_utc().format("%Y-%m-%d").to_string());
+    }
+    for pattern in ["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%.f"] {
+        if let Ok(datetime) = NaiveDateTime::parse_from_str(trimmed, pattern) {
+            return Some(datetime.format("%Y-%m-%d").to_string());
+        }
+    }
+    None
 }
 
 /// Read one worksheet with the shared Rust Excel reader and expand it using the timeline rules.
@@ -113,6 +178,7 @@ pub fn extract_cells_from_workbook(
         row_suffix_enabled,
         &Default::default(),
     )
+    .map(|output| output.cells)
     .map_err(|message| anyhow!(message))
 }
 
@@ -194,6 +260,33 @@ mod tests {
     use super::*;
     use serde_json::{json, Value};
     use std::path::PathBuf;
+
+    /// 表头里的日期只输出日期部分（用户 2026-11-09 口径）。
+    #[test]
+    fn workbook_cell_datetime_text_drops_time_and_uses_iso_date() {
+        // 46334 = 2026-11-08（Excel 1900 系统）。
+        assert_eq!(
+            WorkbookCell::DateTimeSerial(46334.0).to_sheet_text(),
+            "2026-11-08"
+        );
+        // ISO 日期时间：丢时间、留日期。
+        assert_eq!(
+            WorkbookCell::DateTimeIso("2026-11-08T00:00:00.000".to_owned()).to_sheet_text(),
+            "2026-11-08"
+        );
+        assert_eq!(
+            WorkbookCell::DateTimeIso("2026-11-08 13:45:30".to_owned()).to_sheet_text(),
+            "2026-11-08"
+        );
+        // 纯时间序列号仍然显示时间，不能落成 1899-12-31。
+        assert_eq!(
+            WorkbookCell::DateTimeSerial(0.5).to_sheet_text(),
+            "12:00:00"
+        );
+        // 普通数字保持原样（PyCode 的 float 语义）。
+        assert_eq!(WorkbookCell::Number(46334.0).to_sheet_text(), "46334.0");
+        assert_eq!(WorkbookCell::Integer(46334).to_sheet_text(), "46334");
+    }
 
     struct TestDir(PathBuf);
 

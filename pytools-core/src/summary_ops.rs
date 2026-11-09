@@ -1207,6 +1207,26 @@ struct NamedSheetSpec {
     rows: Vec<NamedSummaryRow>,
 }
 
+/// 路由阶段只需要模板结构（表头/分组/字段位置），不需要已累积的汇总行。
+///
+/// `sheet_specs` 会随每个源文件把新行追加进 `spec.rows`；路由时若整体 clone，
+/// 第 k 个文件就要复制前 k-1 个文件的全部行，整批变成 O(N²)。实测 198 个源
+/// 文件时这占掉一半以上耗时（约 1.5 秒 / 2 秒），所以这里显式清空 `rows`。
+fn route_only_clone(spec: &NamedSheetSpec) -> NamedSheetSpec {
+    NamedSheetSpec {
+        template_sheet: spec.template_sheet.clone(),
+        output_key: spec.output_key.clone(),
+        mode: spec.mode,
+        fallback_output: spec.fallback_output,
+        structure: spec.structure.clone(),
+        groups: spec.groups.clone(),
+        field_positions: spec.field_positions.clone(),
+        output_headers: spec.output_headers.clone(),
+        extra_fields: spec.extra_fields.clone(),
+        rows: Vec::new(),
+    }
+}
+
 #[derive(Clone, Debug)]
 struct NamedValidationSheetSpec {
     template_sheet: String,
@@ -3444,17 +3464,16 @@ fn summarize_by_named_ranges_inner(
                     !spec.fallback_output
                         && named_direct_template_matches(&spec.template_sheet, &source_sheet.name)
                 })
-                .cloned()
+                .map(route_only_clone)
                 .collect::<Vec<_>>();
             let mut specs = direct_specs
                 .iter()
-                .cloned()
-                .map(|spec| (spec, false))
+                .map(|spec| (route_only_clone(spec), false))
                 .collect::<Vec<_>>();
             for fallback in &audit_fallbacks {
                 // Check the explicit fallback after a direct route fails too.
                 // Selection happens after both routes have been preflighted.
-                specs.push((fallback.clone(), true));
+                specs.push((route_only_clone(fallback), true));
             }
             if specs.is_empty() {
                 let reason = "未找到同名模板工作表，也未配置可用兜底模板".to_owned();
@@ -5336,7 +5355,16 @@ fn named_summary_header_labels(
             let address = format!("{}{}", column_letters(column), row);
             let value = cell_at_or_merged(sheet, &address);
             let text = match value.get("type").and_then(serde_json::Value::as_str) {
-                Some("number" | "integer" | "datetime_serial") => value["value"]
+                // 日期表头按用户口径只写日期（`yyyy-MM-dd`），与按批注汇总一致。
+                Some("datetime_serial") => value["value"]
+                    .as_f64()
+                    .and_then(datetime_serial_date_text)
+                    .unwrap_or_default(),
+                Some("datetime_iso") => {
+                    datetime_iso_date_text(value["value"].as_str().unwrap_or_default())
+                        .unwrap_or_default()
+                }
+                Some("number" | "integer") => value["value"]
                     .as_f64()
                     .map(|number| {
                         let mut text = number.to_string();
@@ -5346,7 +5374,7 @@ fn named_summary_header_labels(
                         text
                     })
                     .unwrap_or_default(),
-                Some("error" | "datetime_iso" | "duration_iso") => {
+                Some("error" | "duration_iso") => {
                     anyhow::bail!("模板表头 {}!{} 含不支持的值类型", sheet.name, address)
                 }
                 _ => probe_text(&value),
@@ -5385,6 +5413,12 @@ fn extract_named_sheet_rows(
             if end_row < bounds.start_row {
                 continue;
             }
+            // 固定行区域会为区域内每一行都输出（含空行）。若整个区域没有任何
+            // 数据，说明这个源工作表只是字段容器（例如 Meta 表被兜底路由
+            // 兜进来），输出一串空行没有意义，整块跳过。
+            if !dynamic && !named_region_has_any_data(source_sheet, bounds) {
+                continue;
+            }
             ensure_named_summary_formula_cache(
                 source_sheet,
                 NamedRegionBounds { end_row, ..bounds },
@@ -5410,7 +5444,10 @@ fn extract_named_sheet_rows(
                     let position = spec.field_positions[&(group.id.clone(), column)];
                     values[position + 2 + extra_values.len()] = value;
                 }
-                if !has_data {
+                // 固定行区域：区域内每一行都输出，数据为空就留空行——用户要靠
+                // 行数核对报表数量、及时发现漏提取；动态（任意行）区域的结束行
+                // 由最后一个有数据的行决定，空行没有意义，仍然跳过。
+                if dynamic && !has_data {
                     continue;
                 }
                 result.push(NamedSummaryRow {
@@ -5421,6 +5458,27 @@ fn extract_named_sheet_rows(
         }
     }
     Ok(result)
+}
+
+/// 区域内是否存在任何有数据的单元格。
+fn named_region_has_any_data(sheet: &SheetDump, bounds: NamedRegionBounds) -> bool {
+    sheet.values.iter().any(|(address, value)| {
+        let Some((row, column)) = parse_a1(address) else {
+            return false;
+        };
+        row >= bounds.start_row
+            && row <= bounds.end_row
+            && column >= bounds.start_column
+            && column <= bounds.end_column
+            && named_region_cell_has_data(value)
+    }) || sheet.formulas.keys().any(|address| {
+        parse_a1(address).is_some_and(|(row, column)| {
+            row >= bounds.start_row
+                && row <= bounds.end_row
+                && column >= bounds.start_column
+                && column <= bounds.end_column
+        })
+    })
 }
 
 fn last_named_region_value_row(sheet: &SheetDump, bounds: NamedRegionBounds) -> Option<usize> {
@@ -6224,6 +6282,121 @@ pub(crate) fn read_zero_number_format_cells(
     read_cells_with_matching_styles(&mut archive, sheets, &zero_styles, "zero number-format")
 }
 
+/// 读取写成日期格式的单元格坐标，不限工作表。
+///
+/// Calamine 把日期单元格统一返回 `DateTimeSerial`，但对**手工填成序列号的
+/// 单元格**（用户把单元格设成日期格式、值敲 46334）它同样给 `Float`/`Int`。
+/// 表头里这两种情形都要按日期显示，所以需要 number-format 元数据来判断：
+/// 只要该单元格的格式是内置日期/时间格式（14-22、27-36、45-47、50-58）或
+/// 自定义格式里含年/月/日标记，就视为日期。
+///
+/// 注意 `[h]:mm:ss` 这类**累计时长**格式不算日期，它们由
+/// [`read_elapsed_time_cells`] 单独识别。
+pub(crate) fn read_date_formatted_cells(
+    path: &Path,
+    sheets: &[SheetDump],
+) -> Result<BTreeMap<String, BTreeSet<String>>> {
+    let file = fs::File::open(path)
+        .with_context(|| format!("open workbook for date-format metadata: {}", path.display()))?;
+    let mut archive = ZipArchive::new(file).context("open workbook OOXML package")?;
+    let Some(styles_part) = resolve_summary_styles_part(&mut archive)? else {
+        return Ok(BTreeMap::new());
+    };
+    let styles_xml = read_zip_part(&mut archive, &styles_part)?;
+    let styles_text =
+        std::str::from_utf8(&styles_xml).context("workbook styles.xml must be UTF-8")?;
+    let date_styles = parse_date_formatted_cell_styles(styles_text)?;
+    if !date_styles.iter().any(|is_date| *is_date) {
+        return Ok(BTreeMap::new());
+    }
+    read_cells_with_matching_styles(&mut archive, sheets, &date_styles, "date-format")
+}
+
+/// 每个 cellXfs 索引是否为日期/时间格式。
+fn parse_date_formatted_cell_styles(styles_xml: &str) -> Result<Vec<bool>> {
+    let document = roxmltree::Document::parse(styles_xml).context("parse styles.xml")?;
+    let mut custom_formats = BTreeMap::new();
+    if let Some(number_formats) = document
+        .root()
+        .descendants()
+        .find(|node| is_xml_element(*node, SPREADSHEET_MAIN_NS, "numFmts"))
+    {
+        for number_format in number_formats
+            .children()
+            .filter(|node| is_xml_element(*node, SPREADSHEET_MAIN_NS, "numFmt"))
+        {
+            let Some(id) = number_format.attribute("numFmtId") else {
+                continue;
+            };
+            let id = id
+                .parse::<u32>()
+                .context("invalid custom number format id")?;
+            let code = number_format
+                .attribute("formatCode")
+                .context("custom number format has no formatCode")?;
+            custom_formats.insert(id, code.to_owned());
+        }
+    }
+    let cell_formats = document
+        .root()
+        .descendants()
+        .find(|node| is_xml_element(*node, SPREADSHEET_MAIN_NS, "cellXfs"))
+        .context("styles.xml has no cellXfs collection")?;
+    let mut result = Vec::new();
+    for format in cell_formats
+        .children()
+        .filter(|node| is_xml_element(*node, SPREADSHEET_MAIN_NS, "xf"))
+    {
+        let id = format
+            .attribute("numFmtId")
+            .unwrap_or("0")
+            .parse::<u32>()
+            .context("invalid cell format number format id")?;
+        result.push(match custom_formats.get(&id) {
+            Some(code) => is_openpyxl_date_format(code),
+            None => is_builtin_date_format_id(id),
+        });
+    }
+    anyhow::ensure!(!result.is_empty(), "styles.xml cellXfs is empty");
+    Ok(result)
+}
+
+/// Built-in number format ids that render a date and/or clock time.
+///
+/// 14-22 是区域相关的日期/时间格式，45-47 是分秒格式，27-36 与 50-58 是
+/// 东亚洲历日期格式（含日文年号、中文年月日），Excel 一律按日期显示。
+fn is_builtin_date_format_id(id: u32) -> bool {
+    matches!(id, 14..=22 | 27..=36 | 45..=47 | 50..=58)
+}
+
+/// 自定义格式是否渲染日期或时间（而不是纯数字/文本/累计时长）。
+fn is_openpyxl_date_format(format_code: &str) -> bool {
+    // 只检查第一个 `;` 分隔的正数段：负数/零/文本段的格式不影响它是不是日期列。
+    let first_section = format_code.split(';').next().unwrap_or_default();
+    // 累计时长标记（[h]、[mm]、[ss]）按 openpyxl 口径是 timedelta，不是日期。
+    if is_openpyxl_timedelta_format(first_section) {
+        return false;
+    }
+    let mut in_quotes = false;
+    let mut in_bracket = false;
+    let mut chars = first_section.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            '[' => in_bracket = true,
+            ']' => in_bracket = false,
+            '\\' => {
+                // 转义的下一个字符是字面量，跳过。
+                chars.next();
+            }
+            _ if in_quotes || in_bracket => {}
+            'y' | 'Y' | 'm' | 'M' | 'd' | 'D' | 'h' | 'H' | 's' | 'S' => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 fn read_cells_with_matching_styles(
     archive: &mut ZipArchive<fs::File>,
     sheets: &[SheetDump],
@@ -6595,12 +6768,16 @@ fn probe_text(value: &serde_json::Value) -> String {
             }
             Some("boolean") => python_bool_text(cell_value.as_bool().unwrap_or(false)),
             Some("number") | Some("integer") => python_number_text(cell_value),
-            Some("datetime_iso") => {
-                python_datetime_iso_text(cell_value.as_str().unwrap_or_default())
-            }
+            // 表头里的日期只取日期部分（2026-11-09 用户口径）：
+            // 原先输出 `2026-03-01 00:00:00`，与「表头是日期」的展示习惯不符。
+            // 纯时间值（< 1 天）仍保留时间，否则会落成 1899-12-31。
+            Some("datetime_iso") => datetime_iso_date_text(cell_value.as_str().unwrap_or_default())
+                .unwrap_or_else(|| {
+                    python_datetime_iso_text(cell_value.as_str().unwrap_or_default())
+                }),
             Some("datetime_serial") => cell_value
                 .as_f64()
-                .and_then(python_datetime_serial_text)
+                .and_then(datetime_serial_date_text)
                 .unwrap_or_default(),
             Some("duration_serial") => cell_value
                 .as_f64()
@@ -6611,6 +6788,64 @@ fn probe_text(value: &serde_json::Value) -> String {
             _ => value.to_string(),
         }
     }
+}
+
+/// 日期时间序列号 → `yyyy-MM-dd`；纯时间（< 1 天）→ `HH:MM:SS[.ffffff]`。
+fn datetime_serial_date_text(serial: f64) -> Option<String> {
+    if !serial.is_finite() || serial < 0.0 {
+        return None;
+    }
+    let milliseconds = (serial * 86_400_000.0).round();
+    if milliseconds < 0.0 || milliseconds > i64::MAX as f64 {
+        return None;
+    }
+    let milliseconds = milliseconds as i64;
+    const DAY_MILLISECONDS: i64 = 86_400_000;
+    if milliseconds < DAY_MILLISECONDS {
+        // 当天时刻，沿用 Python `time` 的显示（只到秒，非零微秒才补）。
+        let time = python_datetime_serial_text(serial)?;
+        return Some(time);
+    }
+    let days = milliseconds.div_euclid(DAY_MILLISECONDS);
+    let time = chrono::NaiveTime::from_num_seconds_from_midnight_opt(
+        (milliseconds.rem_euclid(DAY_MILLISECONDS) / 1_000) as u32,
+        0,
+    )?;
+    // Excel 1900 闰年缺陷：序列号 60 是不存在的 1900-02-29。
+    let epoch = if days < 60 {
+        chrono::NaiveDate::from_ymd_opt(1900, 1, 1)?
+    } else {
+        chrono::NaiveDate::from_ymd_opt(1899, 12, 30)?
+    };
+    let date = epoch.checked_add_signed(chrono::Duration::days(if days < 60 {
+        days.saturating_sub(1)
+    } else {
+        days
+    }))?;
+    let _ = time;
+    Some(date.format("%Y-%m-%d").to_string())
+}
+
+/// ISO 日期时间 → `yyyy-MM-dd`；解析不出日期时返回 None 交由调用方兜底。
+fn datetime_iso_date_text(text: &str) -> Option<String> {
+    use chrono::{DateTime, NaiveDate, NaiveDateTime};
+
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(date) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return Some(date.format("%Y-%m-%d").to_string());
+    }
+    if let Ok(datetime) = DateTime::parse_from_rfc3339(trimmed) {
+        return Some(datetime.naive_utc().format("%Y-%m-%d").to_string());
+    }
+    for pattern in ["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%.f"] {
+        if let Ok(datetime) = NaiveDateTime::parse_from_str(trimmed, pattern) {
+            return Some(datetime.format("%Y-%m-%d").to_string());
+        }
+    }
+    None
 }
 
 fn python_bool_text(value: bool) -> String {
@@ -7028,6 +7263,46 @@ mod used_range_datetime_compat_tests {
 mod comment_region_tests {
     use super::*;
 
+    /// 内置日期格式 id 的判定：日期与时间算，累计时长（46）不算。
+    #[test]
+    fn builtin_date_format_ids_cover_regional_and_east_asian_variants() {
+        for id in [14, 15, 16, 17, 18, 19, 20, 21, 22] {
+            assert!(is_builtin_date_format_id(id), "id {id} should be a date");
+        }
+        // 东亚洲历/年号日期格式。
+        for id in [27, 28, 29, 30, 31, 32, 33, 34, 35, 36] {
+            assert!(is_builtin_date_format_id(id), "id {id} should be a date");
+        }
+        for id in [45, 46, 47] {
+            assert!(is_builtin_date_format_id(id), "id {id} should be a date");
+        }
+        for id in [50, 57, 58] {
+            assert!(is_builtin_date_format_id(id), "id {id} should be a date");
+        }
+        // 常规/数字/文本格式不是日期。
+        for id in [0, 1, 2, 3, 4, 9, 10, 11, 37, 38, 39, 40, 41, 43, 49] {
+            assert!(!is_builtin_date_format_id(id), "id {id} is not a date");
+        }
+    }
+
+    /// 自定义格式：引号内与方括号内的字母不算日期标记。
+    #[test]
+    fn custom_date_formats_ignore_quoted_and_bracketed_text() {
+        assert!(is_openpyxl_date_format(r#"yyyy"年"m"月"d"日""#));
+        assert!(is_openpyxl_date_format("m/d/yyyy"));
+        assert!(is_openpyxl_date_format("yyyy-mm-dd hh:mm:ss"));
+        // 累计时长不是日期。
+        assert!(!is_openpyxl_date_format("[h]:mm:ss"));
+        assert!(!is_openpyxl_date_format("[mm]:ss"));
+        // 引号里的字面量不是日期标记。
+        assert!(!is_openpyxl_date_format(r#"0.00"天""#));
+        // 纯数字格式不是日期。
+        assert!(!is_openpyxl_date_format("#,##0.00"));
+        assert!(!is_openpyxl_date_format("0"));
+        // 转义字母不是日期标记。
+        assert!(!is_openpyxl_date_format(r"0\m"));
+    }
+
     #[test]
     fn empty_set_capture_is_ignored_but_whitespace_capture_is_retained() {
         assert_eq!(parse_set_name("set()"), None);
@@ -7085,16 +7360,22 @@ mod comment_region_tests {
             probe_text(&serde_json::json!({"type":"number", "value":1e20})),
             "1e+20"
         );
+        // 2026-11-09 用户口径：表头里的日期只输出日期部分。
         assert_eq!(
             probe_text(&serde_json::json!({
                 "type":"datetime_iso",
                 "value":"2026-06-30T00:00:00.123"
             })),
-            "2026-06-30 00:00:00.123000"
+            "2026-06-30"
         );
         assert_eq!(
             probe_text(&serde_json::json!({"type":"datetime_serial", "value":46203.0})),
-            "2026-06-30 00:00:00"
+            "2026-06-30"
+        );
+        // 纯时间值仍保留时间，不能落成 1899-12-31。
+        assert_eq!(
+            probe_text(&serde_json::json!({"type":"datetime_serial", "value":0.5})),
+            "12:00:00"
         );
         assert_eq!(
             probe_text(&serde_json::json!({"type":"duration_serial", "value":1.1356495717592594})),

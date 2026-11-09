@@ -69,6 +69,27 @@ pub struct MergeRange {
     pub max_col: usize,
 }
 
+/// 固定行区域里「有行标识、但数据列全空」的行。
+///
+/// 这类行不产出任何单元格，单独登记后由调用方补一行空值输出，使输出行数与
+/// 模板科目行数一致——用户靠行数核对报表数量，漏填不应被静默丢弃。
+#[derive(Clone, Debug)]
+pub struct BlankRow {
+    pub source_file: String,
+    pub sheet_name: String,
+    pub rule_name: String,
+    pub data_date: String,
+    pub row_path: String,
+    /// 1-based 行号，只用于日志与排错。
+    pub row_number: String,
+}
+
+/// `extract_cells_from_matrix` 的完整产出。
+pub struct ExtractionOutput<T> {
+    pub cells: Vec<ExtractedCell<T>>,
+    pub blank_rows: Vec<BlankRow>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtractedCell<T> {
     pub source_file: String,
@@ -220,6 +241,13 @@ fn compute_col_paths_from_headers(
 
 /// Expand an in-memory worksheet using the configured row/column header rules.
 /// Cell values remain typed and are cloned only for cells included in the result.
+fn empty_output<T>() -> ExtractionOutput<T> {
+    ExtractionOutput {
+        cells: Vec::new(),
+        blank_rows: Vec::new(),
+    }
+}
+
 pub fn extract_cells_from_matrix<T: SheetValue>(
     sheet: &[Vec<Option<T>>],
     merge_ranges: &[MergeRange],
@@ -229,11 +257,11 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     path_maps: &[PathMapRule],
     row_suffix_enabled: bool,
     overrides: &HashMap<(usize, usize), String>,
-) -> Result<Vec<ExtractedCell<T>>, &'static str> {
+) -> Result<ExtractionOutput<T>, &'static str> {
     let rows = sheet.len();
     let column_count = sheet.iter().map(Vec::len).max().unwrap_or(0);
     if rows == 0 || column_count == 0 {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     }
 
     let a1 = cell_text(sheet, 0, 0);
@@ -256,14 +284,14 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
                 .iter()
                 .any(|column| *column >= column_count)
         {
-            return Ok(Vec::new());
+            return Ok(empty_output());
         }
         configured_columns
     } else {
         Vec::new()
     };
     if rule.row_header_col_specified && row_header_columns.is_empty() {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     }
 
     let header_rows = rule
@@ -272,10 +300,10 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
         .map(|row| row.checked_sub(1))
         .collect::<Option<Vec<_>>>();
     let Some(header_rows) = header_rows else {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     };
     if header_rows.is_empty() || header_rows.iter().any(|row| *row >= rows) {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     }
 
     let row_start = if rule.data_row_start > 0 {
@@ -283,11 +311,14 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     } else {
         *header_rows.iter().max().unwrap_or(&0) + 1
     };
-    let row_end = rule
+    // 固定行区域（配置填写「数据结束行」）：结束时使用配置值，区域内每行都
+    // 输出，数据为空就留空行——用户靠行数核对报表数量、发现漏提取。
+    // 动态区域（结束行留空）：结束行取数据列最后一个有值的行，空行没有意义。
+    let fixed_row_end = rule
         .data_row_end
         .filter(|end| *end > 0)
-        .map(|end| end - 1)
-        .unwrap_or(rows - 1);
+        .map(|end| end.wrapping_sub(1));
+    let row_end = fixed_row_end.unwrap_or(rows - 1);
     let col_start = if rule.data_col_start > 0 {
         rule.data_col_start - 1
     } else if rule.row_header_col_specified {
@@ -302,7 +333,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
         .unwrap_or(column_count - 1);
 
     if row_start > row_end || col_start > col_end {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     }
     // PyCode reads out-of-range header cells as empty strings, so rows beyond
     // the stored data silently drop out (empty row header), and the wide
@@ -313,7 +344,27 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     let row_end = row_end.min(rows.saturating_sub(1));
     let col_end = col_end.min(column_count.saturating_sub(1));
     if row_start > row_end || col_start > col_end {
-        return Ok(Vec::new());
+        return Ok(empty_output());
+    }
+    // 动态区域：结束行收敛到「数据列里最后一个有值的行」，避免把 A 列的
+    // 备注文字当成数据行。固定区域保持配置的结束行，不收敛。
+    let row_end = match fixed_row_end {
+        Some(fixed) => fixed.min(rows.saturating_sub(1)),
+        None => (row_start..=row_end)
+            .rev()
+            .find(|row| {
+                (col_start..=col_end).any(|column| {
+                    sheet
+                        .get(*row)
+                        .and_then(|cells| cells.get(column))
+                        .and_then(Option::as_ref)
+                        .is_some_and(|value| !value.is_missing())
+                })
+            })
+            .unwrap_or(row_start.wrapping_sub(1)),
+    };
+    if row_start > row_end {
+        return Ok(empty_output());
     }
 
     let header_texts = collect_header_rows(
@@ -346,7 +397,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
         && !required_match(&rule.required_row_headers, &row_header_values))
         || !required_match(&rule.required_col_headers, &column_header_values)
     {
-        return Ok(Vec::new());
+        return Ok(empty_output());
     }
 
     let (column_paths, _) = compute_col_paths_from_headers(
@@ -382,6 +433,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
     let row_maps = filter_path_maps(path_maps, "行头", &rule.name, source_file_name, sheet_name);
     let mut seen_rows = HashMap::<String, usize>::new();
     let mut extracted = Vec::new();
+    let mut blank_rows = Vec::new();
     for (offset, raw_path) in raw_row_paths.into_iter().enumerate() {
         let row = row_start + offset;
         if raw_path.is_empty() || skip_match(&rule.skip_keywords, &raw_path) {
@@ -397,6 +449,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
             };
         let row_path = apply_path_maps(&row_path, &row_maps);
 
+        let mut row_has_value = false;
         for col in col_start..=col_end {
             let col_path = column_paths.get(&col).map(String::as_str).unwrap_or("");
             if col_path.is_empty() {
@@ -412,6 +465,7 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
             if value.is_missing() {
                 continue;
             }
+            row_has_value = true;
             extracted.push(ExtractedCell {
                 source_file: source_file_name.to_owned(),
                 sheet_name: sheet_name.to_owned(),
@@ -423,8 +477,24 @@ pub fn extract_cells_from_matrix<T: SheetValue>(
                 cell_addr: cell_address(row + 1, col + 1),
             });
         }
+        // 固定行区域：有行标识但数据列全空的行也要登记，输出时留空值，
+        // 这样行数与模板科目行数一致，漏填不会被静默吞掉。动态区域跳过
+        // （结束行本身就是按有数据的行收敛的）。
+        if fixed_row_end.is_some() && !row_has_value {
+            blank_rows.push(BlankRow {
+                source_file: source_file_name.to_owned(),
+                sheet_name: sheet_name.to_owned(),
+                rule_name: rule.name.clone(),
+                data_date: data_date.clone(),
+                row_path,
+                row_number: (row + 1).to_string(),
+            });
+        }
     }
-    Ok(extracted)
+    Ok(ExtractionOutput {
+        cells: extracted,
+        blank_rows,
+    })
 }
 
 fn cell_text<T: SheetValue>(sheet: &[Vec<Option<T>>], row: usize, col: usize) -> String {
@@ -650,6 +720,7 @@ mod configured_range_boundary_tests {
         )
         .expect("a data range starting after the sheet should produce no rows");
 
-        assert!(cells.is_empty());
+        assert!(cells.cells.is_empty());
+        assert!(cells.blank_rows.is_empty());
     }
 }

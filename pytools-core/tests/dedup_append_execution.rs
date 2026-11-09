@@ -895,7 +895,36 @@ wb.save(r"{path}")
 
 /// 回退路径是否可执行：显式环境变量或发行包 dist/python 皆可。
 fn openpyxl_runtime_available() -> bool {
-    openpyxl_python_for_fixtures().is_some()
+    ensure_openpyxl_env()
+}
+
+/// 把夹具发现到的运行时写进产品解析器认的环境变量。
+///
+/// 夹具发现器会从测试可执行文件逐级向上找 `python/python.exe`（测试进程在
+/// `target/debug/deps/`，因此能命中 `target/debug/python/`）；而产品解析器
+/// 只认 `<exe目录>/python`，不会向上一级找。两者口径不同会让“夹具存在但
+/// 回退不可执行”，所以这里用产品支持的显式覆盖把路径对齐。
+/// 返回 false 表示本机确实没有可用运行时，调用方应跳过。
+fn ensure_openpyxl_env() -> bool {
+    if std::env::var("PYTOOLS_OPENPYXL_PYTHON").is_ok()
+        && std::env::var("PYTOOLS_OPENPYXL_WORKER").is_ok()
+    {
+        return true;
+    }
+    let Some(python) = openpyxl_python_for_fixtures() else {
+        return false;
+    };
+    let Some(workspace) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() else {
+        return false;
+    };
+    let worker = workspace.join("crates/excel-editor/python/openpyxl_worker.py");
+    if !worker.is_file() {
+        return false;
+    }
+    // 产品运行时解析要求两个变量必须同时有效，缺一即配置错误。
+    std::env::set_var("PYTOOLS_OPENPYXL_PYTHON", &python);
+    std::env::set_var("PYTOOLS_OPENPYXL_WORKER", &worker);
+    true
 }
 
 /// 夹具构造用的解释器解析：显式环境变量优先，其次从测试可执行文件

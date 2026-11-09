@@ -1841,6 +1841,54 @@ fn run_wide_summary_inner(
                     .with_context(|| format!("project calendar dates from {}", path.display()));
             }
         };
+        // 表头里手工填成序列号的日期（单元格格式是日期、值敲 46334）Calamine
+        // 返回 Int/Float，`to_sheet_text` 会当成数字。这里按 number-format 元数据
+        // 把它们投影成日期序列号，表头才会写成 `yyyy-MM-dd` 而不是 `46334.0`。
+        // 放在日期系统投影之后，才能拿到本工作簿的 1904 标记。
+        if !is_legacy_xls {
+            match crate::summary_ops::read_date_formatted_cells(path, &workbook.sheets) {
+                Ok(date_cells) => {
+                    let projected = overlay_wide_date_formatted_cells(
+                        &mut workbook.sheets,
+                        &date_cells,
+                        &elapsed_time_cells,
+                        source_uses_1904_epoch,
+                    );
+                    if projected > 0 {
+                        emitter.emit(
+                            "header_date_projection",
+                            "completed",
+                            format!("已按单元格日期格式投影 {projected} 个日期值"),
+                            Some(input_index),
+                            Some(elapsed_metadata_started.elapsed()),
+                            &["pytools-core", "OOXML styles", "roxmltree"],
+                            Some("pytools-core OOXML adapter"),
+                            None,
+                        );
+                    }
+                }
+                Err(error) if global.error_policy == "continue" => {
+                    emitter.emit(
+                        "header_date_projection",
+                        "skipped",
+                        format!(
+                            "工作簿 {filename}（第 {input_index}/{} 个）日期格式读取失败；表头日期可能显示为序列号",
+                            sources.len()
+                        ),
+                        Some(input_index),
+                        Some(elapsed_metadata_started.elapsed()),
+                        &["pytools-core", "OOXML styles", "roxmltree"],
+                        Some("pytools-core OOXML adapter"),
+                        Some("header_date_projection_error"),
+                    );
+                    let _ = error;
+                }
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("read date formats from {}", path.display()));
+                }
+            }
+        }
         let time_normalization_started = Instant::now();
         let normalized_subday_values =
             normalize_wide_subday_serials(&mut workbook.sheets, source_uses_1904_epoch);
@@ -2043,7 +2091,7 @@ fn run_wide_summary_inner(
                         }
                     }
                 }
-                let cells = match crate::rule_engine::extract_cells_from_matrix(
+                let output = match crate::rule_engine::extract_cells_from_matrix(
                     &matrix,
                     &merges,
                     &filename,
@@ -2053,7 +2101,7 @@ fn run_wide_summary_inner(
                     row_suffix_enabled,
                     &HashMap::new(),
                 ) {
-                    Ok(cells) => cells,
+                    Ok(output) => output,
                     Err(error) => {
                         emitter.progress.failed_inputs += 1;
                         emitter.emit(
@@ -2074,9 +2122,43 @@ fn run_wide_summary_inner(
                         });
                     }
                 };
-                let worksheet_cells = cells.len();
+                let worksheet_cells = output.cells.len();
                 emitter.progress.extracted_cells += worksheet_cells;
-                for cell in cells {
+                // 固定行区域补出的空行：先登记桶（保持模板行序），再按普通
+                // 单元格流程填值，这样输出里就是「有科目名、数据空白」的一行。
+                let blank_row_cells = output
+                    .blank_rows
+                    .into_iter()
+                    .map(|blank| crate::rule_engine::ExtractedCell {
+                        source_file: blank.source_file,
+                        sheet_name: blank.sheet_name,
+                        rule_name: blank.rule_name,
+                        data_date: blank.data_date,
+                        row_path: blank.row_path,
+                        // 空 col_path 只用于建立桶，不会写进 values。
+                        col_path: String::new(),
+                        value: crate::workbook_extract::WorkbookCell::Text(String::new()),
+                        cell_addr: format!("A{}", blank.row_number),
+                    })
+                    .collect::<Vec<_>>();
+                // 按源表行号合并，保持模板行序（空行不能因为先建桶而跑到最前）。
+                let mut all_cells = blank_row_cells
+                    .into_iter()
+                    .chain(output.cells)
+                    .collect::<Vec<_>>();
+                all_cells.sort_by_key(|cell| {
+                    cell.cell_addr
+                        .chars()
+                        .rev()
+                        .take_while(|ch| ch.is_ascii_digit())
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect::<String>()
+                        .parse::<u32>()
+                        .unwrap_or(u32::MAX)
+                });
+                for cell in all_cells {
                     let row_number = cell
                         .cell_addr
                         .chars()
@@ -2126,6 +2208,10 @@ fn run_wide_summary_inner(
                     };
                     let bucket = &mut state.buckets[bucket_index];
                     bucket.row_number = row_number;
+                    // 空 col_path 是「固定区域空行」的占位标记：只建桶，不填值。
+                    if cell.col_path.is_empty() {
+                        continue;
+                    }
                     if !bucket.values.contains_key(&cell.col_path) {
                         if state.seen_columns.insert(cell.col_path.clone()) {
                             state.columns.push(cell.col_path.clone());
@@ -2394,6 +2480,72 @@ fn normalize_wide_subday_serials(sheets: &mut [SheetDump], date_1904: bool) -> u
         }
     }
     normalized
+}
+
+/// 把「格式是日期、值为数字」的单元格投影成日期序列号。
+///
+/// 这类单元格是用户在日期格式下手工录入的（或在别的软件里保存的），Calamine
+/// 按值返回 `Int`/`Float`，`WorkbookCell::to_sheet_text` 会输出 `46334.0`。
+/// 只处理 >= 1 的序列号：`0 < v < 1` 是当天时刻，投影成日期会落成 1899-12-31。
+/// 累计时长格式的单元格由 `elapsed_time_cells` 排除，避免把 `[h]:mm:ss` 当时日期。
+fn overlay_wide_date_formatted_cells(
+    sheets: &mut [SheetDump],
+    date_cells: &BTreeMap<String, BTreeSet<String>>,
+    elapsed_time_cells: &BTreeMap<String, BTreeSet<String>>,
+    date_1904: bool,
+) -> usize {
+    const DAYS_1904_TO_1900: f64 = 1462.0;
+    let mut projected = 0;
+    for (name, addresses) in date_cells {
+        if elapsed_time_cells
+            .get(name)
+            .is_some_and(|elapsed| addresses.is_subset(elapsed))
+        {
+            continue;
+        }
+        let Some(sheet) = sheets.iter_mut().find(|sheet| sheet.name == *name) else {
+            continue;
+        };
+        for address in addresses {
+            if elapsed_time_cells
+                .get(name)
+                .is_some_and(|elapsed| elapsed.contains(address))
+            {
+                continue;
+            }
+            let Some(cell) = sheet.values.get_mut(address) else {
+                continue;
+            };
+            let kind = cell.get("type").and_then(serde_json::Value::as_str);
+            let serial = cell.get("value").and_then(serde_json::Value::as_f64);
+            let Some(serial) = serial else { continue };
+            match kind {
+                // 已经是日期序列号：只需保证不再走数字分支。1904 工作簿的
+                // 值要平移到 1900 系统，表头文本才和 Excel 显示一致。
+                Some("datetime_serial") => {
+                    if date_1904 && serial >= 1.0 {
+                        *cell = serde_json::json!({
+                            "type": "datetime_serial",
+                            "value": serial + DAYS_1904_TO_1900,
+                        });
+                        projected += 1;
+                    }
+                }
+                // 手工录入的日期格式数字：重标为日期序列号。
+                Some("integer" | "number") if serial >= 1.0 && serial.fract() == 0.0 => {
+                    let serial = if date_1904 {
+                        serial + DAYS_1904_TO_1900
+                    } else {
+                        serial
+                    };
+                    *cell = serde_json::json!({"type": "datetime_serial", "value": serial});
+                    projected += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    projected
 }
 
 fn overlay_wide_elapsed_duration_serials(

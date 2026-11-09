@@ -1,6 +1,7 @@
-//! 报表打印菜单（3-1/3-2 Openpyxl / 3-3 预校验）的端到端测试。
+//! 报表打印菜单（3-1 Openpyxl 生成 / 3-2 预校验）的端到端测试。
 //!
-//! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口。
+//! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口；
+//! 旧 3-1（umya）与 3-2（openpyxl）已合并为同一个 openpyxl 生成入口。
 
 use anyhow::{Context, Result};
 use excel_reader::read_workbook;
@@ -59,14 +60,18 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     assert!(menu.status.success());
     let menu_text = String::from_utf8_lossy(&menu.stdout);
     assert!(
-        menu_text.contains("1  按打印配置生成：openpyxl（旧 3-1 入口）"),
-        "{menu_text}"
-    );
-    assert!(
-        menu_text.contains("2  按打印配置生成：openpyxl（旧 3-2 入口）"),
+        menu_text.contains("1  按打印配置生成：openpyxl"),
         "{menu_text}"
     );
     assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
+    let precheck_entries = menu_text
+        .lines()
+        .filter(|line| line.contains("按打印配置生成"))
+        .count();
+    assert_eq!(
+        precheck_entries, 1,
+        "old 3-1/3-2 duplicate entries must collapse into one: {menu_text}"
+    );
     assert!(!menu_text.contains("PDF"), "PDF entry must stay removed");
     assert!(
         !menu_text.contains("按批注"),
@@ -133,7 +138,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     );
 
     // 3-3：配置预校验（机器可读 JSON 仅 developer 视图输出）。
-    let precheck = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
+    let precheck = run_menu_with_view(&config, "3\n2\n0\n0\n", "developer")?;
     assert!(precheck.status.success());
     let precheck_response = output_json(&precheck)?;
     assert_eq!(
@@ -271,41 +276,6 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
 }
 
 #[test]
-fn openpyxl_print_engine_reports_clearly_and_publishes_when_available() -> Result<()> {
-    let root = TestDirectory::new()?;
-    let source = root.path().join("source.xlsx");
-    let target = root.path().join("printed.xlsx");
-    let config =
-        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
-    create_print_source(&source)?;
-    let source_before = fs::read(&source)?;
-
-    let output = run_menu(&config, "3\n2\n0\n0\n")?;
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("（openpyxl）"), "{stdout}");
-    let printed = target.clone();
-    if printed.is_file() {
-        assert!(
-            stdout.contains("按配置生成静态打印文件：执行成功"),
-            "{stdout}"
-        );
-        let dump = read_workbook(&printed)?;
-        assert_eq!(dump.sheets[0].name, "Printed");
-        assert_eq!(dump.sheets[0].values["B3"]["value"], 0.0001);
-        assert_eq!(dump.sheets[0].values["C3"]["value"], "0");
-        assert_eq!(fs::read(&source)?, source_before);
-    } else {
-        // 本机无 python/openpyxl 时必须是明确的环境提示，而不是伪造成功。
-        assert!(
-            stdout.contains("该功能需要外部环境") || stdout.contains("处理失败"),
-            "unexpected openpyxl outcome: {stdout}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
@@ -314,7 +284,7 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     create_print_source(&source)?;
     let log_dir = root.path().join("logs");
 
-    let developer = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
+    let developer = run_menu_with_view(&config, "3\n2\n0\n0\n", "developer")?;
     assert!(
         developer.status.success(),
         "precheck failed: {}",
@@ -349,14 +319,14 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     assert_eq!(history["action"], "config_precheck");
     assert_eq!(history["status"], "succeeded");
 
-    let user = run_menu_with_view(&config, "3\n3\n0\n0\n", "user")?;
+    let user = run_menu_with_view(&config, "3\n2\n0\n0\n", "user")?;
     assert!(user.status.success());
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     assert!(user_stdout.contains("开始：按配置预校验打印任务"));
     assert!(user_stdout.contains("通过配置数：1"), "{user_stdout}");
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
-    let off = run_menu_with_view(&config, "3\n3\n0\n0\n", "off")?;
+    let off = run_menu_with_view(&config, "3\n2\n0\n0\n", "off")?;
     assert!(off.status.success());
     let off_stdout = String::from_utf8_lossy(&off.stdout);
     assert!(!off_stdout.contains("PT-3 开始："));
@@ -507,7 +477,15 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 }
 
 fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    // 3-1 打印只认随包 openpyxl 运行时（不做 PATH 回退）。测试二进制旁边
+    // 没有 python/，因此显式指向发行包的 dist/python 与仓库内的 worker。
+    if let Some((python, worker)) = bundled_openpyxl_runtime() {
+        command
+            .env("PYTOOLS_OPENPYXL_PYTHON", python)
+            .env("PYTOOLS_OPENPYXL_WORKER", worker);
+    }
+    let mut child = command
         .arg("menu")
         .arg("--config")
         .arg(config)
@@ -527,6 +505,25 @@ fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Outp
     child
         .wait_with_output()
         .context("wait for interactive menu")
+}
+
+/// 发行包随附的 openpyxl 运行时：(解释器, worker)。
+fn bundled_openpyxl_runtime() -> Option<(PathBuf, PathBuf)> {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?;
+    let worker = workspace.join("crates/excel-editor/python/openpyxl_worker.py");
+    let python_names: &[&str] = if cfg!(windows) {
+        &[
+            "dist/python/python.exe",
+            "dist/python/runtime/bin/python.exe",
+        ]
+    } else {
+        &["dist/python/python3", "dist/python/runtime/bin/python3"]
+    };
+    let python = python_names
+        .iter()
+        .map(|relative| workspace.join(relative))
+        .find(|path| path.is_file())?;
+    worker.is_file().then_some((python, worker))
 }
 
 fn output_json(output: &Output) -> Result<Value> {

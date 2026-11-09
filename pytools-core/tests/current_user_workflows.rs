@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
-use pytools_core::static_print_engines::{run_configured_static_print, StaticPrintEngine};
+use pytools_core::static_print_engines::{
+    run_configured_static_print_with_python, StaticPrintEngine,
+};
 use rust_xlsxwriter::Workbook;
 use std::{fs, path::PathBuf, process::Command};
 
@@ -23,8 +25,34 @@ impl Drop for Scratch {
     }
 }
 
+/// 3-1 只认随包 openpyxl 运行时（不做 PATH 回退）。进程内直调时测试二进制
+/// 位于 `target/debug/deps/`，其旁边没有 `python/`，因此显式指向发行包。
+fn bundled_python() -> Option<PathBuf> {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()?
+        .to_path_buf();
+    let names: &[&str] = if cfg!(windows) {
+        &[
+            "dist/python/python.exe",
+            "dist/python/runtime/bin/python.exe",
+        ]
+    } else {
+        &["dist/python/python3", "dist/python/runtime/bin/python3"]
+    };
+    names
+        .iter()
+        .map(|relative| workspace.join(relative))
+        .find(|path| path.is_file())
+}
+
 #[test]
 fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Result<()> {
+    let Some(python) = bundled_python() else {
+        // 运行时缺失时跳过：这条测试断言的是 openpyxl 写出的内容，
+        // 环境限制必须如实记录，不能用伪造结果代替。
+        eprintln!("skipping: dist/python openpyxl runtime not staged");
+        return Ok(());
+    };
     let temp = Scratch::new()?;
     let source = temp.0.join("source.xlsx");
     let target = temp.0.join("configured.xlsx");
@@ -68,7 +96,11 @@ fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Res
         }
     }
     settings.save(&config)?;
-    let run = run_configured_static_print(&config, StaticPrintEngine::Openpyxl)?;
+    let run = run_configured_static_print_with_python(
+        &config,
+        StaticPrintEngine::Openpyxl,
+        Some(&python),
+    )?;
     assert_eq!((run.task_ok, run.task_failed, run.outputs.len()), (2, 0, 1));
     assert_eq!(run.outputs[0], target);
     let output = excel_reader::read_workbook(&target)?;
@@ -76,7 +108,11 @@ fn print_uses_configured_target_groups_sheets_and_refuses_existing_file() -> Res
     assert_eq!(output.sheets[0].values["A1"]["value"], "first");
     assert_eq!(output.sheets[1].values["A1"]["value"], "second");
     let before = fs::read(&target)?;
-    let rejected = run_configured_static_print(&config, StaticPrintEngine::Openpyxl)?;
+    let rejected = run_configured_static_print_with_python(
+        &config,
+        StaticPrintEngine::Openpyxl,
+        Some(&python),
+    )?;
     assert_eq!((rejected.task_ok, rejected.task_failed), (0, 2));
     assert!(rejected.outputs.is_empty());
     assert_eq!(fs::read(&target)?, before);

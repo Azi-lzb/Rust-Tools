@@ -683,11 +683,8 @@ fn copy_raw_value_static(
     }
 }
 
-/// 菜单 3-1/3-2：openpyxl，逐属性复制样式，行为对齐原 PyTools `print_310.py`。
-pub fn run_openpyxl_engine(
-    tasks: &[PrintTask],
-    python_exe: Option<&str>,
-) -> Result<StaticPrintRun> {
+/// 菜单 3-1：openpyxl，逐属性复制样式，行为对齐原 PyTools `print_310.py`。
+pub fn run_openpyxl_engine(tasks: &[PrintTask], python: &Path) -> Result<StaticPrintRun> {
     let enabled: Vec<&PrintTask> = tasks.iter().filter(|task| task.enabled).collect();
     ensure!(
         !enabled.is_empty(),
@@ -938,10 +935,7 @@ for t in plan['tasks']:
 sys.stdout.reconfigure(encoding='utf-8')
 print(json.dumps({'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': task_failed, 'outputs': outputs, 'issues': issues, 'events': events}, ensure_ascii=True))
 "#;
-    let python = python_exe
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("python"));
-    let output = Command::new(&python)
+    let output = Command::new(python)
         .arg("-c")
         .arg(script)
         .arg(&plan_path)
@@ -949,7 +943,10 @@ print(json.dumps({'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': 
         .stderr(Stdio::piped())
         .output()
         .with_context(|| {
-            "该功能需要外部环境: 无法启动 Python（3-5 openpyxl 引擎需要本机 python 与 openpyxl）"
+            format!(
+                "无法启动随包 openpyxl 运行时：{}（3-1 打印不采用 PATH 上的 Python）",
+                python.display()
+            )
         })?;
     let _ = fs::remove_file(&plan_path);
     ensure!(
@@ -1042,16 +1039,36 @@ fn unique_temp_json(value: &serde_json::Value) -> Result<PathBuf> {
     Ok(path)
 }
 
-pub fn probe_python_exe() -> Option<String> {
-    std::env::var("PYTOOLS_OPENPYXL_PYTHON")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+/// 解析 3-1 打印引擎使用的 Python 解释器。
+///
+/// 与 openpyxl worker 共用 `OpenpyxlWorkerConfig::resolve_runtime` 的分层查找
+/// （显式覆盖 / deb 布局 / `<exe>/python` ZIP 布局），因此 3-1 用的是随包运行时，
+/// 而不是 PATH 上的 `python`。2026-11-09 修复：旧实现只读
+/// `PYTOOLS_OPENPYXL_PYTHON`，未设置时回退裸 `python`，在 Windows 上会命中
+/// 微软商店占位程序并报 “Python was not found”。
+pub fn resolve_print_python() -> Result<PathBuf> {
+    let binary = std::env::current_exe().context("无法定位当前程序目录")?;
+    let config = excel_editor::OpenpyxlWorkerConfig::resolve_runtime(&binary, "pytools")
+        .context("3-1 打印需要随包 openpyxl 运行时")?;
+    Ok(config.python_executable)
 }
 
 /// 读打印配置并执行指定引擎。
 pub fn run_configured_static_print(
     config_path: &Path,
     engine: StaticPrintEngine,
+) -> Result<StaticPrintRun> {
+    run_configured_static_print_with_python(config_path, engine, None)
+}
+
+/// 同上，但允许调用方显式指定解释器。
+///
+/// 产品路径始终传 `None`（走 `resolve_print_python` 的分层查找）；测试需要
+/// 在不改动进程环境变量的前提下指向 `dist/python`，避免依赖 PATH 上的 Python。
+pub fn run_configured_static_print_with_python(
+    config_path: &Path,
+    engine: StaticPrintEngine,
+    python_override: Option<&Path>,
 ) -> Result<StaticPrintRun> {
     let tasks = crate::config::load_print_tasks(config_path).with_context(|| {
         format!(
@@ -1108,7 +1125,11 @@ pub fn run_configured_static_print(
         match engine {
             StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
             StaticPrintEngine::Openpyxl => {
-                run_openpyxl_engine(&tasks, probe_python_exe().as_deref())
+                let python = match python_override {
+                    Some(path) => path.to_path_buf(),
+                    None => resolve_print_python()?,
+                };
+                run_openpyxl_engine(&tasks, &python)
             }
         }?
     };
