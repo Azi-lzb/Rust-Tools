@@ -612,6 +612,12 @@ betteroffice：
 落点：`conversion_engine::run_fidelity_conversion_with_runtime` 的 `lo` 分支，
 新增 `refresh_converted_caches_with_betteroffice`。
 
+**设计意图（2026-11-09 用户确认保留）**：LO 转换后的 betteroffice 重算**不是
+多余步骤**——它让转换产物的 `<v>` 缓存回到 Excel 口径，这样下游用 calamine
+`data_only` 读缓存值（1-1/2-1/4-4 等功能都这么做）时拿到的就是 Excel 算过的
+结果，而不是 LO 的 `#REF!`/异形缓存。实测 ！50：LO 转换后 754 格缓存错误
+（`#REF!`），betteroffice 重算后与 COM 直接转换**只差 1 格**（浮点文本末位）。
+
 原因：LO 对 `INDIRECT` 的求值不可靠。实测 ！50 模板有 754 个格在 LO 转换后
 得到 `#REF!`（原 `.xls` 缓存是 `0.0`），其中 536 处公式直接含 `INDIRECT`、
 218 处是下游级联。公式文本逐字正确，只是缓存错。
