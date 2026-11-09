@@ -267,19 +267,38 @@ def _cell_name(address: tuple[int, int]) -> str:
     return f"{_column_name(address[1])}{address[0]}"
 
 
+# 转换校验的数值容差。
+#
+# Excel 把数值按 **15 位有效数字** 保存/显示，而 BIFF→OOXML 重存时两侧可能
+# 分别是 17 位与 15 位形式，相对差实测最大约 2.7e-15（例如
+# 1234.5678901234567 → 1234.56789012346）。原 1e-15 会把这类正常尾差判成
+# "转换改变了非公式数据"并让整次转换失败。取 1e-14：比最坏实测大 3.7 倍，
+# 同时仍比 Excel 15 位精度的固有误差紧一个数量级，不会放过真实数据改动。
+_VALUE_TOLERANCE = 1e-14
+# 零附近用绝对容差：原实现要求两侧都非零，导致 0 与极小正数被判不同。
+_VALUE_ZERO_TOLERANCE = 1e-12
+
+
 def _values_equal(left: Any, right: Any) -> bool:
     if isinstance(left, bool) or isinstance(right, bool):
         return type(left) is type(right) and left == right
     if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        left = float(left)
+        right = float(right)
         if left == right:
             return True
-        return (
-            math.isfinite(left)
-            and math.isfinite(right)
-            and left != 0
-            and right != 0
-            and abs(left - right) <= 1e-15 * max(abs(left), abs(right))
-        )
+        if not (math.isfinite(left) and math.isfinite(right)):
+            return False
+        # 两侧都是整数值时必须精确相等：容差只用于吸收浮点尾差，不能掩盖
+        # "1000 变成 1001" 这类真实改动（大数值下相对容差会放过 ±1）。
+        if left.is_integer() and right.is_integer():
+            return False
+        difference = abs(left - right)
+        scale = max(abs(left), abs(right))
+        if scale < _VALUE_ZERO_TOLERANCE:
+            # 两侧都贴近 0（含 0 与 ±1e-300 之类）：按绝对差判断。
+            return difference <= _VALUE_ZERO_TOLERANCE
+        return difference <= _VALUE_TOLERANCE * scale
     return type(left) is type(right) and left == right
 
 
@@ -455,7 +474,7 @@ def _compare(source: list[dict[str, Any]], output: list[dict[str, Any]]) -> dict
         "formula_cells": formula_count,
         "value_cells": value_count,
         "used_cells": used_cell_count,
-        "numeric_tolerance": 1e-15,
+        "numeric_tolerance": _VALUE_TOLERANCE,
     }
 
 

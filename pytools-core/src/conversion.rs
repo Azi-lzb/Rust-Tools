@@ -1544,13 +1544,24 @@ fn native_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> R
     })
 }
 
+/// 与 `conversion_engine::cell_values_equal` 同一口径：容差只吸收浮点尾差，
+/// 整数必须精确相等，零附近用绝对容差。
 fn numeric_values_equal(left: f64, right: f64) -> bool {
     if left == right {
         return true;
     }
-    left.is_finite()
-        && right.is_finite()
-        && (left - right).abs() <= 1e-15 * left.abs().max(right.abs())
+    if !(left.is_finite() && right.is_finite()) {
+        return false;
+    }
+    if left.fract() == 0.0 && right.fract() == 0.0 {
+        return false;
+    }
+    let difference = (left - right).abs();
+    let scale = left.abs().max(right.abs());
+    if scale < crate::conversion_engine::VALUE_ZERO_TOLERANCE {
+        return difference <= crate::conversion_engine::VALUE_ZERO_TOLERANCE;
+    }
+    difference <= crate::conversion_engine::VALUE_TOLERANCE * scale
 }
 
 fn parse_a1(address: &str) -> Option<(u32, u16)> {

@@ -2601,7 +2601,7 @@ fn validate_conversion(
     if source_ext == "csv" {
         validate_csv_conversion(input, &converted)?;
         return Ok(
-            "{\"level\":\"one_worksheet_and_csv_values\",\"numeric_tolerance\":1e-15}".into(),
+            "{\"level\":\"one_worksheet_and_csv_values\",\"numeric_tolerance\":1e-14}".into(),
         );
     }
     if let Some(validation) = external_validation {
@@ -2663,7 +2663,7 @@ fn validate_conversion(
     })?;
     compare_workbooks(&source, &converted)?;
     Ok(
-        "{\"level\":\"worksheet_order_names_values_and_formula_text\",\"numeric_tolerance\":1e-15}"
+        "{\"level\":\"worksheet_order_names_values_and_formula_text\",\"numeric_tolerance\":1e-14}"
             .into(),
     )
 }
@@ -2826,6 +2826,14 @@ fn compare_workbooks(source: &WorkbookDump, converted: &WorkbookDump) -> Result<
     Ok(())
 }
 
+/// 转换校验的数值容差。Excel 以 15 位有效数字保存/显示，BIFF→OOXML 重存时
+/// 两侧可能分别是 17 位与 15 位形式，实测相对差最大约 2.7e-15；原 1e-15 会把
+/// 正常尾差判成"转换改变了非公式数据"并让整次转换失败。1e-14 比最坏实测大
+/// 3.7 倍，仍比 Excel 15 位精度的固有误差紧一个数量级。详见 docs §5.14。
+pub(crate) const VALUE_TOLERANCE: f64 = 1e-14;
+/// 零附近的绝对容差（原实现要求两侧非零，0 与极小正数会被误判）。
+pub(crate) const VALUE_ZERO_TOLERANCE: f64 = 1e-12;
+
 fn cell_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
     let numeric = |kind: &str| matches!(kind, "number" | "integer" | "datetime_serial");
     let left_kind = cell_kind(left);
@@ -2841,12 +2849,22 @@ fn cell_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> boo
         let Some(right) = right.get("value").and_then(serde_json::Value::as_f64) else {
             return false;
         };
-        return left == right
-            || (left.is_finite()
-                && right.is_finite()
-                && left != 0.0
-                && right != 0.0
-                && (left - right).abs() <= 1e-15 * left.abs().max(right.abs()));
+        if (left - right).abs() == 0.0 {
+            return true;
+        }
+        if !(left.is_finite() && right.is_finite()) {
+            return false;
+        }
+        // 两侧都是整数值时必须精确相等：容差只吸收浮点尾差，不能掩盖真实改动。
+        if left.fract() == 0.0 && right.fract() == 0.0 {
+            return false;
+        }
+        let difference = (left - right).abs();
+        let scale = left.abs().max(right.abs());
+        if scale < VALUE_ZERO_TOLERANCE {
+            return difference <= VALUE_ZERO_TOLERANCE;
+        }
+        return difference <= VALUE_TOLERANCE * scale;
     }
     left == right
 }
@@ -3103,7 +3121,7 @@ fn csv_text_matches_probe(source: &str, actual: &serde_json::Value) -> bool {
             };
             left.is_finite()
                 && right.is_finite()
-                && (left - right).abs() <= 1e-15 * left.abs().max(right.abs()).max(1.0)
+                && (left - right).abs() <= VALUE_TOLERANCE * left.abs().max(right.abs()).max(1.0)
         }
         "boolean" => {
             let source = source.trim();
@@ -3146,14 +3164,71 @@ impl Drop for TempDirGuard {
 
 #[cfg(test)]
 mod tests {
+    /// 转换校验的数值容差口径（docs §5.14）。
+    #[test]
+    fn conversion_value_tolerance_absorbs_float_tails_only() {
+        let number = |value: f64| serde_json::json!({"type": "number", "value": value});
+
+        // 必须通过：Excel 15 位有效数字重存造成的尾差。
+        for (left, right) in [
+            // 现场反馈的实际样本
+            (0.0012083234879418526_f64, 0.00120832348794185_f64),
+            (1234.5678901234567, 1234.56789012346),
+            (0.12345678901234566, 0.123456789012346),
+            (901777.4199999999, 901777.42),
+            (12345678.901234567, 12345678.9012346),
+            (999999999999.9999, 1000000000000.0),
+        ] {
+            assert!(
+                cell_values_equal(&number(left), &number(right)),
+                "float tail {left} vs {right} must compare equal"
+            );
+            assert!(
+                cell_values_equal(&number(right), &number(left)),
+                "comparison must be symmetric for {left} vs {right}"
+            );
+        }
+
+        // 必须通过：零与符号零、零与极小值。
+        for (left, right) in [(0.0_f64, 0.0_f64), (0.0, -0.0), (0.0, 1e-300)] {
+            assert!(
+                cell_values_equal(&number(left), &number(right)),
+                "{left} vs {right} must compare equal near zero"
+            );
+        }
+
+        // 必须拒绝：真实数据改动。
+        for (left, right) in [
+            (100.0_f64, 101.0_f64),
+            (100.0, 100.001),
+            (100.0, 100.00000001),
+            (1234.0, 1235.0),
+            (0.0, 1.0),
+            (0.0, 0.001),
+        ] {
+            assert!(
+                !cell_values_equal(&number(left), &number(right)),
+                "{left} vs {right} must NOT compare equal"
+            );
+        }
+
+        // 整数必须精确相等：大数值下的相对容差不能掩盖 ±1。
+        assert!(!cell_values_equal(&number(1e15), &number(1e15 + 1.0)));
+        // 类型必须一致：数字与文本不相等。
+        assert!(!cell_values_equal(
+            &number(1.0),
+            &serde_json::json!({"type": "string", "value": "1"})
+        ));
+    }
+
+    use super::{
+        cell_values_equal, file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
+        select_conversion_engine, select_fidelity_engine, unique_sibling_conversion_candidate,
+        ConversionRuntime, LibreOfficeExecutor, LibreOfficeRunOutcome,
+    };
     #[cfg(target_os = "linux")]
     use super::{
         extract_named_validation_cells, parse_named_validation_region, NamedValidationRegionRequest,
-    };
-    use super::{
-        file_uri, libreoffice_batch_request, libreoffice_user_installation_arg,
-        select_conversion_engine, select_fidelity_engine, unique_sibling_conversion_candidate,
-        ConversionRuntime, LibreOfficeExecutor, LibreOfficeRunOutcome,
     };
     use anyhow::Result;
     use excel_editor::OpenpyxlWorkerConfig;
