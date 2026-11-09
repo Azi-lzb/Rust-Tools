@@ -690,13 +690,15 @@ betteroffice（与 Windows 同源同行为），LO 保留为格式转换与兜�
 - 1-4 Linux（工作副本恒为 xlsx）用 LO 计算是安全的；
 - 4-4/4-7 从 BIFF 源转换时才需要 betteroffice 刷缓存（当前实现已如此）。
 
-### 未验证（更新）
+### 未验证项的处理决定（2026-11-09 用户确认）
 
+- ~~betteroffice Linux 编译运行~~ → 已验证（上节）。
+- **原生 WPS ET（65521）样本**：不再追。COM 另存无法产生原生 ET，样本不可得；
+  BIFF 内容的 .et（实际遇到的全部形态）已按内容放行并实测通过。**不用管。**
+- **betteroffice 重算失败的回滚分支**：不再构造样本。betteroffice 能正确处理
+  绝大多数文件；失败时回退链已有代码兜底。**不用管。**
 - Windows 上未装 LibreOffice，LO 链路的端到端（转换+重算）只在组件层面验证
-  （WSL 转换 + Windows 重算），未在单一进程内跑通 `--engine lo`。
-- `betteroffice` 重算失败的回滚分支未构造样本触发。
-- ~~betteroffice Linux 编译运行~~ → 已验证（本节）。
-- 原生 WPS ET（65521）样本仍缺，.et 原生路径未验证。
+  （WSL 转换 + Windows 重算），未在单一进程内跑通 `--engine lo`。维持记录。
 
 ## 6. 修复的一个真 bug
 
