@@ -385,6 +385,82 @@ shared formula 展开——都不影响 Excel 打开与后续重算。已放开 
 - **LO 路由限定**：仅 `xls`/`xlsm` → `xlsx`；`.xlsb`、`.et`/`.ett`、Word 目标
   在 Linux 仍明确报错要求 Windows COM（未实测 LO 对它们的保真度）。
 
+## 5.11 4-4 转换失败的两个真实原因（2026-11-09 追加实测）
+
+§5.10 记录了 5 个 .xls 转换失败。深入排查后分成两类，**都不是 LO 路由的问题**：
+
+### 5.11.1 整列范围写法差异（已修复）
+
+失败信息：`工作表 '单位存款余额' 的公式在 M55 不一致`，
+源 `.xls` 写 `集中系统数据!$1:$65536`、产物 `.xlsx` 写 `$1:$1048576`。
+
+BIFF 单表上限 65536 行、OOXML 上限 1048576 行；Excel 的 SaveAs 会把整列引用
+规范到目标格式的上限。语义完全相同。
+
+修复（两处，口径一致）：
+- Rust `excel_reader::canonicalize_formula_for_recalculation` 新增
+  `canonicalize_sheet_row_ceilings`：把 `$1:$65536` / `$D$1:$D$65536` 两种
+  写法的行上限视为等价；`=A1+65536` 之类字面量不受影响（有反向测试）。
+- pywin32 worker 的 `_compare` 原本用 `a.strip() == b.strip()` 比对公式，
+  现改为 `_canonicalize_formula`（同样处理行上限、`TRUE()`、`=` 前缀与空白）。
+  注意：worker 是**随包**的，改源码后必须同步 `dist/python/` 与
+  `F:/RustBuild/pytools/{debug,release}/python/`，否则跑的是旧副本
+  （本轮实测踩过：改了源码但 exe 读的是 exe 同级 `python/` 下的旧 worker）。
+
+修复后该批 5 个文件从 0/5 转为 **4/5 成功**。
+
+### 5.11.2 源文件自身缺陷（不可修复，非管线问题）
+
+剩余 1 个失败：`统计工具-报表工具(基础数据用)v1.0.4.9 (1).xls`
+（24 个工作表、2.3 MB、`HasVBProject=True`）。
+
+- 失败阶段：`重新打开候选工作簿` —— Excel 打不开自己刚 SaveAs 出的 XLSX。
+- **手工验证**：脱离本工具，直接用 Excel COM `SaveAs(FileFormat=51)`，
+  产物同样打不开（`类 Workbooks 的 Open 方法无效`）。
+- 结论：该源文件（带 VBA 工程的老工具簿）经 Excel 自身 SaveAs 就产出坏文件，
+  与本工具或 LO 路由无关。这类文件应改用其他方式（如先在 Excel 里手工另存
+  并确认可打开）处理。
+
+### 5.11.4 .xlsb / .et 实测与路由放开
+
+**结论：.xlsb 已放开给 Linux LO；.et/.ett 无法用真实样本验证，维持现状。**
+
+#### .xlsb（已实测，已放开）
+
+造样本：2 个 S1F1 模板经 COM `SaveAs(FileFormat=50)` 生成。
+
+| 文件 | COM | LO | 表名一致 | 公式 | 归一后公式差 | 纯精度值差 | 真值差 |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: |
+| ！100 单位存款 | ok | ok | 是 | 1331 / 1341 | **10**（`=NA()` 写法） | 215 | 3 |
+| ！120 代发工资 | ok | ok | 是 | 160 / 160 | **0** | 48 | 0 |
+
+公式差异只有 `=NA()` vs 空（LO 写出 `=#N/A`），值差全是浮点表示位数。
+与 .xls 的结论完全一致 → `select_conversion_engine` 已加入 `xlsb`。
+
+顺带修了一个既有缺陷：worker 的容器校验对 `.xlsb` 要求 `xl/workbook.xml`，
+但二进制工作簿的主部件是 `xl/workbook.bin`，导致 .xlsb 一律被误判为"包被裁剪"。
+已按后缀区分必需部件。修复前 .xlsb 全部失败（0/2），修复后 2/2 转换成功。
+
+#### .et / .ett（未能验证，未放开）
+
+用 WPS 2019 专业版（`ket.Application`）把一个 xlsx 存为 `.et`，
+但 `Workbook.FileFormat` 读出 **56（xlExcel8 = 标准 BIFF XLS）**，
+不是 WPS 原生 ET（65521）。因此：
+
+- 现有 `.et` 原生格式校验**正确地**拒绝了它（"未将该文件识别为原生 ET/ETT"）；
+- 手上没有 WPS 真正原生保存的 `.et` 样本，**无法完成 LO 对 .et 的保真度实测**；
+- 因此 `.et`/`.ett` 的 Linux LO 路由**未放开**（`select_conversion_engine`
+  里虽已列出，但 `ensure_wps_source_format_verified` 仍会在原生校验处拒绝非原生
+  内容；真正原生 .et 在 Linux 上的行为**未验证**）。
+
+要把 .et 加入路由，需要一份 WPS 原生保存的 .et 真实样本，再重复 §5.10 的对拍流程。
+
+### 5.11.3 顺带修的一处健壮性缺陷
+
+`_snapshot()` 原先一次读取 `UsedRange.Formula`，在 154x40 的「基本配置」表上
+抛 com_error（同表 `Value2` 可正常读）。现加回退：区域批量读失败时改用
+`SpecialCells(xlCellTypeFormulas)` 按 Area 逐块读公式文本。
+
 ## 6. 修复的一个真 bug
 
 `strip_style_only_cells` 首版在重建被改动的 `<row>` 时：

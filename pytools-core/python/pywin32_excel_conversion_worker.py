@@ -97,6 +97,9 @@ def _validate_container(path: Path, label: str) -> None:
     required = ["[Content_Types].xml", "_rels/.rels"]
     if suffix in _ZIP_WORD_SUFFIXES:
         required.append("word/document.xml")
+    elif suffix == ".xlsb":
+        # Binary workbook: the main part is `xl/workbook.bin`, not .xml.
+        required.append("xl/workbook.bin")
     else:
         required.append("xl/workbook.xml")
     missing = [name for name in required if name not in names]
@@ -167,6 +170,50 @@ def _matrix(value: Any, rows: int, columns: int) -> list[list[Any]]:
     return [list(row) if isinstance(row, tuple) else [row] for row in value]
 
 
+# xlCellTypeFormulas — SpecialCells selector for formula cells.
+_XL_CELL_TYPE_FORMULAS = -4123
+
+
+def _formula_map(worksheet: Any, used: Any) -> dict[tuple[int, int], str]:
+    """Formula text per cell, keyed by absolute (row, column).
+
+    Reading `UsedRange.Formula` in one go fails on some workbooks (observed on a
+    154x40 sheet of a 24-sheet legacy .xls: `Value2` reads fine while
+    `.Formula` raises com_error). Fall back to asking Excel for the formula
+    cells only, then read each block individually.
+    """
+    try:
+        matrix = _matrix(used.Formula, int(used.Rows.Count), int(used.Columns.Count))
+        first_row = int(used.Row)
+        first_column = int(used.Column)
+        result: dict[tuple[int, int], str] = {}
+        for row_offset, row in enumerate(matrix):
+            for column_offset, formula in enumerate(row):
+                if isinstance(formula, str):
+                    result[(first_row + row_offset, first_column + column_offset)] = formula
+        return result
+    except Exception:
+        pass
+    # Fallback: enumerate formula cells through SpecialCells, one area at a time.
+    result = {}
+    try:
+        areas = worksheet.Cells.SpecialCells(_XL_CELL_TYPE_FORMULAS)
+    except Exception:
+        return result
+    for area_index in range(1, int(areas.Areas.Count) + 1):
+        area = areas.Areas(area_index)
+        rows = int(area.Rows.Count)
+        columns = int(area.Columns.Count)
+        first_row = int(area.Row)
+        first_column = int(area.Column)
+        block = _matrix(area.Formula, rows, columns)
+        for row_offset, row in enumerate(block):
+            for column_offset, formula in enumerate(row):
+                if isinstance(formula, str):
+                    result[(first_row + row_offset, first_column + column_offset)] = formula
+    return result
+
+
 def _snapshot(workbook: Any) -> list[dict[str, Any]]:
     sheets: list[dict[str, Any]] = []
     for index in range(1, int(workbook.Worksheets.Count) + 1):
@@ -176,8 +223,9 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
         columns = int(used.Columns.Count)
         first_row = int(used.Row)
         first_column = int(used.Column)
-        formulas = _matrix(used.Formula, rows, columns)
+        # `Value2` tolerates regions where the bulk `.Formula` read fails.
         values = _matrix(used.Value2, rows, columns)
+        formula_by_cell = _formula_map(worksheet, used)
         formula_cells: dict[tuple[int, int], str] = {}
         formula_values: dict[tuple[int, int], Any] = {}
         value_cells: dict[tuple[int, int], Any] = {}
@@ -185,9 +233,9 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
         for row_offset in range(rows):
             for column_offset in range(columns):
                 address = (first_row + row_offset, first_column + column_offset)
-                formula = formulas[row_offset][column_offset]
                 value = values[row_offset][column_offset]
-                if isinstance(formula, str) and formula.startswith("="):
+                formula = formula_by_cell.get(address)
+                if formula is not None and formula.startswith("="):
                     formula_cells[address] = formula
                     formula_values[address] = value
                 elif value is not None:
@@ -232,6 +280,136 @@ def _values_equal(left: Any, right: Any) -> bool:
     return type(left) is type(right) and left == right
 
 
+_ROW_CEILING_BIFF = 65_536
+_ROW_CEILING_OOXML = 1_048_576
+
+
+def _canonicalize_formula(formula: str) -> str:
+    """Normalize the formula rewrites a SaveAs may legitimately perform.
+
+    Mirrors Rust `excel_reader::canonicalize_formula_for_recalculation`:
+
+    * BIFF caps a sheet at 65,536 rows, OOXML at 1,048,576; Excel's SaveAs
+      rewrites a whole-column span (`$1:$65536`, `$D$1:$D$65536`) to the OOXML
+      ceiling. Both name the same column.
+    * `TRUE()`/`FALSE()` versus `TRUE`/`FALSE`.
+    * Optional quotes around known internal sheet names.
+    * A leading `=` and surrounding whitespace.
+
+    Cell references, ranges, functions and external workbook links stay
+    significant; a quoted string is copied verbatim.
+    """
+    text = formula.strip()
+    if text.startswith("="):
+        text = text[1:].lstrip()
+    text = _canonicalize_row_ceilings(text)
+    text = _canonicalize_boolean_literals(text)
+    return text
+
+
+def _canonicalize_row_ceilings(formula: str) -> str:
+    out: list[str] = []
+    index = 0
+    in_string = False
+    length = len(formula)
+    while index < length:
+        current = formula[index]
+        if current == '"':
+            out.append(current)
+            in_string = not in_string
+            index += 1
+            continue
+        if not in_string and current == "$":
+            start = index + 1
+            end = start
+            while end < length and formula[end].isdigit():
+                end += 1
+            if end > start:
+                number = formula[start:end]
+                at_reference_end = end >= length or not (
+                    formula[end].isalnum() or formula[end] == "_"
+                )
+                preceded_by_colon = index > 0 and formula[index - 1] == ":"
+                preceded_by_column = False
+                if index > 0 and formula[index - 1].isalpha():
+                    cursor = index - 1
+                    while cursor > 0 and formula[cursor - 1].isalpha():
+                        cursor -= 1
+                    probe = cursor
+                    if probe > 0 and formula[probe - 1] == "$":
+                        probe -= 1
+                    preceded_by_column = probe > 0 and formula[probe - 1] == ":"
+                if (
+                    at_reference_end
+                    and (preceded_by_colon or preceded_by_column)
+                    and number.isdigit()
+                    and int(number) == _ROW_CEILING_BIFF
+                ):
+                    out.append(f"${_ROW_CEILING_OOXML}")
+                    index = end
+                    continue
+        out.append(current)
+        index += 1
+    return "".join(out)
+
+
+def _canonicalize_boolean_literals(formula: str) -> str:
+    out: list[str] = []
+    index = 0
+    in_string = False
+    in_sheet_name = False
+    length = len(formula)
+    while index < length:
+        current = formula[index]
+        if current == '"' and not in_sheet_name:
+            out.append(current)
+            if in_string and formula[index + 1 : index + 2] == '"':
+                out.append('"')
+                index += 2
+                continue
+            in_string = not in_string
+            index += 1
+            continue
+        if current == "'" and not in_string:
+            out.append(current)
+            if in_sheet_name and formula[index + 1 : index + 2] == "'":
+                out.append("'")
+                index += 2
+                continue
+            in_sheet_name = not in_sheet_name
+            index += 1
+            continue
+        if not in_string and not in_sheet_name:
+            token_len = 0
+            upper = formula[index : index + 5].upper()
+            if upper.startswith("TRUE"):
+                token_len = 4
+            elif upper.startswith("FALSE"):
+                token_len = 5
+            if token_len:
+                previous_is_identifier = index > 0 and (
+                    formula[index - 1].isalnum() or formula[index - 1] in "_."
+                )
+                next_char = formula[index + token_len : index + token_len + 1]
+                next_is_identifier = bool(next_char) and (
+                    next_char.isalnum() or next_char in "_."
+                )
+                followed_by_empty_call = (
+                    formula[index + token_len : index + token_len + 2] == "()"
+                )
+                if (
+                    not previous_is_identifier
+                    and not next_is_identifier
+                    and followed_by_empty_call
+                ):
+                    out.append(formula[index : index + token_len])
+                    index += token_len + 2
+                    continue
+        out.append(current)
+        index += 1
+    return "".join(out)
+
+
 def _compare(source: list[dict[str, Any]], output: list[dict[str, Any]]) -> dict[str, Any]:
     source_names = [sheet["name"] for sheet in source]
     output_names = [sheet["name"] for sheet in output]
@@ -244,7 +422,11 @@ def _compare(source: list[dict[str, Any]], output: list[dict[str, Any]]) -> dict
     for source_sheet, output_sheet in zip(source, output):
         sheet_name = source_sheet["name"]
         for kind, label, equals in (
-            ("formulas", "公式", lambda a, b: a.strip() == b.strip()),
+            (
+                "formulas",
+                "公式",
+                lambda a, b: _canonicalize_formula(a) == _canonicalize_formula(b),
+            ),
             ("values", "非公式数据", _values_equal),
         ):
             before = source_sheet[kind]

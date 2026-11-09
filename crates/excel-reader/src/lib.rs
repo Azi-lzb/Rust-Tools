@@ -2138,8 +2138,79 @@ pub fn canonicalize_formula_for_recalculation(formula: &str, sheet_names: &[&str
     // 先去掉首尾空白，再剥前导 '='（"  =  X  " 这种写法也要能对上）。
     let trimmed = formula.trim();
     let trimmed = trimmed.trim_start_matches('=').trim_start();
-    let trimmed = canonicalize_formula_boolean_literals(trimmed);
+    // 格式上限差异（BIFF 65536 行 vs OOXML 1048576 行）先归一——Excel 另存
+    // .xls→.xlsx 会把整列引用从 $1:$65536 改写成 $1:$1048576，语义相同。
+    let trimmed = canonicalize_sheet_row_ceilings(trimmed);
+    let trimmed = canonicalize_formula_boolean_literals(&trimmed);
     canonicalize_formula_sheet_reference_quoting(&trimmed, sheet_names)
+}
+
+/// BIFF (`.xls`) caps a sheet at 65,536 rows while OOXML allows 1,048,576.
+/// Excel's SaveAs rewrites a whole-column reference (`$1:$65536`) to the OOXML
+/// ceiling (`$1:$1048576`); LibreOffice keeps its own 65,536. Both spellings
+/// describe the same column, so they must compare equal.
+fn canonicalize_sheet_row_ceilings(formula: &str) -> String {
+    const BIFF: u32 = 65_536;
+    const OOXML: u32 = 1_048_576;
+    let mut out = String::with_capacity(formula.len());
+    let characters: Vec<char> = formula.chars().collect();
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < characters.len() {
+        let current = characters[index];
+        if current == '"' {
+            out.push(current);
+            index += 1;
+            in_string = !in_string;
+            continue;
+        }
+        // A whole-column span ends with an absolute row: two spellings occur —
+        // `$1:$65536` (bare) and `$D$1:$D$65536` (column-qualified). Only the
+        // row digits that directly follow the second '$' are rewritten.
+        if !in_string && current == '$' {
+            let digits_start = index + 1;
+            let mut digits_end = digits_start;
+            while digits_end < characters.len() && characters[digits_end].is_ascii_digit() {
+                digits_end += 1;
+            }
+            if digits_end > digits_start {
+                let number: String = characters[digits_start..digits_end].iter().collect();
+                let at_reference_end = !characters
+                    .get(digits_end)
+                    .is_some_and(|next| next.is_ascii_alphanumeric() || *next == '_');
+                // The '$' must be the row half of a range: either `$1:$65536`
+                // (the '$' itself follows ':') or `$D$1:$D$65536` (a column
+                // letter follows ':', then this '$', then the row digits).
+                let preceded_by_colon = index > 0 && characters[index - 1] == ':';
+                let preceded_by_column =
+                    index > 0 && characters[index - 1].is_ascii_alphabetic() && {
+                        // `$D$65536`: walk back over the column letters, then
+                        // expect `$` and `:` (the range separator).
+                        let mut cursor = index - 1;
+                        while cursor > 0 && characters[cursor - 1].is_ascii_alphabetic() {
+                            cursor -= 1;
+                        }
+                        let mut probe = cursor;
+                        if probe > 0 && characters[probe - 1] == '$' {
+                            probe -= 1;
+                        }
+                        probe > 0 && characters[probe - 1] == ':'
+                    };
+                if at_reference_end
+                    && (preceded_by_colon || preceded_by_column)
+                    && number.parse::<u32>().ok() == Some(BIFF)
+                {
+                    out.push('$');
+                    out.push_str(&OOXML.to_string());
+                    index = digits_end;
+                    continue;
+                }
+            }
+        }
+        out.push(current);
+        index += 1;
+    }
+    out
 }
 
 /// Canonicalize only the boolean literal spelling known to differ after an
@@ -2383,6 +2454,45 @@ mod tests {
                 "{left:?} must NOT equal {right:?}"
             );
         }
+    }
+
+    #[test]
+    fn biff_and_ooxml_row_ceilings_compare_equal() {
+        let sheets: [&str; 1] = ["集中系统数据"];
+        for (biff, ooxml) in [
+            (
+                "=INDEX(集中系统数据!$1:$65536,MATCH(A1,B:B,0))",
+                "=INDEX(集中系统数据!$1:$1048576,MATCH(A1,B:B,0))",
+            ),
+            ("=SUM(数据!$D$1:$D$65536)", "=SUM(数据!$D$1:$D$1048576)"),
+        ] {
+            assert!(
+                formula_text_equivalent_after_recalculation(biff, ooxml, &sheets),
+                "{biff:?} should equal {ooxml:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn row_ceiling_rewrite_does_not_touch_unrelated_numbers() {
+        let sheets: [&str; 1] = ["数据"];
+        // 65536 作为参数/比较值出现时不得改写
+        for (left, right) in [
+            ("=A1+65536", "=A1+1048576"),
+            ("=IF(A1>65536,1,0)", "=IF(A1>1048576,1,0)"),
+            (r#"=IF(A1="65536","x","y")"#, r#"=IF(A1="1048576","x","y")"#),
+        ] {
+            assert!(
+                !formula_text_equivalent_after_recalculation(left, right, &sheets),
+                "{left:?} must NOT equal {right:?}"
+            );
+        }
+        // 非整列区间的 $65536 也不改写（如单行引用 $65536）
+        assert!(!formula_text_equivalent_after_recalculation(
+            "=数据!A$65536",
+            "=数据!A$1048576",
+            &sheets
+        ));
     }
 
     #[test]

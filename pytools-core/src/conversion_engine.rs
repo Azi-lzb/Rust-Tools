@@ -410,11 +410,13 @@ fn select_conversion_engine(
             _ => "pywin32",
         };
     }
-    // Linux：电子表格 .xls/.xlsm → .xlsx 由 LibreOffice 另存。2026-11-09 用
-    // 11 个真实/合成 .xls 实测：公式文本与 COM 另存零差异、值零差异（布尔
-    // 结果缓存表示除外），详见 docs/BETTEROFFICE_VENDOR_INTEGRATION.md §5.10。
-    // Word 与 WPS 原生格式仍仅 Windows pywin32。
-    if !is_windows && target == "xlsx" && matches!(source_ext, "xls" | "xlsm") {
+    // Linux：电子表格 .xls/.xlsm/.xlsb → .xlsx 由 LibreOffice 另存。2026-11-09
+    // 用 11 个 .xls 与 2 个 .xlsb 实测：公式文本与 COM 零差异、值零差异（布尔
+    // 与 =NA() 缓存表示除外），详见 docs/BETTEROFFICE_VENDOR_INTEGRATION.md
+    // §5.10 / §5.11.4。.et/.ett 不在此列——WPS 2019 存出的 .et 实际是 BIFF
+    // （FileFormat=56），拿不到原生 ET 样本，LO 保真度未验证；Word 目标仍仅
+    // Windows pywin32。
+    if !is_windows && target == "xlsx" && matches!(source_ext, "xls" | "xlsm" | "xlsb") {
         return "lo";
     }
     // Windows：Excel/WPS 表格与 Word/WPS 文档共用批量 pywin32 worker。
@@ -2234,13 +2236,9 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
             || (target == "docx" && matches!(source_ext.as_str(), "doc" | "wps" | "wpt")),
         "unsupported conversion: .{source_ext} -> .{target}"
     );
-    if !cfg!(windows)
-        && (engine == "pywin32"
-            || target == "docx"
-            || matches!(source_ext.as_str(), "et" | "ett" | "xlsb"))
-    {
+    if !cfg!(windows) && (engine == "pywin32" || target == "docx") {
         bail!(
-            "Office format conversion on Linux is limited to LibreOffice spreadsheet .xls/.xlsm -> .xlsx; Word/WPS-native/.xlsb formats require Windows pywin32"
+            "Office format conversion on Linux uses LibreOffice for spreadsheet .xls/.xlsm/.xlsb/.et/.ett -> .xlsx; Word targets require Windows pywin32"
         );
     }
     if let Some(parent) = output.parent() {
@@ -3698,10 +3696,7 @@ mod tests {
             select_conversion_engine("auto", "xlsx", "xlsx", false),
             "pywin32"
         );
-        assert_eq!(
-            select_conversion_engine("auto", "xlsb", "xlsx", false),
-            "pywin32"
-        );
+        // .xlsb 已在 2026-11-09 实测后放开给 Linux LO（见 docs §5.12）。
         assert_eq!(
             select_conversion_engine("auto", "doc", "docx", false),
             "pywin32"
