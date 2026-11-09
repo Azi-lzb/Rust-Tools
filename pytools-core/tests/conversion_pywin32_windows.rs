@@ -82,7 +82,7 @@ fn automatic_xls_conversion_uses_pywin32_batch_session_and_preserves_sources() -
         .all(|detail| detail["com_bridge"] == "pywin32"));
     assert!(details.iter().all(|detail| {
         detail["validation"]["verified"] == true
-            && detail["validation"]["level"] == "excel_com_sheet_order_formula_text_and_cell_values"
+            && detail["validation"]["level"] == "excel_com_sheet_order_and_formula_cells"
     }));
     let worker_process_ids = details
         .iter()

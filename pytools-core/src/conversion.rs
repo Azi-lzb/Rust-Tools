@@ -1769,7 +1769,7 @@ mod tests {
 
     #[test]
     fn wps_native_sidecar_must_explicitly_verify_native_source_format() {
-        let verified = r#"{"status":"converted","engine":"pywin32","validation":{"level":"excel_com_sheet_order_formula_text_and_cell_values","source_extension":"et","source_format_verified":true,"source_file_format":65521,"verified":true}}"#;
+        let verified = r#"{"status":"converted","engine":"pywin32","validation":{"level":"excel_com_sheet_order_and_formula_cells","source_extension":"et","source_format_verified":true,"source_file_format":65521,"verified":true}}"#;
         ensure_wps_source_format_verified(verified, "et")
             .expect("explicit native ET source evidence should pass");
         let verified_template = r#"{"status":"converted","engine":"pywin32","validation":{"source_extension":"ett","source_format_verified":true,"source_file_format":65522,"verified":true}}"#;
