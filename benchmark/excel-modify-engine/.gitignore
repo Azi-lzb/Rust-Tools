@@ -1,0 +1,14 @@
+# 生成的夹具与输出不提交（gen_fixtures.py 可复现）
+fixtures/
+results/outputs/
+target/
+*.tmp
+.cold-req-*.json
+results/bridge-req-*.json
+results/bridge-resp-*.json
+results/bridge-in-*.xlsx
+results/ops_*.json
+results/single-out-*.json
+results/ops_*.json
+results/single-out-*.xlsx
+results/single-out-*.json

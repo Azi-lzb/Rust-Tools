@@ -1,0 +1,109 @@
+[
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M01",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M02",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M03",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M04",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [
+      "set_number_format: set_number_format: UNSUPPORTED: rxls 0.1.4 exposes no style/number-format edit API"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M05",
+    "result": "UNSUPPORTED"
+  },
+  {
+    "engine": "rxls",
+    "errors": [
+      "set_font_bold: set_font_bold: UNSUPPORTED: rxls 0.1.4 exposes no style/number-format edit API",
+      "set_fill: set_fill: UNSUPPORTED: rxls 0.1.4 exposes no style/number-format edit API",
+      "set_border: set_border: UNSUPPORTED: rxls 0.1.4 exposes no style/number-format edit API",
+      "set_align_center: set_align_center: UNSUPPORTED: rxls 0.1.4 exposes no style/number-format edit API"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M06",
+    "result": "UNSUPPORTED"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M07",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M08",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M09",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M10",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [
+      "set_landscape: set_landscape: UNSUPPORTED: no page-orientation API in rxls 0.1.4"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M11",
+    "result": "UNSUPPORTED"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M12",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_complex.xlsx",
+    "op": "M13",
+    "result": "PASS"
+  },
+  {
+    "engine": "rxls",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M14",
+    "result": "PASS"
+  }
+]

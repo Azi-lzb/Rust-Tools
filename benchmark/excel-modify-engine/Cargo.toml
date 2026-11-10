@@ -1,0 +1,28 @@
+[package]
+name = "excel-modify-engine-bench"
+version = "0.1.0"
+edition = "2021"
+description = "Standalone benchmark: betteroffice vs rxls vs umya vs openpyxl XLSX modification engines"
+
+[dependencies]
+rxls = "=0.1.4"
+betteroffice-xlsx = "0.5.1"
+betteroffice-xlsx-ops = "0.5.1"
+betteroffice-xlsx-model = "0.5.1"
+umya-spreadsheet = "=3.1.1"
+excel-reader = { path = "../../crates/excel-reader" }
+serde_json = "1"
+anyhow = "1"
+sha2 = "0.10"
+zip = "2"
+
+[dependencies.windows-sys]
+version = "0.59"
+features = ["Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Threading", "Win32_Foundation", "Win32_Security"]
+
+[patch.crates-io]
+betteroffice-xlsx-model = { path = "../../vendor/betteroffice-xlsx-model" }
+betteroffice-xlsx-calc = { path = "../../vendor/betteroffice-xlsx-calc" }
+
+[profile.release]
+debug = false

@@ -1,0 +1,106 @@
+[
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M01",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M02",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M03",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M04",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M05",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M06",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M07",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M08",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [
+      "set_comment: UNSUPPORTED: betteroffice-xlsx 0.5.1 has no comment representation (model + ops verified)"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M09",
+    "result": "UNSUPPORTED"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M10",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [
+      "set_landscape: UNSUPPORTED: no page-orientation representation in betteroffice-xlsx 0.5.1"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M11",
+    "result": "UNSUPPORTED"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_basic.xlsx",
+    "op": "M12",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [],
+    "fixture": "f_complex.xlsx",
+    "op": "M13",
+    "result": "PASS"
+  },
+  {
+    "engine": "betteroffice",
+    "errors": [
+      "set_comment: UNSUPPORTED: betteroffice-xlsx 0.5.1 has no comment representation (model + ops verified)"
+    ],
+    "fixture": "f_basic.xlsx",
+    "op": "M14",
+    "result": "UNSUPPORTED"
+  }
+]

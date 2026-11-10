@@ -11,6 +11,7 @@ members = [
 exclude = [
     "vendor/betteroffice-xlsx-model",
     "vendor/betteroffice-xlsx-calc",
+    "benchmark/excel-modify-engine",
 ]
 
 [workspace.package]
