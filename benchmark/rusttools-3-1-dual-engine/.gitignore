@@ -1,0 +1,4 @@
+# 生成的测试产物不入库（可用 scripts/ 重新生成）
+RustTools.exe
+fixtures/
+results/outputs/

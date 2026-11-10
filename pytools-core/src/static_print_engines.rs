@@ -36,8 +36,8 @@ pub enum StaticPrintEngine {
 impl StaticPrintEngine {
     pub fn label(self) -> &'static str {
         match self {
-            Self::RustWriter => "rust_xlsxwriter",
-            Self::Openpyxl => "openpyxl",
+            Self::RustWriter => "Rust (calamine + OOXML + rust_xlsxwriter)",
+            Self::Openpyxl => "Openpyxl",
         }
     }
 }
@@ -155,6 +155,53 @@ fn is_zero_like(value: &serde_json::Value) -> bool {
 }
 
 /// 3-3：现有 Rust 写入路径（calamine 读值 → rust_xlsxwriter 新建目标）。
+/// Rust 入口的专用输出路径：原目标文件名追加 `_Rust` 后缀（保持目录与扩展名），
+/// 防止覆盖 Openpyxl 入口的输出文件。
+pub fn rust_output_path(target: &Path) -> PathBuf {
+    let stem = target
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // 幂等：已带 _Rust 后缀的路径不再追加（run_configured_static_print 与
+    // run_rust_print_engine 都会调用本函数，避免叠加成 _Rust_Rust）。
+    if stem.ends_with("_Rust") {
+        return target.to_path_buf();
+    }
+    let extension = target
+        .extension()
+        .map(|ext| ext.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "xlsx".to_owned());
+    target.with_file_name(format!("{stem}_Rust.{extension}"))
+}
+
+/// 菜单 3-1 Rust 入口：与 Openpyxl 入口共用同一份「打印配置」，
+/// 但输出走独立 `_Rust` 路径，且只调用 Rust 实现（无 Openpyxl/UMYA/BetterOffice 兜底）。
+///
+/// XLSM 目标明确拒绝并提示使用 Openpyxl 入口。
+pub fn run_rust_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
+    let mut rust_tasks: Vec<PrintTask> = Vec::new();
+    for task in tasks.iter().filter(|task| task.enabled).cloned() {
+        let Some(target) = task.target_wb.as_ref() else {
+            rust_tasks.push(task);
+            continue;
+        };
+        if target
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsm"))
+        {
+            bail!(
+                "Rust 引擎暂不支持 XLSM 输出，任务未执行，请使用 Openpyxl 入口：{}",
+                target.display()
+            );
+        }
+        let mut rust_task = task.clone();
+        rust_task.target_wb = Some(rust_output_path(target));
+        rust_tasks.push(rust_task);
+    }
+    run_rust_writer_engine(&rust_tasks)
+}
+
 pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     use crate::print_ops::{build_config_print_plans, write_static_print_plans};
     let mut run = StaticPrintRun::default();
@@ -1070,14 +1117,36 @@ pub fn run_configured_static_print_with_python(
     engine: StaticPrintEngine,
     python_override: Option<&Path>,
 ) -> Result<StaticPrintRun> {
-    let tasks = crate::config::load_print_tasks(config_path).with_context(|| {
+    let mut tasks = crate::config::load_print_tasks(config_path).with_context(|| {
         format!(
             "[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）",
             config_path.display()
         )
     })?;
+    // Rust 入口的输出隔离：在目标校验前把目标重映射为 `_Rust` 后缀路径，
+    // 使「目标已存在」校验和后续写入都针对独立输出，绝不覆盖 Openpyxl 输出。
+    if engine == StaticPrintEngine::RustWriter {
+        for task in tasks.iter_mut().filter(|task| task.enabled) {
+            if let Some(target) = task.target_wb.as_ref() {
+                task.target_wb = Some(rust_output_path(target));
+            }
+        }
+    }
     for task in tasks.iter().filter(|task| task.enabled) {
         if let Some(target) = task.target_wb.as_deref() {
+            if engine == StaticPrintEngine::RustWriter
+                && target
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsm"))
+            {
+                ensure!(
+                    false,
+                    "打印配置第 {} 行：Rust 引擎暂不支持 XLSM 输出，任务未执行，请使用 Openpyxl 入口：{}",
+                    task.row_no,
+                    target.display()
+                );
+            }
             ensure!(
                 is_xlsx(target),
                 "打印配置第 {} 行：打印目标只支持 .xlsx/.xlsm，当前路径为 {}",
@@ -1123,7 +1192,7 @@ pub fn run_configured_static_print_with_python(
         StaticPrintRun::default()
     } else {
         match engine {
-            StaticPrintEngine::RustWriter => run_rust_writer_engine(&tasks),
+            StaticPrintEngine::RustWriter => run_rust_print_engine(&tasks),
             StaticPrintEngine::Openpyxl => {
                 let python = match python_override {
                     Some(path) => path.to_path_buf(),

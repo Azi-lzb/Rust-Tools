@@ -1,0 +1,32 @@
+{
+ "mode1": {
+  "checked": 22,
+  "diffs": [
+   "A1 bold TruevsFalse",
+   "A1 size 14.0vs11.0",
+   "C2 numfmt '0.00%'vs'General'",
+   "C3 numfmt '0.00%'vs'General'",
+   "C4 numfmt '0.00%'vs'General'",
+   "C5 numfmt '0.00%'vs'General'",
+   "C6 numfmt '0.00%'vs'General'",
+   "C7 numfmt '0.00%'vs'General'",
+   "C8 numfmt '0.00%'vs'General'"
+  ],
+  "diff_count": 9
+ },
+ "mode3": {
+  "checked": 22,
+  "diffs": [
+   "A1 bold TruevsFalse",
+   "A1 size 14.0vs11.0",
+   "C2 numfmt '0.00%'vs'General'",
+   "C3 numfmt '0.00%'vs'General'",
+   "C4 numfmt '0.00%'vs'General'",
+   "C5 numfmt '0.00%'vs'General'",
+   "C6 numfmt '0.00%'vs'General'",
+   "C7 numfmt '0.00%'vs'General'",
+   "C8 numfmt '0.00%'vs'General'"
+  ],
+  "diff_count": 9
+ }
+}

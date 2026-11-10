@@ -5155,17 +5155,21 @@ where
     R: BufRead,
     W: Write,
 {
-    // 打印改为“按配置直接生成”：不再需要 y 确认，也不再提供仅出计划的入口。
-    // 旧 3-1（umya）与 3-2（openpyxl）已统一到 openpyxl，只保留一个生成入口；
-    // 菜单编号 1 沿用原 3-1，预校验由 3 改为 2。
+    // 双入口设计（2026-11-11 用户要求）：1 = 原 Openpyxl 实现（保留完整行为），
+    // 2 = 新增 Rust 实现（calamine + OOXML + rust_xlsxwriter，独立输出 _Rust 后缀）。
+    // 无自动路由：两入口各自只调用自己的实现；预校验由 2 改为 3。
     let _ = (allow_native_dialog, capabilities, platform);
     loop {
         writeln!(output, "------ 报表打印 ------")?;
         writeln!(
             output,
-            "  1  按打印配置生成：openpyxl  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
+            "  1  按打印配置生成（Openpyxl）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
         )?;
-        writeln!(output, "  2  打印配置预校验  【打印配置】")?;
+        writeln!(
+            output,
+            "  2  按打印配置生成（Rust）  【同一份打印配置；输出文件名追加 _Rust；暂不支持 XLSM】"
+        )?;
+        writeln!(output, "  3  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------")?;
         let Some(menu_choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -5183,6 +5187,16 @@ where
                 )?;
             }
             "2" => {
+                run_configured_static_print_menu(
+                    output,
+                    config_path,
+                    global,
+                    "3-1-Rust",
+                    pytools_core::static_print_engines::StaticPrintEngine::RustWriter,
+                    log_view,
+                )?;
+            }
+            "3" => {
                 run_print_menu_action(
                     output,
                     global,
@@ -5199,7 +5213,7 @@ where
             }
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2 或 0")?;
+                writeln!(output, "仅接受 1、2、3 或 0")?;
             }
         }
     }

@@ -49,6 +49,8 @@ struct StaticPrintCell {
     row: usize,
     column: usize,
     value: serde_json::Value,
+    /// 源单元格样式经 OOXML 读取映射后的写入格式；None = 默认格式。
+    format: Option<rust_xlsxwriter::Format>,
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +60,8 @@ struct StaticPrintMerge {
     last_row: usize,
     last_column: usize,
     text: String,
+    /// 锚点单元格样式（若源单元格带样式）。
+    format: Option<rust_xlsxwriter::Format>,
 }
 
 static NEXT_STATIC_PRINT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -501,6 +505,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
         }
         let mut created = BTreeSet::<String>::new();
         let mut next_row = BTreeMap::<String, usize>::new();
+        let mut seen_target_sheets = BTreeSet::<String>::new();
         let mut max_columns = BTreeMap::<String, usize>::new();
         let mut range_count = 0usize;
         let mut matching_sheets = BTreeSet::<String>::new();
@@ -528,6 +533,12 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                         source.display()
                     )
                 })?;
+            // 重复目标 Sheet 对齐 Openpyxl 实际行为：清空重写（后写任务覆盖先写
+            // 任务的行）。reset 按 task 粒度，同一 task 内的多区域正常堆叠。
+            if seen_target_sheets.contains(&task.target_ws) {
+                next_row.insert(task.target_ws.clone(), 1);
+            }
+            seen_target_sheets.insert(task.target_ws.clone());
             let ranges = if task.source_ranges.trim().is_empty() {
                 used_bounds(sheet).into_iter().collect()
             } else {
@@ -591,7 +602,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                     copy_all_row_dimensions: false,
                     copy_all_column_dimensions: false,
                     materialize_blank_cells: false,
-                    hide_zero: true,
+                    hide_zero: task.hide_zero,
                 });
                 let rows = r2 - r1 + 1;
                 let columns = c2 - c1 + 1;
@@ -683,7 +694,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
         let total = target_order.len();
         for (index, sheet_name) in target_order.iter().enumerate() {
             let mut settings = final_setup.remove(sheet_name).unwrap_or_default();
-            settings.footer = Some(format!("第 {} 页 / 共 {} 页", index + 1, total));
+            settings.footer = Some(format!("&C第 {} 页 / 共 {} 页", index + 1, total));
             operations.push(EditOperation::SetPageSettings {
                 sheet: sheet_name.clone(),
                 settings,
@@ -750,6 +761,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
 
     let mut source_books = HashMap::<PathBuf, WorkbookDump>::new();
     let mut source_uses_1904_epoch = HashMap::<PathBuf, bool>::new();
+    let mut source_styles =
+        HashMap::<PathBuf, std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>>::new();
     for operation in &plan.operations {
         if let EditOperation::ImportRange {
             source_workbook, ..
@@ -776,6 +789,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut worksheet_names = Vec::new();
     let mut cells_by_sheet = BTreeMap::<String, Vec<StaticPrintCell>>::new();
     let mut merges_by_sheet = BTreeMap::<String, Vec<StaticPrintMerge>>::new();
+    let mut comments_by_sheet = BTreeMap::<String, Vec<(String, String)>>::new();
     let mut imported_ranges = 0usize;
     let mut formulas_materialized = 0usize;
 
@@ -796,14 +810,15 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 target_start,
                 copy_values,
                 copy_formulas,
+                style_mode,
                 copy_comments,
                 copy_merges,
                 hide_zero,
                 ..
             } => {
                 anyhow::ensure!(
-                    *copy_values && !*copy_formulas && !*copy_comments,
-                    "native static print requires values-only imports without formulas or comments"
+                    *copy_values && !*copy_formulas,
+                    "native static print requires values-only imports without formulas"
                 );
                 anyhow::ensure!(
                     worksheet_names.contains(target_sheet),
@@ -826,8 +841,55 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 let (target_row, target_column) = parse_a1(target_start).with_context(|| {
                     format!("invalid static print target cell {target_start:?}")
                 })?;
+                // OOXML 窄范围样式读取：styles.xml + worksheet cell s 索引，
+                // 只覆盖本次导入涉及的源单元格。
+                let source_style_map = source_styles
+                    .entry(source_workbook.clone())
+                    .or_insert_with(|| {
+                        std::sync::Arc::new(
+                            crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
+                                .unwrap_or_else(|error| {
+                                    eprintln!(
+                                        "[3-1][Rust] 源样式读取失败（输出将使用默认格式）：{error}"
+                                    );
+                                    crate::ooxml_cell_styles::SourceStyles::default()
+                                }),
+                        )
+                    })
+                    .clone();
+                let cell_style_indices = source_style_map
+                    .cell_style_indices(source_workbook, source_sheet)
+                    .unwrap_or_default();
+                // Format 去重缓存：descriptor → 已构造 Format。
+                let mut format_cache = HashMap::<
+                    crate::ooxml_cell_styles::CellStyleInfo,
+                    rust_xlsxwriter::Format,
+                >::new();
                 let mut covered_by_string_merge = BTreeSet::new();
                 let mut target_merges = Vec::new();
+                let format_of = |address: &str,
+                                 cache: &mut HashMap<
+                    crate::ooxml_cell_styles::CellStyleInfo,
+                    rust_xlsxwriter::Format,
+                >| {
+                    cell_style_indices
+                        .get(address)
+                        .map(|index| source_style_map.descriptor(*index))
+                        .filter(|descriptor| {
+                            *descriptor != crate::ooxml_cell_styles::CellStyleInfo::default()
+                        })
+                        .map(|descriptor| {
+                            cache
+                                .entry(descriptor.clone())
+                                .or_insert_with(|| {
+                                    build_writer_format(
+                                        &descriptor,
+                                        matches!(style_mode, RangeStyleMode::Full),
+                                    )
+                                })
+                                .clone()
+                        })
+                };
                 for merge in source.merges.iter().filter(|_| *copy_merges) {
                     let Ok((
                         (merge_first_row, merge_first_column),
@@ -870,12 +932,35 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         last_row: target_last_row - 1,
                         last_column: target_last_column - 1,
                         text: text.to_owned(),
+                        format: format_of(&source_top_left, &mut format_cache),
                     });
                 }
                 merges_by_sheet
                     .entry(target_sheet.clone())
                     .or_default()
                     .extend(target_merges);
+                if *copy_comments {
+                    for (address, text) in &source.comments {
+                        let Some((row, column)) = parse_a1(address) else {
+                            continue;
+                        };
+                        if row < source_first.0
+                            || row > source_last.0
+                            || column < source_first.1
+                            || column > source_last.1
+                        {
+                            continue;
+                        }
+                        let target_address = a1_address(
+                            target_row + (row - source_first.0),
+                            target_column + (column - source_first.1),
+                        );
+                        comments_by_sheet
+                            .entry(target_sheet.clone())
+                            .or_default()
+                            .push((target_address, text.clone()));
+                    }
+                }
                 for row in source_first.0..=source_last.0 {
                     for column in source_first.1..=source_last.1 {
                         if covered_by_string_merge.contains(&(row, column)) {
@@ -889,9 +974,14 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         if source.formulas.contains_key(&address) {
                             formulas_materialized += 1;
                         }
-                        if *hide_zero && static_print_is_numeric_zero(value) {
-                            continue;
-                        }
+                        // 零值隐藏：对齐 Openpyxl 行为——值清空但保留单元格
+                        // 样式（数字格式等），避免输出出现格式断档。
+                        let hidden_zero = *hide_zero && static_print_is_numeric_zero(value);
+                        let cell_format = if hidden_zero {
+                            None
+                        } else {
+                            format_of(&address, &mut format_cache)
+                        };
                         let source_uses_1904 = source_uses_1904_epoch
                             .get(source_workbook)
                             .copied()
@@ -915,7 +1005,16 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             .push(StaticPrintCell {
                                 row: target_row - 1 + (row - source_first.0),
                                 column: target_column - 1 + (column - source_first.1),
-                                value: output_value,
+                                value: if hidden_zero {
+                                    serde_json::json!({"type": "blank", "value": null})
+                                } else {
+                                    output_value
+                                },
+                                format: if hidden_zero {
+                                    format_of(&address, &mut format_cache)
+                                } else {
+                                    cell_format
+                                },
                             });
                     }
                 }
@@ -972,13 +1071,28 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     to_row(merge.last_row)?,
                     to_column(merge.last_column)?,
                     &merge.text,
-                    &Format::new(),
+                    merge.format.as_ref().unwrap_or(&Format::new()),
                 )?;
             }
         }
         if let Some(cells) = cells_by_sheet.get(name) {
             for cell in cells {
-                write_static_print_cell(worksheet, cell.row, cell.column, &cell.value)?;
+                write_static_print_cell(
+                    worksheet,
+                    cell.row,
+                    cell.column,
+                    &cell.value,
+                    cell.format.as_ref(),
+                )?;
+            }
+        }
+        if let Some(comments) = comments_by_sheet.get(name) {
+            for (address, text) in comments {
+                let Some((row, column)) = parse_a1(address) else {
+                    continue;
+                };
+                let note = rust_xlsxwriter::Note::new(text.as_str());
+                worksheet.insert_note(to_row(row)?, to_column(column)?, &note)?;
             }
         }
     }
@@ -1077,11 +1191,146 @@ fn apply_static_print_page_settings(
     Ok(())
 }
 
+/// 将 OOXML 样式描述映射为 rust_xlsxwriter 写入格式。
+///
+/// `full` = mode 1/2（含边框）；Basic = mode 3（font/fill/align/numfmt，无边框）。
+fn build_writer_format(
+    descriptor: &crate::ooxml_cell_styles::CellStyleInfo,
+    full: bool,
+) -> rust_xlsxwriter::Format {
+    use rust_xlsxwriter::FormatAlign;
+    use rust_xlsxwriter::FormatBorder;
+    use rust_xlsxwriter::FormatUnderline;
+
+    let mut format = Format::new();
+    if let Some(num_fmt) = &descriptor.num_fmt {
+        format = format.set_num_format(num_fmt.as_str());
+    }
+    if let Some(font) = &descriptor.font {
+        if font.bold {
+            format = format.set_bold();
+        }
+        if font.italic {
+            format = format.set_italic();
+        }
+        if font.strike {
+            format = format.set_font_strikethrough();
+        }
+        if let Some(size) = &font.size {
+            if let Ok(size) = size.parse::<f64>() {
+                format = format.set_font_size(size);
+            }
+        }
+        if let Some(name) = &font.name {
+            format = format.set_font_name(name.as_str());
+        }
+        if let Some(color) = &font.color {
+            format = format.set_font_color(color.as_str());
+        }
+        if let Some(style) = &font.underline {
+            let underline = match style.as_str() {
+                "double" => FormatUnderline::Double,
+                "singleAccounting" => FormatUnderline::SingleAccounting,
+                "doubleAccounting" => FormatUnderline::DoubleAccounting,
+                _ => FormatUnderline::Single,
+            };
+            format = format.set_underline(underline);
+        }
+    }
+    if let Some(fill) = &descriptor.fill {
+        if fill.pattern.as_deref() == Some("solid") {
+            if let Some(color) = &fill.fg_color {
+                format = format.set_background_color(color.as_str());
+            }
+        }
+    }
+    if let Some(align) = &descriptor.align {
+        if let Some(horizontal) = &align.horizontal {
+            let align_value = match horizontal.as_str() {
+                "left" => FormatAlign::Left,
+                "right" => FormatAlign::Right,
+                "center" | "centerContinuous" => FormatAlign::CenterAcross,
+                "fill" => FormatAlign::Fill,
+                "justify" => FormatAlign::Justify,
+                "distributed" => FormatAlign::Distributed,
+                _ => FormatAlign::General,
+            };
+            if align_value != FormatAlign::General {
+                format = format.set_align(align_value);
+            }
+        }
+        if let Some(vertical) = &align.vertical {
+            let align_value = match vertical.as_str() {
+                "top" => FormatAlign::Top,
+                "bottom" => FormatAlign::Bottom,
+                "center" => FormatAlign::VerticalCenter,
+                "justify" => FormatAlign::Justify,
+                "distributed" => FormatAlign::VerticalDistributed,
+                _ => FormatAlign::General,
+            };
+            if align_value != FormatAlign::General {
+                format = format.set_align(align_value);
+            }
+        }
+        if align.wrap_text {
+            format = format.set_text_wrap();
+        }
+    }
+    if full {
+        if let Some(border) = &descriptor.border {
+            fn apply_edge(
+                mut format: rust_xlsxwriter::Format,
+                edge: &Option<(Option<String>, Option<String>)>,
+                setter: fn(rust_xlsxwriter::Format, FormatBorder) -> rust_xlsxwriter::Format,
+            ) -> rust_xlsxwriter::Format {
+                let Some((style, color)) = edge else {
+                    return format;
+                };
+                let border_kind = match style.as_deref() {
+                    Some("thin") => FormatBorder::Thin,
+                    Some("medium") => FormatBorder::Medium,
+                    Some("thick") => FormatBorder::Thick,
+                    Some("dashed") => FormatBorder::Dashed,
+                    Some("dotted") => FormatBorder::Dotted,
+                    Some("double") => FormatBorder::Double,
+                    Some("hair") => FormatBorder::Hair,
+                    Some("mediumDashed") => FormatBorder::MediumDashed,
+                    Some("dashDot") => FormatBorder::DashDot,
+                    Some("mediumDashDot") => FormatBorder::MediumDashDot,
+                    Some("dashDotDot") => FormatBorder::DashDotDot,
+                    Some("mediumDashDotDot") => FormatBorder::MediumDashDotDot,
+                    Some("slantDashDot") => FormatBorder::SlantDashDot,
+                    _ => return format,
+                };
+                setter(format, border_kind)
+            }
+            format = apply_edge(
+                format,
+                &border.left,
+                rust_xlsxwriter::Format::set_border_left,
+            );
+            format = apply_edge(
+                format,
+                &border.right,
+                rust_xlsxwriter::Format::set_border_right,
+            );
+            format = apply_edge(format, &border.top, rust_xlsxwriter::Format::set_border_top);
+            format = apply_edge(
+                format,
+                &border.bottom,
+                rust_xlsxwriter::Format::set_border_bottom,
+            );
+        }
+    }
+    format
+}
+
 fn write_static_print_cell(
     worksheet: &mut Worksheet,
     row: usize,
     column: usize,
     value: &serde_json::Value,
+    cell_format: Option<&rust_xlsxwriter::Format>,
 ) -> Result<()> {
     let row = to_row(row)?;
     let column = to_column(column)?;
@@ -1094,7 +1343,19 @@ fn write_static_print_cell(
         .context("static print cell has no value")?;
     match value_type {
         "string" | "datetime_iso" | "duration_iso" => {
-            worksheet.write_string(row, column, data.as_str().unwrap_or_default())?;
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_string_with_format(
+                        row,
+                        column,
+                        data.as_str().unwrap_or_default(),
+                        format,
+                    );
+                }
+                None => {
+                    worksheet.write_string(row, column, data.as_str().unwrap_or_default())?;
+                }
+            };
         }
         "integer" => {
             let integer = data.as_i64().context("static print integer is invalid")?;
@@ -1103,32 +1364,82 @@ fn write_static_print_cell(
                 format!("{number:.0}").parse::<i64>().ok() == Some(integer),
                 "integer {integer} cannot be represented exactly as an XLSX numeric cell"
             );
-            worksheet.write_number(row, column, number)?;
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_number_with_format(row, column, number, format);
+                }
+                None => {
+                    worksheet.write_number(row, column, number)?;
+                }
+            };
         }
         "number" => {
             let number = data.as_f64().context("static print number is invalid")?;
             anyhow::ensure!(number.is_finite(), "static print number is not finite");
-            worksheet.write_number(row, column, number)?;
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_number_with_format(row, column, number, format);
+                }
+                None => {
+                    worksheet.write_number(row, column, number)?;
+                }
+            };
         }
         "datetime_serial" => {
             let number = data
                 .as_f64()
                 .context("static print date serial is invalid")?;
             anyhow::ensure!(number.is_finite(), "static print date serial is not finite");
-            let format = Format::new().set_num_format("yyyy-mm-dd h:mm:ss");
+            let format = match cell_format {
+                // 源单元格自带数字格式（OOXML 读取）：保持源显示口径。
+                Some(format) => format.clone(),
+                None => Format::new().set_num_format("yyyy-mm-dd h:mm:ss"),
+            };
             worksheet.write_number_with_format(row, column, number, &format)?;
         }
         "boolean" => {
-            worksheet.write_boolean(
-                row,
-                column,
-                data.as_bool().context("static print boolean is invalid")?,
-            )?;
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_boolean_with_format(
+                        row,
+                        column,
+                        data.as_bool().context("static print boolean is invalid")?,
+                        format,
+                    );
+                }
+                None => {
+                    worksheet.write_boolean(
+                        row,
+                        column,
+                        data.as_bool().context("static print boolean is invalid")?,
+                    )?;
+                }
+            };
         }
         "error" => {
             // 原 Python 打印工具原样输出错误值（如 #DIV/0!）。xlsxwriter 无
             // 类型化错误写入 API，按旧版可见文本写入，保持与源表显示一致。
-            worksheet.write_string(row, column, data.as_str().unwrap_or("#N/A"))?;
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_string_with_format(
+                        row,
+                        column,
+                        data.as_str().unwrap_or("#N/A"),
+                        format,
+                    );
+                }
+                None => {
+                    worksheet.write_string(row, column, data.as_str().unwrap_or("#N/A"))?;
+                }
+            };
+        }
+        "blank" => {
+            match cell_format {
+                Some(format) => {
+                    worksheet.write_blank(row, column, format)?;
+                }
+                None => {}
+            };
         }
         other => anyhow::bail!("unsupported static print cell type {other:?}"),
     }

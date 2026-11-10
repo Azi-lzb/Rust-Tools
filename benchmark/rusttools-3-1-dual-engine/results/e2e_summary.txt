@@ -1,0 +1,14 @@
+cfg_mode1 entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_mode1 entry=rust 按配置生成静态打印文件：执行成功
+cfg_mode2 entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_mode2 entry=rust 按配置生成静态打印文件：执行成功
+cfg_mode3 entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_mode3 entry=rust 按配置生成静态打印文件：执行成功
+cfg_multirange entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_multirange entry=rust 按配置生成静态打印文件：执行成功
+cfg_emptyrange entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_emptyrange entry=rust 按配置生成静态打印文件：执行成功
+cfg_multitarget entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_multitarget entry=rust 按配置生成静态打印文件：执行成功
+cfg_repeatsheet entry=openpyxl 按配置生成静态打印文件：执行成功
+cfg_repeatsheet entry=rust 按配置生成静态打印文件：执行成功

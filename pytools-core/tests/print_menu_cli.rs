@@ -60,17 +60,27 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     assert!(menu.status.success());
     let menu_text = String::from_utf8_lossy(&menu.stdout);
     assert!(
-        menu_text.contains("1  按打印配置生成：openpyxl"),
+        menu_text.contains("1  按打印配置生成（Openpyxl）"),
+        "{menu_text}"
+    );
+    // 双入口（2026-11-11 用户要求）：2 = Rust，独立实现、_Rust 输出、无自动路由。
+    assert!(
+        menu_text.contains("2  按打印配置生成（Rust）"),
         "{menu_text}"
     );
     assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
-    let precheck_entries = menu_text
+    let rust_entries = menu_text
         .lines()
-        .filter(|line| line.contains("按打印配置生成"))
+        .filter(|line| line.contains("按打印配置生成（Rust）"))
+        .count();
+    assert_eq!(rust_entries, 1, "Rust entry must appear once: {menu_text}");
+    let openpyxl_entries = menu_text
+        .lines()
+        .filter(|line| line.contains("按打印配置生成（Openpyxl）"))
         .count();
     assert_eq!(
-        precheck_entries, 1,
-        "old 3-1/3-2 duplicate entries must collapse into one: {menu_text}"
+        openpyxl_entries, 1,
+        "Openpyxl entry must appear once: {menu_text}"
     );
     assert!(!menu_text.contains("PDF"), "PDF entry must stay removed");
     assert!(
@@ -98,7 +108,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
         .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
     assert!(starts_with_timestamp(start_line), "{start_line}");
-    assert!(start_line.contains("（openpyxl）"), "{start_line}");
+    assert!(start_line.contains("（Openpyxl）"), "{start_line}");
     let done_line = print_stdout
         .lines()
         .find(|line| line.contains("按配置生成静态打印文件：执行成功"))
@@ -138,7 +148,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     );
 
     // 3-3：配置预校验（机器可读 JSON 仅 developer 视图输出）。
-    let precheck = run_menu_with_view(&config, "3\n2\n0\n0\n", "developer")?;
+    let precheck = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
     assert!(precheck.status.success());
     let precheck_response = output_json(&precheck)?;
     assert_eq!(
@@ -209,7 +219,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         .lines()
         .find(|line| line.contains("开始按打印配置生成静态打印文件"))
         .context("start line missing")?;
-    assert!(start_line.contains("（openpyxl）"), "{start_line}");
+    assert!(start_line.contains("（Openpyxl）"), "{start_line}");
     assert!(starts_with_timestamp(start_line), "{start_line}");
     assert!(
         !stdout.contains("输入 y/yes/是"),
@@ -284,7 +294,7 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     create_print_source(&source)?;
     let log_dir = root.path().join("logs");
 
-    let developer = run_menu_with_view(&config, "3\n2\n0\n0\n", "developer")?;
+    let developer = run_menu_with_view(&config, "3\n3\n0\n0\n", "developer")?;
     assert!(
         developer.status.success(),
         "precheck failed: {}",
@@ -319,14 +329,14 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     assert_eq!(history["action"], "config_precheck");
     assert_eq!(history["status"], "succeeded");
 
-    let user = run_menu_with_view(&config, "3\n2\n0\n0\n", "user")?;
+    let user = run_menu_with_view(&config, "3\n3\n0\n0\n", "user")?;
     assert!(user.status.success());
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     assert!(user_stdout.contains("开始：按配置预校验打印任务"));
     assert!(user_stdout.contains("通过配置数：1"), "{user_stdout}");
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
-    let off = run_menu_with_view(&config, "3\n2\n0\n0\n", "off")?;
+    let off = run_menu_with_view(&config, "3\n3\n0\n0\n", "off")?;
     assert!(off.status.success());
     let off_stdout = String::from_utf8_lossy(&off.stdout);
     assert!(!off_stdout.contains("PT-3 开始："));
@@ -336,6 +346,78 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
         history_count_before_off,
         "off view must not write history"
     );
+    Ok(())
+}
+
+#[test]
+fn rust_print_entry_writes_isolated_styled_output() -> Result<()> {
+    // 双入口验收（2026-11-11）：Rust 入口独立执行同一份配置，
+    // 输出追加 _Rust 后缀，不覆盖 Openpyxl 入口的输出文件。
+    let root = TestDirectory::new()?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("printed.xlsx");
+    let config =
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
+    create_print_source(&source)?;
+    let source_before = fs::read(&source)?;
+
+    let execution = run_menu(&config, "3\n2\n0\n0\n")?;
+    assert!(
+        execution.status.success(),
+        "rust print failed: {}",
+        String::from_utf8_lossy(&execution.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&execution.stdout);
+    assert!(stdout.contains("（Rust"), "{stdout}");
+    // 源文件与 Openpyxl 目标路径都不得被写入。
+    assert!(
+        !target.exists(),
+        "Rust entry must not write the Openpyxl target"
+    );
+    assert_eq!(
+        fs::read(&source)?,
+        source_before,
+        "source must stay unchanged"
+    );
+
+    let rust_target = root.path().join("printed_Rust.xlsx");
+    assert!(rust_target.is_file(), "Rust output missing: {stdout}");
+
+    let printed = read_workbook(&rust_target)?;
+    assert_eq!(printed.sheets.len(), 1);
+    let sheet = &printed.sheets[0];
+    assert_eq!(sheet.name, "Printed");
+    // 数值/缓存值/零值隐藏语义与 Openpyxl 入口一致。
+    assert_eq!(sheet.values["A3"]["value"], 3.0, "formula cache value");
+    assert!(!sheet.values.contains_key("A1"), "numeric zero hidden");
+    assert_eq!(sheet.values["A2"]["value"], 2.0);
+    assert_eq!(sheet.values["B3"]["value"], 0.0001);
+    assert_eq!(sheet.values["C3"]["value"], "0");
+    // 样式：锚点字体（OOXML 读取映射为 Format）与合并区域平移。
+    assert_eq!(sheet.merges, vec!["B2:C2".to_owned()], "merged range");
+    assert_eq!(
+        fs::read(&source)?,
+        source_before,
+        "source must stay unchanged after close"
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_print_entry_refuses_xlsm_target_with_clear_message() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("printed.xlsm");
+    let config = create_print_config(root.path(), &source, &target)?;
+    create_print_source(&source)?;
+
+    let execution = run_menu(&config, "3\n2\n0\n0\n")?;
+    let stdout = String::from_utf8_lossy(&execution.stdout);
+    assert!(
+        stdout.contains("XLSM"),
+        "XLSM refusal must name the format: {stdout}"
+    );
+    assert!(!target.exists(), "failed print must not create a target");
     Ok(())
 }
 

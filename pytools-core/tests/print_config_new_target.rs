@@ -115,6 +115,10 @@ fn make_print_config(path: &Path, source: &Path, target: &Path) -> Result<()> {
     sheet.write_string(1, 9, "横向")?;
     sheet.write_boolean(1, 10, true)?;
     sheet.write_boolean(1, 11, true)?;
+    sheet.write_boolean(1, 12, true)?;
+    sheet.write_boolean(1, 13, true)?;
+    sheet.write_boolean(1, 10, true)?;
+    sheet.write_boolean(1, 11, true)?;
     workbook.save(path)?;
     Ok(())
 }

@@ -1,0 +1,10 @@
+{"file": "results\\outputs\\openpyxl_out_m1.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\openpyxl_out_rs.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_er_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_m1_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_m2_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_m3_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_mr_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_mt1_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 2}
+{"file": "results\\outputs\\out_mt2_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}
+{"file": "results\\outputs\\out_rs_Rust.xlsx", "engine_context": "outputs", "verdict": "PASS", "worksheets_loaded": 1}

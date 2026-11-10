@@ -1,0 +1,42 @@
+{
+ "mode1": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "mode2": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "mode3": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "multirange": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "emptyrange": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "multitarget-1": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "multitarget-2": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ },
+ "repeatsheet": {
+  "value_diffs": [],
+  "style_diffs": 0,
+  "details": []
+ }
+}

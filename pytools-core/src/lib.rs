@@ -24,6 +24,7 @@ pub mod fx_header;
 pub mod inplace_edit;
 pub mod institution_normalize;
 pub mod local_filename_map;
+pub mod ooxml_cell_styles;
 pub mod path_map;
 pub mod print_ops;
 pub mod quick;
