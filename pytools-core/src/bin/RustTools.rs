@@ -2371,7 +2371,20 @@ where
                                 )
                             )?;
                             if item["status"] == "failed" {
-                                writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, "写入失败；请检查目标工作簿、工作表、文件占用状态和写入权限"))?;
+                                // 失败条目的 error 已由 safe_wide_target_error
+                                // 脱敏，这里如实带出真实原因，避免固定文案把
+                                // 表头不一致等护栏拒绝误描述为占用/权限问题。
+                                let reason = item["error"]
+                                    .as_str()
+                                    .unwrap_or("目标工作簿写入失败；请检查目标文件、工作表、文件占用状态和权限");
+                                writeln!(
+                                    output,
+                                    "{}",
+                                    pytools_core::run_logging::terminal_line(
+                                        pytools_core::run_logging::Level::Error,
+                                        &format!("写入失败：{reason}"),
+                                    )
+                                )?;
                             }
                         }
                     }
