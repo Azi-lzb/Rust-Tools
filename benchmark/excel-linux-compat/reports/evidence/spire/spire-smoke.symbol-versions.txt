@@ -1,0 +1,34 @@
+
+Version symbols section '.gnu.version' contains 76 entries:
+ Addr: 0000000000401928  Offset: 0x001928  Link: 5 (.dynsym)
+  000:   0 (*local*)       2 (GLIBCXX_3.4)   3 (CXXABI_1.3)    4 (GLIBC_2.14) 
+  004:   2 (GLIBCXX_3.4)   1 (*global*)      2 (GLIBCXX_3.4)   5 (GLIBC_2.2.5)
+  008:   2 (GLIBCXX_3.4)   1 (*global*)      6 (GLIBCXX_3.4.21)    1 (*global*)   
+  00c:   2 (GLIBCXX_3.4)   2 (GLIBCXX_3.4)   1 (*global*)      2 (GLIBCXX_3.4)
+  010:   7 (GCC_3.0)       2 (GLIBCXX_3.4)   5 (GLIBC_2.2.5)   3 (CXXABI_1.3) 
+  014:   2 (GLIBCXX_3.4)   5 (GLIBC_2.2.5)   2 (GLIBCXX_3.4)   5 (GLIBC_2.2.5)
+  018:   2 (GLIBCXX_3.4)   2 (GLIBCXX_3.4)   1 (*global*)      1 (*global*)   
+  01c:   1 (*global*)      1 (*global*)      2 (GLIBCXX_3.4)   1 (*global*)   
+  020:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+  024:   1 (*global*)      1 (*global*)      1 (*global*)      2 (GLIBCXX_3.4)
+  028:   1 (*global*)      2 (GLIBCXX_3.4)   1 (*global*)      1 (*global*)   
+  02c:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+  030:   1 (*global*)      1 (*global*)      1 (*global*)      2 (GLIBCXX_3.4)
+  034:   1 (*global*)      3 (CXXABI_1.3)    1 (*global*)      1 (*global*)   
+  038:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+  03c:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+  040:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+  044:   1 (*global*)      1 (*global*)      2 (GLIBCXX_3.4)   1 (*global*)   
+  048:   1 (*global*)      1 (*global*)      1 (*global*)      1 (*global*)   
+
+Version needs section '.gnu.version_r' contains 3 entries:
+ Addr: 0x00000000004019c0  Offset: 0x0019c0  Link: 6 (.dynstr)
+  000000: Version: 1  File: libgcc_s.so.1  Cnt: 1
+  0x0010:   Name: GCC_3.0  Flags: none  Version: 7
+  0x0020: Version: 1  File: libc.so.6  Cnt: 2
+  0x0030:   Name: GLIBC_2.2.5  Flags: none  Version: 5
+  0x0040:   Name: GLIBC_2.14  Flags: none  Version: 4
+  0x0050: Version: 1  File: libstdc++.so.6  Cnt: 3
+  0x0060:   Name: GLIBCXX_3.4.21  Flags: none  Version: 6
+  0x0070:   Name: CXXABI_1.3  Flags: none  Version: 3
+  0x0080:   Name: GLIBCXX_3.4  Flags: none  Version: 2

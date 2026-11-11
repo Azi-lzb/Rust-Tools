@@ -1,0 +1,708 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-11-11T18:41:38Z",
+  "root": "benchmark/excel-linux-compat",
+  "note": "Hashes cover harness, evidence, synthetic fixtures, and outputs; this manifest excludes itself. Commercial SDK binaries, license files, publish directories, and cargo target output are excluded.",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 323,
+      "sha256": "68ef0893aed151ba153b1cb19af24dc3c982bf23b79bb4b04ad401f6a52a8731"
+    },
+    {
+      "path": "aspose-cpp/CMakeLists.txt",
+      "bytes": 634,
+      "sha256": "9c04be3221ae96f4a6dd44226dc30f3b51f80b7c0e21f9ef21dfe6c1f7fcd40d"
+    },
+    {
+      "path": "aspose-cpp/src/aspose_cpp_smoke.cpp",
+      "bytes": 1642,
+      "sha256": "b22bcafd612c6fbeec80c17c399eb8faa8c45f972aa8c503a90206884ef10193"
+    },
+    {
+      "path": "docker/rocky8-toolchain/Dockerfile",
+      "bytes": 978,
+      "sha256": "2a60edcbdd8447ed000f2dec11ee139855d7ee8e83c3144c08ebc99d45d23572"
+    },
+    {
+      "path": "docker/rust-rocky8/Dockerfile",
+      "bytes": 481,
+      "sha256": "f01b3a8f17cf08f92cc6dc55fbbc646319293458b044e57e99412ab3e1778594"
+    },
+    {
+      "path": "dotnet/aspose/Asposetest.csproj",
+      "bytes": 511,
+      "sha256": "255c443f423acb826c75961bed107bdfb792159a15f6242429004c88e25542d9"
+    },
+    {
+      "path": "dotnet/aspose/Program.cs",
+      "bytes": 21775,
+      "sha256": "b3a8c5224234ee02ee3fe76450b137a7780302640f285abc340335feb5911199"
+    },
+    {
+      "path": "dotnet/gembox/GemboxTest.csproj",
+      "bytes": 343,
+      "sha256": "2a61a3691f9ec542a9ed3c059e978f656a561bf3be5cafbe690635336e0af50c"
+    },
+    {
+      "path": "dotnet/gembox/Program.cs",
+      "bytes": 19070,
+      "sha256": "e5b42e32b43494cabae4d15d61b4b5d48d3abdfe199ea19842620b889f1b2f37"
+    },
+    {
+      "path": "fixtures/capabilities.xls",
+      "bytes": 5632,
+      "sha256": "1441a277b9c982e1675285c975a64e8005f00e63c7b7252dc839a801f6d68d2e"
+    },
+    {
+      "path": "fixtures/capabilities.xlsx",
+      "bytes": 9578,
+      "sha256": "7e1c7c49a57ded54e9ec419377c6bf8a8592a775551619453f532d9bd7d5fa6c"
+    },
+    {
+      "path": "fixtures/smoke.xls",
+      "bytes": 5632,
+      "sha256": "1441a277b9c982e1675285c975a64e8005f00e63c7b7252dc839a801f6d68d2e"
+    },
+    {
+      "path": "fixtures/smoke.xlsx",
+      "bytes": 9578,
+      "sha256": "7e1c7c49a57ded54e9ec419377c6bf8a8592a775551619453f532d9bd7d5fa6c"
+    },
+    {
+      "path": "libxl/CMakeLists.txt",
+      "bytes": 702,
+      "sha256": "4ec8f8eda668a817b1377d9b0f95defc41efb76aea8e9b9149af4a97bf10eca2"
+    },
+    {
+      "path": "libxl/src/libxl_smoke.cpp",
+      "bytes": 12920,
+      "sha256": "34a26440ffd0808930770a3b97a3d47a447a56ea71230676dda620c2b2c9c7a4"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1710,
+      "sha256": "04706ec6f79daaec5a8b45cfaf650c101b8020b3cb6d819a9f0a3d8ed922df8a"
+    },
+    {
+      "path": "reports/DEPENDENCIES.csv",
+      "bytes": 1734,
+      "sha256": "62a38e4c87c5faf41398c510fb58422b6498d2c90b751aab11300b64683c70f1"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/aspose-cpp-build-container.log",
+      "bytes": 3505,
+      "sha256": "03e66961380365158e58001a6af89e2a71ef121c7537ac7e3361c6fc98ca1af9"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/aspose-cpp-build.log",
+      "bytes": 3096,
+      "sha256": "690c453e4e5417d40d656d2df39c2bc4d1f3a7918e8a453151260d60a2b4a9ec"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/libAspose.Cells.so.dynamic.txt",
+      "bytes": 2081,
+      "sha256": "71713adc6ea91a13c29f301f5027809983ce47909ee6021ed83b393f22ea6e21"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/libAspose.Cells.so.elf-header.txt",
+      "bytes": 967,
+      "sha256": "cbab70b44035bb41cc5bc156fd4dcd927c30e895fa0ceee6e212944f6da798ed"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/libAspose.Cells.so.file.txt",
+      "bytes": 207,
+      "sha256": "78f227a0a332cdd1a6c97bc2cc287bdbd02c2ccb5ea97d53ac1df1ffce2d6f66"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/libAspose.Cells.so.ldd.txt",
+      "bytes": 1253,
+      "sha256": "9a538dc2ae361d68e39bf671c711481aabe454d5247eeff3c0d6d456681ad7c7"
+    },
+    {
+      "path": "reports/evidence/aspose-cpp/libAspose.Cells.so.symbol-versions.txt",
+      "bytes": 271990,
+      "sha256": "c01ea40fec151f7fd74070d04ffb100fcc7ad8c74b4f24b39a922c3a7cf32e6d"
+    },
+    {
+      "path": "reports/evidence/aspose/dotnet-native-dependencies.txt",
+      "bytes": 12916,
+      "sha256": "06ff57811cf37c66e18f1a4af738d98fbd533af710d9dfff67ea68aed34fb297"
+    },
+    {
+      "path": "reports/evidence/aspose/dotnet-publish.log",
+      "bytes": 239,
+      "sha256": "02b053bf15d9dc3dbe510cb9a01079a65381f9bf2ee9578412ec8501f22217ef"
+    },
+    {
+      "path": "reports/evidence/aspose/dotnet-restore.log",
+      "bytes": 86,
+      "sha256": "0a5293e62d3bb4d8819d8d749f51206d3aa424744e622337bee96070823f245b"
+    },
+    {
+      "path": "reports/evidence/aspose/dotnet-sdk-info.txt",
+      "bytes": 1532,
+      "sha256": "fa7fe7856cc342c62e834c15629bac02beef67ff9d236db94797fc06dcf43ed0"
+    },
+    {
+      "path": "reports/evidence/aspose/offline-runtime.log",
+      "bytes": 366,
+      "sha256": "4f8442ca7a36c4607bb114c4418e838358c98c0cb472962088730361ca9d88ab"
+    },
+    {
+      "path": "reports/evidence/gembox/dotnet-native-dependencies.txt",
+      "bytes": 14113,
+      "sha256": "abe3a9db1680e04e236667aeb221ea47aba6094477fd0d80525840a707269130"
+    },
+    {
+      "path": "reports/evidence/gembox/dotnet-publish.log",
+      "bytes": 239,
+      "sha256": "9db28c3020682619f7b0c0236f2351719850cab052c196dd109553b0b97e9f8c"
+    },
+    {
+      "path": "reports/evidence/gembox/dotnet-restore.log",
+      "bytes": 86,
+      "sha256": "0a5293e62d3bb4d8819d8d749f51206d3aa424744e622337bee96070823f245b"
+    },
+    {
+      "path": "reports/evidence/gembox/dotnet-sdk-info.txt",
+      "bytes": 1532,
+      "sha256": "fa7fe7856cc342c62e834c15629bac02beef67ff9d236db94797fc06dcf43ed0"
+    },
+    {
+      "path": "reports/evidence/gembox/offline-runtime.log",
+      "bytes": 455,
+      "sha256": "ef27d62277cb0a272c94e793e04a6f0e6707995dd37a4737c3fe1bd889c9bc64"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-build-container.log",
+      "bytes": 2256,
+      "sha256": "73e36e8001389de7fd8c422fc92c373b9c04167dfe15d95a203bd843ae957155"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-build.log",
+      "bytes": 1649,
+      "sha256": "ef8c40bcfd73bc8b545d024cfd544c1a7119cfe526d41b3a869aedd8018b345c"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-image-pull.log",
+      "bytes": 434,
+      "sha256": "48eb39ab114c99122f0222c880f92cbe4e2983836ebda55e98bae80e2dfea958"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-offline-runtime.log",
+      "bytes": 2480,
+      "sha256": "f87c3d887ba865a324336a64266d20cb1cc1d69e867e10033613dcf58144253a"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-build-ldd-r.txt",
+      "bytes": 383,
+      "sha256": "2d4ed9d7d1321ef78fa772e32dfbf2f5415fa074e08143cb2fdbeede3c7f2e1b"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-build-ldd.txt",
+      "bytes": 383,
+      "sha256": "0d0a0dabe34f90a258515bcb7dff87ffc1f67f4cc1e904f4af38b04cee7f8455"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-dynamic.txt",
+      "bytes": 1683,
+      "sha256": "aec841b1eaef11849f1ea023a905db8b637509e52085bf796f1f8d07e8b5934f"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-elf-header.txt",
+      "bytes": 956,
+      "sha256": "a5d2a5a2d42292c278c07cbc5dbaaad76b79244cc21cca28d1b6377b1d407655"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-file.txt",
+      "bytes": 241,
+      "sha256": "13cc30432333b8ac1057372cc53e15ba5eeda1522464bdae1ecaa3d9b6f37cbe"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-smoke-symbol-versions.txt",
+      "bytes": 5509,
+      "sha256": "aabd4b7817abb836a9d05c7fbd0771ab5d23cb82aa6d339dea560d8f133234a1"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-dynamic.txt",
+      "bytes": 1614,
+      "sha256": "680ea7fb9da60679f020c5843d3cee63c083f4ee8b090ac5628ef74560c8a9bd"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-elf-header.txt",
+      "bytes": 965,
+      "sha256": "29ebea862f7428bb1c107ffd07af94b21c000e97a905b414d0bfcc96f9dcc1e4"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-file.txt",
+      "bytes": 172,
+      "sha256": "a04bd5d81cdabbd9e4b99d18fd9c39bd2908e9388e3677e8a816623e0c88691e"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-ldd-r.txt",
+      "bytes": 314,
+      "sha256": "53adcb3392471d0a9152b0f426672d4c052fba36d4a6b85ea38097d2a0f8c23e"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-ldd.txt",
+      "bytes": 314,
+      "sha256": "25bf17e766571afa66de237aeed2d5b1fc04c4ea8091afbd93fc786686ab9cff"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-so-symbol-versions.txt",
+      "bytes": 37303,
+      "sha256": "000641161b9010e3ffc127a626aa1ece1fa4ca145e4b187dd9dbf014483ee1cc"
+    },
+    {
+      "path": "reports/evidence/rocky8-image-id.txt",
+      "bytes": 160,
+      "sha256": "34f5326fe35ea8b5b2085fd11c15cce6ae12ff6593df37853288447e0eb9b0e7"
+    },
+    {
+      "path": "reports/evidence/rocky8-runtime-environment.txt",
+      "bytes": 650,
+      "sha256": "86de42c8b277fdcf675f1351a50db6944c464022afa3370fc81fa9d73ccdd745"
+    },
+    {
+      "path": "reports/evidence/rxls/rxls-build.log",
+      "bytes": 5175,
+      "sha256": "ad3521fc00ca0fdbdc7d449e42bbfc9c8c19b6a68f10597454710588336503cc"
+    },
+    {
+      "path": "reports/evidence/rxls/rxls-convert-report.json",
+      "bytes": 1810,
+      "sha256": "4e02f47fb5711e90b67a2aa1078d81776de63f39005c3220f76b46304f6d8f24"
+    },
+    {
+      "path": "reports/evidence/rxls/rxls-elf-dependencies.txt",
+      "bytes": 7397,
+      "sha256": "a63de937e9417dc4945df5bd6eb62b4c6cf6e3d1a5020a4c5e166bff6867331a"
+    },
+    {
+      "path": "reports/evidence/rxls/rxls-offline-runtime.log",
+      "bytes": 225,
+      "sha256": "c38f9a15a7f059c4c5ea320c1a2ba94bcffbebb32d1d15ad98c83ade69357386"
+    },
+    {
+      "path": "reports/evidence/rxls/toolchain-build.log",
+      "bytes": 1778,
+      "sha256": "c0515ed7961aefa89d140b3d6e27d7e05d08d475c8273c08defc0e293f4cca23"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp-rocky8-ldd.txt",
+      "bytes": 977,
+      "sha256": "147cbf1a8ed3060b6cc0563a929dd9d7675390fe6b007aad8c62e43a7a080096"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp.so.dynamic.txt",
+      "bytes": 1915,
+      "sha256": "4ebeb179cdc14d04cff29ab93e7de8bab1e04fce89c3d2fd83f7ccb9ff56f953"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp.so.elf-header.txt",
+      "bytes": 964,
+      "sha256": "04778905ca7fa5aaed265360616a30941de55eaedbd21e2db89b8e6a088b90f7"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp.so.file.txt",
+      "bytes": 183,
+      "sha256": "30b14b113013fa76602bb3f739c62c36a2c8f675e6337a81e23f39d030506da2"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp.so.ldd.txt",
+      "bytes": 880,
+      "sha256": "45d533cb480f12d2af643cdb6c244b9e1ac36fc05f36c1adf8218d2ab514e47a"
+    },
+    {
+      "path": "reports/evidence/spire/libSkiaSharp.so.symbol-versions.txt",
+      "bytes": 25146,
+      "sha256": "4b04ca4cd2afd46cc00a2eeba07dbbd47b988082146c9b08a496c287384c772e"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsBase.so.dynamic.txt",
+      "bytes": 2090,
+      "sha256": "110d0ec82b2be71fae26e476cec6f5740387eaa9ab8f2e3cada1bb323084ff8d"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsBase.so.elf-header.txt",
+      "bytes": 961,
+      "sha256": "63fa91a42b2885d72134455ac89b2d279662c33ae0e9a5e69323001cc156c516"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsBase.so.file.txt",
+      "bytes": 207,
+      "sha256": "f42bd945293fe21798a33d0c3ca7b33d0c7e6a3b6ceca1697308442dc6e4de96"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsBase.so.ldd.txt",
+      "bytes": 538,
+      "sha256": "ea300179a1dad02d782053c50f3ac3b68441fad9b6becee53635f8f174f23fbe"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsBase.so.symbol-versions.txt",
+      "bytes": 155993,
+      "sha256": "d77c172ec37f30999ad14abd1821e0b8c040fc0fa62c4ccf316d508a9b9c1c7d"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsCpp.so.dynamic.txt",
+      "bytes": 1693,
+      "sha256": "7b7036aaa3a0747ad03cf0d5e245325188396112d15758add5a418e8334fac5a"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsCpp.so.elf-header.txt",
+      "bytes": 965,
+      "sha256": "edb92c9cb85a6488762622587fe6db5d4db5de80856b46db31722451e828e3b1"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsCpp.so.file.txt",
+      "bytes": 206,
+      "sha256": "d7eb7cee28e4e9f7d9e3bcf383db9051bbd2fd577bb81d2c2dbd27bb5e6021c9"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsCpp.so.ldd.txt",
+      "bytes": 368,
+      "sha256": "1c4f7a5385786abc6b389eb10e0cbb9b4f8b9c15d8e716e03fcd1c3bc3ddf7ad"
+    },
+    {
+      "path": "reports/evidence/spire/libSpireXlsCpp.so.symbol-versions.txt",
+      "bytes": 354511,
+      "sha256": "f237361eee0c95ade9bed6c25aa2abc8aafb4958dba9b2d4a3816e2d75bcd655"
+    },
+    {
+      "path": "reports/evidence/spire/spire-build-container.log",
+      "bytes": 2252,
+      "sha256": "9a2c3118f19ddc598aee551b17a67b1dbafe935f21ca1dd4f779ebeac1c1e542"
+    },
+    {
+      "path": "reports/evidence/spire/spire-build.log",
+      "bytes": 1689,
+      "sha256": "b9d49d14eccae5c75f926820ecf4552b7e9e9ea84cf2ea0b9cfef11001e3da29"
+    },
+    {
+      "path": "reports/evidence/spire/spire-offline-runtime.log",
+      "bytes": 1508,
+      "sha256": "37c25fceac4be57f7c459fde17aa972ae0940d9d6c7e17b20074506fbea17ff2"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.dynamic.txt",
+      "bytes": 1837,
+      "sha256": "2954fcb4e89171178d91166dadde4930a47e06af19cec19ffcae259240b8cae2"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.elf-header.txt",
+      "bytes": 960,
+      "sha256": "c4830070436a4169a0e90df0429d94c9f60e72324d5bdfca3d52f8e184553423"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.file.txt",
+      "bytes": 236,
+      "sha256": "afaceb511d309909685a7275dd21cf7f414cde0f4be2cce7869db05c6a97008e"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.ldd-reloc.txt",
+      "bytes": 714,
+      "sha256": "edc132456aefa23d266562b308f452038594dc485c40d69e9ed77fdf7d42ce7b"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.ldd.txt",
+      "bytes": 714,
+      "sha256": "222036e71343352e6951c7cf4fef33353ad7bdddd0b5481b654a129187cd2d8d"
+    },
+    {
+      "path": "reports/evidence/spire/spire-smoke.symbol-versions.txt",
+      "bytes": 2224,
+      "sha256": "0cb5e059817595e3d4f412f66a635ecc270f159b3d4017c8a5a7d0390732b524"
+    },
+    {
+      "path": "reports/evidence/toolchain-image-id.txt",
+      "bytes": 187,
+      "sha256": "a0f16db95585ad21625d5aa07d0a3ebfab898d5f12e6b4e65f14cbdedcabdbe7"
+    },
+    {
+      "path": "reports/LINUX_GLIBC228_COMPATIBILITY.md",
+      "bytes": 7331,
+      "sha256": "38187e674c15346618cf286017e4f9f5d8038d3bbe61de21c7b5f9d19c591e2b"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-capabilities.xlsx",
+      "bytes": 32635,
+      "sha256": "ff2ce10ccab1ac8c08fc04780bfeb8c87a79b419b49b2f6a266a8b570e98b88f"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-converted.xlsx",
+      "bytes": 10233,
+      "sha256": "03e22a9f1e6d5ba500d055229a91e2438a4e35b1ba13549823d4622cfafd7d72"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-edited.xls",
+      "bytes": 7680,
+      "sha256": "6b6a54d98b71f241bdbb54bf91488e7dbbf5559e0d0693672d02ecffa3ce242a"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-edited.xlsx",
+      "bytes": 15501,
+      "sha256": "27e328b7770c3f81df31d9322677eb68a7e72ed5a8d16879bc111408ecbfa85c"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-noop.xls",
+      "bytes": 7168,
+      "sha256": "6bfa84989c39b9977c140a29d8174e2e3404ef8515f01b5b57c9fcff1f7f592c"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-noop.xlsx",
+      "bytes": 14755,
+      "sha256": "ca517acddc141261bd80425981150ae7cfe03a16d7b41ee49b207dcfad08b6a1"
+    },
+    {
+      "path": "reports/samples/aspose/aspose-smoke.pdf",
+      "bytes": 6345,
+      "sha256": "aa7959c1dbaf5f82f55425eebbceb58bb80ba854e5283a025fe9a87b6c971a32"
+    },
+    {
+      "path": "reports/samples/aspose/formula-check.xlsx",
+      "bytes": 9512,
+      "sha256": "87887176156f31bb5765e11fd8a6bb8947ccc65526191bdb5b031a795e9077ad"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-capabilities.xlsx",
+      "bytes": 12962,
+      "sha256": "134aec48279ff9ac4700ce4307d98c96f0cf69d667984513e25773dd625f9b2d"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-converted.xlsx",
+      "bytes": 7712,
+      "sha256": "dca43c2d273cccfed35a93ade3460a2f2248ff13024c0516805a16c9b04a2f56"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-edited.xls",
+      "bytes": 7168,
+      "sha256": "edb994748e6976b74c8678c5dbf9cbfb2ee2e5710167382769506256106d2922"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-edited.xlsx",
+      "bytes": 11320,
+      "sha256": "e4b9e7096a199393f4a0540029848b6be2b6c5b30becbb5da5d2d7212d92acf8"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-formula-check.xlsx",
+      "bytes": 6713,
+      "sha256": "b460fbb44a104b8192be1a5663c6ad6eadaa36b8caa24ed9550beef6777e6222"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-noop.xls",
+      "bytes": 7168,
+      "sha256": "1b78a86f49f276cc0d6e5fee757ee88ba04cfb62467fd94c5661234b3b606acd"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-noop.xlsx",
+      "bytes": 11322,
+      "sha256": "5f84787aee3d4545dcca6f741b054f127e63b1056431043bb886156b0a9b944f"
+    },
+    {
+      "path": "reports/samples/gembox/gembox-smoke.pdf",
+      "bytes": 12785,
+      "sha256": "fc2af703136ac7b751c70a9b93d546454d85a8c539db00e982e76766ce028ee4"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-capabilities.xls",
+      "bytes": 14336,
+      "sha256": "bae93e7d1ff436db6750e9285367fab2b247866a3b784456c781afcdcb7dbefd"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-capabilities.xlsx",
+      "bytes": 5633,
+      "sha256": "42cd23e27907684d4f73861dbe8e44db516e4f5c0886729c3d10990d6842cd52"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-converted.xlsx",
+      "bytes": 3603,
+      "sha256": "4c0917e7cd3043495931b8ed84c99905984b5c5e196a222385ca391aa2b3b8c9"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-input.xls",
+      "bytes": 7168,
+      "sha256": "4dbf86b8c8f1e7a6e1e64035a24b960a3e78d657649b98897b6bf74d76ce24a6"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-input.xlsx",
+      "bytes": 3603,
+      "sha256": "4c0917e7cd3043495931b8ed84c99905984b5c5e196a222385ca391aa2b3b8c9"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-modified.xls",
+      "bytes": 7168,
+      "sha256": "ef087a828bf55a06e58bf3ad2f3a55cf0551a84c71e78e2e9415863e850b9250"
+    },
+    {
+      "path": "reports/samples/libxl/libxl-modified.xlsx",
+      "bytes": 3619,
+      "sha256": "0711b1c661748467089f70b76ddc5105958ba65a7b347e0ecc8c4bc6327fe6ce"
+    },
+    {
+      "path": "reports/samples/rxls/capabilities-converted.xlsx",
+      "bytes": 4824,
+      "sha256": "03762b75839153e0de08f783bc59161b0d82bf64422d5b98a3f94f5d4f327d63"
+    },
+    {
+      "path": "reports/SMOKE_RESULTS.json",
+      "bytes": 5016,
+      "sha256": "f581ee74e2d618c5788408e464eaf4e5bcbaecd7b4fe282557dc86dadc1d8a3e"
+    },
+    {
+      "path": "rxls/source/Cargo.lock",
+      "bytes": 25337,
+      "sha256": "c926b8e70bab1512b29c2bfc45b4467254902a3e0248e7bb99e30b85305a8dd4"
+    },
+    {
+      "path": "rxls/source/Cargo.toml",
+      "bytes": 930,
+      "sha256": "721a35cc3a06ff9844ff222496927e7087e09ce900b02fbc4b794c9b5053debb"
+    },
+    {
+      "path": "rxls/source/src/bench.rs",
+      "bytes": 21305,
+      "sha256": "d1fe41210c51b5085d2ddd4b00616deb1dd85722bfadca69330196fc4121760d"
+    },
+    {
+      "path": "rxls/source/src/bx_calamine.rs",
+      "bytes": 8972,
+      "sha256": "ec65987e533f9b38e1c737aae2c810e87fb6e41c35f56ddeb7755e507220613a"
+    },
+    {
+      "path": "rxls/source/src/bx_com.rs",
+      "bytes": 8346,
+      "sha256": "adb0768f4068d4eeea1c3e97765a99e293c793a3eede356b9cc63dd68113f068"
+    },
+    {
+      "path": "rxls/source/src/bx_rxls.rs",
+      "bytes": 5585,
+      "sha256": "165bb6654e66ca8e008464d33b070f5c194d3ad535a7d3d1e90454ae2de1ba95"
+    },
+    {
+      "path": "rxls/source/src/combase.rs",
+      "bytes": 21052,
+      "sha256": "b91c164ea35f8915891943b736a38b576842ab507e90b5b09d4356aeaf4db074"
+    },
+    {
+      "path": "rxls/source/src/common.rs",
+      "bytes": 13909,
+      "sha256": "e358761aca1ee86a25f66fbb149abdfef2b30de2b56015422d8ad329da04d093"
+    },
+    {
+      "path": "rxls/source/src/compare.rs",
+      "bytes": 38585,
+      "sha256": "573e2e5e3c4460374b17d30b7b8c9857128387311b2d9ebcbe984bfad5f09b62"
+    },
+    {
+      "path": "rxls/source/src/fxgen.rs",
+      "bytes": 46233,
+      "sha256": "01e70dd8d36d900cf80ed7d5b8d0f22ebd7169096fc7ef51546e8e90444dc872"
+    },
+    {
+      "path": "rxls/source/src/main.rs",
+      "bytes": 15671,
+      "sha256": "40f774f0ba64645c38b3db5fd56ab47957e0eac3d3883f0099fadbbeeed49033"
+    },
+    {
+      "path": "rxls/source/src/mkcorrupt.rs",
+      "bytes": 2696,
+      "sha256": "1697f7b1dcd95d349da2547fc64cdff686e89848f51af6243b876569148b774c"
+    },
+    {
+      "path": "rxls/source/src/opencheck.rs",
+      "bytes": 12804,
+      "sha256": "36276b7d8555bcd5da7271c806d2dc458fccfcaeac52205f3cf9fd800c8bc64a"
+    },
+    {
+      "path": "scripts/build_aspose_cpp_rocky8.sh",
+      "bytes": 1539,
+      "sha256": "ac75af432639bb49a17b03ff67c8f692a5ed6e8deb84e86b9c2920ba04a9d98c"
+    },
+    {
+      "path": "scripts/build_libxl_rocky8.sh",
+      "bytes": 1527,
+      "sha256": "da20c52fc974eb83a50f178e0879051ea771d5e14841a633d93830765a74a47b"
+    },
+    {
+      "path": "scripts/build_rocky8_toolchain.ps1",
+      "bytes": 778,
+      "sha256": "c1cf3630fdcb532321718bc2416ca16fbeabff7d2b15131c03c6e3145ee68ef1"
+    },
+    {
+      "path": "scripts/build_spire_rocky8.sh",
+      "bytes": 1470,
+      "sha256": "78fe04fce06b2ef8510ffd9a01212ccbce6d09c4a68eac662f8e5ce1f98f5a47"
+    },
+    {
+      "path": "scripts/capture_environment_rocky8.ps1",
+      "bytes": 1142,
+      "sha256": "f68985e82e1fa81c10186d5310a052040b60a77a08faaa3fb67b32152b087a51"
+    },
+    {
+      "path": "scripts/inspect_dotnet_publish_rocky8.sh",
+      "bytes": 647,
+      "sha256": "43139307ac48a7485ba4c54aa92e11c5e80ec58cf5d18d190b15e3ba4c6b5191"
+    },
+    {
+      "path": "scripts/run_aspose_cpp_offline_rocky8.sh",
+      "bytes": 535,
+      "sha256": "14c514a1521e053dcbb52b1784de32a2635f63a8d2e91d7f72f5709cb6db2941"
+    },
+    {
+      "path": "scripts/run_aspose_cpp_rocky8.ps1",
+      "bytes": 2542,
+      "sha256": "c22f683bfd2801543158ec08630c7e20e995bfa0e01801488eee47777eefd96b"
+    },
+    {
+      "path": "scripts/run_dotnet_smoke_rocky8.ps1",
+      "bytes": 5406,
+      "sha256": "edb87a4888e34db4caca9ef3d45eecd1bd9fca24c4410270d8fbe636fd683080"
+    },
+    {
+      "path": "scripts/run_dotnet_smoke_rocky8.sh",
+      "bytes": 908,
+      "sha256": "31b3f889db5f5649d101814652b099adea90f441b891599aaa8b4e0b9842cbd8"
+    },
+    {
+      "path": "scripts/run_libxl_offline_rocky8.sh",
+      "bytes": 1069,
+      "sha256": "3563207adca67a04bb9a2115aed234715fe08ba72185fa4a107aad1d2b0ead2a"
+    },
+    {
+      "path": "scripts/run_libxl_rocky8.ps1",
+      "bytes": 3924,
+      "sha256": "7f8258aac36b1ec2644fbb92baf09e929afd1fde0317f2b454ff487221f7aab0"
+    },
+    {
+      "path": "scripts/run_rxls_rocky8.ps1",
+      "bytes": 3469,
+      "sha256": "0a25a6e04951690e1615b3b659db5bed3178a191081aa357fb5553347c63a901"
+    },
+    {
+      "path": "scripts/run_spire_offline_rocky8.sh",
+      "bytes": 512,
+      "sha256": "4e2ff312cfa341f824820098550fcded5ec8ac165d320862b77e9b5931d4a691"
+    },
+    {
+      "path": "scripts/run_spire_rocky8.ps1",
+      "bytes": 2539,
+      "sha256": "917f9e43cf9da531f525faf285a43d61d37597e63e8dad56730988b763f468cb"
+    },
+    {
+      "path": "scripts/write_package_manifest.ps1",
+      "bytes": 1249,
+      "sha256": "009f79e022d3a88d717ec9ceef20dc836fda62297522cb1a9205ba1dbb67e4e6"
+    },
+    {
+      "path": "spire/CMakeLists.txt",
+      "bytes": 682,
+      "sha256": "8c4dde81057e49454b54eeb51d2f7145e9c5879aec687d3297254196034326c2"
+    },
+    {
+      "path": "spire/src/spire_smoke.cpp",
+      "bytes": 1878,
+      "sha256": "bd39d3226c9cb0e8a5d4323c80039ff6297d0382d8f416f961d0e63fcac906cf"
+    }
+  ]
+}
