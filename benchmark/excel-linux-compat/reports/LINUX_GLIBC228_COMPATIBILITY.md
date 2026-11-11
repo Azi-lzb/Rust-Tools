@@ -19,7 +19,7 @@ Date: 2026-11-12. Scope: compatibility, self-contained/offline execution, real X
 | Aspose.Cells .NET | NuGet 26.10.0; .NET SDK 10.0.404/runtime 10.0.15 | PASS | PASS | PASS | PASS | PASS | PASS (6345 bytes) | **PASS** |
 | Spire.XLS C++ | Linux SDK 16.7.0 | PASS, GCC 8.5 | runtime fails on a late-loaded native dependency | runtime fails before workbook load | NOT_RUN | NOT_RUN | NOT_RUN | **INCOMPATIBLE** |
 | GemBox.Spreadsheet .NET | NuGet 2026.10.101; .NET SDK 10.0.404/runtime 10.0.15 | PASS | PASS | PASS | PASS | PASS | PASS (12785 bytes) | **PASS** (100-row Free limit applies) |
-| LibXL C++ | Linux SDK 5.2.0.1 | PASS, GCC 8.5 | PASS | PASS | **UNSUPPORTED natively**; reconstruction only | PASS | UNSUPPORTED / not part of SDK smoke | **PASS** |
+| LibXL C++ | Linux SDK 5.2.0.1 | PASS, GCC 8.5 | PASS | PASS | **UNSUPPORTED natively**; reconstruction only | PASS | UNSUPPORTED_BY_DESIGN | **PASS** |
 | rXLS (historical reference) | benchmark harness at commit `fb05ebc` (harness 0.1.0, rxls dependency 0.1.4) | PASS, Release | generated XLSX validated with openpyxl | no in-place XLS editing | PASS for tested sample | PASS | unsupported by this converter | **PASS for conversion only** |
 
 The Aspose C++ SDK's shared library requires `GLIBC_2.29` math symbols and `GLIBCXX_3.4.26`; link against Rocky 8 failed with unresolved references including `log2@GLIBC_2.29`, `exp2@GLIBC_2.29`, and `std::_Sp_make_shared_tag...@GLIBCXX_3.4.26`. The Linux SDK also documents GCC 9.4+ while this target baseline provides GCC 8.5. These are SDK compatibility failures, not missing test code. See `evidence/aspose-cpp/`.
@@ -27,6 +27,8 @@ The Aspose C++ SDK's shared library requires `GLIBC_2.29` math symbols and `GLIB
 Spire's main linked libraries do not expose the decisive dependency at startup. Its packaged `libSkiaSharp.so` is loaded dynamically, requires `GLIBC_2.29`, and on the target image `ldd` reports `/lib64/libm.so.6: version 'GLIBC_2.29' not found`. The actual C++ program builds but fails when creating a Workbook (`TypeInitialization_Type_NoTypeAvailable`). See `evidence/spire/libSkiaSharp-rocky8-ldd.txt` and `spire-offline-runtime.log`.
 
 LibXL passes original XLS and XLSX edit/reopen checks on Rocky 8. It has no formula calculation engine. The tested C++ SDK rejected loading a BIFF XLS through its XMLBook API; the sample labeled `libxl-converted.xlsx` is explicitly reconstruction of scalar values/formula, not direct native conversion and not a fidelity-preserving conversion claim.
+
+The LibXL 5.2.0.1 public C/C++ headers contain no PDF API token; `IBookT` exposes `save(filename)` and `saveRaw(data,size)` without an output format selector. The official product page lists Excel formats. PDF is recorded `UNSUPPORTED_BY_DESIGN`, and no PDF operation was attempted. See `evidence/libxl/libxl-pdf-api-review.txt`.
 
 rXLS is retained only as the requested historical reference. It built on glibc 2.28 and converted the sample successfully (`ok=1`, `failed=0`, 112.37 ms reported by the converter); this says nothing about its previously documented formula/style limitations or general editing ability. ELF requirements peak at `GLIBC_2.28`, with only standard system libraries (`libgcc_s`, `libpthread`, `libm`, `libdl`, `libc`).
 
@@ -54,6 +56,12 @@ Rust main program
 ```
 
 This only says which tested SDK distributions clear the glibc/offline smoke gate. It does not validate Rust FFI/IPC, full Excel feature fidelity, business correctness, or relative performance, and it is not the final architecture recommendation.
+
+## Next stage recommendation
+
+Advance **Aspose.Cells .NET, GemBox.Spreadsheet, and LibXL** to a bounded capability gate only after the team supplies/chooses the production license terms and confirms Kylin/UOS acceptance requirements. Keep Aspose C++ and Spire C++ out of glibc 2.28 performance ranking at these tested versions; their SDK binaries already fail the compatibility gate. If a vendor provides a later Linux package built for the 2.28 baseline, repeat this compatibility test first.
+
+For capability tests, compare formula calculation only between engines that implement it; LibXL is excluded from formula correctness/rate ranking because the vendor confirms there is no calculation engine. For performance, first gate on workbook fidelity and business correctness, then use the original bounded workload (24 files, 150k rows, 1m rows) rather than timing the smoke fixtures. Measure .NET worker and Rust bridge costs separately after native engine capability tests; this compatibility project has not measured either.
 
 ### License/re-distribution notes
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_utc": "2026-11-11T18:43:52Z",
+  "generated_utc": "2026-11-11T18:47:58Z",
   "root": "benchmark/excel-linux-compat",
   "note": "Hashes cover harness, evidence, synthetic fixtures, and outputs; this manifest excludes itself. Commercial SDK binaries, license files, publish directories, and cargo target output are excluded.",
   "files": [
@@ -193,6 +193,11 @@
       "path": "reports/evidence/libxl/libxl-offline-runtime.log",
       "bytes": 2480,
       "sha256": "f87c3d887ba865a324336a64266d20cb1cc1d69e867e10033613dcf58144253a"
+    },
+    {
+      "path": "reports/evidence/libxl/libxl-pdf-api-review.txt",
+      "bytes": 713,
+      "sha256": "d451c05604bffaf734f2b4512ac80c3f54774080b02eacd26e64b1cb92440523"
     },
     {
       "path": "reports/evidence/libxl/libxl-smoke-build-ldd-r.txt",
@@ -421,8 +426,8 @@
     },
     {
       "path": "reports/LINUX_GLIBC228_COMPATIBILITY.md",
-      "bytes": 10241,
-      "sha256": "e14e8553d8636d4f3d997baf628a80d258b8c0d0e7352cca71c4ea6f06fdabbd"
+      "bytes": 11587,
+      "sha256": "3078105e80833d6fe6e1bdbd39e87bdf06dd9ba067b1761b7152fe4a5a88da39"
     },
     {
       "path": "reports/samples/aspose/aspose-capabilities.xlsx",
@@ -546,8 +551,8 @@
     },
     {
       "path": "reports/SMOKE_RESULTS.json",
-      "bytes": 5016,
-      "sha256": "f581ee74e2d618c5788408e464eaf4e5bcbaecd7b4fe282557dc86dadc1d8a3e"
+      "bytes": 5157,
+      "sha256": "c4d6b50434fb8e6fc0e5fc84f984942b8d5bd0b2dfbc89d1d6434971d11b53fd"
     },
     {
       "path": "rxls/source/Cargo.lock",

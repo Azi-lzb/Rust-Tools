@@ -83,9 +83,9 @@
       "self_contained": "PARTIAL; system libstdc++ and glibc remain required and were not bundled",
       "append_style_row_column_page_setup": "PASS on synthetic XLS and XLSX smoke fixture",
       "formula_calculation": "UNSUPPORTED_BY_DESIGN",
-      "pdf": "NOT_TESTED",
+      "pdf": "UNSUPPORTED_BY_DESIGN; no PDF export API in public 5.2.0.1 C/C++ headers",
       "license": "BLOCKED_LICENSE_REVIEW",
-      "evidence": ["evidence/libxl/libxl-offline-runtime.log", "evidence/libxl/libxl-smoke-ldd.txt"]
+      "evidence": ["evidence/libxl/libxl-offline-runtime.log", "evidence/libxl/libxl-smoke-ldd.txt", "evidence/libxl/libxl-pdf-api-review.txt"]
     },
     {
       "id": "rxls-historical",
@@ -97,7 +97,7 @@
       "xls_to_xlsx": "PASS for one synthetic XLS; generated XLSX reopened with openpyxl",
       "offline": "PASS; 112.37 ms reported; 0 failures",
       "self_contained": "PARTIAL; single executable still relies on standard system libraries",
-      "pdf": "NOT_TESTED",
+      "pdf": "UNSUPPORTED_BY_DESIGN in tested converter flow",
       "license": "OPEN_SOURCE_LICENSE_REVIEW_REQUIRED",
       "evidence": ["evidence/rxls/rxls-build.log", "evidence/rxls/rxls-offline-runtime.log", "evidence/rxls/rxls-convert-report.json", "evidence/rxls/rxls-elf-dependencies.txt"]
     }
