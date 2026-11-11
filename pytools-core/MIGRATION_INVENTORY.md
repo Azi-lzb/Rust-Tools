@@ -138,9 +138,19 @@ PT-1-2 时序提取、COM 批注版工作表提取、PDF 导出、跨类别转�
 
 `../docs/archive/MIGRATION_INVENTORY_20261027.md` 保留拆分前完整业务细节、历史测试、待确认事项与证据；`GPT修改记录/`、`probe/reports/` 和现有人工作业记录原样保留。历史阶段门、旧项目路径及分支同步描述只解释当时背景，不是当前指令。
 
-## openpyxl 运行时与就地修改（2026-10-29 状态）
+## openpyxl 运行时与就地修改（2026-11-11 状态）
 
 - openpyxl 子进程为 IPC（独立 Python 进程 + JSON 文件交换），非 FFI。
+- 1-1 目标追加性能（2026-11-11）：同一目标工作簿的多个目标表已合并为
+  一个 ExcelEditPlan、一次 openpyxl 执行 + 一次安全提交（整本加载/保存/
+  回读从“每目标表一次”降为“每工作簿一次”）；worker 对纯跨簿导入计划
+  （无 copy_range）按需加载 data_only 视图，再省一次目标簿整本读取。
+  同一目标工作表被多条规则写入时自动退回逐表执行以保持去重语义；
+  批量内任一表校验失败则该工作簿整体不发布（失败原子性增强）。
+  若目标簿位于网络盘/慢盘，建议本地处理后再拷回，整本重写的 I/O
+  放大会叠加。校验侧 umya 读回保留（追加计划 style_mode=Full 且
+  preserve 含 Styles，跳过即降低校验强度，不可行；若业务确认追加行
+  无需复制样式，需先按 §9.1 对拍旧工具输出再另行变更）。
 - 运行时解析已统一到 `OpenpyxlWorkerConfig::resolve_runtime`（预检与执行共用）：
   显式环境变量 → deb libexec 布局 → Windows ZIP `python/` 布局（兼容
   `python/runtime/bin/` 变体）→ 开发树（仅 debug 构建，或
