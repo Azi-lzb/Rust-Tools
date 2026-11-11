@@ -39,6 +39,30 @@ rXLS is retained only as the requested historical reference. It built on glibc 2
 - No production license files/keys were supplied or committed. Production shipping rights are therefore `BLOCKED_LICENSE_REVIEW` for every commercial SDK; obtain and review the correct license before packaging. Evaluation entitlements were not bypassed.
 - Kylin V10, UOS V20, `.deb` installation on those systems, dynamic load tracing over representative workbooks, and production font availability remain `NOT_TESTED`.
 
+## Compatibility gate for the proposed Rust routing
+
+The user's proposed layout can proceed as a candidate, subject to these Linux 2.28 results:
+
+```text
+Rust main program
+├─ Rust native: calamine / rust_xlsxwriter                         NOT_TESTED HERE
+├─ C ABI / C++ route: LibXL                                         GLIBC228 PASS
+│  ├─ Aspose.Cells C++                                              INCOMPATIBLE
+│  └─ Spire.XLS C++                                                 INCOMPATIBLE
+└─ isolated worker route: Aspose.Cells .NET / GemBox.Spreadsheet   GLIBC228 PASS
+   └─ Python / openpyxl                                             NOT_TESTED HERE
+```
+
+This only says which tested SDK distributions clear the glibc/offline smoke gate. It does not validate Rust FFI/IPC, full Excel feature fidelity, business correctness, or relative performance, and it is not the final architecture recommendation.
+
+### License/re-distribution notes
+
+- **Aspose.Cells (.NET and C++):** the test ran without an applied commercial license. The .NET workbook outputs therefore include evaluation-warning sheets. Aspose's published licensing material differentiates developer, SDK, and OEM distribution models; the chosen product/platform license must match deployment to the intended customer locations. No SDK or license file is included here.
+- **Spire.XLS C++:** the downloaded SDK is a temporary evaluation package. The vendor lists Small Business and OEM tiers separately; OEM is required for distribution across arbitrary locations and for the listed docker/cloud/public-facing cases. No production key was supplied.
+- **GemBox.Spreadsheet:** this run was under Free-Limited behavior (100 append rows). The vendor states redistribution is permitted for files marked redistributable in product documentation and requires developers to be covered; verify the selected license and packaged-file list before shipping.
+- **LibXL:** the vendor advertises royalty-free distribution inside commercial applications, while its purchase page distinguishes a per-developer Linux license from an enterprise unlimited developer/server license. Its download page says the unlicensed trial writes a banner and limits reading to 300 cells. This smoke confirms API behavior but does not validate a purchased key or the exact license tier for the rustTools deployment model.
+- **rXLS historical harness:** `Cargo.toml` does not declare a license for the harness. The bundled `rxls` crate was resolved from crates.io at 0.1.4; independently verify the license of this historical version and each dependency before redistributing any resulting executable.
+
 ## Evidence map
 
 - Structured status: `SMOKE_RESULTS.json`
@@ -55,6 +79,7 @@ These links summarize official published terms; they are not a legal determinati
 - [Aspose use-license policy](https://purchase.aspose.com/policies/use-license/) and [licensing FAQ](https://purchase.aspose.com/faqs/licensing)
 - [Spire.XLS C++ license tiers](https://cdn.e-iceblue.com/Buy/Spire.XLS-CPP.html); the vendor distinguishes internal/small-business and OEM distribution.
 - [GemBox EULA](https://www.gemboxsoftware.com/purchase/eula) and [redistribution FAQ](https://www.gemboxsoftware.com/support/faq)
-- [LibXL license/pricing](https://www.libxl.com/purchase.html); Linux developer and enterprise/server licenses are distinct.
+- [LibXL license/pricing](https://www.libxl.com/purchase.html), [distribution statement](https://www.libxl.com/home.html), and [trial limits](https://www.libxl.com/download.html); Linux developer and enterprise/server licenses are distinct.
+- [LibXL formula FAQ](https://www.libxl.com/faq.html) confirms its API stores formula expressions but does not calculate them.
 - [.NET official support policy](https://dotnet.microsoft.com/en-us/platform/support/policy): .NET 10 is LTS; our recorded runtime patch was 10.0.15.
 

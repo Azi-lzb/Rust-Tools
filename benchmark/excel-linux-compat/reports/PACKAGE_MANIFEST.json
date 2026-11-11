@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_utc": "2026-11-11T18:41:38Z",
+  "generated_utc": "2026-11-11T18:43:52Z",
   "root": "benchmark/excel-linux-compat",
   "note": "Hashes cover harness, evidence, synthetic fixtures, and outputs; this manifest excludes itself. Commercial SDK binaries, license files, publish directories, and cargo target output are excluded.",
   "files": [
@@ -421,8 +421,8 @@
     },
     {
       "path": "reports/LINUX_GLIBC228_COMPATIBILITY.md",
-      "bytes": 7331,
-      "sha256": "38187e674c15346618cf286017e4f9f5d8038d3bbe61de21c7b5f9d19c591e2b"
+      "bytes": 10241,
+      "sha256": "e14e8553d8636d4f3d997baf628a80d258b8c0d0e7352cca71c4ea6f06fdabbd"
     },
     {
       "path": "reports/samples/aspose/aspose-capabilities.xlsx",
