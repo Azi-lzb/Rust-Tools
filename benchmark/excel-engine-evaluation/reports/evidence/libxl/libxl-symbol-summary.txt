@@ -1,0 +1,12 @@
+=== /sdk/lib64/libxl.so ===
+  Class:                             ELF64
+  Machine:                           Advanced Micro Devices X86-64
+CXXABI_1.3.5
+GLIBCXX_3.4.15
+GLIBC_2.14
+=== /pkg/bin/libxl_smoke ===
+  Class:                             ELF64
+  Machine:                           Advanced Micro Devices X86-64
+CXXABI_1.3.9
+GLIBCXX_3.4.21
+GLIBC_2.14

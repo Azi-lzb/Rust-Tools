@@ -1,0 +1,22 @@
+Vendor: XLware / LibXL
+Product: LibXL for Linux, C++ SDK
+Version: 5.2.0
+Archive filename: libxl-lin-5.2.0.1.tar.gz
+Official download URL: https://www.libxl.com/download/libxl-lin-5.2.0.1.tar.gz
+Official download page: https://www.libxl.com/download.html
+Published archive size: 24,519,638 bytes
+Published MD5: 7BA2B90CB39894A365540B00CE2C70E9
+Downloaded archive size: 24,519,638 bytes
+Measured MD5: 7BA2B90CB39894A365540B00CE2C70E9
+Measured SDK library: lib64/libxl.so, ELF64 x86-64
+Target image: Rocky Linux 8.9, x86_64, glibc 2.28
+Target image digest: sha256:9794037624aaa6212aeada1d28861ef5e0a935adaf93e4ef79837119f2a2d04c
+Evaluation restrictions observed from vendor download page: banner in first row and maximum 300 readable cells; no license key used.
+No commercial SDK binary, license key, or license file is stored in Git.
+
+Official feature evidence:
+- Linux x64 download is listed on the official download page.
+- The official FAQ says LibXL has no calculation engine and only reads/writes formula expressions.
+- The Linux package readme documents linking against lib64/libxl.so and using an application RPATH.
+
+Source pages: https://www.libxl.com/download.html ; https://www.libxl.com/faq.html ; https://www.libxl.com/doc

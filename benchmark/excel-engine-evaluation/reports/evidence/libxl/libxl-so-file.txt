@@ -1,0 +1,1 @@
+/opt/libxl-sdk/lib64/libxl.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=2fa019b07c8d0b554d4522424ee22681ab48b241, stripped

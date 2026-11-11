@@ -1,0 +1,32 @@
+
+Dynamic section at offset 0x2ed88 contains 29 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libxl.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x000000000000000f (RPATH)              Library rpath: [$ORIGIN/../lib]
+ 0x000000000000000c (INIT)               0x404fd0
+ 0x000000000000000d (FINI)               0x4250f8
+ 0x0000000000000019 (INIT_ARRAY)         0x62eb60
+ 0x000000000000001b (INIT_ARRAYSZ)       16 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x62eb70
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (bytes)
+ 0x000000006ffffef5 (GNU_HASH)           0x400298
+ 0x0000000000000005 (STRTAB)             0x401ab8
+ 0x0000000000000006 (SYMTAB)             0x400630
+ 0x000000000000000a (STRSZ)              9607 (bytes)
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000015 (DEBUG)              0x0
+ 0x0000000000000003 (PLTGOT)             0x62f000
+ 0x0000000000000002 (PLTRELSZ)           2280 (bytes)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0x4046e8
+ 0x0000000000000007 (RELA)               0x4042f8
+ 0x0000000000000008 (RELASZ)             1008 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x000000006ffffffe (VERNEED)            0x4041f8
+ 0x000000006fffffff (VERNEEDNUM)         3
+ 0x000000006ffffff0 (VERSYM)             0x404040
+ 0x0000000000000000 (NULL)               0x0

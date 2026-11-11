@@ -1,0 +1,7 @@
+Excel 16.0 build 20527
+startup_ms=768.705
+warmup_open_ms=982.996
+input=C:\Users\AZI\Desktop\VibeCode\Rust-Tools-test\benchmark\excel-engine-evaluation\fixtures\performance
+rounds=3
+files_per_round=8
+Excel process reused across all files and rounds

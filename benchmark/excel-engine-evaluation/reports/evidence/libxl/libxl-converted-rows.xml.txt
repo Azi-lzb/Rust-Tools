@@ -1,0 +1,4 @@
+<row r="2"><c r="A2" t="s"><v>1</v></c></row>
+<row r="3"><c r="A3"><v>10</v></c></row>
+<row r="4"><c r="A4"><v>20</v></c></row>
+<row r="5"><c r="A5"><f>SUM(A3:A4)</f></c></row>

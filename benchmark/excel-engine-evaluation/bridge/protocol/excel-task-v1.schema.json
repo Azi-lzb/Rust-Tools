@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusttools.local/excel-task-v1.schema.json",
+  "title": "rustTools Excel worker task v1",
+  "type": "object",
+  "required": ["protocol_version", "request_id", "engine", "input_path", "output_path", "sheet_name", "operations", "save_format"],
+  "properties": {
+    "protocol_version": { "const": 1 },
+    "request_id": { "type": "string", "minLength": 1 },
+    "engine": { "type": "string", "minLength": 1 },
+    "input_path": { "type": "string", "minLength": 1 },
+    "output_path": { "type": "string", "minLength": 1 },
+    "sheet_name": { "type": "string", "minLength": 1 },
+    "save_format": { "enum": ["preserve", "xls", "xlsx"] },
+    "calculate": { "type": "boolean", "default": false },
+    "timeout_ms": { "type": "integer", "minimum": 1 },
+    "operations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/appendRows" },
+          { "$ref": "#/$defs/deleteRows" },
+          { "$ref": "#/$defs/deleteColumns" },
+          { "$ref": "#/$defs/setValues" },
+          { "$ref": "#/$defs/setColumnWidths" },
+          { "$ref": "#/$defs/setRowHeights" },
+          { "$ref": "#/$defs/setStyles" },
+          { "$ref": "#/$defs/setPageSetup" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "cellValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "object", "required": ["type", "value"], "properties": {
+          "type": { "const": "date_serial" }, "value": { "type": "number" }
+        }, "additionalProperties": false }
+      ]
+    },
+    "appendRows": { "type": "object", "required": ["op", "start_row", "rows"], "properties": {
+      "op": { "const": "append_rows" }, "start_row": { "type": "integer", "minimum": 0 },
+      "rows": { "type": "array", "items": { "type": "array", "items": { "$ref": "#/$defs/cellValue" } } }
+    }, "additionalProperties": false },
+    "deleteRows": { "type": "object", "required": ["op", "start_row", "count"], "properties": {
+      "op": { "const": "delete_rows" }, "start_row": { "type": "integer", "minimum": 0 }, "count": { "type": "integer", "minimum": 1 }
+    }, "additionalProperties": false },
+    "deleteColumns": { "type": "object", "required": ["op", "start_column", "count"], "properties": {
+      "op": { "const": "delete_columns" }, "start_column": { "type": "integer", "minimum": 0 }, "count": { "type": "integer", "minimum": 1 }
+    }, "additionalProperties": false },
+    "setValues": { "type": "object", "required": ["op", "cells"], "properties": {
+      "op": { "const": "set_values" }, "cells": { "type": "array", "items": { "type": "object", "required": ["row", "column", "value"], "properties": {
+        "row": { "type": "integer", "minimum": 0 }, "column": { "type": "integer", "minimum": 0 }, "value": { "$ref": "#/$defs/cellValue" }
+      }, "additionalProperties": false } }
+    }, "additionalProperties": false },
+    "setColumnWidths": { "type": "object", "required": ["op", "columns"], "properties": {
+      "op": { "const": "set_column_widths" }, "columns": { "type": "array", "items": { "type": "object", "required": ["column", "width"], "properties": {
+        "column": { "type": "integer", "minimum": 0 }, "width": { "type": "number", "minimum": 0 }, "hidden": { "type": "boolean" }
+      }, "additionalProperties": false } }
+    }, "additionalProperties": false },
+    "setRowHeights": { "type": "object", "required": ["op", "rows"], "properties": {
+      "op": { "const": "set_row_heights" }, "rows": { "type": "array", "items": { "type": "object", "required": ["row", "height"], "properties": {
+        "row": { "type": "integer", "minimum": 0 }, "height": { "type": "number", "minimum": 0 }, "hidden": { "type": "boolean" }
+      }, "additionalProperties": false } }
+    }, "additionalProperties": false },
+    "setStyles": { "type": "object", "required": ["op", "styles"], "properties": {
+      "op": { "const": "set_styles" }, "styles": { "type": "array", "items": { "type": "object", "required": ["range", "properties"], "properties": {
+        "range": { "type": "string", "minLength": 1 }, "properties": { "type": "object" }
+      }, "additionalProperties": false } }
+    }, "additionalProperties": false },
+    "setPageSetup": { "type": "object", "required": ["op", "settings"], "properties": {
+      "op": { "const": "set_page_setup" }, "settings": { "type": "object" }
+    }, "additionalProperties": false }
+  },
+  "additionalProperties": false
+}
