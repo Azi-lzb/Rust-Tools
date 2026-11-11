@@ -4418,6 +4418,7 @@ mod keyword_match_tests {
             set_items: Vec::new(),
             set_parse_error: String::new(),
             target_dedup_cols: Vec::new(),
+            target_header_match: String::new(),
             output_row_no: false,
         };
         let template = [

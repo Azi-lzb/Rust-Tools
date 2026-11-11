@@ -2375,7 +2375,20 @@ where
                                 )
                             )?;
                             if item["status"] == "failed" {
-                                writeln!(output, "{}", pytools_core::run_logging::terminal_line(pytools_core::run_logging::Level::Error, "写入失败；请检查目标工作簿、工作表、文件占用状态和写入权限"))?;
+                                // 失败条目的 error 已由 safe_wide_target_error
+                                // 脱敏，这里如实带出真实原因，避免固定文案把
+                                // 表头不一致等护栏拒绝误描述为占用/权限问题。
+                                let reason = item["error"]
+                                    .as_str()
+                                    .unwrap_or("目标工作簿写入失败；请检查目标文件、工作表、文件占用状态和权限");
+                                writeln!(
+                                    output,
+                                    "{}",
+                                    pytools_core::run_logging::terminal_line(
+                                        pytools_core::run_logging::Level::Error,
+                                        &format!("写入失败：{reason}"),
+                                    )
+                                )?;
                             }
                         }
                     }
@@ -16337,22 +16350,61 @@ fn parse_wide_a1(address: &str) -> Option<(usize, usize)> {
 /// Append selected rows from the Rust-built 1-1 summary workbook to an
 /// existing target through the Openpyxl worker, then publish with a verified
 /// snapshot and backup. The source target is never edited in place by Python.
+/// 同一目标工作簿批量追加的单个工作表规格。
+#[derive(Clone)]
+struct WideTargetSheetAppend {
+    /// 该表的数据来源（各规则对应的汇总工作表名，可能不同）。
+    summary_sheet: String,
+    summary_max_col: u32,
+    target_sheet: String,
+    create_sheet: bool,
+    write_start_row: u32,
+    include_header: bool,
+    kept_rows: Vec<u32>,
+    /// None = 整体按位置写入（严格模式 / 空白或新建表）；
+    /// Some = 宽松模式的按列映射：逐汇总列给出目标列及是否需先写表头。
+    column_plan: Option<Vec<WideColumnMapping>>,
+}
+
+/// 宽松模式下的单列映射：summary_col 的数据写到 target_col；
+/// header_needed = 目标表没有该列头，需要先在目标第 1 行写入列头。
+#[derive(Clone)]
+struct WideColumnMapping {
+    summary_col: u32,
+    target_col: u32,
+    header_needed: bool,
+}
+
+/// 待批量执行的既有目标工作簿追加登记：附带的字段用于在批量落盘后
+/// 重建每条规则自己的成功/失败事件与结果（消息语义与逐表执行一致）。
+struct PendingWideTargetAppend {
+    spec: WideTargetSheetAppend,
+    mode: String,
+    append_to_existing: bool,
+    copied: usize,
+    input_rows: usize,
+    batch_dedup_rows: usize,
+    existing_filtered_rows: usize,
+}
+
+/// 把同一目标工作簿的所有目标表追加合并为一个 ExcelEditPlan：
+/// openpyxl worker 只整本加载/保存/回读一次，而不是每个目标表一遍。
 fn commit_wide_summary_existing_target_openpyxl(
     summary_path: &Path,
     target: &Path,
     expected_hash: &str,
-    summary_sheet: &str,
-    target_sheet: &str,
-    summary_max_col: u32,
-    write_start_row: u32,
-    include_header: bool,
-    create_sheet: bool,
-    kept_rows: &[u32],
+    appends: &[WideTargetSheetAppend],
 ) -> Result<()> {
     use excel_editor::{
         EditOperation, ExcelEditPlan, PreservationRequirement, RangeStyleMode, WorkbookFormat,
     };
 
+    anyhow::ensure!(!appends.is_empty(), "目标追加计划没有任何工作表");
+    let summary_max_col = appends
+        .iter()
+        .map(|append| append.summary_max_col)
+        .max()
+        .unwrap_or_default();
     anyhow::ensure!(summary_max_col > 0, "汇总工作表没有可写入的列");
     let profile = excel_editor::inspect_xlsx_profile(target)
         .with_context(|| format!("检查既有目标工作簿失败：{}", target.display()))?;
@@ -16361,62 +16413,154 @@ fn commit_wide_summary_existing_target_openpyxl(
         "目标工作簿结构清单不完整，拒绝使用 openpyxl 修改"
     );
     let mut operations = Vec::new();
-    if create_sheet {
-        operations.push(EditOperation::CreateSheet {
-            name: target_sheet.to_owned(),
-        });
-    }
-    let mut destination_row = write_start_row;
-    let mut push_import = |source_start: u32,
-                           source_end: u32,
-                           destination_start: u32|
-     -> Result<()> {
-        let source_start_cell = pytools_core::rule_engine::cell_address(source_start as usize, 1);
-        let source_end_cell =
-            pytools_core::rule_engine::cell_address(source_end as usize, summary_max_col as usize);
-        operations.push(EditOperation::ImportRange {
-            source_workbook: summary_path.to_path_buf(),
-            source_sheet: summary_sheet.to_owned(),
-            source_range: format!("{source_start_cell}:{source_end_cell}"),
-            target_sheet: target_sheet.to_owned(),
-            target_start: format!("A{destination_start}"),
-            copy_values: true,
-            copy_formulas: true,
-            style_mode: RangeStyleMode::Full,
-            copy_comments: false,
-            copy_merges: false,
-            copy_row_heights: false,
-            copy_column_widths: false,
-            copy_row_hidden: false,
-            copy_column_hidden: false,
-            copy_outline_levels: false,
-            copy_all_row_dimensions: false,
-            copy_all_column_dimensions: false,
-            materialize_blank_cells: false,
-            hide_zero: false,
-        });
-        Ok(())
-    };
-    if include_header {
-        push_import(1, 1, destination_row)?;
-        destination_row += 1;
-    }
-    let mut rows = kept_rows.iter().copied();
-    if let Some(mut range_start) = rows.next() {
-        let mut range_end = range_start;
-        for row in rows {
-            if row == range_end + 1 {
-                range_end = row;
-                continue;
-            }
-            push_import(range_start, range_end, destination_row)?;
-            destination_row += range_end - range_start + 1;
-            range_start = row;
-            range_end = row;
+    for append in appends {
+        if append.create_sheet {
+            operations.push(EditOperation::CreateSheet {
+                name: append.target_sheet.to_owned(),
+            });
         }
-        push_import(range_start, range_end, destination_row)?;
+        let mut push_import = |summary_sheet: &str,
+                               source_start: u32,
+                               source_end: u32,
+                               source_start_col: u32,
+                               source_end_col: u32,
+                               destination_start: u32,
+                               target_start_col: u32|
+         -> Result<()> {
+            let source_start_cell = pytools_core::rule_engine::cell_address(
+                source_start as usize,
+                source_start_col as usize,
+            );
+            let source_end_cell = pytools_core::rule_engine::cell_address(
+                source_end as usize,
+                source_end_col as usize,
+            );
+            let target_column_letter = pytools_core::rule_engine::cell_address(
+                1,
+                target_start_col as usize,
+            )
+            .trim_end_matches('1')
+            .to_owned();
+            operations.push(EditOperation::ImportRange {
+                source_workbook: summary_path.to_path_buf(),
+                source_sheet: summary_sheet.to_owned(),
+                source_range: format!("{source_start_cell}:{source_end_cell}"),
+                target_sheet: append.target_sheet.to_owned(),
+                target_start: format!("{target_column_letter}{destination_start}"),
+                copy_values: true,
+                copy_formulas: true,
+                style_mode: RangeStyleMode::Full,
+                copy_comments: false,
+                copy_merges: false,
+                copy_row_heights: false,
+                copy_column_widths: false,
+                copy_row_hidden: false,
+                copy_column_hidden: false,
+                copy_outline_levels: false,
+                copy_all_row_dimensions: false,
+                copy_all_column_dimensions: false,
+                materialize_blank_cells: false,
+                hide_zero: false,
+            });
+            Ok(())
+        };
+        if let Some(column_plan) = &append.column_plan {
+            // 宽松模式：按列名映射逐列写入；新列先写目标表头再写数据。
+            // 每列的数据都从该表的写入起始行开始，行游标逐列独立。
+            let mut destination_row = append.write_start_row;
+            for mapping in column_plan {
+                destination_row = append.write_start_row;
+                if mapping.header_needed {
+                    push_import(
+                        &append.summary_sheet,
+                        1,
+                        1,
+                        mapping.summary_col,
+                        mapping.summary_col,
+                        1,
+                        mapping.target_col,
+                    )?;
+                }
+                let mut rows = append.kept_rows.iter().copied();
+                if let Some(mut range_start) = rows.next() {
+                    let mut range_end = range_start;
+                    for row in rows {
+                        if row == range_end + 1 {
+                            range_end = row;
+                            continue;
+                        }
+                        push_import(
+                            &append.summary_sheet,
+                            range_start,
+                            range_end,
+                            mapping.summary_col,
+                            mapping.summary_col,
+                            destination_row,
+                            mapping.target_col,
+                        )?;
+                        destination_row += range_end - range_start + 1;
+                        range_start = row;
+                        range_end = row;
+                    }
+                    push_import(
+                        &append.summary_sheet,
+                        range_start,
+                        range_end,
+                        mapping.summary_col,
+                        mapping.summary_col,
+                        destination_row,
+                        mapping.target_col,
+                    )?;
+                }
+            }
+        } else {
+            // 严格模式 / 空白或新建表：整体按位置写入。
+            let mut destination_row = append.write_start_row;
+            if append.include_header {
+                push_import(
+                    &append.summary_sheet,
+                    1,
+                    1,
+                    1,
+                    summary_max_col,
+                    destination_row,
+                    1,
+                )?;
+                destination_row += 1;
+            }
+            let mut rows = append.kept_rows.iter().copied();
+            if let Some(mut range_start) = rows.next() {
+                let mut range_end = range_start;
+                for row in rows {
+                    if row == range_end + 1 {
+                        range_end = row;
+                        continue;
+                    }
+                    push_import(
+                        &append.summary_sheet,
+                        range_start,
+                        range_end,
+                        1,
+                        summary_max_col,
+                        destination_row,
+                        1,
+                    )?;
+                    destination_row += range_end - range_start + 1;
+                    range_start = row;
+                    range_end = row;
+                }
+                push_import(
+                    &append.summary_sheet,
+                    range_start,
+                    range_end,
+                    1,
+                    summary_max_col,
+                    destination_row,
+                    1,
+                )?;
+            }
+        }
     }
-    drop(push_import);
     anyhow::ensure!(!operations.is_empty(), "目标追加计划没有实际写入区域");
 
     let plan = ExcelEditPlan {
@@ -16574,6 +16718,13 @@ fn execute_wide_summary_target_writes(
     let mut results = Vec::new();
     let mut any_ok = false;
     let mut any_failed = false;
+    // 同一目标工作簿的多个目标表共享一次 openpyxl 执行：
+    // 逐规则的表头/去重检查保持不变，发布统一推迟到循环末尾落盘，
+    // 避免每个目标表都整本加载/保存/回读目标工作簿一遍。
+    let mut pending_target_batches: std::collections::BTreeMap<
+        PathBuf,
+        (String, Vec<PendingWideTargetAppend>),
+    > = std::collections::BTreeMap::new();
     for rule in targets {
         let Some(target) = rule.target_wb_path.as_ref() else {
             continue;
@@ -16736,12 +16887,55 @@ fn execute_wide_summary_target_writes(
         let (summary_max_col, summary_max_row) = wide_dump_used_bounds(summary_sheet);
 
         // 既有工作表：完全空白→视为待填充，直接写入表头+数据；
-        // 否则先比对表头（列数 + 每列文本）：一致→在末尾追加数据行；
-        // 不一致→拒绝写入并说明差异，绝不清空既有数据。
+        // 非空白表按规则的“目标表头匹配”模式处理：
+        // - 宽松（默认，对齐旧工具）：目标表头须包含固定前缀列
+        //   （工作簿名/工作表名/数据日期 + set 列头 + 行头路径），缺失即拒绝；
+        //   其余按列头文本映射写入，汇总新列扩展到目标末尾；
+        // - 严格：列数 + 每列文本全等，不同即拒绝。绝不清空既有数据。
+        let rule_name_for_message = rule.name.clone();
+        let rule_name = &rule_name_for_message;
+        let header_match_value = rule.target_header_match.trim();
+        let header_match_strict = header_match_value == "严格";
+        if !header_match_strict
+            && !header_match_value.is_empty()
+            && header_match_value != "宽松"
+        {
+            any_failed = true;
+            let message = format!(
+                "规则 {rule_name:?} 的目标表头匹配配置无效：{}（仅支持 空/宽松=按列名映射 或 严格），已跳过目标写入",
+                rule.target_header_match
+            );
+            let mut event = new_wide_summary_cli_event(
+                events,
+                run_started,
+                feature_id,
+                total_inputs,
+                "target_write",
+                "skipped",
+                format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
+                Some(stage_started.elapsed().as_millis()),
+                0,
+                &["pytools-core", "calamine"],
+                None,
+                Some("target_header_match_invalid"),
+            );
+            event.workbook_name = Some(target.to_string_lossy().into_owned());
+            event.worksheet_name = Some(target_sheet_name.clone());
+            emit_wide_summary_event(_log_view, events, event);
+            results.push(serde_json::json!({
+                "target": display_path_for_user(&target).to_string(),
+                "sheet": target_sheet_name,
+                "status": "skipped",
+                "error": message,
+            }));
+            continue;
+        }
         let mut existing_target_rows: u32 = 0;
         let mut blank_existing_sheet = false;
+        // 宽松模式的按列映射（None = 整体按位置写入）。
+        let mut column_plan: Option<Vec<WideColumnMapping>> = None;
         let (write_start_row, _first_source_row, mode) = if existed_sheet {
-            let (target_max_col, target_max_row, mismatch) = {
+            let (target_max_col, target_max_row, mismatch, mapped_columns) = {
                 let target_ws = target_book
                     .as_ref()
                     .and_then(|book| {
@@ -16753,8 +16947,8 @@ fn execute_wide_summary_target_writes(
                 let (target_max_col, target_max_row) = wide_dump_used_bounds(target_ws);
                 if target_max_col == 0 || target_max_row == 0 {
                     // 空白目标工作表视为待填充。
-                    (0u32, 0u32, None)
-                } else {
+                    (0u32, 0u32, None, None)
+                } else if header_match_strict {
                     let mut mismatch = None;
                     if target_max_col != summary_max_col {
                         mismatch = Some(format!(
@@ -16772,7 +16966,88 @@ fn execute_wide_summary_target_writes(
                             }
                         }
                     }
-                    (target_max_col, target_max_row, mismatch)
+                    (target_max_col, target_max_row, mismatch, None)
+                } else {
+                    // 宽松模式：固定前缀列存在性检查 + 按列头文本映射 + 新列扩展。
+                    let summary_header_texts: Vec<(u32, String)> = (1..=summary_max_col)
+                        .map(|column| {
+                            (column, wide_dump_cell_display(summary_sheet, column, 1))
+                        })
+                        .collect();
+                    let mut required_prefix: Vec<String> = vec![
+                        "工作簿名".to_owned(),
+                        "工作表名".to_owned(),
+                        "数据日期".to_owned(),
+                    ];
+                    required_prefix
+                        .extend(rule.set_items.iter().map(|(name, _)| name.clone()));
+                    if summary_header_texts
+                        .iter()
+                        .any(|(_, text)| text == "行头路径")
+                    {
+                        required_prefix.push("行头路径".to_owned());
+                    }
+                    let target_header_texts: Vec<(u32, String)> = (1..=target_max_col)
+                        .map(|column| {
+                            (column, wide_dump_cell_display(target_ws, column, 1))
+                        })
+                        .collect();
+                    let missing_prefix: Vec<String> = required_prefix
+                        .iter()
+                        .filter(|required| {
+                            !summary_header_texts
+                                .iter()
+                                .any(|(_, text)| text == *required)
+                                || !target_header_texts
+                                    .iter()
+                                    .any(|(_, text)| text == *required)
+                        })
+                        .cloned()
+                        .collect();
+                    if !missing_prefix.is_empty() {
+                        // 连旧工具要求的固定前缀列都不在目标里：拒绝写入。
+                        let mismatch = Some(format!(
+                            "目标表缺少固定前缀列（宽松模式保护）：{}",
+                            missing_prefix.join("、")
+                        ));
+                        (target_max_col, target_max_row, mismatch, None)
+                    } else {
+                        // 按列头文本映射：同名多列按出现顺序配对；汇总新列扩展。
+                        let mut target_queue: std::collections::BTreeMap<
+                            String,
+                            std::collections::VecDeque<u32>,
+                        > = std::collections::BTreeMap::new();
+                        for (column, text) in &target_header_texts {
+                            target_queue
+                                .entry(text.clone())
+                                .or_default()
+                                .push_back(*column);
+                        }
+                        let mut mapped = Vec::new();
+                        let mut new_columns = 0u32;
+                        for (summary_col, text) in &summary_header_texts {
+                            let mapped_target = target_queue
+                                .get_mut(text)
+                                .and_then(|queue| queue.pop_front());
+                            match mapped_target {
+                                Some(target_col) => mapped.push(WideColumnMapping {
+                                    summary_col: *summary_col,
+                                    target_col,
+                                    header_needed: false,
+                                }),
+                                None => {
+                                    // 汇总新列：扩展到目标末尾（表头+数据一起写）。
+                                    new_columns += 1;
+                                    mapped.push(WideColumnMapping {
+                                        summary_col: *summary_col,
+                                        target_col: target_max_col + new_columns,
+                                        header_needed: true,
+                                    });
+                                }
+                            }
+                        }
+                        (target_max_col, target_max_row, None, Some(mapped))
+                    }
                 }
             };
             let _ = target_max_col;
@@ -16806,12 +17081,13 @@ fn execute_wide_summary_target_writes(
                 }));
                 continue;
             }
+            column_plan = mapped_columns;
             if target_max_row == 0 {
                 // 空白工作表：在既有空 sheet 上写入表头+数据，其他 sheet 不受影响。
                 blank_existing_sheet = true;
                 (1u32, 1u32, "空白工作表写入")
             } else {
-                // 表头一致：跳过汇总表头行，追加到目标末行之后。
+                // 表头通过：跳过汇总表头行，追加到目标末行之后。
                 existing_target_rows = target_max_row;
                 (target_max_row + 1, 2u32, "表头一致追加")
             }
@@ -16858,25 +17134,71 @@ fn execute_wide_summary_target_writes(
                     continue;
                 }
             };
-        let key_columns: Vec<usize> = key_names
-            .iter()
-            .map(|name| {
-                summary_headers
-                    .iter()
-                    .position(|header| header == name)
-                    .expect("key names resolved against summary headers")
-                    + 1
-            })
-            .collect();
-        let row_key = |sheet: &excel_reader::SheetDump, row: u32| -> Vec<String> {
-            key_columns
+        // 键列解析：严格模式/空白表按汇总表头位置；宽松模式按键名映射到
+        // 目标列（目标与汇总的列顺序可能不同）。映射为“新增列”（目标尚无
+        // 该列）的键列按旧工具语义从键中剔除；全部剔除时不做去重过滤。
+        let dedup_enabled;
+        let summary_key_columns: Vec<usize>;
+        let target_key_columns: Vec<usize>;
+        {
+            // 键名 → 汇总列位置。
+            let key_positions: Vec<(String, usize)> = key_names
                 .iter()
-                .map(|&column| wide_dump_cell_display(sheet, column as u32, row))
+                .map(|name| {
+                    (
+                        name.clone(),
+                        summary_headers
+                            .iter()
+                            .position(|header| header == name)
+                            .expect("key names resolved against summary headers")
+                            + 1,
+                    )
+                })
+                .collect();
+            match &column_plan {
+                Some(plan) => {
+                    // 宽松模式：按键名映射到目标列；映射为“新增列”（目标尚无）
+                    // 的键列按旧工具语义从键中剔除（两侧同步剔除，键元数一致）。
+                    let mut summary_positions = Vec::new();
+                    let mut target_positions = Vec::new();
+                    for (name, position) in &key_positions {
+                        match plan
+                            .iter()
+                            .find(|mapping| mapping.summary_col as usize == *position)
+                        {
+                            Some(mapping) if !mapping.header_needed => {
+                                summary_positions.push(*position);
+                                target_positions.push(mapping.target_col as usize);
+                            }
+                            _ => {}
+                        }
+                    }
+                    dedup_enabled = !target_positions.is_empty();
+                    summary_key_columns = summary_positions;
+                    target_key_columns = target_positions;
+                }
+                None => {
+                    dedup_enabled = !key_positions.is_empty();
+                    summary_key_columns = key_positions.iter().map(|(_, position)| *position).collect();
+                    target_key_columns = summary_key_columns.clone();
+                }
+            }
+        }
+        let summary_row_key = |row: u32| -> Vec<String> {
+            summary_key_columns
+                .iter()
+                .map(|&column| wide_dump_cell_display(summary_sheet, column as u32, row))
+                .collect()
+        };
+        let target_row_key = |target_ws: &excel_reader::SheetDump, row: u32| -> Vec<String> {
+            target_key_columns
+                .iter()
+                .map(|&column| wide_dump_cell_display(target_ws, column as u32, row))
                 .collect()
         };
         let mut seen_keys: std::collections::HashSet<Vec<String>> =
             std::collections::HashSet::new();
-        if existed_sheet {
+        if dedup_enabled && existed_sheet {
             let target_ws = target_book
                 .as_ref()
                 .and_then(|book| {
@@ -16886,7 +17208,7 @@ fn execute_wide_summary_target_writes(
                 })
                 .expect("target sheet resolved above");
             for row in 2..=existing_target_rows {
-                seen_keys.insert(row_key(target_ws, row));
+                seen_keys.insert(target_row_key(target_ws, row));
             }
         }
         let mut batch_keys: std::collections::HashSet<Vec<String>> =
@@ -16896,16 +17218,18 @@ fn execute_wide_summary_target_writes(
         let mut kept_rows = Vec::<u32>::new();
         // 去重始终只针对数据行（第 2 行起）；表头行由下方写入逻辑单独处理。
         for row in 2..=summary_max_row {
-            let key = row_key(summary_sheet, row);
-            if !batch_keys.insert(key.clone()) {
-                batch_dedup_rows += 1;
-                continue;
+            let key = summary_row_key(row);
+            if dedup_enabled {
+                if !batch_keys.insert(key.clone()) {
+                    batch_dedup_rows += 1;
+                    continue;
+                }
+                if seen_keys.contains(&key) {
+                    existing_filtered_rows += 1;
+                    continue;
+                }
+                seen_keys.insert(key);
             }
-            if seen_keys.contains(&key) {
-                existing_filtered_rows += 1;
-                continue;
-            }
-            seen_keys.insert(key);
             kept_rows.push(row);
         }
         let input_rows = summary_max_row.saturating_sub(1) as usize;
@@ -16971,130 +17295,251 @@ fn execute_wide_summary_target_writes(
                     .count()
             })
             .sum::<usize>();
-        let publish = (|| -> Result<()> {
+        let publish = (|| -> Result<bool> {
             if let Some(hash) = original_hash.as_deref() {
-                commit_wide_summary_existing_target_openpyxl(
-                    summary_path,
-                    target,
-                    hash,
-                    &summary_sheet_name,
-                    &target_sheet_name,
-                    summary_max_col,
-                    write_start_row,
-                    !append_to_existing,
-                    !existed_sheet,
-                    &kept_rows,
-                )?;
-            } else {
-                let candidate = wide_target_candidate_path(target)?;
-                let writer_rows =
-                    pytools_core::timeline_ops::write_wide_summary_new_target_candidate(
-                        summary_path,
-                        rule,
-                        &target_sheet_name,
-                        candidate.path(),
-                    )?;
-                anyhow::ensure!(
-                    writer_rows == kept_rows.len(),
-                    "Rust XlsxWriter 与目标去重规划的行数不一致：计划 {} 行，实际 {} 行",
-                    kept_rows.len(),
-                    writer_rows
-                );
-                create_target_from_candidate(candidate.path(), target)
-                    .context("Rust XlsxWriter 候选验证后发布新目标工作簿失败")?;
+                // 既有目标：登记待批量执行（同一工作簿只跑一次 openpyxl）。
+                let pending = pending_target_batches
+                    .entry(target.clone())
+                    .or_insert_with(|| (hash.to_owned(), Vec::new()));
+                pending.1.push(PendingWideTargetAppend {
+                    spec: WideTargetSheetAppend {
+                        summary_sheet: summary_sheet_name.clone(),
+                        summary_max_col,
+                        target_sheet: target_sheet_name.clone(),
+                        create_sheet: !existed_sheet,
+                        write_start_row,
+                        include_header: !append_to_existing,
+                        kept_rows: kept_rows.clone(),
+                        column_plan: column_plan.clone(),
+                    },
+                    mode: mode.to_owned(),
+                    append_to_existing,
+                    copied,
+                    input_rows,
+                    batch_dedup_rows,
+                    existing_filtered_rows,
+                });
+                return Ok(false);
             }
-            Ok(())
-        })();
-        if let Err(error) = publish {
-            any_failed = true;
-            let message = format!("保存目标工作簿失败：{error:#}");
-            let mut event = new_wide_summary_cli_event(
-                events,
-                run_started,
-                feature_id,
-                total_inputs,
-                "target_write",
-                "failed",
-                format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
-                Some(stage_started.elapsed().as_millis()),
-                0,
-                if existed {
-                    &["pytools-core", "openpyxl"]
-                } else {
-                    &["pytools-core", "rust_xlsxwriter"]
-                },
-                None,
-                Some("target_write_error"),
+            let candidate = wide_target_candidate_path(target)?;
+            let writer_rows =
+                pytools_core::timeline_ops::write_wide_summary_new_target_candidate(
+                    summary_path,
+                    rule,
+                    &target_sheet_name,
+                    candidate.path(),
+                )?;
+            anyhow::ensure!(
+                writer_rows == kept_rows.len(),
+                "Rust XlsxWriter 与目标去重规划的行数不一致：计划 {} 行，实际 {} 行",
+                kept_rows.len(),
+                writer_rows
             );
-            event.workbook_name = Some(target.to_string_lossy().into_owned());
-            emit_wide_summary_event(_log_view, events, event);
-            results.push(serde_json::json!({
-                "target": display_path_for_user(&target).to_string(),
-                "sheet": target_sheet_name,
-                "status": "failed",
-                "error": message,
-            }));
+            create_target_from_candidate(candidate.path(), target)
+                .context("Rust XlsxWriter 候选验证后发布新目标工作簿失败")?;
+            Ok(true)
+        })();
+        match publish {
+            Ok(true) => {
+                any_ok = true;
+                let mode = "新建工作簿并写入";
+                let written_rows = if append_to_existing {
+                    kept_rows.len()
+                } else {
+                    kept_rows.len() + 1
+                };
+                let written_data_rows = kept_rows.len();
+                let data_write_label = if append_to_existing {
+                    "实际追加到目标"
+                } else {
+                    "实际写入目标数据"
+                };
+                let message = format!(
+                    "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行，{data_write_label} {written_data_rows} 行 / 写入 {copied} 个单元格）",
+                    display_path_for_user(&target)
+                );
+                let mut event = new_wide_summary_cli_event(
+                    events,
+                    run_started,
+                    feature_id,
+                    total_inputs,
+                    "target_write",
+                    "succeeded",
+                    message.clone(),
+                    Some(stage_started.elapsed().as_millis()),
+                    0,
+                    &["pytools-core", "rust_xlsxwriter"],
+                    Some("rust_xlsxwriter"),
+                    None,
+                );
+                event.workbook_name = Some(target.to_string_lossy().into_owned());
+                event.worksheet_name = Some(target_sheet_name.clone());
+                emit_wide_summary_event(_log_view, events, event);
+                results.push(serde_json::json!({
+                    "target": display_path_for_user(&target).to_string(),
+                    "sheet": target_sheet_name,
+                    "status": "succeeded",
+                    "mode": mode,
+                    "cells": copied,
+                    "input_rows": input_rows,
+                    "batch_dedup_rows": batch_dedup_rows,
+                    "existing_filtered_rows": existing_filtered_rows,
+                    "target_duplicate_rows": existing_filtered_rows,
+                    "written_rows": written_rows,
+                    "written_data_rows": written_data_rows,
+                }));
+            }
+            Ok(false) => {}
+            Err(error) => {
+                any_failed = true;
+                let message = format!("保存目标工作簿失败：{error:#}");
+                let mut event = new_wide_summary_cli_event(
+                    events,
+                    run_started,
+                    feature_id,
+                    total_inputs,
+                    "target_write",
+                    "failed",
+                    format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
+                    Some(stage_started.elapsed().as_millis()),
+                    0,
+                    &["pytools-core", "rust_xlsxwriter"],
+                    None,
+                    Some("target_write_error"),
+                );
+                event.workbook_name = Some(target.to_string_lossy().into_owned());
+                emit_wide_summary_event(_log_view, events, event);
+                results.push(serde_json::json!({
+                    "target": display_path_for_user(&target).to_string(),
+                    "sheet": target_sheet_name,
+                    "status": "failed",
+                    "error": message,
+                }));
+                continue;
+            }
+        }
+    }
+
+    // 批量落盘：同一目标工作簿的所有 openpyxl 追加合并为一次执行。
+    for (target, (expected_hash, pending)) in pending_target_batches {
+        if pending.is_empty() {
             continue;
         }
-        any_ok = true;
-        let mode = if !existed {
-            "新建工作簿并写入"
+        // 同一目标工作表在一次批量里会互相覆盖目标区域；此时退回逐表执行，
+        // 保持“后续规则按前面规则已写入的行去重”的既有语义。
+        let mut seen_sheets = std::collections::BTreeSet::new();
+        let mut has_duplicate_sheet = false;
+        for append in &pending {
+            if !seen_sheets.insert(append.spec.target_sheet.clone()) {
+                has_duplicate_sheet = true;
+                break;
+            }
+        }
+        let chunks: Vec<Vec<&PendingWideTargetAppend>> = if has_duplicate_sheet {
+            pending.iter().map(|append| vec![append]).collect()
         } else {
-            mode
+            vec![pending.iter().collect()]
         };
-        let written_rows = if append_to_existing {
-            kept_rows.len()
-        } else {
-            kept_rows.len() + 1
-        };
-        let written_data_rows = kept_rows.len();
-        let data_write_label = if append_to_existing {
-            "实际追加到目标"
-        } else {
-            "实际写入目标数据"
-        };
-        let message = format!(
-            "目标工作簿 {}：{mode}工作表 {target_sheet_name:?}（输入 {input_rows} 行，批内去重 {batch_dedup_rows} 行，批内去重后与目标去重键相同 {existing_filtered_rows} 行，{data_write_label} {written_data_rows} 行 / 写入 {copied} 个单元格）",
-            display_path_for_user(&target)
-        );
-        let mut event = new_wide_summary_cli_event(
-            events,
-            run_started,
-            feature_id,
-            total_inputs,
-            "target_write",
-            "succeeded",
-            message.clone(),
-            Some(stage_started.elapsed().as_millis()),
-            0,
-            if existed {
-                &["pytools-core", "openpyxl"]
-            } else {
-                &["pytools-core", "rust_xlsxwriter"]
-            },
-            Some(if existed {
-                "openpyxl"
-            } else {
-                "rust_xlsxwriter"
-            }),
-            None,
-        );
-        event.workbook_name = Some(target.to_string_lossy().into_owned());
-        event.worksheet_name = Some(target_sheet_name.clone());
-        emit_wide_summary_event(_log_view, events, event);
-        results.push(serde_json::json!({
-            "target": display_path_for_user(&target).to_string(),
-            "sheet": target_sheet_name,
-            "status": "succeeded",
-            "mode": mode,
-            "cells": copied,
-            "input_rows": input_rows,
-            "batch_dedup_rows": batch_dedup_rows,
-            "existing_filtered_rows": existing_filtered_rows,
-            "target_duplicate_rows": existing_filtered_rows,
-            "written_rows": written_rows,
-            "written_data_rows": written_data_rows,
-        }));
+        for chunk in chunks {
+            let specs: Vec<WideTargetSheetAppend> =
+                chunk.iter().map(|append| append.spec.clone()).collect();
+            let stage_elapsed_ms = Some(stage_started.elapsed().as_millis());
+            let publish = commit_wide_summary_existing_target_openpyxl(
+                summary_path,
+                &target,
+                &expected_hash,
+                &specs,
+            );
+            match publish {
+                Ok(()) => {
+                    any_ok = true;
+                    for append in chunk {
+                        let written_data_rows = append.spec.kept_rows.len();
+                        let written_rows = if append.append_to_existing {
+                            written_data_rows
+                        } else {
+                            written_data_rows + 1
+                        };
+                        let data_write_label = if append.append_to_existing {
+                            "实际追加到目标"
+                        } else {
+                            "实际写入目标数据"
+                        };
+                        let message = format!(
+                            "目标工作簿 {}：{}工作表 {:?}（输入 {} 行，批内去重 {} 行，批内去重后与目标去重键相同 {} 行，{} {} 行 / 写入 {} 个单元格）",
+                            display_path_for_user(&target),
+                            append.mode,
+                            append.spec.target_sheet,
+                            append.input_rows,
+                            append.batch_dedup_rows,
+                            append.existing_filtered_rows,
+                            data_write_label,
+                            written_data_rows,
+                            append.copied,
+                        );
+                        let mut event = new_wide_summary_cli_event(
+                            events,
+                            run_started,
+                            feature_id,
+                            total_inputs,
+                            "target_write",
+                            "succeeded",
+                            message.clone(),
+                            stage_elapsed_ms,
+                            0,
+                            &["pytools-core", "openpyxl"],
+                            Some("openpyxl"),
+                            None,
+                        );
+                        event.workbook_name = Some(target.to_string_lossy().into_owned());
+                        event.worksheet_name = Some(append.spec.target_sheet.clone());
+                        emit_wide_summary_event(_log_view, events, event);
+                        results.push(serde_json::json!({
+                            "target": display_path_for_user(&target).to_string(),
+                            "sheet": append.spec.target_sheet,
+                            "status": "succeeded",
+                            "mode": append.mode,
+                            "cells": append.copied,
+                            "input_rows": append.input_rows,
+                            "batch_dedup_rows": append.batch_dedup_rows,
+                            "existing_filtered_rows": append.existing_filtered_rows,
+                            "target_duplicate_rows": append.existing_filtered_rows,
+                            "written_rows": written_rows,
+                            "written_data_rows": written_data_rows,
+                        }));
+                    }
+                }
+                Err(error) => {
+                    any_failed = true;
+                    let message = format!("保存目标工作簿失败：{error:#}");
+                    for append in chunk {
+                        let mut event = new_wide_summary_cli_event(
+                            events,
+                            run_started,
+                            feature_id,
+                            total_inputs,
+                            "target_write",
+                            "failed",
+                            format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
+                            stage_elapsed_ms,
+                            0,
+                            &["pytools-core", "openpyxl"],
+                            None,
+                            Some("target_write_error"),
+                        );
+                        event.workbook_name = Some(target.to_string_lossy().into_owned());
+                        event.worksheet_name = Some(append.spec.target_sheet.clone());
+                        emit_wide_summary_event(_log_view, events, event);
+                        results.push(serde_json::json!({
+                            "target": display_path_for_user(&target).to_string(),
+                            "sheet": append.spec.target_sheet,
+                            "status": "failed",
+                            "error": message,
+                        }));
+                    }
+                }
+            }
+        }
     }
     let status = if any_failed && any_ok {
         "partial".to_owned()

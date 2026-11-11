@@ -2750,12 +2750,26 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
 }
 
 fn run_menu_with_view(config: &Path, log_view: &str, input: &str) -> Result<Output> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+    // 涉及 openpyxl 目标写入的交互流程需要隔离运行时；环境变量已设置时
+    // 显式注入两个变量（严格解析要求成对出现），未设置时保持继承环境。
+    let isolated_runtime = std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    command
         .arg("menu")
         .arg("--config")
         .arg(config)
         .arg("--log-view")
-        .arg(log_view)
+        .arg(log_view);
+    if let Some(python) = &isolated_runtime {
+        command
+            .env("PYTOOLS_OPENPYXL_PYTHON", python)
+            .env(
+                "PYTOOLS_OPENPYXL_WORKER",
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../crates/excel-editor/python/openpyxl_worker.py"),
+            );
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -2803,4 +2817,591 @@ fn run_menu_with_capabilities(
     child
         .wait_with_output()
         .context("wait for interactive menu")
+}
+/// 1-1 批量追加回归：同一目标工作簿的多个目标表合并为一次 openpyxl 执行。
+/// 逐规则的表头一致性检查与两级去重语义保持不变；表头不一致的规则仍被
+/// 单独拒绝，且任何写入都发生在候选校验与安全替换之后。
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass() -> Result<()> {
+    let root = TestDirectory::new()?;
+    // 子进程通过显式覆盖使用隔离运行时（与执行侧同一解析入口）；
+    // 未设置时跳过，避免在无运行时环境里失败。
+    let isolated_python =
+        std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON").map(PathBuf::from);
+    let source = root.path().join("sample wide.xlsx");
+    {
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        for (sheet_name, organization, amount) in [
+            ("Report1", "甲批组织", 10.0f64),
+            ("Report2", "乙批组织", 20.0),
+            ("Report3", "丙批组织", 30.0),
+        ] {
+            let sheet = workbook.add_worksheet();
+            sheet.set_name(sheet_name)?;
+            sheet.write_string(0, 0, "报表")?;
+            sheet.merge_range(1, 0, 1, 1, "集团A", &rust_xlsxwriter::Format::new())?;
+            sheet.write_string(2, 0, "地区")?;
+            sheet.merge_range(2, 1, 2, 2, "存款", &rust_xlsxwriter::Format::new())?;
+            sheet.write_string(2, 3, "贷款")?;
+            sheet.write_string(3, 0, "名称")?;
+            sheet.write_string(3, 1, "余额")?;
+            sheet.write_string(3, 2, "余额")?;
+            sheet.write_string(3, 3, "本息")?;
+            sheet.write_string(4, 0, organization)?;
+            sheet.write_number(4, 1, amount)?;
+            sheet.write_number(4, 2, amount + 1.0)?;
+            sheet.write_number(4, 3, amount + 2.0)?;
+        }
+        workbook.save(&source)?;
+    }
+    let source_before = fs::read(&source)?;
+
+    let run_summary = |config: &Path| -> Result<(PathBuf, String)> {
+        anyhow::ensure!(
+            isolated_python.is_some(),
+            "RUST_WORKSPACE_OPENPYXL_PYTHON is required for this test"
+        );
+        let worker = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../crates/excel-editor/python/openpyxl_worker.py");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+        command
+            .arg("wide-summary")
+            .arg("--config")
+            .arg(config)
+            .arg("--log-view")
+            .arg("developer")
+            .arg(&source)
+            .env(
+                "PYTOOLS_OPENPYXL_PYTHON",
+                isolated_python.as_ref().expect("runtime checked above"),
+            )
+            .env("PYTOOLS_OPENPYXL_WORKER", &worker);
+        let output = command.output().context("run wide-summary CLI")?;
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        let report: Value =
+            serde_json::from_str(stdout.trim()).context("wide-summary report JSON missing")?;
+        let summary_path = report["output"]
+            .as_str()
+            .map(PathBuf::from)
+            .context("wide-summary output path missing")?;
+        anyhow::ensure!(
+            summary_path.is_file(),
+            "summary workbook missing: {}",
+            summary_path.display()
+        );
+        Ok((summary_path, stderr))
+    };
+
+    // 第一轮：目标写入禁用，生成汇总并读取各汇总页的表头。
+    let config_without_target = create_multi_rule_wide_config(root.path(), None, false)?;
+    let (summary_path, _) = run_summary(&config_without_target)?;
+    let summary_dump = read_workbook(&summary_path)?;
+    let summary_headers = |sheet_name: &str| -> Vec<String> {
+        let sheet = summary_dump
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == sheet_name)
+            .expect("summary sheet for rule");
+        let max_col = sheet
+            .values
+            .keys()
+            .filter_map(|address| {
+                let prefix: String = address
+                    .chars()
+                    .take_while(|character| character.is_ascii_alphabetic())
+                    .collect();
+                (prefix.is_empty() != true).then_some(
+                    prefix
+                        .bytes()
+                        .fold(0u32, |acc, byte| acc * 26 + u32::from(byte - b'A' + 1)),
+                )
+            })
+            .max()
+            .unwrap_or(0);
+        (0..max_col)
+            .map(|index| {
+                let mut letters = String::new();
+                let mut value = index;
+                loop {
+                    letters.insert(0, (b'A' + (value % 26) as u8) as char);
+                    if value < 26 {
+                        break;
+                    }
+                    value = value / 26 - 1;
+                }
+                sheet
+                    .values
+                    .get(&format!("{letters}1"))
+                    .map(|value| {
+                        value
+                            .get("value")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    };
+    let headers_jia = summary_headers("甲批");
+    let headers_yi = summary_headers("乙批");
+    anyhow::ensure!(!headers_jia.is_empty(), "summary headers must be readable");
+
+    // 目标工作簿：两表表头与汇总一致（非空白→追加模式），一表表头错误。
+    let target = root.path().join("batched-target.xlsx");
+    {
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        let write_header_row = |sheet: &mut rust_xlsxwriter::Worksheet,
+                                headers: &[String]|
+         -> Result<()> {
+            for (index, header) in headers.iter().enumerate() {
+                sheet.write_string(0, index as u16, header)?;
+            }
+            Ok(())
+        };
+        let sheet_jia = workbook.add_worksheet();
+        sheet_jia.set_name("二批房地产")?;
+        write_header_row(sheet_jia, &headers_jia)?;
+        let sheet_yi = workbook.add_worksheet();
+        sheet_yi.set_name("二批大中小")?;
+        write_header_row(sheet_yi, &headers_yi)?;
+        let sheet_bad = workbook.add_worksheet();
+        sheet_bad.set_name("坏表头表")?;
+        sheet_bad.write_string(0, 0, "列1")?;
+        sheet_bad.write_string(0, 1, "列2")?;
+        workbook.save(&target)?;
+    }
+    let bad_sheet_before = {
+        let dump = read_workbook(&target)?;
+        dump.sheets
+            .iter()
+            .find(|sheet| sheet.name == "坏表头表")
+            .expect("bad-header sheet")
+            .values
+            .clone()
+    };
+
+    // 第二轮：目标写入启用；三条规则指向同一目标工作簿。
+    let config_with_target = create_multi_rule_wide_config(root.path(), Some(&target), true)?;
+    let (_, stderr) = run_summary(&config_with_target)?;
+    assert!(
+        stderr.matches("实际追加到目标").count() == 2,
+        "exactly two sheets append data: {stderr}"
+    );
+    assert!(
+        stderr.contains("目标表缺少固定前缀列"),
+        "loose mode must reject sheets missing the required prefix columns: {stderr}"
+    );
+    assert!(
+        !stderr.contains("表头列数不同"),
+        "loose mode must not use the strict column-count gate: {stderr}"
+    );
+
+    // 回读：两个一致表各追加汇总数据行；坏表头表未被改动；源文件未变。
+    let dump = read_workbook(&target)?;
+    let appended_sheet = |sheet_name: &str| -> &excel_reader::SheetDump {
+        dump.sheets
+            .iter()
+            .find(|sheet| sheet.name == sheet_name)
+            .expect("target sheet")
+    };
+    let jia = appended_sheet("二批房地产");
+    let yi = appended_sheet("二批大中小");
+    assert!(
+        jia.values.contains_key("A2"),
+        "甲批 must append its data row after the target header"
+    );
+    assert!(yi.values.contains_key("A2"), "乙批 must append its data row");
+    let bad_after = appended_sheet("坏表头表").values.clone();
+    assert_eq!(
+        bad_after, bad_sheet_before,
+        "rejected sheet must be untouched"
+    );
+    assert_eq!(
+        fs::read(&source)?,
+        source_before,
+        "source must stay read-only"
+    );
+    Ok(())
+}
+
+/// 宽松模式语义验证（对齐旧工具 wide_397_398 的 allow_extend 行为）：
+/// 目标表列顺序与汇总不同 → 按列名落位；汇总有目标没有的列 → 扩展到
+/// 目标末尾（表头+数据）；目标独有的列 → 保留不动。
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn wide_summary_loose_mode_maps_by_header_and_extends_new_columns() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("sample wide.xlsx");
+    {
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        let sheet = workbook.add_worksheet();
+        sheet.set_name("Report1")?;
+        sheet.write_string(0, 0, "报表")?;
+        sheet.merge_range(1, 0, 1, 1, "集团A", &rust_xlsxwriter::Format::new())?;
+        sheet.write_string(2, 0, "地区")?;
+        sheet.merge_range(2, 1, 2, 2, "存款", &rust_xlsxwriter::Format::new())?;
+        sheet.write_string(2, 3, "贷款")?;
+        sheet.write_string(3, 0, "名称")?;
+        sheet.write_string(3, 1, "余额")?;
+        sheet.write_string(3, 2, "余额")?;
+        sheet.write_string(3, 3, "本息")?;
+        sheet.write_string(4, 0, "宽松组织")?;
+        sheet.write_number(4, 1, 5.0)?;
+        sheet.write_number(4, 2, 6.0)?;
+        sheet.write_number(4, 3, 7.0)?;
+        workbook.save(&source)?;
+    }
+
+    let config = create_multi_rule_wide_config_single(root.path(), None)?;
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .arg("wide-summary")
+        .arg("--config")
+        .arg(&config)
+        .arg("--log-view")
+        .arg("developer")
+        .arg(&source)
+        .output()
+        .context("run wide-summary CLI (pass 1)")?;
+    anyhow::ensure!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let report: Value = serde_json::from_str(stdout.trim())?;
+    let summary_path = PathBuf::from(report["output"].as_str().context("summary path missing")?);
+    let summary_dump = read_workbook(&summary_path)?;
+    let summary_sheet = summary_dump
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "甲批")
+        .context("summary sheet 甲批 missing")?;
+    let summary_headers: Vec<(u32, String)> = (1..=9)
+        .map(|column| (column, wide_test_cell(&summary_sheet, column, 1)))
+        .collect();
+
+    // 目标表：汇总列的乱序版本，并追加一个目标独有列。
+    let target = root.path().join("loose-target.xlsx");
+    let mut reordered: Vec<String> = Vec::new();
+    for (column, header) in &summary_headers {
+        let swap = match column {
+            1 => Some(2),
+            2 => Some(1),
+            3 => Some(5),
+            5 => Some(3),
+            _ => None,
+        };
+        reordered.push(summary_headers[swap.unwrap_or(*column as usize) - 1].1.clone());
+    }
+    reordered.push("目标独有列".to_owned());
+    let reordered_headers: Vec<String> = reordered.clone();
+    {
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        let sheet = workbook.add_worksheet();
+        sheet.set_name("二批宽松")?;
+        for (index, header) in reordered.iter().enumerate() {
+            sheet.write_string(0, index as u16, header)?;
+        }
+        // 目标独有列的既有数据（宽松模式必须保留）。
+        let extra_col = reordered.len() as u32;
+        sheet.write_string(1, (extra_col - 1) as u16, "既有数据")?;
+        workbook.save(&target)?;
+    }
+
+    let config_with_target = create_multi_rule_wide_config_single_with_mode(
+        root.path(),
+        Some(&target),
+        "宽松",
+    )?;
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .arg("wide-summary")
+        .arg("--config")
+        .arg(&config_with_target)
+        .arg("--log-view")
+        .arg("developer")
+        .env(
+            "PYTOOLS_OPENPYXL_PYTHON",
+            std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON")
+                .context("isolated runtime required")?,
+        )
+        .env(
+            "PYTOOLS_OPENPYXL_WORKER",
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../crates/excel-editor/python/openpyxl_worker.py"),
+        )
+        .arg(&source)
+        .output()
+        .context("run wide-summary CLI (pass 2)")?;
+    anyhow::ensure!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("实际追加到目标"),
+        "loose mode must append: {stderr}"
+    );
+
+    let dump = read_workbook(&target)?;
+    let target_sheet = dump
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "二批宽松")
+        .context("target sheet missing")?;
+    // 按列名验证：汇总“工作簿名”的值应落在目标的“工作簿名”列。
+    let target_col_of = |header: &str| -> Option<u32> {
+        reordered_headers
+            .iter()
+            .position(|header_text| header_text == header)
+            .map(|index| index as u32 + 1)
+    };
+    let workbook_col = target_col_of("工作簿名").context("工作簿名 column missing")?;
+    // 目标的“既有数据”占 J2（末行=2），宽松追加从下一行（第 3 行）开始。
+    let workbook_address = format!("{}3", column_letters_for_test(workbook_col));
+    let workbook_value = target_sheet
+        .values
+        .get(&workbook_address)
+        .and_then(|value| value.get("value"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    assert_eq!(
+        workbook_value, "sample wide.xlsx",
+        "工作簿名 must be mapped by header name at {workbook_address}, got {workbook_value:?}"
+    );
+    // 其余映射列抽查：工作表名(A3)=Report1、行头路径(C3)=宽松组织、
+    // 行序号(F3)=5——全部按键名落位而非位置。
+    let sheet_name_address =
+        format!("{}3", column_letters_for_test(target_col_of("工作表名").context("工作表名 missing")?));
+    assert_eq!(
+        target_sheet
+            .values
+            .get(&sheet_name_address)
+            .and_then(|value| value.get("value"))
+            .and_then(serde_json::Value::as_str),
+        Some("Report1"),
+        "工作表名 must be mapped by header name"
+    );
+    // 目标独有列的既有表头保留。
+    let extra_col = target_col_of("目标独有列").context("目标独有列 missing")?;
+    let extra_address = format!("{}1", column_letters_for_test(extra_col));
+    assert_eq!(
+        target_sheet
+            .values
+            .get(&extra_address)
+            .and_then(|value| value.get("value"))
+            .and_then(serde_json::Value::as_str),
+        Some("目标独有列"),
+        "target-only header must stay"
+    );
+    Ok(())
+}
+
+fn wide_test_cell(sheet: &excel_reader::SheetDump, column: u32, row: u32) -> String {
+    let address = format!("{}{}", column_letters_for_test(column), row);
+    sheet
+        .values
+        .get(&address)
+        .and_then(|value| value.get("value"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn column_letters_for_test(column: u32) -> String {
+    let mut letters = String::new();
+    let mut value = column;
+    while value > 0 {
+        let remainder = ((value - 1) % 26) as u8;
+        letters.insert(0, (b'A' + remainder) as char);
+        value = (value - 1) / 26;
+    }
+    letters
+}
+
+/// 单规则 1-1 配置（宽松模式验证用），可指定目标与匹配模式。
+fn create_multi_rule_wide_config_single(root: &Path, target: Option<&Path>) -> Result<PathBuf> {
+    create_multi_rule_wide_config_single_with_mode(root, target, "")
+}
+
+fn create_multi_rule_wide_config_single_with_mode(
+    root: &Path,
+    target: Option<&Path>,
+    header_match: &str,
+) -> Result<PathBuf> {
+    use rust_xlsxwriter::Workbook;
+    let config = root.join("app").join("config").join("config.xlsx");
+    fs::create_dir_all(config.parent().context("config parent missing")?)?;
+    let app = root.join("app");
+    fs::create_dir_all(app.join("input"))?;
+    fs::create_dir_all(app.join("output"))?;
+    fs::create_dir_all(app.join("logs"))?;
+    let mut workbook = Workbook::new();
+    {
+        let global = workbook.add_worksheet();
+        global.set_name("全局配置")?;
+        let settings = [
+            ("输入目录", app.join("input").to_string_lossy().into_owned()),
+            ("输出目录", app.join("output").to_string_lossy().into_owned()),
+            ("日志目录", app.join("logs").to_string_lossy().into_owned()),
+            ("错误策略", "continue".to_owned()),
+            ("时序规则命中策略", "all_match".to_owned()),
+        ];
+        for (index, (key, value)) in settings.iter().enumerate() {
+            global.write_string((index + 1) as u32, 0, *key)?;
+            global.write_string((index + 1) as u32, 1, value)?;
+        }
+    }
+    {
+        let timeline = workbook.add_worksheet();
+        timeline.set_name("时序提取规则")?;
+        let headers = [
+            "是否启用",
+            "规则名称",
+            "工作簿关键字",
+            "工作表关键字",
+            "行头列",
+            "列表头行",
+            "必含列头",
+            "必含行头",
+            "数据起始行",
+            "数据结束行",
+            "数据起始列",
+            "数据结束列",
+            "跳过关键字",
+            "目标工作簿路径",
+            "目标工作表",
+            "启用目标写入",
+            "set区域",
+            "目标去重列",
+            "目标表头匹配",
+            "是否输出行序号",
+        ];
+        for (column, header) in headers.iter().enumerate() {
+            timeline.write_string(0, column as u16, *header)?;
+        }
+        let target_workbook = target
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let enabled_value = if target.is_some() { "是" } else { "否" };
+        let values = [
+            "是",
+            "甲批",
+            "sample",
+            "Report1",
+            "A",
+            "5",
+            "",
+            "",
+            "5",
+            "",
+            "B",
+            "D",
+            "",
+            target_workbook.as_str(),
+            "二批宽松",
+            enabled_value,
+            "集团@B2",
+            "",
+            header_match,
+            "是",
+        ];
+        for (column, value) in values.iter().enumerate() {
+            timeline.write_string(1, column as u16, *value)?;
+        }
+    }
+    workbook.save(&config)?;
+    Ok(config)
+}
+
+
+/// 多规则 1-1 配置：三条规则共享同一目标工作簿（可选启用目标写入）。
+fn create_multi_rule_wide_config(
+    root: &Path,
+    target: Option<&Path>,
+    target_enabled: bool,
+) -> Result<PathBuf> {
+    use rust_xlsxwriter::Workbook;
+    let config = root.join("app").join("config").join("config.xlsx");
+    fs::create_dir_all(config.parent().context("config parent missing")?)?;
+    let app = root.join("app");
+    fs::create_dir_all(app.join("input"))?;
+    fs::create_dir_all(app.join("output"))?;
+    fs::create_dir_all(app.join("logs"))?;
+    let mut workbook = Workbook::new();
+    {
+        let global = workbook.add_worksheet();
+        global.set_name("全局配置")?;
+        let settings = [
+            ("输入目录", app.join("input").to_string_lossy().into_owned()),
+            ("输出目录", app.join("output").to_string_lossy().into_owned()),
+            ("日志目录", app.join("logs").to_string_lossy().into_owned()),
+            ("错误策略", "continue".to_owned()),
+            ("时序规则命中策略", "all_match".to_owned()),
+        ];
+        for (index, (key, value)) in settings.iter().enumerate() {
+            global.write_string((index + 1) as u32, 0, *key)?;
+            global.write_string((index + 1) as u32, 1, value)?;
+        }
+    }
+    {
+        let timeline = workbook.add_worksheet();
+        timeline.set_name("时序提取规则")?;
+        let headers = [
+            "是否启用",
+            "规则名称",
+            "工作簿关键字",
+            "工作表关键字",
+            "行头列",
+            "列表头行",
+            "必含列头",
+            "必含行头",
+            "数据起始行",
+            "数据结束行",
+            "数据起始列",
+            "数据结束列",
+            "跳过关键字",
+            "目标工作簿路径",
+            "目标工作表",
+            "启用目标写入",
+            "set区域",
+            "目标去重列",
+            "是否输出行序号",
+        ];
+        for (column, header) in headers.iter().enumerate() {
+            timeline.write_string(0, column as u16, *header)?;
+        }
+        let target_workbook = target
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let enabled_value = if target_enabled { "是" } else { "否" };
+        let rules = [
+            ("甲批", "Report1", "二批房地产"),
+            ("乙批", "Report2", "二批大中小"),
+            ("丙批", "Report3", "坏表头表"),
+        ];
+        for (row, (name, sheet_keyword, target_sheet)) in rules.iter().enumerate() {
+            let values = [
+                "是",
+                name,
+                "sample",
+                sheet_keyword,
+                "A",
+                "5",
+                "",
+                "",
+                "5",
+                "",
+                "B",
+                "D",
+                "",
+                target_workbook.as_str(),
+                target_sheet,
+                enabled_value,
+                "集团@B2",
+                "",
+                "是",
+            ];
+            for (column, value) in values.iter().enumerate() {
+                timeline.write_string((row + 1) as u32, column as u16, *value)?;
+            }
+        }
+    }
+    workbook.save(&config)?;
+    Ok(config)
 }
