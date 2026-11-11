@@ -88,11 +88,41 @@ rust_xlsxwriter 0.98.2 通过 `insert_note(Note::new(text))` 支持批注写入�
 - 只取缓存值（calamine），不复制公式文本，不自动重算，不调 BetterOffice。
 - 缓存缺失 → 空白（openpyxl 路径 data_only 返回 None 的行为一致）。
 - 缓存缺失计入 issues 的机制沿用。
+- **运行摘要固定说明**（两引擎共用）：
+  `公式缓存说明：公式缓存取自源文件保存时状态，本次打印未重新计算。`
 
-## 10. 已知限制（Rust 入口）
+## 10. 本轮对拍中修正的 Rust 侧缺陷
+
+以下问题在补跑宽表/日期夹具时被逐格对拍暴露，均已修复并补回归测试：
+
+| # | 缺陷 | 根因 | 修正 |
+| --- | --- | --- | --- |
+| 1 | 默认字体丢失（宋体→Calibri） | `fontId=0` 被当作「无字体」跳过；Excel 烘焙源的 font 0 就是工作簿默认字体（中文环境为宋体） | 按 `fontId` 恒查表，不再对 0 特判 |
+| 2 | 1904 簿时间单元格偏移 | 1904→1900 纪元平移对纯时间值不适用 | 新增 `numfmt_is_time_only`：纯时间格式且串行值 < 1 时不平移；含整天数（公式 +1）照常平移 |
+| 3 | 打印区域少一行 | Rust 侧 `final_row = next_row - 2`，openpyxl 引擎是 `out_row - 1`（含块间空行） | 改为 `next_row - 1`，与 openpyxl 引擎一致 |
+| 4 | 颜色被静默丢弃 | OOXML 是 8 位 ARGB，rust_xlsxwriter 只接受 6 位 RGB，越界后 `is_valid()` 判否并**丢色**（同时打 stderr 噪声） | 新增 `writer_rgb6`：写入前截掉 alpha |
+| 5 | 列宽全部漂移 +0.71 | rust_xlsxwriter 的 `set_column_width` 走「字符宽→像素→再转回」往返，12.0 写成 12.7109375 | 新增 `set_column_width_exact`：反解像素走 `set_column_width_pixels`，写出与 openpyxl 完全相同的 width 值 |
+| 6 | 未设列宽缺省不一致 | openpyxl 对未显式设置的列取 `DEFAULT_COLUMN_WIDTH=13.0` 并落盘；分组列（`min..max`）只有 min 字母命中 | 列宽表按 `<col min>` 单键收录；逐列回落到 13.0，与 openpyxl 引擎逐列语义一致 |
+| 7 | 源行高/列宽未复制 | calamine 不暴露行高列宽，原实现只复制了值与样式 | 新增 `SheetLayout`（窄读 `<col>`/`<row>`），mode 1/2 按 openpyxl 语义复制 |
+
+## 11. 已知限制（Rust 入口）
 
 1. XLSM 输出明确拒绝（提示走 Openpyxl 入口）。
 2. 追加到既有目标：Rust 输出走独立 `_Rust` 新路径，因此天然从新簿开始；对既有 Rust 输出拒绝覆盖。
 3. 批注作者信息不单独保留（文本含 author 前缀时随文本带入）。
 4. theme 颜色 tint 算法为标准近似公式。
 5. mode 2 的列宽自适应沿用 `static_print_display_length`（日期按 19 字符估算），未按数字格式精确计算显示宽度（与 Openpyxl 入口现状一致）。
+6. **Openpyxl 引擎的既有缺口（Rust 已按 print_310.py 语义实现，故两引擎 mode 2 输出不同）**：
+   - 内嵌 Openpyxl 脚本没有 `print_310.py` 的 `_autofit_block_columns` / `_compact_block_row_heights`
+     （实测：脚本中 `autofit`/`compact`/`0.95` 出现次数均为 0），mode 2 只复制源列宽、不做紧凑自适应；
+   - 内嵌脚本的 `parse_orientation` 在配置留空时返回 `None`，Excel 落为纵向，不做「按区域宽高比自动判断」。
+   本轮按目标「Rust 以 print_310.py 真实源码语义为准」「不得改变原有 Openpyxl 实现」处理：
+   Rust 保留自适应与自动方向，Openpyxl 入口行为原样不动，差异在验收报告中如实列出。
+
+## 12. 性能观测开关
+
+设置 `PYTOOLS_PRINT_STAGE_TIMING=1` 后，Rust 引擎会把分阶段耗时以
+`[3-1][stage-timing] {json}` 形式输出到 stderr（不影响正常输出与日志格式），
+覆盖目标 §14.4 的 12 项阶段：配置读取、源工作簿打开/数据读取、OOXML 解析、
+样式映射、区域提取、区域重组、目标工作簿创建、写入、打印设置、保存、总耗时。
+

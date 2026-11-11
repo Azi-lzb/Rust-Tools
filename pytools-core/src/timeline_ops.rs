@@ -556,7 +556,8 @@ pub fn run_timeline_precheck(config_path: impl AsRef<Path>) -> Result<PrecheckRe
                             "行头列为空时，数据起始行必填".to_owned()
                         );
                     }
-                    if crate::path_map::parse_col_spec(&data_column_start) <= 0 {
+                    // parse_col_spec 返回无符号列号，<= 0 等价于 == 0。
+                    if crate::path_map::parse_col_spec(&data_column_start) == 0 {
                         add!(
                             "error",
                             location.clone(),

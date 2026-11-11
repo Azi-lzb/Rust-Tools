@@ -1,0 +1,15 @@
+cfg_dates/out_dates: out_dates.xlsx vs out_dates_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_wide186_m1/out_wide186_m1: out_wide186_m1.xlsx vs out_wide186_m1_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 1
+cfg_wide186_m2/out_wide186_m2: out_wide186_m2.xlsx vs out_wide186_m2_Rust.xlsx: value_diffs = 0 style_diffs = 20 setup_diffs = 1
+cfg_wide210_m1/out_wide210_m1: out_wide210_m1.xlsx vs out_wide210_m1_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 1
+cfg_wide210_m2/out_wide210_m2: out_wide210_m2.xlsx vs out_wide210_m2_Rust.xlsx: value_diffs = 0 style_diffs = 20 setup_diffs = 1
+cfg_wide222_m1/out_wide222_m1: out_wide222_m1.xlsx vs out_wide222_m1_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 1
+cfg_wide222_m2/out_wide222_m2: out_wide222_m2.xlsx vs out_wide222_m2_Rust.xlsx: value_diffs = 0 style_diffs = 20 setup_diffs = 1
+cfg_mode1/out_m1: out_m1.xlsx vs out_m1_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_mode2/out_m2: out_m2.xlsx vs out_m2_Rust.xlsx: value_diffs = 0 style_diffs = 3 setup_diffs = 0
+cfg_mode3/out_m3: out_m3.xlsx vs out_m3_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_multirange/out_mr: out_mr.xlsx vs out_mr_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_emptyrange/out_er: out_er.xlsx vs out_er_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_multitarget/out_mt1: out_mt1.xlsx vs out_mt1_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_multitarget/out_mt2: out_mt2.xlsx vs out_mt2_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0
+cfg_repeatsheet/out_rs: out_rs.xlsx vs out_rs_Rust.xlsx: value_diffs = 0 style_diffs = 0 setup_diffs = 0

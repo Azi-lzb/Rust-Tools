@@ -1117,12 +1117,25 @@ pub fn run_configured_static_print_with_python(
     engine: StaticPrintEngine,
     python_override: Option<&Path>,
 ) -> Result<StaticPrintRun> {
+    // 阶段计时（PYTOOLS_PRINT_STAGE_TIMING=1 时输出到 stderr，供性能分析用）。
+    let stage_timing_enabled = std::env::var_os("PYTOOLS_PRINT_STAGE_TIMING").is_some();
+    let config_read_started = std::time::Instant::now();
     let mut tasks = crate::config::load_print_tasks(config_path).with_context(|| {
         format!(
             "[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）",
             config_path.display()
         )
     })?;
+    if stage_timing_enabled {
+        eprintln!(
+            "[3-1][stage-timing] {}",
+            serde_json::json!({
+                "config": config_path.file_name().map(|name| name.to_string_lossy().into_owned()),
+                "engine": engine.label(),
+                "config_read_ms": u64::try_from(config_read_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            })
+        );
+    }
     // Rust 入口的输出隔离：在目标校验前把目标重映射为 `_Rust` 后缀路径，
     // 使「目标已存在」校验和后续写入都针对独立输出，绝不覆盖 Openpyxl 输出。
     if engine == StaticPrintEngine::RustWriter {

@@ -1,0 +1,9 @@
+{
+ "openpyxl": "fixtures\\out_dates.xlsx",
+ "rust": "fixtures\\out_dates_Rust.xlsx",
+ "value_diff_count": 0,
+ "style_diff_count": 0,
+ "value_diffs": [],
+ "style_diffs": [],
+ "setup_diffs": []
+}

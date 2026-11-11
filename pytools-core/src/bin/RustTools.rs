@@ -981,6 +981,10 @@ where
     }
 }
 
+// 快捷工具面板是一次性动作菜单：执行一次后返回主菜单（末尾 `return Ok(())`）。
+// 该 `loop` 与 `_` 分支是历史遗留结构；为保持既有用户可见行为不变，这里只标注
+// clippy，不调整循环语义。
+#[allow(clippy::never_loop)]
 fn run_interactive_quick_menu<R, W>(
     input: &mut R,
     output: &mut W,
@@ -4905,6 +4909,11 @@ where
         } else {
             TaskStatus::Success
         };
+        // 公式缓存红线固定说明：两引擎均只取源文件保存时的缓存值，不做重算。
+        summary.business_metrics.insert(
+            "公式缓存说明".to_owned(),
+            serde_json::json!("公式缓存取自源文件保存时状态，本次打印未重新计算。"),
+        );
         summary
             .business_metrics
             .insert("成功配置项".to_owned(), serde_json::json!(run.task_ok));

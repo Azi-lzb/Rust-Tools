@@ -1,0 +1,28 @@
+{
+ "openpyxl": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_m2.xlsx",
+ "rust": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_m2_Rust.xlsx",
+ "value_diff_count": 0,
+ "style_diff_count": 3,
+ "value_diffs": [],
+ "style_diffs": [
+  {
+   "section": "col_widths",
+   "key": "col1",
+   "a": 12.0,
+   "b": 7.2852
+  },
+  {
+   "section": "col_widths",
+   "key": "col2",
+   "a": 15.0,
+   "b": 8.5703
+  },
+  {
+   "section": "col_widths",
+   "key": "col3",
+   "a": 13.0,
+   "b": 7.2852
+  }
+ ],
+ "setup_diffs": []
+}

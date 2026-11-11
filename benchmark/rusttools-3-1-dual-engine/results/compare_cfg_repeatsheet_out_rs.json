@@ -1,0 +1,9 @@
+{
+ "openpyxl": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_rs.xlsx",
+ "rust": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_rs_Rust.xlsx",
+ "value_diff_count": 0,
+ "style_diff_count": 0,
+ "value_diffs": [],
+ "style_diffs": [],
+ "setup_diffs": []
+}

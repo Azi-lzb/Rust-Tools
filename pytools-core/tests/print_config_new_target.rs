@@ -316,7 +316,9 @@ fn pt_3_3_new_target_creates_a_plan_without_touching_source_or_target() -> Resul
             EditOperation::SetPageSettings { settings, .. } => settings.print_area.as_deref(),
             _ => None,
         });
-    assert_eq!(print_area, Some("A1:F2"));
+    // 打印区域末行对齐 openpyxl 引擎（apply_setup(ws, out_row - 1, …)）：
+    // 含区域末尾的块间空行，即 next_row - 1 = 3。
+    assert_eq!(print_area, Some("A1:F3"));
     assert_eq!(fs::read(&source)?, source_before);
     assert_eq!(fs::read(&config)?, config_before);
 

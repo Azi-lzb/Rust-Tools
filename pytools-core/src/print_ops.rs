@@ -660,11 +660,15 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                 .context("FitToPagesWide exceeds XLSX setting range")?;
             let fit_tall = u16::try_from(task.fit_tall.max(0))
                 .context("FitToPagesTall exceeds XLSX setting range")?;
+            // 打印区域末行对齐 openpyxl 引擎语义（apply_setup(ws, out_row - 1, …)）：
+            // out_row/next_row 在最后一个区域后已 +1（块间空行），打印区域包含
+            // 该尾随空行，即末行 = next_row - 1。此前 Rust 侧多减 1 导致
+            // 打印区域比 Openpyxl 输出少一行（实测 8 场景对拍暴露）。
             let final_row = next_row
                 .get(&target_sheet)
                 .copied()
                 .unwrap_or(2)
-                .saturating_sub(2)
+                .saturating_sub(1)
                 .max(1);
             let final_cols = max_columns.get(&target_sheet).copied().unwrap_or(1).max(1);
             final_setup.insert(
@@ -763,6 +767,15 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut source_uses_1904_epoch = HashMap::<PathBuf, bool>::new();
     let mut source_styles =
         HashMap::<PathBuf, std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>>::new();
+    // 阶段计时（PYTOOLS_PRINT_STAGE_TIMING=1 时输出到 stderr，供性能分析用）。
+    let stage_timing_enabled = std::env::var_os("PYTOOLS_PRINT_STAGE_TIMING").is_some();
+    let stage_started = std::time::Instant::now();
+    let styles_load_ms = std::cell::Cell::new(0u128);
+    let ooxml_parse_ms = std::cell::Cell::new(0u128);
+    let style_map_ms = std::cell::Cell::new(0u128);
+    let region_extract_ms = std::cell::Cell::new(0u128);
+    let region_reorg_ms = std::cell::Cell::new(0u128);
+    let source_load_started = std::time::Instant::now();
     for operation in &plan.operations {
         if let EditOperation::ImportRange {
             source_workbook, ..
@@ -785,11 +798,19 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
             }
         }
     }
+    let source_read_ms = source_load_started.elapsed();
+    let extract_reorg_started = std::time::Instant::now();
 
     let mut worksheet_names = Vec::new();
     let mut cells_by_sheet = BTreeMap::<String, Vec<StaticPrintCell>>::new();
     let mut merges_by_sheet = BTreeMap::<String, Vec<StaticPrintMerge>>::new();
     let mut comments_by_sheet = BTreeMap::<String, Vec<(String, String)>>::new();
+    // mode 1 源行高/列宽（OOXML 窄读补充）：目标行/列 -> 值，后写覆盖（对齐
+    // openpyxl 引擎逐块赋值语义）。在计划自带的 Set 行高列宽操作之前应用。
+    let mut layout_row_heights = BTreeMap::<String, BTreeMap<u32, f64>>::new();
+    let mut layout_column_widths = BTreeMap::<String, BTreeMap<u32, f64>>::new();
+    let mut source_layouts =
+        HashMap::<(PathBuf, String), std::sync::Arc<crate::ooxml_cell_styles::SheetLayout>>::new();
     let mut imported_ranges = 0usize;
     let mut formulas_materialized = 0usize;
 
@@ -813,6 +834,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 style_mode,
                 copy_comments,
                 copy_merges,
+                copy_row_heights,
+                copy_column_widths,
                 hide_zero,
                 ..
             } => {
@@ -846,20 +869,78 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 let source_style_map = source_styles
                     .entry(source_workbook.clone())
                     .or_insert_with(|| {
-                        std::sync::Arc::new(
-                            crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
-                                .unwrap_or_else(|error| {
-                                    eprintln!(
-                                        "[3-1][Rust] 源样式读取失败（输出将使用默认格式）：{error}"
-                                    );
-                                    crate::ooxml_cell_styles::SourceStyles::default()
-                                }),
-                        )
+                        let styles_started = std::time::Instant::now();
+                        let loaded = crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
+                            .unwrap_or_else(|error| {
+                                eprintln!(
+                                    "[3-1][Rust] 源样式读取失败（输出将使用默认格式）：{error}"
+                                );
+                                crate::ooxml_cell_styles::SourceStyles::default()
+                            });
+                        let elapsed = styles_started.elapsed().as_millis();
+                        styles_load_ms.set(styles_load_ms.get() + elapsed);
+                        // styles.xml 解析属于 OOXML 窄读的一部分。
+                        ooxml_parse_ms.set(ooxml_parse_ms.get() + elapsed);
+                        std::sync::Arc::new(loaded)
                     })
                     .clone();
+                let indices_started = std::time::Instant::now();
                 let cell_style_indices = source_style_map
                     .cell_style_indices(source_workbook, source_sheet)
                     .unwrap_or_default();
+                ooxml_parse_ms.set(ooxml_parse_ms.get() + indices_started.elapsed().as_millis());
+                // mode 1 源行高列宽：OOXML 窄读（calamine 不暴露）。对齐
+                // openpyxl 引擎 copy_block：行高按源行→目标行平移（mode 1），
+                // 列宽按源列→目标列平移（mode 1/2），仅显式设置项，后写覆盖。
+                if *copy_row_heights || *copy_column_widths {
+                    let layout = source_layouts
+                        .entry((source_workbook.clone(), source_sheet.clone()))
+                        .or_insert_with(|| {
+                            std::sync::Arc::new(
+                                source_style_map
+                                    .sheet_layout(source_workbook, source_sheet)
+                                    .unwrap_or_else(|error| {
+                                        eprintln!(
+                                            "[3-1][Rust] 源行高列宽读取失败（输出使用默认行高列宽）：{error}"
+                                        );
+                                        crate::ooxml_cell_styles::SheetLayout::default()
+                                    }),
+                            )
+                        })
+                        .clone();
+                    if *copy_row_heights {
+                        for (row, height) in &layout.row_heights {
+                            if *row < source_first.0 as u32 || *row > source_last.0 as u32 {
+                                continue;
+                            }
+                            let target = (target_row as u32) + row - source_first.0 as u32;
+                            layout_row_heights
+                                .entry(target_sheet.clone())
+                                .or_default()
+                                .insert(target, *height);
+                        }
+                    }
+                    if *copy_column_widths {
+                        // openpyxl 语义：`src_ws.column_dimensions[列字母].width`
+                        // 只在显式设置时命中，未设置的列取 openpyxl 的
+                        // DEFAULT_COLUMN_WIDTH（13.0），并且写入目标时同样落盘
+                        // （不是「留空用默认」）。
+                        for offset in 0..(source_last.1 - source_first.1 + 1) {
+                            let source_column = (source_first.1 + offset) as u32;
+                            let width = layout
+                                .column_widths
+                                .get(&source_column)
+                                .copied()
+                                .unwrap_or(crate::ooxml_cell_styles::DEFAULT_COLUMN_WIDTH);
+                            let target =
+                                (target_column as u32) + source_column - source_first.1 as u32;
+                            layout_column_widths
+                                .entry(target_sheet.clone())
+                                .or_default()
+                                .insert(target, width);
+                        }
+                    }
+                }
                 // Format 去重缓存：descriptor → 已构造 Format。
                 let mut format_cache = HashMap::<
                     crate::ooxml_cell_styles::CellStyleInfo,
@@ -872,7 +953,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     crate::ooxml_cell_styles::CellStyleInfo,
                     rust_xlsxwriter::Format,
                 >| {
-                    cell_style_indices
+                    let map_started = std::time::Instant::now();
+                    let result = cell_style_indices
                         .get(address)
                         .map(|index| source_style_map.descriptor(*index))
                         .filter(|descriptor| {
@@ -888,7 +970,9 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                                     )
                                 })
                                 .clone()
-                        })
+                        });
+                    style_map_ms.set(style_map_ms.get() + map_started.elapsed().as_millis());
+                    result
                 };
                 for merge in source.merges.iter().filter(|_| *copy_merges) {
                     let Ok((
@@ -961,6 +1045,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             .push((target_address, text.clone()));
                     }
                 }
+                let extract_started = std::time::Instant::now();
                 for row in source_first.0..=source_last.0 {
                     for column in source_first.1..=source_last.1 {
                         if covered_by_string_merge.contains(&(row, column)) {
@@ -994,7 +1079,24 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                                 .get("value")
                                 .and_then(serde_json::Value::as_f64)
                                 .context("static print date serial is invalid")?;
-                            let serial = date_serial_for_1900_output(serial, source_uses_1904)?;
+                            // 纯时间格式（hh:mm:ss 等）且串行值 < 1（纯时刻，无日期
+                            // 部分）：串行值在 1900/1904 系统下显示一致，不做跨纪元
+                            // 平移，与 openpyxl 引擎对 1904 簿 time 单元格的取值一致。
+                            // 串行值 ≥ 1 含整天数（如 =B3+1），仍是真实日期时间，照常平移。
+                            let time_only = source_uses_1904
+                                && serial < 1.0
+                                && cell_style_indices
+                                    .get(&address)
+                                    .map(|index| source_style_map.descriptor(*index))
+                                    .and_then(|descriptor| descriptor.num_fmt)
+                                    .as_deref()
+                                    .map(numfmt_is_time_only)
+                                    .unwrap_or(false);
+                            let serial = if time_only {
+                                serial
+                            } else {
+                                date_serial_for_1900_output(serial, source_uses_1904)?
+                            };
                             let serial = serde_json::Number::from_f64(serial)
                                 .context("static print date serial is not finite")?;
                             output_value["value"] = serde_json::Value::Number(serial);
@@ -1018,6 +1120,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             });
                     }
                 }
+                region_extract_ms
+                    .set(region_extract_ms.get() + extract_started.elapsed().as_millis());
                 imported_ranges += 1;
             }
             EditOperation::SetPageSettings { sheet, .. } => {
@@ -1057,10 +1161,21 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         "static print plan has no target worksheets"
     );
 
+    let extract_reorg_ms = extract_reorg_started.elapsed();
+    // 区域提取 = 逐单元格读取/取值；区域重组 = 其余坐标平移、合并/批注归集
+    // 与目标分组工作。两者之和即本阶段的 extract_reorg_ms。
+    let region_reorg_ms = std::cell::Cell::new(
+        extract_reorg_ms
+            .as_millis()
+            .saturating_sub(region_extract_ms.get()),
+    );
+    let target_create_started = std::time::Instant::now();
     let mut workbook = Workbook::new();
     for name in &worksheet_names {
         workbook.add_worksheet().set_name(name)?;
     }
+    let target_create_ms = target_create_started.elapsed();
+    let target_write_started = std::time::Instant::now();
     for name in &worksheet_names {
         let worksheet = workbook.worksheet_from_name(name)?;
         if let Some(merges) = merges_by_sheet.get(name) {
@@ -1096,6 +1211,22 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
             }
         }
     }
+    let target_write_ms = target_write_started.elapsed();
+    let page_settings_started = std::time::Instant::now();
+    // 先应用 mode 1 源行高列宽（逐块收集，后写覆盖），再应用计划显式
+    // Set 行高列宽（mode 2 自适应等），与 openpyxl 引擎的执行顺序一致。
+    for (sheet, heights) in &layout_row_heights {
+        let worksheet = workbook.worksheet_from_name(sheet)?;
+        for (row, height) in heights {
+            worksheet.set_row_height(row.saturating_sub(1), *height)?;
+        }
+    }
+    for (sheet, widths) in &layout_column_widths {
+        let worksheet = workbook.worksheet_from_name(sheet)?;
+        for (column, width) in widths {
+            set_column_width_exact(worksheet, *column, *width)?;
+        }
+    }
     for operation in &plan.operations {
         match operation {
             EditOperation::SetRowHeight {
@@ -1112,9 +1243,9 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 column_index,
                 width,
             } => {
-                workbook.worksheet_from_name(sheet)?.set_column_width(
-                    u16::try_from(column_index.saturating_sub(1))
-                        .context("static print column width index is out of range")?,
+                set_column_width_exact(
+                    workbook.worksheet_from_name(sheet)?,
+                    *column_index,
                     *width,
                 )?;
             }
@@ -1125,6 +1256,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         }
     }
 
+    let page_settings_ms = page_settings_started.elapsed();
+    let save_started = std::time::Instant::now();
     let output_parent = plan
         .output
         .parent()
@@ -1137,6 +1270,26 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         )
     })?;
     save_new_workbook_without_overwrite(&mut workbook, &plan.output)?;
+    if stage_timing_enabled {
+        eprintln!(
+            "[3-1][stage-timing] {}",
+            serde_json::json!({
+                "output": plan.output.file_name().map(|name| name.to_string_lossy().into_owned()),
+                // 目标 §14.4 的 12 项阶段细分（按 Rust 实现的可测边界映射）。
+                "source_read_ms": u64::try_from(source_read_ms.as_millis()).unwrap_or(u64::MAX),
+                "ooxml_parse_ms": u64::try_from(ooxml_parse_ms.get()).unwrap_or(u64::MAX),
+                "styles_load_ms": u64::try_from(styles_load_ms.get()).unwrap_or(u64::MAX),
+                "style_map_ms": u64::try_from(style_map_ms.get()).unwrap_or(u64::MAX),
+                "region_extract_ms": u64::try_from(region_extract_ms.get()).unwrap_or(u64::MAX),
+                "region_reorg_ms": u64::try_from(region_reorg_ms.get()).unwrap_or(u64::MAX),                "extract_reorg_ms": u64::try_from(extract_reorg_ms.as_millis()).unwrap_or(u64::MAX),
+                "target_create_ms": u64::try_from(target_create_ms.as_millis()).unwrap_or(u64::MAX),
+                "target_write_ms": u64::try_from(target_write_ms.as_millis()).unwrap_or(u64::MAX),
+                "page_settings_ms": u64::try_from(page_settings_ms.as_millis()).unwrap_or(u64::MAX),
+                "save_ms": u64::try_from(save_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                "total_ms": u64::try_from(stage_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            })
+        );
+    }
     Ok(StaticPrintExecution {
         engine: "rust_xlsxwriter",
         output: plan.output.clone(),
@@ -1194,6 +1347,66 @@ fn apply_static_print_page_settings(
 /// 将 OOXML 样式描述映射为 rust_xlsxwriter 写入格式。
 ///
 /// `full` = mode 1/2（含边框）；Basic = mode 3（font/fill/align/numfmt，无边框）。
+/// 把 OOXML 颜色（8 位 ARGB 或 6 位 RGB）转成 rust_xlsxwriter 可用的 6 位 RGB。
+///
+/// rust_xlsxwriter 的 `Color::from(&str)` 用 `u32::from_str_radix` 解析，
+/// 8 位 ARGB（如 `FF000000`）会超过 `0xFFFFFF` 上限，被 `is_valid()` 判为越界
+/// 并**静默丢弃颜色**，同时在 stderr 打印告警。因此写入前统一截掉 alpha。
+fn writer_rgb6(color: &str) -> Option<String> {
+    let value = color.trim().trim_start_matches('#');
+    if value.len() == 8 {
+        let rgb = &value[2..];
+        if rgb.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Some(format!("#{rgb}"));
+        }
+        return None;
+    }
+    if value.len() == 6 && value.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Some(format!("#{value}"));
+    }
+    None
+}
+
+/// 把字符宽度写成与源/openpyxl **完全相同**的 width 值。
+///
+/// rust_xlsxwriter 的 `set_column_width(w)` 走「字符宽 → 像素 → 再转回字符宽」
+/// 往返换算（MDW=7、padding=5），写出的 width 会比输入大约 0.71
+/// （12.0 → 12.7109375），与 openpyxl 直接写原始 width 的行为不一致。
+/// 这里改走像素入口反算：像素 p 在存盘时按 `floor(p*256/7)/256` 还原成
+/// 字符宽，因此先反解出能还原出目标 width 的像素值即可精确对齐。
+fn set_column_width_exact(
+    worksheet: &mut rust_xlsxwriter::Worksheet,
+    column_index: u32,
+    width: f64,
+) -> Result<()> {
+    // 目标 width 的 1/256 量化值（Excel 列宽上限 255 字符 → 65280）。
+    let target = (width * 256.0).round();
+    anyhow::ensure!(
+        (0.0..=65280.0).contains(&target),
+        "static print column width {width} is out of range"
+    );
+    let target = target as u64;
+    // 反解像素：floor(px*256/7) == target，px 落在 [target*7/256, (target+1)*7/256)。
+    let low = (target * 7).div_ceil(256);
+    let high = ((target + 1) * 7).div_ceil(256) - 1;
+    let pixels = (low..=high).find(|candidate| (*candidate * 256 / 7) == target);
+    let Some(pixels) = pixels else {
+        // 目标宽度无法用像素精确表达时退回字符宽接口（存在 0.71 的取整差）。
+        worksheet.set_column_width(
+            u16::try_from(column_index.saturating_sub(1))
+                .context("static print column width index is out of range")?,
+            width,
+        )?;
+        return Ok(());
+    };
+    worksheet.set_column_width_pixels(
+        u16::try_from(column_index.saturating_sub(1))
+            .context("static print column width index is out of range")?,
+        u32::try_from(pixels).unwrap_or(u32::MAX),
+    )?;
+    Ok(())
+}
+
 fn build_writer_format(
     descriptor: &crate::ooxml_cell_styles::CellStyleInfo,
     full: bool,
@@ -1225,7 +1438,12 @@ fn build_writer_format(
             format = format.set_font_name(name.as_str());
         }
         if let Some(color) = &font.color {
-            format = format.set_font_color(color.as_str());
+            // OOXML 颜色是 8 位 ARGB；rust_xlsxwriter 只接受 6 位 RGB
+            // （0x000000..0xFFFFFF），传 8 位会被判越界并**静默丢弃颜色**。
+            // 这里截掉 alpha（Excel 写出时同样补 FF 前缀）。
+            if let Some(rgb) = writer_rgb6(color) {
+                format = format.set_font_color(rgb.as_str());
+            }
         }
         if let Some(style) = &font.underline {
             let underline = match style.as_str() {
@@ -1240,7 +1458,9 @@ fn build_writer_format(
     if let Some(fill) = &descriptor.fill {
         if fill.pattern.as_deref() == Some("solid") {
             if let Some(color) = &fill.fg_color {
-                format = format.set_background_color(color.as_str());
+                if let Some(rgb) = writer_rgb6(color) {
+                    format = format.set_background_color(rgb.as_str());
+                }
             }
         }
     }
@@ -1471,6 +1691,57 @@ fn static_print_is_numeric_zero(value: &serde_json::Value) -> bool {
         .get("value")
         .and_then(serde_json::Value::as_f64)
         .is_some_and(|number| number == 0.0)
+}
+
+/// 判断数字格式是否为纯时间格式（hh:mm:ss、mm:ss、[h]:mm 等）。
+///
+/// 纯时间串行值是「天的小数」，在 1900/1904 两种日期系统下显示一致；
+/// 不做跨纪元平移，使值与 openpyxl 引擎（openpyxl 按源簿纪元读 time 单元格）一致。
+/// 规则：清洗掉引号字面量、反斜杠转义与普通 [括号] 段后，
+/// 含时间记号（h/s 或保留的 [h]/[m]/[mm]/[ss]）且不含日期记号（y/d）。
+fn numfmt_is_time_only(format_code: &str) -> bool {
+    let mut cleaned = String::with_capacity(format_code.len());
+    let mut has_elapsed_token = false;
+    let mut chars = format_code.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            // 引号字面量整段丢弃
+            '"' => {
+                for skipped in chars.by_ref() {
+                    if skipped == '"' {
+                        break;
+                    }
+                }
+            }
+            // 反斜杠转义的单个字面量（如 yyyy\-mm\-dd）丢弃
+            '\\' => {
+                chars.next();
+            }
+            // [括号] 段：颜色/条件（[Red]、[DBNum1]、[$-409]）丢弃；
+            // 经过时间记号（[h]、[m]、[mm]、[ss]）保留记号字母
+            '[' => {
+                let mut section = String::new();
+                for skipped in chars.by_ref() {
+                    if skipped == ']' {
+                        break;
+                    }
+                    section.push(skipped);
+                }
+                let lowered = section.to_ascii_lowercase();
+                if lowered.starts_with('h') || lowered.starts_with('m') || lowered.starts_with('s')
+                {
+                    cleaned.push_str(&lowered);
+                    has_elapsed_token = true;
+                }
+            }
+            _ => cleaned.push(ch),
+        }
+    }
+    let lowered = cleaned.to_ascii_lowercase();
+    // 单独的 m 是月份记号；时间记号要求 h/s（或保留的经过时间括号段）
+    let has_time = lowered.contains('h') || lowered.contains('s') || has_elapsed_token;
+    let has_date = lowered.contains('y') || lowered.contains('d');
+    has_time && !has_date
 }
 
 fn date_serial_for_1900_output(serial: f64, source_uses_1904_epoch: bool) -> Result<f64> {
@@ -1846,5 +2117,25 @@ mod tests {
         // 因此这里要求放行而不是报错。
         validate_static_print_values(&sheet, &[(1, 2, 3, 4)])
             .expect("Excel error cells must not block static print output");
+    }
+
+    #[test]
+    fn time_only_numfmt_detection() {
+        assert!(numfmt_is_time_only("hh:mm:ss"));
+        assert!(numfmt_is_time_only("h:mm"));
+        assert!(numfmt_is_time_only("mm:ss"));
+        assert!(numfmt_is_time_only("[h]:mm"));
+        assert!(numfmt_is_time_only("[mm]"));
+        // 引号/转义字面量不参与记号判断
+        assert!(numfmt_is_time_only("h\"时\"mm\"分\""));
+        // 日期/日期时间格式不做跨纪元豁免
+        assert!(!numfmt_is_time_only("yyyy\\-mm\\-dd"));
+        assert!(!numfmt_is_time_only("yyyy-mm-dd h:mm:ss"));
+        assert!(!numfmt_is_time_only("dd/mm/yyyy"));
+        assert!(!numfmt_is_time_only("m/d/yy h:mm"));
+        // 颜色/条件括号段不是时间记号；月份 mm 不是时间
+        assert!(!numfmt_is_time_only("[Red]mm"));
+        assert!(!numfmt_is_time_only("mm"));
+        assert!(!numfmt_is_time_only("0.00%"));
     }
 }

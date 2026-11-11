@@ -73,6 +73,24 @@ pub struct CellStyleInfo {
     pub align: Option<AlignInfo>,
 }
 
+/// Explicit row heights / column widths of one worksheet（窄范围 OOXML 读取）。
+///
+/// calamine 不暴露行高列宽；这里从 worksheet 部件读 `<col>` 与 `<row>`。
+///
+/// 列宽按 **openpyxl 的 `column_dimensions` 语义** 收录：以 `<col min=…>`
+/// 的最小列字母为键（分组列 `min..max` 只有 min 字母有键），未显式设置的
+/// 列由调用方按 openpyxl 的 `DEFAULT_COLUMN_WIDTH`（13.0）兜底。
+#[derive(Clone, Debug, Default)]
+pub struct SheetLayout {
+    /// 1-based column index（`<col min>`）-> width（字符宽度）
+    pub column_widths: BTreeMap<u32, f64>,
+    /// 1-based row index -> height（磅）
+    pub row_heights: BTreeMap<u32, f64>,
+}
+
+/// openpyxl `DEFAULT_COLUMN_WIDTH`：未显式设置列宽时的缺省值。
+pub const DEFAULT_COLUMN_WIDTH: f64 = 13.0;
+
 /// Per-workbook style tables parsed once and reused for every import.
 #[derive(Debug, Default)]
 pub struct SourceStyles {
@@ -164,6 +182,20 @@ impl SourceStyles {
         parse_cell_style_indices(text)
     }
 
+    /// Read explicit column widths / row heights of one worksheet.
+    pub fn sheet_layout(&self, path: &Path, sheet_name: &str) -> Result<SheetLayout> {
+        let part = self
+            .sheet_parts
+            .get(sheet_name)
+            .with_context(|| format!("worksheet {sheet_name:?} has no package part for layout"))?;
+        let file = std::fs::File::open(path)
+            .with_context(|| format!("open source workbook for layout: {}", path.display()))?;
+        let mut archive = zip::ZipArchive::new(file).context("reopen OOXML package")?;
+        let xml = read_zip_part(&mut archive, part)?;
+        let text = std::str::from_utf8(&xml).context("worksheet XML must be UTF-8")?;
+        Ok(parse_sheet_layout(text))
+    }
+
     /// Resolve one style index into a hashable descriptor.
     pub fn descriptor(&self, style_index: u32) -> CellStyleInfo {
         let Some(xf) = self.xfs.get(style_index as usize) else {
@@ -177,11 +209,10 @@ impl SourceStyles {
         } else {
             None
         };
-        let font = if xf.font_id != 0 {
-            self.font_at(xf.font_id)
-        } else {
-            None
-        };
+        // fontId=0 是工作簿默认字体（Excel 中文环境烘焙的源里是宋体），
+        // 是真实存在的字体条目；与 numFmtId=0（General）不同，不能当作「无字体」跳过，
+        // 否则带样式单元格会回落到 rust_xlsxwriter 的 Calibri，与 openpyxl 引擎不一致。
+        let font = self.font_at(xf.font_id);
         let fill = if xf.fill_id != 0 {
             self.fill_at(xf.fill_id)
         } else {
@@ -579,6 +610,59 @@ fn parse_cell_style_indices(xml: &str) -> Result<BTreeMap<String, u32>> {
     Ok(out)
 }
 
+/// 解析 worksheet 部件里显式设置的列宽（customWidth=1 的 `<col>`，
+/// 展开 min..max 区间）与行高（customHeight=1 的 `<row>`）。
+fn parse_sheet_layout(xml: &str) -> SheetLayout {
+    let mut layout = SheetLayout::default();
+    let Ok(doc) = roxmltree::Document::parse(xml) else {
+        return layout;
+    };
+    let root = doc.root_element();
+    // <cols><col min="1" max="3" width="12" customWidth="1"/></cols>
+    for cols in root
+        .children()
+        .filter(|node| node.is_element() && node.tag_name().name() == "cols")
+    {
+        for col in cols
+            .children()
+            .filter(|node| node.is_element() && node.tag_name().name() == "col")
+        {
+            // openpyxl 读列宽只看 width 属性（customWidth 可能被 Excel 省略），
+            // 因此这里同样只要有 width 就收录。
+            let Some(width) = attr(&col, "width").and_then(|v| v.parse::<f64>().ok()) else {
+                continue;
+            };
+            let min = attr(&col, "min")
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            if min == 0 {
+                continue;
+            }
+            // 与 openpyxl `column_dimensions` 一致：分组列只以 min 列字母为键。
+            layout.column_widths.insert(min, width);
+        }
+    }
+    // <row r="5" ht="30" customHeight="1">：openpyxl 对带 ht 的行都建
+    // row_dimensions 条目，因此只要有 ht 就收录。
+    for row in root
+        .children()
+        .filter(|node| node.is_element() && node.tag_name().name() == "sheetData")
+        .flat_map(|sheet_data| {
+            sheet_data
+                .children()
+                .filter(|node| node.is_element() && node.tag_name().name() == "row")
+        })
+    {
+        if let (Some(index), Some(height)) = (
+            attr(&row, "r").and_then(|v| v.parse::<u32>().ok()),
+            attr(&row, "ht").and_then(|v| v.parse::<f64>().ok()),
+        ) {
+            layout.row_heights.insert(index, height);
+        }
+    }
+    layout
+}
+
 fn resolve_sheet_parts(workbook_xml: &str, rels_xml: &str) -> Result<BTreeMap<String, String>> {
     let wb_doc = roxmltree::Document::parse(workbook_xml).context("parse workbook.xml")?;
     let rels_doc = roxmltree::Document::parse(rels_xml).context("parse workbook rels")?;
@@ -756,5 +840,34 @@ mod tests {
     fn normalize_rgb_handles_six_and_eight_digit_forms() {
         assert_eq!(normalize_rgb("#FF0000"), "FFFF0000");
         assert_eq!(normalize_rgb("FFFF0000"), "FFFF0000");
+    }
+
+    /// 回归：Excel 烘焙源里 fontId=0（工作簿默认字体，中文环境为宋体）
+    /// 必须映射为真实字体，而不是回落到 rust_xlsxwriter 默认的 Calibri。
+    /// 夹具由 scripts/gen_wide_dates_combo.py + scripts/bake_formula_cache.py
+    /// 生成（benchmark/rusttools-3-1-dual-engine/fixtures/，不入库）；
+    /// 夹具不存在时跳过，不阻塞其他环境。
+    #[test]
+    fn excel_baked_default_font_maps_to_real_font() {
+        let path = std::path::Path::new(
+            "C:/Users/AZI/Desktop/VibeCode/Rust-Tools/benchmark/rusttools-3-1-dual-engine/fixtures/src_dates1900.xlsx",
+        );
+        if !path.exists() {
+            return;
+        }
+        let styles = SourceStyles::load(path).expect("styles load");
+        let indices = styles.cell_style_indices(path, "Dates").expect("indices");
+        // B2 s=2：numFmtId=177（自定义日期格式）+ fontId=0（宋体）
+        let descriptor = styles.descriptor(indices["B2"]);
+        assert_eq!(descriptor.num_fmt.as_deref(), Some("yyyy\\-mm\\-dd"));
+        let font = descriptor.font.expect("fontId=0 must resolve to font 0");
+        assert_eq!(font.name.as_deref(), Some("宋体"));
+        assert_eq!(font.size.as_deref(), Some("11"));
+        // A1 s=1：fontId=1（宋体加粗）不受影响
+        let header = styles.descriptor(indices["A1"]);
+        assert_eq!(
+            header.font.and_then(|font| font.name).as_deref(),
+            Some("宋体")
+        );
     }
 }

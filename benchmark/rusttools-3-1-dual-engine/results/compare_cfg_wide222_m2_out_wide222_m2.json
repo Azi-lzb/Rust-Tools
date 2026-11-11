@@ -1,0 +1,136 @@
+{
+ "openpyxl": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_wide222_m2.xlsx",
+ "rust": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\rusttools-3-1-dual-engine\\fixtures\\out_wide222_m2_Rust.xlsx",
+ "value_diff_count": 0,
+ "style_diff_count": 20,
+ "value_diffs": [],
+ "style_diffs": [
+  {
+   "section": "col_widths",
+   "key": "col1",
+   "a": 11.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col2",
+   "a": 5.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col3",
+   "a": 12.0,
+   "b": 11.4258
+  },
+  {
+   "section": "col_widths",
+   "key": "col4",
+   "a": 9.0,
+   "b": 17.1406
+  },
+  {
+   "section": "col_widths",
+   "key": "col5",
+   "a": 12.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col6",
+   "a": 8.0,
+   "b": 13.2852
+  },
+  {
+   "section": "col_widths",
+   "key": "col7",
+   "a": 8.0,
+   "b": 10.4258
+  },
+  {
+   "section": "col_widths",
+   "key": "col8",
+   "a": 16.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col9",
+   "a": 11.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col10",
+   "a": 5.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col11",
+   "a": 12.0,
+   "b": 11.4258
+  },
+  {
+   "section": "col_widths",
+   "key": "col12",
+   "a": 9.0,
+   "b": 17.1406
+  },
+  {
+   "section": "col_widths",
+   "key": "col13",
+   "a": 12.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col14",
+   "a": 8.0,
+   "b": 13.2852
+  },
+  {
+   "section": "col_widths",
+   "key": "col15",
+   "a": 8.0,
+   "b": 10.4258
+  },
+  {
+   "section": "col_widths",
+   "key": "col16",
+   "a": 16.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col17",
+   "a": 11.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col18",
+   "a": 5.0,
+   "b": 18.0
+  },
+  {
+   "section": "col_widths",
+   "key": "col19",
+   "a": 12.0,
+   "b": 11.4258
+  },
+  {
+   "section": "col_widths",
+   "key": "col20",
+   "a": 9.0,
+   "b": 17.1406
+  }
+ ],
+ "setup_diffs": [
+  {
+   "key": "Printed",
+   "a": "portrait",
+   "b": "landscape"
+  }
+ ]
+}

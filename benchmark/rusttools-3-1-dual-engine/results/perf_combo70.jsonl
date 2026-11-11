@@ -1,0 +1,10 @@
+{"config": "cfg_combo70.xlsx", "engine": "rust", "rep": 1, "exit": 0, "wall_ms": 1099, "cpu_seconds": 0.531, "peak_working_set_mb": 18.2}
+{"config": "cfg_combo70.xlsx", "engine": "openpyxl", "rep": 1, "exit": 0, "wall_ms": 14725, "cpu_seconds": 6.703, "peak_working_set_mb": 41.2}
+{"config": "cfg_combo70.xlsx", "engine": "rust", "rep": 1, "exit": 0, "wall_ms": 1384, "cpu_seconds": 0.594, "peak_working_set_mb": 17.8}
+{"config": "cfg_combo70.xlsx", "engine": "openpyxl", "rep": 1, "exit": 0, "wall_ms": 11034, "cpu_seconds": 7.297, "peak_working_set_mb": 41.1}
+{"config": "cfg_combo70.xlsx", "engine": "rust", "rep": 1, "exit": 0, "wall_ms": 1094, "cpu_seconds": 0.656, "peak_working_set_mb": 18.2}
+{"config": "cfg_combo70.xlsx", "engine": "openpyxl", "rep": 1, "exit": 0, "wall_ms": 9906, "cpu_seconds": 6.453, "peak_working_set_mb": 41.3}
+{"config": "cfg_combo70.xlsx", "engine": "rust", "rep": 1, "exit": 0, "wall_ms": 1098, "cpu_seconds": 0.578, "peak_working_set_mb": 18.1}
+{"config": "cfg_combo70.xlsx", "engine": "openpyxl", "rep": 1, "exit": 0, "wall_ms": 9901, "cpu_seconds": 6.438, "peak_working_set_mb": 41.2}
+{"config": "cfg_combo70.xlsx", "engine": "rust", "rep": 1, "exit": 0, "wall_ms": 1102, "cpu_seconds": 0.703, "peak_working_set_mb": 18.1}
+{"config": "cfg_combo70.xlsx", "engine": "openpyxl", "rep": 1, "exit": 0, "wall_ms": 9661, "cpu_seconds": 6.344, "peak_working_set_mb": 41.2}
