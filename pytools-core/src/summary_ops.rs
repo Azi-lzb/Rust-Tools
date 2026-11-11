@@ -5541,13 +5541,15 @@ fn is_xlsx_or_xlsm(path: &Path) -> bool {
 
 pub(crate) fn excel_error_value(reader_value: &str) -> Result<&'static str> {
     match reader_value {
-        "Div0" => Ok("#DIV/0!"),
-        "NA" => Ok("#N/A"),
-        "Name" => Ok("#NAME?"),
-        "Null" => Ok("#NULL!"),
-        "Num" => Ok("#NUM!"),
-        "Ref" => Ok("#REF!"),
-        "Value" => Ok("#VALUE!"),
+        // excel_reader 自 2026-11 起改用 calamine Display 输出规范文本
+        // （#DIV/0! 等）；旧数据/旧夹具仍是 Debug 变体名（Div0 等），两种都收。
+        "Div0" | "#DIV/0!" => Ok("#DIV/0!"),
+        "NA" | "#N/A" => Ok("#N/A"),
+        "Name" | "#NAME?" => Ok("#NAME?"),
+        "Null" | "#NULL!" => Ok("#NULL!"),
+        "Num" | "#NUM!" => Ok("#NUM!"),
+        "Ref" | "#REF!" => Ok("#REF!"),
+        "Value" | "#VALUE!" => Ok("#VALUE!"),
         other => anyhow::bail!("unsupported Calamine error value {other:?} in summary"),
     }
 }

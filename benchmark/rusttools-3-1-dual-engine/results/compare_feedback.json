@@ -1,0 +1,40 @@
+{
+ "openpyxl": "fixtures\\out_feedback.xlsx",
+ "rust": "fixtures\\out_feedback_Rust.xlsx",
+ "value_diff_count": 0,
+ "style_diff_count": 5,
+ "value_diffs": [],
+ "style_diffs": [
+  {
+   "section": "row_heights",
+   "key": "Printed!1",
+   "a": null,
+   "b": 13.5
+  },
+  {
+   "section": "row_heights",
+   "key": "Printed!3",
+   "a": null,
+   "b": 13.5
+  },
+  {
+   "section": "row_heights",
+   "key": "Printed!7",
+   "a": null,
+   "b": 13.5
+  },
+  {
+   "section": "row_heights",
+   "key": "Printed!9",
+   "a": null,
+   "b": 13.5
+  },
+  {
+   "section": "row_heights",
+   "key": "Printed!11",
+   "a": null,
+   "b": 13.5
+  }
+ ],
+ "setup_diffs": []
+}

@@ -204,14 +204,16 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         .iter()
         .find(|sheet| sheet.name == "汇总")
         .context("summary sheet missing")?;
+    // excel_reader 自 2026-11 起用 calamine Display 输出规范错误文本
+    // （#DIV/0! 等），不再是 Debug 变体名（Div0 等）。
     let expected_errors = [
-        ("D2", "Div0"),
-        ("E2", "NA"),
-        ("F2", "Name"),
-        ("G2", "Null"),
-        ("H2", "Num"),
-        ("I2", "Ref"),
-        ("J2", "Value"),
+        ("D2", "#DIV/0!"),
+        ("E2", "#N/A"),
+        ("F2", "#NAME?"),
+        ("G2", "#NULL!"),
+        ("H2", "#NUM!"),
+        ("I2", "#REF!"),
+        ("J2", "#VALUE!"),
     ];
     for (address, error) in expected_errors {
         assert_eq!(

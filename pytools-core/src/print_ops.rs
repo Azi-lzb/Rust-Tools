@@ -60,6 +60,11 @@ struct StaticPrintMerge {
     last_row: usize,
     last_column: usize,
     text: String,
+    /// 锚点为数值/日期序列时的原始数值（openpyxl 引擎先写值后合并，
+    /// 数值锚点保持数值类型；文本化会导致 Excel 显示全精度 + 绿三角）。
+    numeric: Option<f64>,
+    /// 锚点为布尔值时的原始布尔。
+    boolean: Option<bool>,
     /// 锚点单元格样式（若源单元格带样式）。
     format: Option<rust_xlsxwriter::Format>,
 }
@@ -429,6 +434,11 @@ pub fn build_config_print_plan(task: &PrintTask) -> Result<PrintPlanReport> {
 /// each workbook is produced as a new file while keeping cross-workbook ranges
 /// explicit in ExcelEditPlan.
 pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanReport>> {
+    // 空区域任务的样式边界读取缓存（workbook -> SourceStyles）。
+    let mut style_sources = std::collections::HashMap::<
+        PathBuf,
+        std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>,
+    >::new();
     let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&PrintTask>>::new();
     for task in tasks.iter().filter(|task| task.enabled) {
         let target = task
@@ -540,7 +550,33 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             }
             seen_target_sheets.insert(task.target_ws.clone());
             let ranges = if task.source_ranges.trim().is_empty() {
-                used_bounds(sheet).into_iter().collect()
+                // 空区域 = openpyxl 的 used_range（calculate_dimension）语义：
+                // 有值/公式单元格 **和空样式格**（边框/填充/数字格式）都计入
+                // 边界——真实模板里 C1 的 mm-dd-yy 空样式格决定列范围。
+                // 这里把 OOXML cell s 索引的边界并入，与 Openpyxl 引擎一致。
+                let styled_bounds = task.source_wb.as_ref().and_then(|source_workbook| {
+                    let styles = style_sources
+                        .entry(source_workbook.clone())
+                        .or_insert_with(|| {
+                            std::sync::Arc::new(
+                                crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
+                                    .unwrap_or_else(|error| {
+                                        eprintln!("[3-1] 空区域样式边界读取失败：{error}");
+                                        crate::ooxml_cell_styles::SourceStyles::default()
+                                    }),
+                            )
+                        })
+                        .clone();
+                    styles
+                        .cell_style_indices(source_workbook, &task.source_ws)
+                        .ok()
+                        .and_then(|indices| {
+                            bounds_from_addresses(indices.keys().map(|address| address.as_str()))
+                        })
+                });
+                union_bounds(used_bounds(sheet), styled_bounds)
+                    .into_iter()
+                    .collect()
             } else {
                 parse_ranges(&task.source_ranges)?
             };
@@ -811,6 +847,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut layout_column_widths = BTreeMap::<String, BTreeMap<u32, f64>>::new();
     let mut source_layouts =
         HashMap::<(PathBuf, String), std::sync::Arc<crate::ooxml_cell_styles::SheetLayout>>::new();
+    // 目标 sheet -> 源表 defaultRowHeight（输出表默认行高带源值）。
+    let mut plan_sheet_default_row_heights = BTreeMap::<String, f64>::new();
     let mut imported_ranges = 0usize;
     let mut formulas_materialized = 0usize;
 
@@ -908,6 +946,11 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             )
                         })
                         .clone();
+                    // 目标表默认行高带源值（多任务同目标时后写覆盖，与
+                    // openpyxl 引擎逐任务建 sheet 的最终态一致）。
+                    if let Some(default_height) = layout.default_row_height {
+                        plan_sheet_default_row_heights.insert(target_sheet.clone(), default_height);
+                    }
                     if *copy_row_heights {
                         for (row, height) in &layout.row_heights {
                             if *row < source_first.0 as u32 || *row > source_last.0 as u32 {
@@ -991,10 +1034,48 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     }
                     let source_top_left = a1_address(merge_first_row, merge_first_column);
                     // 合并区必须整块保留（原 Python 复制所有完全落在区域内的合并）。
-                    // 锚点可能不是字符串（数字/日期），按显示文本取锚点值。
-                    let text = source
-                        .values
-                        .get(&source_top_left)
+                    // 锚点值类型与 openpyxl 引擎一致：数值/日期序列/布尔写原始
+                    // 类型（openpyxl 先写值后 merge，数值锚点保持数值），
+                    // 文本/错误值写显示文本。
+                    let anchor_value = source.values.get(&source_top_left);
+                    let anchor_number = anchor_value.and_then(|value| {
+                        let value_type = value.get("type").and_then(serde_json::Value::as_str);
+                        let number = value.get("value").and_then(serde_json::Value::as_f64);
+                        match value_type {
+                            Some("number" | "integer") => number,
+                            Some("datetime_serial") => {
+                                // 锚点日期与单元格同规则转换（1904 源平移到
+                                // 1900 输出；纯时间值不做平移）。
+                                number.and_then(|serial| {
+                                    let source_uses_1904 = source_uses_1904_epoch
+                                        .get(source_workbook)
+                                        .copied()
+                                        .unwrap_or(false);
+                                    if source_uses_1904
+                                        && serial < 1.0
+                                        && cell_style_indices
+                                            .get(&source_top_left)
+                                            .map(|index| source_style_map.descriptor(*index))
+                                            .and_then(|descriptor| descriptor.num_fmt)
+                                            .as_deref()
+                                            .map(numfmt_is_time_only)
+                                            .unwrap_or(false)
+                                    {
+                                        Some(serial)
+                                    } else {
+                                        date_serial_for_1900_output(serial, source_uses_1904).ok()
+                                    }
+                                })
+                            }
+                            _ => None,
+                        }
+                    });
+                    let anchor_boolean = anchor_value.and_then(|value| {
+                        (value.get("type").and_then(serde_json::Value::as_str) == Some("boolean"))
+                            .then(|| value.get("value").and_then(serde_json::Value::as_bool))
+                            .flatten()
+                    });
+                    let text = anchor_value
                         .and_then(|value| value.get("value"))
                         .map(display_text_of_value)
                         .unwrap_or_default();
@@ -1010,12 +1091,24 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             covered_by_string_merge.insert((row, column));
                         }
                     }
+                    // 零值隐藏对合并锚点同样生效（openpyxl 引擎把锚点值置空）。
+                    let (anchor_number, anchor_boolean, text) = if *hide_zero
+                        && anchor_value
+                            .map(static_print_is_numeric_zero)
+                            .unwrap_or(false)
+                    {
+                        (None, None, String::new())
+                    } else {
+                        (anchor_number, anchor_boolean, text)
+                    };
                     target_merges.push(StaticPrintMerge {
                         first_row: target_first_row - 1,
                         first_column: target_first_column - 1,
                         last_row: target_last_row - 1,
                         last_column: target_last_column - 1,
                         text: text.to_owned(),
+                        numeric: anchor_number,
+                        boolean: anchor_boolean,
                         format: format_of(&source_top_left, &mut format_cache),
                     });
                 }
@@ -1053,6 +1146,21 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         }
                         let address = a1_address(row, column);
                         let Some(value) = source.values.get(&address) else {
+                            // 源表无值但有样式（边框/填充/数字格式等）的空单元格：
+                            // openpyxl 引擎按 has_style 复制（实测真实模板 C1 的
+                            // mm-dd-yy 日期格式格），这里同样输出空白格保留样式；
+                            // 无样式（descriptor 为默认）则跳过，与 openpyxl 一致。
+                            if let Some(format) = format_of(&address, &mut format_cache) {
+                                cells_by_sheet
+                                    .entry(target_sheet.clone())
+                                    .or_default()
+                                    .push(StaticPrintCell {
+                                        row: target_row - 1 + (row - source_first.0),
+                                        column: target_column - 1 + (column - source_first.1),
+                                        value: serde_json::json!({"type": "blank", "value": null}),
+                                        format: Some(format),
+                                    });
+                            }
                             continue;
                         };
                         // 原 PyTools print_310.py 不拒绝错误值，按显示文本输出。
@@ -1178,16 +1286,42 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let target_write_started = std::time::Instant::now();
     for name in &worksheet_names {
         let worksheet = workbook.worksheet_from_name(name)?;
+        // 输出表默认行高带源值：rust_xlsxwriter 对等于其默认（15.0）的
+        // 显式行高会省略 ht，先把默认改成源表 sheetFormatPr 的值
+        // （如 13.5），显式行高（15.0）即可正常落盘。
+        if let Some(default_height) = plan_sheet_default_row_heights.get(name) {
+            worksheet.set_default_row_height(*default_height);
+        }
         if let Some(merges) = merges_by_sheet.get(name) {
+            let default_format = Format::new();
             for merge in merges {
+                let format = merge.format.as_ref().unwrap_or(&default_format);
+                let first_row = to_row(merge.first_row)?;
+                let first_column = to_column(merge.first_column)?;
+                let last_row = to_row(merge.last_row)?;
+                let last_column = to_column(merge.last_column)?;
+                // merge_range 只支持字符串锚点；openpyxl 引擎先写值后合并，
+                // 数值/日期序列/布尔锚点保持原始类型。这里先注册合并区
+                // （写显示文本 + padding blank），再按锚点类型用原始类型
+                // 覆盖锚点格。
                 worksheet.merge_range(
-                    to_row(merge.first_row)?,
-                    to_column(merge.first_column)?,
-                    to_row(merge.last_row)?,
-                    to_column(merge.last_column)?,
+                    first_row,
+                    first_column,
+                    last_row,
+                    last_column,
                     &merge.text,
-                    merge.format.as_ref().unwrap_or(&Format::new()),
+                    format,
                 )?;
+                if let Some(number) = merge.numeric {
+                    worksheet.write_number_with_format(first_row, first_column, number, format)?;
+                } else if let Some(boolean) = merge.boolean {
+                    worksheet.write_boolean_with_format(
+                        first_row,
+                        first_column,
+                        boolean,
+                        format,
+                    )?;
+                }
             }
         }
         if let Some(cells) = cells_by_sheet.get(name) {
@@ -1386,12 +1520,29 @@ fn set_column_width_exact(
         "static print column width {width} is out of range"
     );
     let target = target as u64;
-    // 反解像素：floor(px*256/7) == target，px 落在 [target*7/256, (target+1)*7/256)。
+    // 反解像素：floor(px*256/7) == target 时可精确还原；无法精确表达的
+    // 宽度（如 18.625，其 256 化目标不是 7 的可达值）选渲染像素一致的
+    // 最近像素（Excel char→px 公式下与 openpyxl 引擎同像素显示）。
     let low = (target * 7).div_ceil(256);
     let high = ((target + 1) * 7).div_ceil(256) - 1;
-    let pixels = (low..=high).find(|candidate| (*candidate * 256 / 7) == target);
+    let neighborhood = low.saturating_sub(2)..=high + 2;
+    let pixels = neighborhood
+        .clone()
+        .find(|candidate| (*candidate * 256 / 7) == target)
+        .or_else(|| {
+            // 无法精确表达时的决胜规则：**Excel 渲染像素**与源宽渲染像素
+            // 一致（char→px：trunc((k+18)*7/256)，k = px*256/7 的商）。
+            // 单看 char 差值会选中渲染多 1px 的候选（实测 25.5：char 最近
+            // 是 179→179px，但源 25.5 渲染 178px，正确解是 px=178）。
+            let source_render_px = ((target + 18) * 7) / 256;
+            neighborhood.min_by_key(|candidate| {
+                let quantized = (*candidate * 256 / 7) as i64;
+                let render_px = ((quantized + 18) * 7 / 256) as i64;
+                (render_px - source_render_px as i64).abs()
+            })
+        });
     let Some(pixels) = pixels else {
-        // 目标宽度无法用像素精确表达时退回字符宽接口（存在 0.71 的取整差）。
+        // 目标宽度无法用像素近似表达时退回字符宽接口（存在 0.71 的取整差）。
         worksheet.set_column_width(
             u16::try_from(column_index.saturating_sub(1))
                 .context("static print column width index is out of range")?,
@@ -1469,7 +1620,10 @@ fn build_writer_format(
             let align_value = match horizontal.as_str() {
                 "left" => FormatAlign::Left,
                 "right" => FormatAlign::Right,
-                "center" | "centerContinuous" => FormatAlign::CenterAcross,
+                "center" => FormatAlign::Center,
+                // 跨列居中（centerContinuous）是独立的对齐语义，不能与普通
+                // 居中合并——实测真实模板 3.6 万个居中格被错误升级为跨列居中。
+                "centerContinuous" => FormatAlign::CenterAcross,
                 "fill" => FormatAlign::Fill,
                 "justify" => FormatAlign::Justify,
                 "distributed" => FormatAlign::Distributed,
@@ -1877,11 +2031,24 @@ fn number_after(text: &str, key: &str) -> Option<usize> {
     digits.parse().ok()
 }
 fn used_bounds(sheet: &SheetDump) -> Option<(usize, usize, usize, usize)> {
+    bounds_from_addresses(
+        sheet
+            .values
+            .keys()
+            .chain(sheet.formulas.keys())
+            .map(|address| address.as_str()),
+    )
+}
+
+/// 由 A1 地址集合推导边界（与 `used_bounds` 同口径）。
+fn bounds_from_addresses<'a>(
+    addresses: impl Iterator<Item = &'a str>,
+) -> Option<(usize, usize, usize, usize)> {
     let mut min_r = usize::MAX;
     let mut min_c = usize::MAX;
     let mut max_r = 0;
     let mut max_c = 0;
-    for address in sheet.values.keys().chain(sheet.formulas.keys()) {
+    for address in addresses {
         if let Some((r, c)) = parse_a1(address) {
             min_r = min_r.min(r);
             min_c = min_c.min(c);
@@ -1890,6 +2057,17 @@ fn used_bounds(sheet: &SheetDump) -> Option<(usize, usize, usize, usize)> {
         }
     }
     (max_r > 0).then_some((min_r, min_c, max_r, max_c))
+}
+
+/// 两个边界矩形的并集（任一为 None 时取另一个）。
+fn union_bounds(
+    a: Option<(usize, usize, usize, usize)>,
+    b: Option<(usize, usize, usize, usize)>,
+) -> Option<(usize, usize, usize, usize)> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some((a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))),
+        (a, b) => a.or(b),
+    }
 }
 fn value_to_text(value: &serde_json::Value) -> String {
     match value.get("type").and_then(serde_json::Value::as_str) {

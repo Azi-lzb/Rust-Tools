@@ -487,7 +487,7 @@ fn summary_comments_cli_preserves_excel_errors_and_textualizes_unknown_error_tok
             .with_context(|| format!("summary output worksheet {sheet_name:?} is missing"))?;
         assert_eq!(
             sheet.values.get("D2"),
-            Some(&serde_json::json!({"type":"error", "value":"Div0"})),
+            Some(&serde_json::json!({"type":"error", "value":"#DIV/0!"})),
             "known Excel errors must remain error-typed on {sheet_name}"
         );
         assert_eq!(

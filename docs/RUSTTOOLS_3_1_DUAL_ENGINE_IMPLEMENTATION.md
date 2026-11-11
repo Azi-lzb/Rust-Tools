@@ -105,6 +105,23 @@ rust_xlsxwriter 0.98.2 通过 `insert_note(Note::new(text))` 支持批注写入�
 | 6 | 未设列宽缺省不一致 | openpyxl 对未显式设置的列取 `DEFAULT_COLUMN_WIDTH=13.0` 并落盘；分组列（`min..max`）只有 min 字母命中 | 列宽表按 `<col min>` 单键收录；逐列回落到 13.0，与 openpyxl 引擎逐列语义一致 |
 | 7 | 源行高/列宽未复制 | calamine 不暴露行高列宽，原实现只复制了值与样式 | 新增 `SheetLayout`（窄读 `<col>`/`<row>`），mode 1/2 按 openpyxl 语义复制 |
 
+## 10.1 真实模板人工测试反馈的修正（2026-11-11 第二轮）
+
+用户用真实模板（`！省信贷收支一批（简表+排名）20260421.xlsx`）人工测试后反馈 4 个问题，
+逐格取证定位并修复（`测试用例/3/` 保留了双引擎输出与取证脚本）：
+
+| # | 用户反馈 | 根因 | 修正 |
+| --- | --- | --- | --- |
+| 8 | 空单元格没有框线/填充 | writer 对无值单元格直接跳过；openpyxl 引擎按 `has_style` 复制样式格（真实模板 C1 的 mm-dd-yy 空样式格） | 无值但有样式 → 输出 `blank` 格带格式；无样式仍跳过 |
+| 9 | 「没有居中」 | `"center"` 被映射成 `FormatAlign::CenterAcross`（跨列居中，XML `centerContinuous`）——实测 3.6 万个居中格被错误升级 | `"center"` → `Center`，`"centerContinuous"` → `CenterAcross` 分开映射 |
+| 10 | 错误值显示 `Div0` | excel_reader 用 `format!("{value:?}")`（Debug=变体名） | 改 `value.to_string()`（Display=`#DIV/0!`）；`summary_ops::excel_error_value` 同时接受两种形态（旧数据兼容） |
+| 11 | 部分数值变文本（绿三角，显示全精度） | 数值锚点的**合并区**经 `display_text_of_value` 文本化写 `merge_range`（真实模板 C40:D40 等 6 处）；openpyxl 引擎先写值后合并保持数值 | `StaticPrintMerge` 增加 `numeric`/`boolean` 锚点：先 `merge_range` 注册，再按锚点类型用原始类型覆盖锚点格；hide_zero 对锚点同样生效 |
+| 12 | 行高 ht=15 丢失 | rust_xlsxwriter 对等于其默认行高（15.0）的显式行高**省略 ht 属性**；源表 defaultRowHeight=13.5 | `SheetLayout` 带源 `defaultRowHeight`，输出表先 `set_default_row_height(源值)`，显式行高（15.0≠13.5）正常落盘 |
+| 13 | 列宽 18.625/25.5 漂移 +0.66 | 这些宽度**无法用像素精确反算**（1/256 量化 × /7 分母），旧 fallback 走字符宽接口多 5px | fallback 决胜改为「Excel 渲染像素与源一致」（char→px：`trunc((k+18)*7/256)`），像素级显示等价 |
+
+另：数值差异（如 `163.5986201078` vs `163.59862010780002`）为**openpyxl 写出 16 位有损文本**、
+Rust 全精度复制源缓存文本——Excel 显示由数字格式决定，两引擎渲染相同，非缺陷。
+
 ## 11. 已知限制（Rust 入口）
 
 1. XLSM 输出明确拒绝（提示走 Openpyxl 入口）。

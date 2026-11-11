@@ -52,7 +52,9 @@ impl From<&Data> for CellValue {
             Data::DateTime(value) => Self::DateTimeSerial(value.as_f64()),
             Data::DateTimeIso(value) => Self::DateTimeIso(value.clone()),
             Data::DurationIso(value) => Self::DurationIso(value.clone()),
-            Data::Error(value) => Self::Error(format!("{value:?}")),
+            // 错误值用 Display（#DIV/0!、#REF! 等规范文本，与源单元格显示
+            // 一致）；Debug 是变体名（Div0），曾被打印输出成 "Div0"。
+            Data::Error(value) => Self::Error(value.to_string()),
         }
     }
 }

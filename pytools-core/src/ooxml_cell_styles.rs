@@ -86,6 +86,12 @@ pub struct SheetLayout {
     pub column_widths: BTreeMap<u32, f64>,
     /// 1-based row index -> height（磅）
     pub row_heights: BTreeMap<u32, f64>,
+    /// 源表 sheetFormatPr 的 defaultRowHeight（磅）。
+    ///
+    /// rust_xlsxwriter 对等于其默认值（15.0）的显式行高会**省略 ht 属性**，
+    /// 导致 openpyxl 读回 None（实测源表行 2 ht=15 丢失）。把输出表的
+    /// 默认行高设为源值后，显式行高（如 15.0 ≠ 13.5）即可正常落盘。
+    pub default_row_height: Option<f64>,
 }
 
 /// openpyxl `DEFAULT_COLUMN_WIDTH`：未显式设置列宽时的缺省值。
@@ -565,7 +571,9 @@ fn builtin_num_fmt(id: u32) -> Option<String> {
         11 => "0.00E+00",
         12 => "# ?/?",
         13 => "# ??/??",
-        14 => "yyyy-m-d",
+        // id 14 的短日期：openpyxl 引擎写出的文本是 "mm-dd-yy"（Excel 按
+        // 区域渲染两者等价）；对齐 openpyxl 的文本写法保持双引擎一致。
+        14 => "mm-dd-yy",
         15 => "d-mmm-yy",
         16 => "d-mmm",
         17 => "mmm-yy",
@@ -618,6 +626,12 @@ fn parse_sheet_layout(xml: &str) -> SheetLayout {
         return layout;
     };
     let root = doc.root_element();
+    // <sheetFormatPr defaultColWidth="9" defaultRowHeight="13.5"/>
+    layout.default_row_height = root
+        .children()
+        .find(|node| node.is_element() && node.tag_name().name() == "sheetFormatPr")
+        .and_then(|node| attr(&node, "defaultRowHeight"))
+        .and_then(|value| value.parse::<f64>().ok());
     // <cols><col min="1" max="3" width="12" customWidth="1"/></cols>
     for cols in root
         .children()
@@ -823,7 +837,7 @@ mod tests {
     #[test]
     fn builtin_num_fmt_covers_common_report_codes() {
         assert_eq!(builtin_num_fmt(9).as_deref(), Some("0%"));
-        assert_eq!(builtin_num_fmt(14).as_deref(), Some("yyyy-m-d"));
+        assert_eq!(builtin_num_fmt(14).as_deref(), Some("mm-dd-yy"));
         assert_eq!(builtin_num_fmt(39).as_deref(), Some("#,##0.00;(#,##0.00)"));
         assert_eq!(builtin_num_fmt(49).as_deref(), Some("@"));
         assert_eq!(builtin_num_fmt(200), None);
@@ -847,6 +861,7 @@ mod tests {
     /// 夹具由 scripts/gen_wide_dates_combo.py + scripts/bake_formula_cache.py
     /// 生成（benchmark/rusttools-3-1-dual-engine/fixtures/，不入库）；
     /// 夹具不存在时跳过，不阻塞其他环境。
+
     #[test]
     fn excel_baked_default_font_maps_to_real_font() {
         let path = std::path::Path::new(
