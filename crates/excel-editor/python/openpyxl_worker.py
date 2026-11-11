@@ -2801,7 +2801,14 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         raise WorkerError("worker_unavailable", "openpyxl import failed: " + str(error), unsupported=True)
     try:
         workbook = openpyxl.load_workbook(str(input_path), data_only=False, keep_links=True, read_only=False)
-        cached_workbook = openpyxl.load_workbook(str(input_path), data_only=True, keep_links=True, read_only=False)
+        # data_only 视图（既有公式的缓存值）只被 copy_range（同簿复制取缓存）
+        # 使用；纯跨簿导入的计划跳过这一次整本加载，省去对大目标簿的一次
+        # 完整读取。语义不变：没有 copy_range 时该视图本来就不会被读取。
+        cached_workbook = (
+            openpyxl.load_workbook(str(input_path), data_only=True, keep_links=True, read_only=False)
+            if any(operation.get("operation") == "copy_range" for operation in operations)
+            else None
+        )
     except Exception as error:
         raise WorkerError("workbook_open_failed", str(error))
     try:
@@ -2838,7 +2845,8 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
             raise WorkerError("save_failed", str(error))
     finally:
         workbook.close()
-        cached_workbook.close()
+        if cached_workbook is not None:
+            cached_workbook.close()
     _preserve_significant_string_whitespace(output_path)
     _materialize_tracked_cells(output_path, tracked_cells)
     _materialize_explicit_style_attributes(output_path)
