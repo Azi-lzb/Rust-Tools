@@ -351,6 +351,10 @@ pub fn load_timeline_rules(config_path: impl AsRef<Path>) -> Result<Vec<Timeline
             set_items,
             set_parse_error,
             target_dedup_cols: split(&field_text(sheet, &headers, row, "目标去重列")),
+            // 目标表头匹配模式：空/未配置 = 宽松（按列名映射，对齐旧工具
+            // 宽表行为：前缀列存在性检查 + 按列头文本落位 + 新列扩展目标）；
+            // “严格” = 列数与逐列文本全等（列数或文本不同即拒绝写入）。
+            target_header_match: field_text(sheet, &headers, row, "目标表头匹配"),
             output_row_no: truthy(&field_text(sheet, &headers, row, "是否输出行序号")),
         });
     }
@@ -1222,6 +1226,9 @@ pub struct TimelineRule {
     pub set_items: Vec<(String, String)>,
     pub set_parse_error: String,
     pub target_dedup_cols: Vec<String>,
+    /// 目标表头匹配模式：""/"宽松" = 按列名映射（旧工具语义）；
+    /// "严格" = 列数与逐列文本全等。
+    pub target_header_match: String,
     pub output_row_no: bool,
 }
 

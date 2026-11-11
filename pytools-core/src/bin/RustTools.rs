@@ -16338,6 +16338,18 @@ struct WideTargetSheetAppend {
     write_start_row: u32,
     include_header: bool,
     kept_rows: Vec<u32>,
+    /// None = 整体按位置写入（严格模式 / 空白或新建表）；
+    /// Some = 宽松模式的按列映射：逐汇总列给出目标列及是否需先写表头。
+    column_plan: Option<Vec<WideColumnMapping>>,
+}
+
+/// 宽松模式下的单列映射：summary_col 的数据写到 target_col；
+/// header_needed = 目标表没有该列头，需要先在目标第 1 行写入列头。
+#[derive(Clone)]
+struct WideColumnMapping {
+    summary_col: u32,
+    target_col: u32,
+    header_needed: bool,
 }
 
 /// 待批量执行的既有目标工作簿追加登记：附带的字段用于在批量落盘后
@@ -16384,23 +16396,34 @@ fn commit_wide_summary_existing_target_openpyxl(
                 name: append.target_sheet.to_owned(),
             });
         }
-        let mut destination_row = append.write_start_row;
         let mut push_import = |summary_sheet: &str,
                                source_start: u32,
                                source_end: u32,
-                               destination_start: u32|
+                               source_start_col: u32,
+                               source_end_col: u32,
+                               destination_start: u32,
+                               target_start_col: u32|
          -> Result<()> {
-            let source_start_cell = pytools_core::rule_engine::cell_address(source_start as usize, 1);
+            let source_start_cell = pytools_core::rule_engine::cell_address(
+                source_start as usize,
+                source_start_col as usize,
+            );
             let source_end_cell = pytools_core::rule_engine::cell_address(
                 source_end as usize,
-                summary_max_col as usize,
+                source_end_col as usize,
             );
+            let target_column_letter = pytools_core::rule_engine::cell_address(
+                1,
+                target_start_col as usize,
+            )
+            .trim_end_matches('1')
+            .to_owned();
             operations.push(EditOperation::ImportRange {
                 source_workbook: summary_path.to_path_buf(),
                 source_sheet: summary_sheet.to_owned(),
                 source_range: format!("{source_start_cell}:{source_end_cell}"),
                 target_sheet: append.target_sheet.to_owned(),
-                target_start: format!("A{destination_start}"),
+                target_start: format!("{target_column_letter}{destination_start}"),
                 copy_values: true,
                 copy_formulas: true,
                 style_mode: RangeStyleMode::Full,
@@ -16418,24 +16441,101 @@ fn commit_wide_summary_existing_target_openpyxl(
             });
             Ok(())
         };
-        if append.include_header {
-            push_import(&append.summary_sheet, 1, 1, destination_row)?;
-            destination_row += 1;
-        }
-        let mut rows = append.kept_rows.iter().copied();
-        if let Some(mut range_start) = rows.next() {
-            let mut range_end = range_start;
-            for row in rows {
-                if row == range_end + 1 {
-                    range_end = row;
-                    continue;
+        if let Some(column_plan) = &append.column_plan {
+            // 宽松模式：按列名映射逐列写入；新列先写目标表头再写数据。
+            // 每列的数据都从该表的写入起始行开始，行游标逐列独立。
+            let mut destination_row = append.write_start_row;
+            for mapping in column_plan {
+                destination_row = append.write_start_row;
+                if mapping.header_needed {
+                    push_import(
+                        &append.summary_sheet,
+                        1,
+                        1,
+                        mapping.summary_col,
+                        mapping.summary_col,
+                        1,
+                        mapping.target_col,
+                    )?;
                 }
-                push_import(&append.summary_sheet, range_start, range_end, destination_row)?;
-                destination_row += range_end - range_start + 1;
-                range_start = row;
-                range_end = row;
+                let mut rows = append.kept_rows.iter().copied();
+                if let Some(mut range_start) = rows.next() {
+                    let mut range_end = range_start;
+                    for row in rows {
+                        if row == range_end + 1 {
+                            range_end = row;
+                            continue;
+                        }
+                        push_import(
+                            &append.summary_sheet,
+                            range_start,
+                            range_end,
+                            mapping.summary_col,
+                            mapping.summary_col,
+                            destination_row,
+                            mapping.target_col,
+                        )?;
+                        destination_row += range_end - range_start + 1;
+                        range_start = row;
+                        range_end = row;
+                    }
+                    push_import(
+                        &append.summary_sheet,
+                        range_start,
+                        range_end,
+                        mapping.summary_col,
+                        mapping.summary_col,
+                        destination_row,
+                        mapping.target_col,
+                    )?;
+                }
             }
-            push_import(&append.summary_sheet, range_start, range_end, destination_row)?;
+        } else {
+            // 严格模式 / 空白或新建表：整体按位置写入。
+            let mut destination_row = append.write_start_row;
+            if append.include_header {
+                push_import(
+                    &append.summary_sheet,
+                    1,
+                    1,
+                    1,
+                    summary_max_col,
+                    destination_row,
+                    1,
+                )?;
+                destination_row += 1;
+            }
+            let mut rows = append.kept_rows.iter().copied();
+            if let Some(mut range_start) = rows.next() {
+                let mut range_end = range_start;
+                for row in rows {
+                    if row == range_end + 1 {
+                        range_end = row;
+                        continue;
+                    }
+                    push_import(
+                        &append.summary_sheet,
+                        range_start,
+                        range_end,
+                        1,
+                        summary_max_col,
+                        destination_row,
+                        1,
+                    )?;
+                    destination_row += range_end - range_start + 1;
+                    range_start = row;
+                    range_end = row;
+                }
+                push_import(
+                    &append.summary_sheet,
+                    range_start,
+                    range_end,
+                    1,
+                    summary_max_col,
+                    destination_row,
+                    1,
+                )?;
+            }
         }
     }
     anyhow::ensure!(!operations.is_empty(), "目标追加计划没有实际写入区域");
@@ -16764,12 +16864,55 @@ fn execute_wide_summary_target_writes(
         let (summary_max_col, summary_max_row) = wide_dump_used_bounds(summary_sheet);
 
         // 既有工作表：完全空白→视为待填充，直接写入表头+数据；
-        // 否则先比对表头（列数 + 每列文本）：一致→在末尾追加数据行；
-        // 不一致→拒绝写入并说明差异，绝不清空既有数据。
+        // 非空白表按规则的“目标表头匹配”模式处理：
+        // - 宽松（默认，对齐旧工具）：目标表头须包含固定前缀列
+        //   （工作簿名/工作表名/数据日期 + set 列头 + 行头路径），缺失即拒绝；
+        //   其余按列头文本映射写入，汇总新列扩展到目标末尾；
+        // - 严格：列数 + 每列文本全等，不同即拒绝。绝不清空既有数据。
+        let rule_name_for_message = rule.name.clone();
+        let rule_name = &rule_name_for_message;
+        let header_match_value = rule.target_header_match.trim();
+        let header_match_strict = header_match_value == "严格";
+        if !header_match_strict
+            && !header_match_value.is_empty()
+            && header_match_value != "宽松"
+        {
+            any_failed = true;
+            let message = format!(
+                "规则 {rule_name:?} 的目标表头匹配配置无效：{}（仅支持 空/宽松=按列名映射 或 严格），已跳过目标写入",
+                rule.target_header_match
+            );
+            let mut event = new_wide_summary_cli_event(
+                events,
+                run_started,
+                feature_id,
+                total_inputs,
+                "target_write",
+                "skipped",
+                format!("目标工作簿 {}：{message}", display_path_for_user(&target)),
+                Some(stage_started.elapsed().as_millis()),
+                0,
+                &["pytools-core", "calamine"],
+                None,
+                Some("target_header_match_invalid"),
+            );
+            event.workbook_name = Some(target.to_string_lossy().into_owned());
+            event.worksheet_name = Some(target_sheet_name.clone());
+            emit_wide_summary_event(_log_view, events, event);
+            results.push(serde_json::json!({
+                "target": display_path_for_user(&target).to_string(),
+                "sheet": target_sheet_name,
+                "status": "skipped",
+                "error": message,
+            }));
+            continue;
+        }
         let mut existing_target_rows: u32 = 0;
         let mut blank_existing_sheet = false;
+        // 宽松模式的按列映射（None = 整体按位置写入）。
+        let mut column_plan: Option<Vec<WideColumnMapping>> = None;
         let (write_start_row, _first_source_row, mode) = if existed_sheet {
-            let (target_max_col, target_max_row, mismatch) = {
+            let (target_max_col, target_max_row, mismatch, mapped_columns) = {
                 let target_ws = target_book
                     .as_ref()
                     .and_then(|book| {
@@ -16781,8 +16924,8 @@ fn execute_wide_summary_target_writes(
                 let (target_max_col, target_max_row) = wide_dump_used_bounds(target_ws);
                 if target_max_col == 0 || target_max_row == 0 {
                     // 空白目标工作表视为待填充。
-                    (0u32, 0u32, None)
-                } else {
+                    (0u32, 0u32, None, None)
+                } else if header_match_strict {
                     let mut mismatch = None;
                     if target_max_col != summary_max_col {
                         mismatch = Some(format!(
@@ -16800,7 +16943,88 @@ fn execute_wide_summary_target_writes(
                             }
                         }
                     }
-                    (target_max_col, target_max_row, mismatch)
+                    (target_max_col, target_max_row, mismatch, None)
+                } else {
+                    // 宽松模式：固定前缀列存在性检查 + 按列头文本映射 + 新列扩展。
+                    let summary_header_texts: Vec<(u32, String)> = (1..=summary_max_col)
+                        .map(|column| {
+                            (column, wide_dump_cell_display(summary_sheet, column, 1))
+                        })
+                        .collect();
+                    let mut required_prefix: Vec<String> = vec![
+                        "工作簿名".to_owned(),
+                        "工作表名".to_owned(),
+                        "数据日期".to_owned(),
+                    ];
+                    required_prefix
+                        .extend(rule.set_items.iter().map(|(name, _)| name.clone()));
+                    if summary_header_texts
+                        .iter()
+                        .any(|(_, text)| text == "行头路径")
+                    {
+                        required_prefix.push("行头路径".to_owned());
+                    }
+                    let target_header_texts: Vec<(u32, String)> = (1..=target_max_col)
+                        .map(|column| {
+                            (column, wide_dump_cell_display(target_ws, column, 1))
+                        })
+                        .collect();
+                    let missing_prefix: Vec<String> = required_prefix
+                        .iter()
+                        .filter(|required| {
+                            !summary_header_texts
+                                .iter()
+                                .any(|(_, text)| text == *required)
+                                || !target_header_texts
+                                    .iter()
+                                    .any(|(_, text)| text == *required)
+                        })
+                        .cloned()
+                        .collect();
+                    if !missing_prefix.is_empty() {
+                        // 连旧工具要求的固定前缀列都不在目标里：拒绝写入。
+                        let mismatch = Some(format!(
+                            "目标表缺少固定前缀列（宽松模式保护）：{}",
+                            missing_prefix.join("、")
+                        ));
+                        (target_max_col, target_max_row, mismatch, None)
+                    } else {
+                        // 按列头文本映射：同名多列按出现顺序配对；汇总新列扩展。
+                        let mut target_queue: std::collections::BTreeMap<
+                            String,
+                            std::collections::VecDeque<u32>,
+                        > = std::collections::BTreeMap::new();
+                        for (column, text) in &target_header_texts {
+                            target_queue
+                                .entry(text.clone())
+                                .or_default()
+                                .push_back(*column);
+                        }
+                        let mut mapped = Vec::new();
+                        let mut new_columns = 0u32;
+                        for (summary_col, text) in &summary_header_texts {
+                            let mapped_target = target_queue
+                                .get_mut(text)
+                                .and_then(|queue| queue.pop_front());
+                            match mapped_target {
+                                Some(target_col) => mapped.push(WideColumnMapping {
+                                    summary_col: *summary_col,
+                                    target_col,
+                                    header_needed: false,
+                                }),
+                                None => {
+                                    // 汇总新列：扩展到目标末尾（表头+数据一起写）。
+                                    new_columns += 1;
+                                    mapped.push(WideColumnMapping {
+                                        summary_col: *summary_col,
+                                        target_col: target_max_col + new_columns,
+                                        header_needed: true,
+                                    });
+                                }
+                            }
+                        }
+                        (target_max_col, target_max_row, None, Some(mapped))
+                    }
                 }
             };
             let _ = target_max_col;
@@ -16834,12 +17058,13 @@ fn execute_wide_summary_target_writes(
                 }));
                 continue;
             }
+            column_plan = mapped_columns;
             if target_max_row == 0 {
                 // 空白工作表：在既有空 sheet 上写入表头+数据，其他 sheet 不受影响。
                 blank_existing_sheet = true;
                 (1u32, 1u32, "空白工作表写入")
             } else {
-                // 表头一致：跳过汇总表头行，追加到目标末行之后。
+                // 表头通过：跳过汇总表头行，追加到目标末行之后。
                 existing_target_rows = target_max_row;
                 (target_max_row + 1, 2u32, "表头一致追加")
             }
@@ -16886,25 +17111,71 @@ fn execute_wide_summary_target_writes(
                     continue;
                 }
             };
-        let key_columns: Vec<usize> = key_names
-            .iter()
-            .map(|name| {
-                summary_headers
-                    .iter()
-                    .position(|header| header == name)
-                    .expect("key names resolved against summary headers")
-                    + 1
-            })
-            .collect();
-        let row_key = |sheet: &excel_reader::SheetDump, row: u32| -> Vec<String> {
-            key_columns
+        // 键列解析：严格模式/空白表按汇总表头位置；宽松模式按键名映射到
+        // 目标列（目标与汇总的列顺序可能不同）。映射为“新增列”（目标尚无
+        // 该列）的键列按旧工具语义从键中剔除；全部剔除时不做去重过滤。
+        let dedup_enabled;
+        let summary_key_columns: Vec<usize>;
+        let target_key_columns: Vec<usize>;
+        {
+            // 键名 → 汇总列位置。
+            let key_positions: Vec<(String, usize)> = key_names
                 .iter()
-                .map(|&column| wide_dump_cell_display(sheet, column as u32, row))
+                .map(|name| {
+                    (
+                        name.clone(),
+                        summary_headers
+                            .iter()
+                            .position(|header| header == name)
+                            .expect("key names resolved against summary headers")
+                            + 1,
+                    )
+                })
+                .collect();
+            match &column_plan {
+                Some(plan) => {
+                    // 宽松模式：按键名映射到目标列；映射为“新增列”（目标尚无）
+                    // 的键列按旧工具语义从键中剔除（两侧同步剔除，键元数一致）。
+                    let mut summary_positions = Vec::new();
+                    let mut target_positions = Vec::new();
+                    for (name, position) in &key_positions {
+                        match plan
+                            .iter()
+                            .find(|mapping| mapping.summary_col as usize == *position)
+                        {
+                            Some(mapping) if !mapping.header_needed => {
+                                summary_positions.push(*position);
+                                target_positions.push(mapping.target_col as usize);
+                            }
+                            _ => {}
+                        }
+                    }
+                    dedup_enabled = !target_positions.is_empty();
+                    summary_key_columns = summary_positions;
+                    target_key_columns = target_positions;
+                }
+                None => {
+                    dedup_enabled = !key_positions.is_empty();
+                    summary_key_columns = key_positions.iter().map(|(_, position)| *position).collect();
+                    target_key_columns = summary_key_columns.clone();
+                }
+            }
+        }
+        let summary_row_key = |row: u32| -> Vec<String> {
+            summary_key_columns
+                .iter()
+                .map(|&column| wide_dump_cell_display(summary_sheet, column as u32, row))
+                .collect()
+        };
+        let target_row_key = |target_ws: &excel_reader::SheetDump, row: u32| -> Vec<String> {
+            target_key_columns
+                .iter()
+                .map(|&column| wide_dump_cell_display(target_ws, column as u32, row))
                 .collect()
         };
         let mut seen_keys: std::collections::HashSet<Vec<String>> =
             std::collections::HashSet::new();
-        if existed_sheet {
+        if dedup_enabled && existed_sheet {
             let target_ws = target_book
                 .as_ref()
                 .and_then(|book| {
@@ -16914,7 +17185,7 @@ fn execute_wide_summary_target_writes(
                 })
                 .expect("target sheet resolved above");
             for row in 2..=existing_target_rows {
-                seen_keys.insert(row_key(target_ws, row));
+                seen_keys.insert(target_row_key(target_ws, row));
             }
         }
         let mut batch_keys: std::collections::HashSet<Vec<String>> =
@@ -16924,16 +17195,18 @@ fn execute_wide_summary_target_writes(
         let mut kept_rows = Vec::<u32>::new();
         // 去重始终只针对数据行（第 2 行起）；表头行由下方写入逻辑单独处理。
         for row in 2..=summary_max_row {
-            let key = row_key(summary_sheet, row);
-            if !batch_keys.insert(key.clone()) {
-                batch_dedup_rows += 1;
-                continue;
+            let key = summary_row_key(row);
+            if dedup_enabled {
+                if !batch_keys.insert(key.clone()) {
+                    batch_dedup_rows += 1;
+                    continue;
+                }
+                if seen_keys.contains(&key) {
+                    existing_filtered_rows += 1;
+                    continue;
+                }
+                seen_keys.insert(key);
             }
-            if seen_keys.contains(&key) {
-                existing_filtered_rows += 1;
-                continue;
-            }
-            seen_keys.insert(key);
             kept_rows.push(row);
         }
         let input_rows = summary_max_row.saturating_sub(1) as usize;
@@ -17014,6 +17287,7 @@ fn execute_wide_summary_target_writes(
                         write_start_row,
                         include_header: !append_to_existing,
                         kept_rows: kept_rows.clone(),
+                        column_plan: column_plan.clone(),
                     },
                     mode: mode.to_owned(),
                     append_to_existing,
