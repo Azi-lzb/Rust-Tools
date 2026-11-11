@@ -11629,9 +11629,17 @@ fn redact_diagnostic_fields(value: &mut serde_json::Value) {
                         .get("kind")
                         .and_then(serde_json::Value::as_str)
                         .map(str::to_owned);
-                    *field = kind
-                        .map(|kind| serde_json::json!({"kind": kind}))
-                        .unwrap_or(serde_json::Value::Null);
+                    // 开发者诊断需要引擎拒绝的具体原因（握手失败/worker 过旧
+                    // 等，不含业务单元格内容），只剥离逐后端的 route_decisions
+                    // 与 attempts 明细。
+                    let message = field
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned);
+                    *field = serde_json::json!({
+                        "kind": kind,
+                        "message": message,
+                    });
                 } else if matches!(key.as_str(), "diagnostic" | "password" | "token" | "secret") {
                     *field = serde_json::Value::Null;
                 } else {

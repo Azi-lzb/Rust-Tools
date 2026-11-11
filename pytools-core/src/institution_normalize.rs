@@ -494,6 +494,7 @@ where
                         &file_name,
                         index + 1,
                         inputs.len(),
+                        Some(&failure.diagnostic),
                     ),
                     diagnostic: Some(failure.diagnostic),
                     route_diagnostic: failure.route_diagnostic,
@@ -607,6 +608,23 @@ fn build_and_optionally_apply_institution_plan(
             None,
         )
         .attach_state(&timings, &stage_components, actual_engine.as_deref()));
+    }
+    // 就地修改的 .xlsx 走 openpyxl 引擎：先做运行时预检（与执行共用同一
+    // 解析入口，含协议握手），失败时如实告知原因与修复建议，避免进入
+    // 执行阶段后才给出误导性的“没有已验收的修改引擎”。
+    if options.in_place && !legacy_xls {
+        if let Some(reason) = crate::inplace_edit::openpyxl_unavailable_reason() {
+            return Err(normalize_file_failure(
+                "engine_readiness_check",
+                "openpyxl_runtime_unavailable",
+                format!(
+                    "openpyxl 修改引擎预检未通过：{}",
+                    collapse_reason_whitespace(&reason)
+                ),
+                None,
+            )
+            .attach_state(&timings, &stage_components, actual_engine.as_deref()));
+        }
     }
     let metadata = fs::symlink_metadata(input).map_err(|error| {
         normalize_file_failure(
@@ -2767,10 +2785,18 @@ fn user_message_for_normalize_failure(
     file_name: &str,
     index: usize,
     total: usize,
+    failure_diagnostic: Option<&str>,
 ) -> String {
     match error_type {
         "unsupported_format" => {
             format!("跳过 {index}/{total}：{file_name}，当前候选仅支持 .xlsx；原文件未修改。")
+        }
+        "openpyxl_runtime_unavailable" => {
+            // 预检失败的原因自带修复建议（运行时缺失/worker 过旧等），如实透出。
+            let reason = failure_diagnostic
+                .map(collapse_reason_whitespace)
+                .unwrap_or_else(|| "openpyxl 运行时不可用".to_owned());
+            format!("失败 {index}/{total}：{file_name}，{reason}；原文件未修改。")
         }
         "no_eligible_backend" => format!(
             "失败 {index}/{total}：{file_name}，没有已验收的修改引擎可处理此文件；原文件未修改。"
@@ -2780,6 +2806,11 @@ fn user_message_for_normalize_failure(
         }
         _ => format!("失败 {index}/{total}：{file_name}，该文件未完成安全处理；请查看开发诊断。"),
     }
+}
+
+/// 把多行原因压成单行（保留全部信息），适合终端用户消息。
+fn collapse_reason_whitespace(reason: &str) -> String {
+    reason.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn engine_language(engine: &str) -> &'static str {

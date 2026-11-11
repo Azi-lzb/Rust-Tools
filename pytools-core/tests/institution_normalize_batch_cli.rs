@@ -548,3 +548,83 @@ fn write_duplicate_institution_config(path: &Path) -> Result<()> {
     workbook.save(path)?;
     Ok(())
 }
+
+/// 就地修改在进入执行阶段前必须对 openpyxl 运行时做预检（解析 + 握手，
+/// 与执行共用同一入口）；运行时不可用时如实告知原因，而不是等到
+/// engine_execution 阶段给出误导性的“没有已验收的修改引擎”。
+#[test]
+fn in_place_preflight_reports_unusable_openpyxl_runtime_before_any_write() -> Result<()> {
+    let temp = TempDirectory::new("pytools-pt-7-2-preflight")?;
+    let config = temp.path().join("institution-config.xlsx");
+    let source = temp.path().join("branch-source.xlsx");
+    let report_path = temp.path().join("run.json");
+    write_institution_config(&config)?;
+
+    let mut workbook = Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("示例分机构")?;
+    sheet.write_string(0, 0, "机构")?;
+    sheet.write_string(1, 0, "ABC Bank")?;
+    workbook.save(&source)?;
+    let source_bytes = std::fs::read(&source)?;
+
+    // 两个显式覆盖同时指向不存在的路径：解析必须直接失败并给出清晰的
+    // 配置错误（预检与执行共用同一解析入口）。
+    let missing_python = temp.path().join("missing-python.exe");
+    let missing_worker = temp.path().join("missing-worker.py");
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args([
+            "institution-normalize",
+            "--config",
+            config.to_str().context("temporary path is UTF-8")?,
+            "--in-place",
+            "auto",
+            "--apply",
+            "--view",
+            "user",
+            "--report-output",
+            report_path.to_str().context("temporary path is UTF-8")?,
+            source.to_str().context("temporary path is UTF-8")?,
+        ])
+        .env("PYTOOLS_OPENPYXL_PYTHON", &missing_python)
+        .env("PYTOOLS_OPENPYXL_WORKER", &missing_worker)
+        .output()
+        .context("run institution-normalize CLI")?;
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("openpyxl 修改引擎预检未通过"),
+        "preflight reason missing from output: {combined}"
+    );
+    assert!(
+        combined.contains("显式覆盖无效"),
+        "resolution detail missing from output: {combined}"
+    );
+    assert!(
+        combined.contains("原文件未修改"),
+        "no-modification promise missing: {combined}"
+    );
+    assert_eq!(
+        std::fs::read(&source)?,
+        source_bytes,
+        "source workbook must remain byte-identical"
+    );
+    let report: Value = serde_json::from_slice(&std::fs::read(&report_path)?)?;
+    let file_result = &report["files"][0];
+    assert_eq!(file_result["status"], "failed");
+    assert_eq!(
+        file_result["error_type"],
+        json!("openpyxl_runtime_unavailable"),
+        "failure must be attributed to the runtime preflight: {file_result}"
+    );
+    assert!(
+        file_result["user_message"]
+            .as_str()
+            .is_some_and(|message| message.contains("openpyxl 修改引擎预检未通过")),
+        "user message must carry the runtime reason: {file_result}"
+    );
+    Ok(())
+}
