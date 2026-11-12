@@ -1,0 +1,49 @@
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 16:39
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 配置与快捷操作 ------
+  1  初始化 / 修复配置（需二次确认）
+  2  重新加载并查看配置状态
+  3  打开配置文件
+  4  打开最近输出
+  5  打开输出目录
+  0  返回
+--------------------------
+子菜单选择> [二次确认] 7-1 将新建配置表或生成配置修复候选；如后续确认替换，当前配置文件会被更新。
+配置路径：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-remaining-mqiq560j\9-7-1-OpenpyxlOnly\config.xlsx
+  1  确认继续
+  0  取消，不修改配置
+确认执行 7-1> PT-5 开始：PT-5-1 initialize_or_repair
+[配置操作失败] configuration header layout is ambiguous: 时序提取规则!S1 contains "是否输出行序号", expected column(s) [20]; refusing repair to protect existing configuration
+PT-5 完成：PT-5-1，状态 failed，配置操作未完成，实际引擎：calamine，实际组件：pytools_core::config::build_config_repair_plan, excel_reader::read_xlsx_sheet_names_ooxml，ExcelModifier 未调用，Excel writer 未调用，耗时 0.808 秒；运行记录：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-remaining-mqiq560j\9-7-1-OpenpyxlOnly\日志目录\pytools-config-initialize_or_repair-20261112_165613_397514900.json
+------ 配置与快捷操作 ------
+  1  初始化 / 修复配置（需二次确认）
+  2  重新加载并查看配置状态
+  3  打开配置文件
+  4  打开最近输出
+  5  打开输出目录
+  0  返回
+--------------------------
+子菜单选择> ======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 16:39
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
+
+[STDERR]
+[2026-11-12 16:56:13] [INFO] 运行编号 pytools-7-1-17652-1794473772585034900-0；运行记录：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-remaining-mqiq560j\9-7-1-OpenpyxlOnly\日志目录\7-1_pytools-7-1-17652-1794473772585034900-0.run.json

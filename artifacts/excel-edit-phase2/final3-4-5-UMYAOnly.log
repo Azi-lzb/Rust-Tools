@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 20:28:40] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-rename-crg6qc53\UMYAOnly\source.xlsx: UMYAOnly cannot rename worksheets while formula or defined-name references require validation

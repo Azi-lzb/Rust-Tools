@@ -1,0 +1,497 @@
+{
+  "branch_sheets": 3,
+  "completed_files": 1,
+  "configuration_elapsed_ms": 618,
+  "elapsed_ms": 7591,
+  "events": [
+    {
+      "components": [
+        "Rust",
+        "calamine"
+      ],
+      "phase": "configuration_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:18.344768300+00:00",
+      "user_message": "正在读取机构映射配置。"
+    },
+    {
+      "components": [
+        "Rust",
+        "calamine"
+      ],
+      "elapsed_ms": 618,
+      "phase": "configuration_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 2,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:18.963728900+00:00",
+      "user_message": "机构映射配置已读取，共 39 条有效映射。"
+    },
+    {
+      "components": [
+        "Rust"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "file_processing",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 3,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:18.963957600+00:00",
+      "user_message": "正在按机构映射标准化第 1/1 个文件名：source.xlsx"
+    },
+    {
+      "components": [
+        "Rust",
+        "sha2"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "source_fingerprint",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 4,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:20.127720600+00:00",
+      "user_message": "正在校验源文件：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "sha2"
+      ],
+      "elapsed_ms": 2,
+      "file_name": "source.xlsx",
+      "phase": "source_fingerprint",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 5,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:20.129711700+00:00",
+      "user_message": "源文件安全检查完成：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "zip",
+        "roxmltree"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "profile_inspection",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 6,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:20.129908+00:00",
+      "user_message": "正在检查工作簿结构：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "zip",
+        "roxmltree"
+      ],
+      "elapsed_ms": 43,
+      "file_name": "source.xlsx",
+      "phase": "profile_inspection",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 7,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:20.173457200+00:00",
+      "user_message": "工作簿结构检查完成：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "calamine"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 8,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:20.173669700+00:00",
+      "user_message": "正在按映射规则检查工作表：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "calamine"
+      ],
+      "elapsed_ms": 168,
+      "file_name": "source.xlsx",
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 9,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:20.342559900+00:00",
+      "user_message": "映射规则检查完成：source.xlsx，命中 24 行。"
+    },
+    {
+      "components": [
+        "Rust",
+        "sha2"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "source_stability_check",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 10,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:20.342734400+00:00",
+      "user_message": "正在确认源文件未变化：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "sha2"
+      ],
+      "elapsed_ms": 1,
+      "file_name": "source.xlsx",
+      "phase": "source_stability_check",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 11,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:20.344612800+00:00",
+      "user_message": "源文件一致性检查通过：source.xlsx。"
+    },
+    {
+      "components": [
+        "Rust",
+        "in-place"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "engine_execution",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 12,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:20.344697500+00:00",
+      "user_message": "正在就地改写源工作簿：source.xlsx。"
+    },
+    {
+      "actual_engine": "openpyxl",
+      "components": [
+        "Rust",
+        "in-place"
+      ],
+      "elapsed_ms": 5591,
+      "file_name": "source.xlsx",
+      "phase": "engine_execution",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 13,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:25.935925200+00:00",
+      "user_message": "openpyxl 候选已通过验证，准备安全提交就地修改：source.xlsx。"
+    },
+    {
+      "actual_engine": "openpyxl",
+      "components": [
+        "Rust",
+        "file_commit"
+      ],
+      "file_name": "source.xlsx",
+      "phase": "safe_commit",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 14,
+      "status": "started",
+      "timestamp": "2026-11-12T08:53:25.936059200+00:00",
+      "user_message": "正在核对源文件快照并安全提交就地修改：source.xlsx。"
+    },
+    {
+      "actual_engine": "openpyxl",
+      "components": [
+        "Rust",
+        "file_commit"
+      ],
+      "elapsed_ms": 0,
+      "file_name": "source.xlsx",
+      "phase": "safe_commit",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 0,
+        "processed_files": 0,
+        "total_files": 1
+      },
+      "sequence": 15,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:25.936141900+00:00",
+      "user_message": "源工作簿已通过快照校验并安全就地修改：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx。"
+    },
+    {
+      "actual_engine": "openpyxl",
+      "components": [
+        "Rust",
+        "openpyxl",
+        "Rust"
+      ],
+      "elapsed_ms": 6972,
+      "file_name": "source.xlsx",
+      "phase": "file_processing",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "failed_files": 0,
+        "modified_files": 1,
+        "processed_files": 1,
+        "total_files": 1
+      },
+      "sequence": 16,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:25.936324300+00:00",
+      "user_message": "完成 1/1：source.xlsx，修改 24 行；源工作簿已就地更新。"
+    },
+    {
+      "components": [
+        "Rust"
+      ],
+      "elapsed_ms": 7591,
+      "phase": "task",
+      "progress": {
+        "completed_files": 1,
+        "current_file": null,
+        "failed_files": 0,
+        "modified_files": 1,
+        "processed_files": 1,
+        "total_files": 1
+      },
+      "sequence": 17,
+      "status": "completed",
+      "timestamp": "2026-11-12T08:53:25.936416+00:00",
+      "user_message": "机构名称规范化结束：成功 1 个，失败 0 个，修改 1 个文件。"
+    }
+  ],
+  "failed_files": 0,
+  "feature_id": "PT-7-2",
+  "files": [
+    {
+      "actual_engine": "openpyxl",
+      "branch_sheets": 3,
+      "cleanup_warning": null,
+      "commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 429,
+        "operation": "replaced",
+        "sha256_after": "bb3ec68d899621c4cbfb25da3381b32f0b2b5bbd48c0be73bb9cc4a6f428bb4e",
+        "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx"
+      },
+      "diagnostic": null,
+      "error_stage": null,
+      "error_type": null,
+      "execution": {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 429,
+          "operation": "replaced",
+          "sha256_after": "bb3ec68d899621c4cbfb25da3381b32f0b2b5bbd48c0be73bb9cc4a6f428bb4e",
+          "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx"
+        },
+        "engine": "openpyxl",
+        "execution": {
+          "attempts": [
+            {
+              "elapsed_ms": 5157,
+              "engine": "rust_native_ooxml",
+              "message": "validated output published",
+              "outcome": "succeeded"
+            }
+          ],
+          "elapsed_ms": 5157,
+          "engine": "rust_native_ooxml",
+          "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx",
+          "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\.pytools-inplace-14760-1794473600346754400.xlsx",
+          "route_decisions": [
+            {
+              "eligible": true,
+              "engine": "rust_native_ooxml",
+              "rejected_reasons": []
+            }
+          ]
+        },
+        "mode": "in_place"
+      },
+      "file_name": "source.xlsx",
+      "mapped_rows": 24,
+      "mapped_sheets": 3,
+      "operation_count": 24,
+      "output_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx",
+      "plan_path": null,
+      "route_diagnostic": {
+        "kind": null,
+        "message": null
+      },
+      "stage_components": {
+        "engine_execution": [
+          "Rust",
+          "in-place",
+          "openpyxl"
+        ],
+        "plan_build": [
+          "Rust",
+          "calamine"
+        ],
+        "profile_inspection": [
+          "Rust",
+          "zip",
+          "roxmltree"
+        ],
+        "safe_commit": [
+          "Rust",
+          "file_commit"
+        ],
+        "source_fingerprint": [
+          "Rust",
+          "sha2"
+        ],
+        "source_stability_check": [
+          "Rust",
+          "sha2"
+        ]
+      },
+      "status": "applied",
+      "timings": {
+        "engine_execution_ms": 5591,
+        "plan_build_ms": 168,
+        "plan_persistence_ms": 0,
+        "profile_inspection_ms": 43,
+        "safe_commit_ms": 0,
+        "source_fingerprint_ms": 2,
+        "source_stability_check_ms": 1,
+        "total_ms": 6972
+      },
+      "user_message": "完成 1/1：source.xlsx，修改 24 行；源工作簿已就地更新。"
+    }
+  ],
+  "history_report": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\PT-7-2_20261112T165318_14760_1794473598342881600.json",
+  "mapped_rows": 24,
+  "mapped_sheets": 3,
+  "mapping_empty": false,
+  "mode": "in_place",
+  "modified_files": 1,
+  "product": "pytools",
+  "run_id": "pytools-pt-7-2-14760-1794473598344734300",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\run-unified\\PT-7-2_pytools-pt-7-2-14760-1794473598344734300.json",
+  "schema_version": 1,
+  "started_at": "2026-11-12T08:53:18.344701600+00:00",
+  "status": "completed",
+  "total_inputs": 1
+}
+
+[STDERR]
+{"components":["Rust","calamine"],"phase":"configuration_read","progress":{"completed_files":0,"current_file":null,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":1,"status":"started","timestamp":"2026-11-12T08:53:18.344768300+00:00","user_message":"正在读取机构映射配置。"}
+{"components":["Rust","calamine"],"elapsed_ms":618,"phase":"configuration_read","progress":{"completed_files":0,"current_file":null,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":2,"status":"completed","timestamp":"2026-11-12T08:53:18.963728900+00:00","user_message":"机构映射配置已读取，共 39 条有效映射。"}
+{"components":["Rust"],"file_name":"source.xlsx","phase":"file_processing","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":3,"status":"started","timestamp":"2026-11-12T08:53:18.963957600+00:00","user_message":"正在按机构映射标准化第 1/1 个文件名：source.xlsx"}
+{"components":["Rust","sha2"],"file_name":"source.xlsx","phase":"source_fingerprint","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":4,"status":"started","timestamp":"2026-11-12T08:53:20.127720600+00:00","user_message":"正在校验源文件：source.xlsx。"}
+{"components":["Rust","sha2"],"elapsed_ms":2,"file_name":"source.xlsx","phase":"source_fingerprint","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":5,"status":"completed","timestamp":"2026-11-12T08:53:20.129711700+00:00","user_message":"源文件安全检查完成：source.xlsx。"}
+{"components":["Rust","zip","roxmltree"],"file_name":"source.xlsx","phase":"profile_inspection","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":6,"status":"started","timestamp":"2026-11-12T08:53:20.129908+00:00","user_message":"正在检查工作簿结构：source.xlsx。"}
+{"components":["Rust","zip","roxmltree"],"elapsed_ms":43,"file_name":"source.xlsx","phase":"profile_inspection","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":7,"status":"completed","timestamp":"2026-11-12T08:53:20.173457200+00:00","user_message":"工作簿结构检查完成：source.xlsx。"}
+{"components":["Rust","calamine"],"file_name":"source.xlsx","phase":"plan_build","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":8,"status":"started","timestamp":"2026-11-12T08:53:20.173669700+00:00","user_message":"正在按映射规则检查工作表：source.xlsx。"}
+{"components":["Rust","calamine"],"elapsed_ms":168,"file_name":"source.xlsx","phase":"plan_build","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":9,"status":"completed","timestamp":"2026-11-12T08:53:20.342559900+00:00","user_message":"映射规则检查完成：source.xlsx，命中 24 行。"}
+{"components":["Rust","sha2"],"file_name":"source.xlsx","phase":"source_stability_check","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":10,"status":"started","timestamp":"2026-11-12T08:53:20.342734400+00:00","user_message":"正在确认源文件未变化：source.xlsx。"}
+{"components":["Rust","sha2"],"elapsed_ms":1,"file_name":"source.xlsx","phase":"source_stability_check","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":11,"status":"completed","timestamp":"2026-11-12T08:53:20.344612800+00:00","user_message":"源文件一致性检查通过：source.xlsx。"}
+{"components":["Rust","in-place"],"file_name":"source.xlsx","phase":"engine_execution","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":12,"status":"started","timestamp":"2026-11-12T08:53:20.344697500+00:00","user_message":"正在就地改写源工作簿：source.xlsx。"}
+[2026-11-12 16:53:25] [INFO] ExcelEditPlan 路由：模式 RustNativeOnly，引擎 rust_native_ooxml，文件 source.xlsx，耗时 5157 ms
+{"actual_engine":"openpyxl","components":["Rust","in-place"],"elapsed_ms":5591,"file_name":"source.xlsx","phase":"engine_execution","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":13,"status":"completed","timestamp":"2026-11-12T08:53:25.935925200+00:00","user_message":"openpyxl 候选已通过验证，准备安全提交就地修改：source.xlsx。"}
+{"actual_engine":"openpyxl","components":["Rust","file_commit"],"file_name":"source.xlsx","phase":"safe_commit","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":14,"status":"started","timestamp":"2026-11-12T08:53:25.936059200+00:00","user_message":"正在核对源文件快照并安全提交就地修改：source.xlsx。"}
+{"actual_engine":"openpyxl","components":["Rust","file_commit"],"elapsed_ms":0,"file_name":"source.xlsx","phase":"safe_commit","progress":{"completed_files":0,"current_file":1,"failed_files":0,"modified_files":0,"processed_files":0,"total_files":1},"sequence":15,"status":"completed","timestamp":"2026-11-12T08:53:25.936141900+00:00","user_message":"源工作簿已通过快照校验并安全就地修改：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx。"}
+{"actual_engine":"openpyxl","components":["Rust","openpyxl","Rust"],"elapsed_ms":6972,"file_name":"source.xlsx","phase":"file_processing","progress":{"completed_files":1,"current_file":1,"failed_files":0,"modified_files":1,"processed_files":1,"total_files":1},"sequence":16,"status":"completed","timestamp":"2026-11-12T08:53:25.936324300+00:00","user_message":"完成 1/1：source.xlsx，修改 24 行；源工作簿已就地更新。"}
+{"components":["Rust"],"elapsed_ms":7591,"phase":"task","progress":{"completed_files":1,"current_file":null,"failed_files":0,"modified_files":1,"processed_files":1,"total_files":1},"sequence":17,"status":"completed","timestamp":"2026-11-12T08:53:25.936416+00:00","user_message":"机构名称规范化结束：成功 1 个，失败 0 个，修改 1 个文件。"}

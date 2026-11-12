@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use excel_reader::read_workbook;
-use std::path::Path;
+use std::{fs, path::Path};
 use umya_spreadsheet::Style;
 
 pub struct UmyaXlsxBackend {
@@ -40,6 +40,19 @@ impl EditBackend for UmyaXlsxBackend {
         if plan.format != WorkbookFormat::Xlsx {
             return Err(BackendFailure::unsupported_before_write(
                 "umya candidate supports XLSX only",
+            ));
+        }
+        if plan.operations.iter().any(|operation| {
+            matches!(
+                operation,
+                EditOperation::SetMargins { .. }
+                    | EditOperation::SetDefinedName { .. }
+                    | EditOperation::DeleteColumns { .. }
+                    | EditOperation::InsertColumns { .. }
+            )
+        }) {
+            return Err(BackendFailure::unsupported_before_write(
+                "umya adapter does not support page margins, defined-name edits, or column insertion/deletion",
             ));
         }
         ooxml_patch::reject_unverified_parts(&plan.input).map_err(|error| {
@@ -156,6 +169,11 @@ impl EditBackend for UmyaXlsxBackend {
         })?;
         crate::save_xlsx(&workbook, &plan.output)
             .map_err(|error| BackendFailure::failed(format!("save XLSX: {error:#}")))?;
+        if can_restore_source_column_definitions(&plan.operations) {
+            restore_source_column_definitions(&plan.input, &plan.output).map_err(|error| {
+                BackendFailure::failed(format!("restore source column definitions: {error:#}"))
+            })?;
+        }
         for (
             source_workbook,
             source_sheet,
@@ -226,6 +244,60 @@ impl EditBackend for UmyaXlsxBackend {
         }
         Ok(())
     }
+
+    fn validate_output(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
+        crate::OpenpyxlXlsxValidator.validate(plan, candidate_output)
+    }
+}
+
+fn can_restore_source_column_definitions(operations: &[EditOperation]) -> bool {
+    !operations.iter().any(|operation| {
+        matches!(
+            operation,
+            EditOperation::CreateSheet { .. }
+                | EditOperation::CreateSheetAt { .. }
+                | EditOperation::DeleteSheet { .. }
+                | EditOperation::RenameSheet { .. }
+                | EditOperation::SetColumnWidth { .. }
+                | EditOperation::DeleteColumns { .. }
+                | EditOperation::InsertColumns { .. }
+        ) || matches!(
+            operation,
+            EditOperation::ImportRange {
+                copy_column_widths: true,
+                ..
+            } | EditOperation::ImportRange {
+                copy_column_hidden: true,
+                ..
+            } | EditOperation::ImportRange {
+                copy_all_column_dimensions: true,
+                ..
+            }
+        )
+    })
+}
+
+fn restore_source_column_definitions(source: &Path, candidate: &Path) -> Result<()> {
+    let file_name = candidate
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("umya-candidate.xlsx");
+    let patched =
+        candidate.with_file_name(format!(".{file_name}.cols-{}.xlsx", std::process::id()));
+    anyhow::ensure!(
+        !patched.exists(),
+        "column-definition patch candidate already exists: {}",
+        patched.display()
+    );
+
+    ooxml_patch::patch_column_dimensions(source, candidate, &patched, &[])
+        .context("copy source worksheet column definitions into UMYA candidate")?;
+    fs::remove_file(candidate).context("remove unpatched UMYA candidate")?;
+    if let Err(error) = fs::rename(&patched, candidate) {
+        let _ = fs::remove_file(&patched);
+        return Err(error).context("install column-definition-preserved candidate");
+    }
+    Ok(())
 }
 
 fn validate_row_deletion_scope(plan: &ExcelEditPlan, workbook: &Workbook) -> Result<()> {
@@ -987,6 +1059,98 @@ fn adjust_formula_batch_for_row_deletion(
         result.push((original_address, value));
     }
     Ok(result)
+}
+
+pub(crate) fn expected_formula_after_row_deletions(
+    formula_sheet: &str,
+    formula: &str,
+    operations: &[EditOperation],
+) -> Result<String> {
+    let mut expected = formula.to_owned();
+    for operation in operations {
+        let EditOperation::DeleteRows {
+            sheet,
+            first_row,
+            count,
+        } = operation
+        else {
+            continue;
+        };
+        let formula_is_local = formula_sheet.eq_ignore_ascii_case(sheet);
+        let formula_references_target = formula_references_sheet(&expected, sheet);
+        if !(formula_is_local && formula_has_a1_reference(&expected)) && !formula_references_target
+        {
+            continue;
+        }
+
+        let mut workbook = umya_spreadsheet::new_file();
+        let worksheet = workbook
+            .sheet_mut(0)
+            .context("create formula reference verification worksheet")?;
+        worksheet.set_name(formula_sheet);
+        worksheet
+            .cell_mut("A1")
+            .set_formula(expected.trim_start_matches('='));
+        let value = worksheet
+            .get_cell("A1")
+            .context("create formula reference verification cell")?
+            .cell_value()
+            .clone();
+        let adjusted = adjust_formula_batch_for_row_deletion(
+            formula_sheet,
+            sheet,
+            *first_row,
+            *count,
+            &[("A1".to_owned(), value)],
+        )?;
+        expected = adjusted
+            .into_iter()
+            .next()
+            .context("formula reference verification returned no result")?
+            .1
+            .formula()
+            .to_owned();
+    }
+    Ok(expected)
+}
+
+pub(crate) fn expected_defined_name_address_after_row_deletions(
+    name: &str,
+    address: &str,
+    scope_sheet: Option<&str>,
+    operations: &[EditOperation],
+) -> Result<Option<String>> {
+    if !operations
+        .iter()
+        .any(|operation| matches!(operation, EditOperation::DeleteRows { .. }))
+    {
+        return Ok(Some(address.to_owned()));
+    }
+    let mut expected = umya_spreadsheet::DefinedName::default();
+    expected.set_name(name);
+    expected.set_address(address);
+    for operation in operations {
+        let EditOperation::DeleteRows {
+            sheet,
+            first_row,
+            count,
+        } = operation
+        else {
+            continue;
+        };
+        let Some(adjusted) = adjust_defined_name_for_row_deletion(
+            &expected,
+            scope_sheet,
+            sheet,
+            *first_row,
+            *count,
+        )?
+        else {
+            return Ok(None);
+        };
+        expected = adjusted;
+    }
+    Ok(Some(expected.address().to_owned()))
 }
 
 fn formula_parking_coordinates(first_row: u32, count: u32, needed: usize) -> Result<Vec<String>> {
@@ -2139,6 +2303,12 @@ fn apply_operation(workbook: &mut crate::Workbook, operation: &EditOperation) ->
         }
         EditOperation::ReplaceHeaderText { .. } => {
             bail!("header replacement must use the namespace-aware OOXML header backend")
+        }
+        EditOperation::SetMargins { .. }
+        | EditOperation::SetDefinedName { .. }
+        | EditOperation::DeleteColumns { .. }
+        | EditOperation::InsertColumns { .. } => {
+            bail!("operation is outside the umya adapter's supported capability")
         }
     }
     Ok(())

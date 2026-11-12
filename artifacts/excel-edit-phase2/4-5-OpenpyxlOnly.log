@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 16:37:46] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-rename-css9umpb\OpenpyxlOnly\source.xlsx: OutputValidationFailed: backend output validation failed: openpyxl changed worksheet page settings

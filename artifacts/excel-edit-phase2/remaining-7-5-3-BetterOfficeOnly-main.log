@@ -1,0 +1,134 @@
+{
+  "branch_sheets": 3,
+  "deleted_rows": 0,
+  "elapsed_ms": 3444,
+  "events": [
+    {
+      "actual_engine": "calamine",
+      "components": [
+        "excel-reader",
+        "calamine"
+      ],
+      "phase": "configuration_load",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "stage_elapsed_ms": 1218,
+      "status": "completed",
+      "timestamp": "2026-11-12T16:55:43.355151800+08:00",
+      "total_elapsed_ms": 1218,
+      "user_message": "外资行配置读取完成。"
+    },
+    {
+      "phase": "file_start",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "status": "started",
+      "timestamp": "2026-11-12T16:55:43.355591300+08:00",
+      "total_elapsed_ms": 1219,
+      "user_message": "开始检查第 1/1 个工作簿。"
+    },
+    {
+      "components": [
+        "pytools-core::batch_ops",
+        "excel-reader",
+        "ExcelEditPlan"
+      ],
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 562,
+      "status": "completed",
+      "timestamp": "2026-11-12T16:55:43.917909600+08:00",
+      "total_elapsed_ms": 1781,
+      "user_message": "已完成检查：3 个目标工作表，0 行待删除。"
+    },
+    {
+      "actual_engine": "file_copy",
+      "components": [
+        "pytools-core",
+        "openpyxl"
+      ],
+      "phase": "engine_execution",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "stage_elapsed_ms": 1662,
+      "status": "completed",
+      "timestamp": "2026-11-12T16:55:45.581004600+08:00",
+      "total_elapsed_ms": 3444,
+      "user_message": "外发结果副本已生成，原工作簿保持不变。"
+    }
+  ],
+  "failed_files": 0,
+  "files": 1,
+  "foreign_empty": false,
+  "history_report": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\logs\\PT-7-3_20261112T165542_33516_1794473742135569300.json",
+  "items": [
+    {
+      "branch_sheets": 3,
+      "deleted_rows": 0,
+      "elapsed_ms": 2225,
+      "execution": {
+        "engine": "file_copy",
+        "execution": "created_unchanged_workbook_copy",
+        "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source(金融局).xlsx",
+        "sha256": "cb871be4c532307e86b4167debad83af3247981af4edf81d5007128a11696fa7"
+      },
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source.xlsx",
+      "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source(金融局).xlsx",
+      "plan": null,
+      "planned_branch_sheets": 3,
+      "planned_deleted_rows": 0,
+      "status": "written"
+    }
+  ],
+  "mode": "create_copy",
+  "ok_files": 1,
+  "planned_branch_sheets": 3,
+  "planned_deleted_rows": 0,
+  "planned_files": 1,
+  "run_id": "pytools-pt-7-3-33516-1794473742136439400",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\logs\\run-unified\\PT-7-3_pytools-pt-7-3-33516-1794473742136439400.json",
+  "started_at": "2026-11-12T16:55:42.136423400+08:00"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:55:43.355151800+08:00","phase":"configuration_load","status":"completed","user_message":"外资行配置读取完成。","progress":{"total_inputs":1,"total_files":1,"current_file":null,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1218,"total_elapsed_ms":1218,"components":["excel-reader","calamine"],"actual_engine":"calamine"}
+{"sequence":2,"timestamp":"2026-11-12T16:55:43.355591300+08:00","phase":"file_start","status":"started","user_message":"开始检查第 1/1 个工作簿。","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":1219}
+{"sequence":3,"timestamp":"2026-11-12T16:55:43.917909600+08:00","phase":"plan_build","status":"completed","user_message":"已完成检查：3 个目标工作表，0 行待删除。","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":562,"total_elapsed_ms":1781,"components":["pytools-core::batch_ops","excel-reader","ExcelEditPlan"]}
+{"sequence":4,"timestamp":"2026-11-12T16:55:45.581004600+08:00","phase":"engine_execution","status":"completed","user_message":"外发结果副本已生成，原工作簿保持不变。","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":1,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1662,"total_elapsed_ms":3444,"components":["pytools-core","openpyxl"],"actual_engine":"file_copy"}

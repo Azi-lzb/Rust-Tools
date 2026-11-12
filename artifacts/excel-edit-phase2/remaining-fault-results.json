@@ -1,0 +1,118 @@
+[
+  {
+    "menu": "7-1",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\0-7-1-OpenpyxlOnly",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\0-7-1-OpenpyxlOnly\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "preparation": [
+      {
+        "kind": "remove_one_comment_for_repair",
+        "sheet": "全局配置",
+        "cell": "A1"
+      }
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "failure_reason": "ambiguous timeline header at S1; expected column 20",
+    "acceptance": "rejected_by_ambiguous-header-guard"
+  },
+  {
+    "menu": "7-1",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\1-7-1-Auto",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\1-7-1-Auto\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "preparation": [
+      {
+        "kind": "remove_one_comment_for_repair",
+        "sheet": "全局配置",
+        "cell": "A1"
+      }
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "failure_reason": "ambiguous timeline header at S1; expected column 20",
+    "acceptance": "rejected_by_ambiguous-header-guard"
+  },
+  {
+    "menu": "2-3",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\2-2-3-OpenpyxlOnly",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\2-2-3-OpenpyxlOnly\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "preparation": [
+      {
+        "kind": "add_one_unique_record",
+        "sheet": "五篇大文章分机构",
+        "row": 464,
+        "date": "2026-10-31"
+      }
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:58:02] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 target.xlsx，耗时 4408 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "acceptance": "rejected_by_existing-cell-preservation-validation"
+  },
+  {
+    "menu": "2-3",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\3-2-3-Auto",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\3-2-3-Auto\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "preparation": [
+      {
+        "kind": "add_one_unique_record",
+        "sheet": "五篇大文章分机构",
+        "row": 464,
+        "date": "2026-10-31"
+      }
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:58:10] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 target.xlsx，耗时 4886 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "acceptance": "rejected_by_existing-cell-preservation-validation"
+  }
+]

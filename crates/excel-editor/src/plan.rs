@@ -64,6 +64,7 @@ pub enum WorkbookFeature {
     FreezePanes,
     AutoFilter,
     CellMetadata,
+    CalcChain,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
@@ -106,6 +107,8 @@ pub enum EditOperationKind {
     SetRowHeight,
     DeleteRows,
     InsertRows,
+    DeleteColumns,
+    InsertColumns,
     RenameSheet,
     CreateSheet,
     CreateSheetAt,
@@ -118,6 +121,8 @@ pub enum EditOperationKind {
     ImportRange,
     SetWorkbookCalculationProperties,
     SetPageSettings,
+    SetMargins,
+    SetDefinedName,
     ReplaceHeaderText,
 }
 
@@ -159,6 +164,17 @@ pub struct PageSettings {
     pub horizontal_centered: Option<bool>,
     pub vertical_centered: Option<bool>,
     pub footer: Option<String>,
+}
+
+/// Worksheet print margins, expressed in inches per OOXML.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PageMargins {
+    pub left: Option<f64>,
+    pub right: Option<f64>,
+    pub top: Option<f64>,
+    pub bottom: Option<f64>,
+    pub header: Option<f64>,
+    pub footer: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -206,6 +222,16 @@ pub enum EditOperation {
     InsertRows {
         sheet: String,
         first_row: u32,
+        count: u32,
+    },
+    DeleteColumns {
+        sheet: String,
+        first_column: u32,
+        count: u32,
+    },
+    InsertColumns {
+        sheet: String,
+        first_column: u32,
         count: u32,
     },
     RenameSheet {
@@ -298,6 +324,17 @@ pub enum EditOperation {
         sheet: String,
         settings: PageSettings,
     },
+    SetMargins {
+        sheet: String,
+        margins: PageMargins,
+    },
+    /// Set, replace, or remove a workbook defined name. `formula: None` removes it.
+    /// `local_sheet: None` addresses a workbook-scoped name.
+    SetDefinedName {
+        name: String,
+        formula: Option<String>,
+        local_sheet: Option<String>,
+    },
     ReplaceHeaderText {
         sheet: String,
         search: String,
@@ -315,6 +352,8 @@ impl EditOperation {
             Self::SetRowHeight { .. } => EditOperationKind::SetRowHeight,
             Self::DeleteRows { .. } => EditOperationKind::DeleteRows,
             Self::InsertRows { .. } => EditOperationKind::InsertRows,
+            Self::DeleteColumns { .. } => EditOperationKind::DeleteColumns,
+            Self::InsertColumns { .. } => EditOperationKind::InsertColumns,
             Self::RenameSheet { .. } => EditOperationKind::RenameSheet,
             Self::CreateSheet { .. } => EditOperationKind::CreateSheet,
             Self::CreateSheetAt { .. } => EditOperationKind::CreateSheetAt,
@@ -329,6 +368,8 @@ impl EditOperation {
                 EditOperationKind::SetWorkbookCalculationProperties
             }
             Self::SetPageSettings { .. } => EditOperationKind::SetPageSettings,
+            Self::SetMargins { .. } => EditOperationKind::SetMargins,
+            Self::SetDefinedName { .. } => EditOperationKind::SetDefinedName,
             Self::ReplaceHeaderText { .. } => EditOperationKind::ReplaceHeaderText,
         }
     }
@@ -420,6 +461,24 @@ impl EditOperation {
                 first_row
                     .checked_add(*count - 1)
                     .ok_or_else(|| anyhow!("row insertion range overflows"))?;
+            }
+            Self::DeleteColumns {
+                sheet,
+                first_column,
+                count,
+            }
+            | Self::InsertColumns {
+                sheet,
+                first_column,
+                count,
+            } => {
+                if sheet.trim().is_empty() || *first_column == 0 || *count == 0 {
+                    bail!("column edit requires a sheet and a non-empty 1-based range");
+                }
+                first_column
+                    .checked_add(*count - 1)
+                    .filter(|last| *last <= 16_384)
+                    .ok_or_else(|| anyhow!("column edit range overflows or exceeds XLSX limits"))?;
             }
             Self::RenameSheet { old_name, new_name } => {
                 if old_name.trim().is_empty() || new_name.trim().is_empty() {
@@ -563,6 +622,40 @@ impl EditOperation {
                     .is_some_and(|area| area.trim().is_empty())
                 {
                     bail!("print area must not be empty when specified");
+                }
+            }
+            Self::SetMargins { sheet, margins } => {
+                if sheet.trim().is_empty() {
+                    bail!("page-margin update requires a worksheet name");
+                }
+                let values = [
+                    margins.left,
+                    margins.right,
+                    margins.top,
+                    margins.bottom,
+                    margins.header,
+                    margins.footer,
+                ];
+                if values
+                    .into_iter()
+                    .flatten()
+                    .any(|value| !value.is_finite() || value < 0.0)
+                {
+                    bail!("page margins must be finite and non-negative");
+                }
+                if values.into_iter().all(|value| value.is_none()) {
+                    bail!("page-margin update must specify at least one margin");
+                }
+            }
+            Self::SetDefinedName { name, formula, local_sheet } => {
+                if name.trim().is_empty() {
+                    bail!("defined-name update requires a non-empty name");
+                }
+                if formula.as_ref().is_some_and(|value| value.trim().is_empty()) {
+                    bail!("defined-name formula must not be empty when specified");
+                }
+                if local_sheet.as_ref().is_some_and(|sheet| sheet.trim().is_empty()) {
+                    bail!("defined-name worksheet scope must not be empty when specified");
                 }
             }
             Self::SetWorkbookCalculationProperties {
@@ -723,16 +816,22 @@ impl ExcelEditPlan {
 #[serde(rename_all = "snake_case")]
 pub enum EngineId {
     OoxmlPatch,
+    RustNativeOoxml,
     UmyaSpreadsheet,
+    BetterOffice,
     OpenpyxlWorker,
+    Composite,
 }
 
 impl std::fmt::Display for EngineId {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
             Self::OoxmlPatch => "ooxml_patch",
+            Self::RustNativeOoxml => "rust_native_ooxml",
             Self::UmyaSpreadsheet => "umya_spreadsheet",
+            Self::BetterOffice => "betteroffice",
             Self::OpenpyxlWorker => "openpyxl_worker",
+            Self::Composite => "composite",
         })
     }
 }
@@ -775,10 +874,12 @@ pub struct BackendRouteDecision {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackendErrorKind {
-    /// The backend completed preflight and rejected the file before writing.
-    /// The modifier may try another already-qualified backend from the original.
+    /// The backend rejected this candidate. An explicitly configured route
+    /// chain may try the next qualified backend from a fresh input snapshot.
     UnsupportedBeforeWrite,
-    /// Includes any error after writes may have started. Never auto-fallback.
+    /// Includes any error after writes may have started. The executor may only
+    /// try a later backend when the route explicitly includes Openpyxl fallback;
+    /// every backend receives a fresh source snapshot and isolated candidate.
     Failed,
 }
 
@@ -813,8 +914,9 @@ pub trait EditBackend: Send + Sync {
     fn apply(&self, plan: &ExcelEditPlan) -> std::result::Result<(), BackendFailure>;
 
     /// Optional backend-specific validation. This runs after the worker writes
-    /// its candidate and before the modifier's shared output validator. Any
-    /// failure is terminal; it must never trigger another engine.
+    /// its candidate and before the modifier's shared output validator. A
+    /// failed candidate is discarded; an explicit Openpyxl fallback route can
+    /// retry from a fresh source snapshot.
     fn validate_output(&self, _plan: &ExcelEditPlan, _candidate_output: &Path) -> Result<()> {
         Ok(())
     }
@@ -899,8 +1001,8 @@ fn execution_error(
     }
 }
 
-/// Routes one complete operation batch to one backend and commits a validated
-/// output without overwriting an existing destination.
+/// Routes one complete operation batch through its configured backend list
+/// and commits a validated output without overwriting an existing destination.
 pub struct ExcelModifier {
     platform: String,
     backends: Vec<Arc<dyn EditBackend>>,
@@ -1033,7 +1135,13 @@ impl ExcelModifier {
         let output_parent = parent_or_current(&plan.output);
         let extension = plan.format.extension();
         let mut attempts = Vec::new();
-        for (backend, engine) in eligible {
+        for (attempt_index, (backend, engine)) in eligible.iter().enumerate() {
+            let backend = *backend;
+            let engine = *engine;
+            let openpyxl_fallback_available = engine != EngineId::OpenpyxlWorker
+                && eligible[attempt_index + 1..]
+                    .iter()
+                    .any(|(_, candidate)| *candidate == EngineId::OpenpyxlWorker);
             let attempt_started = Instant::now();
             // Every attempt receives a new copy of the original, never the
             // preceding backend's input or output.
@@ -1122,6 +1230,9 @@ impl ExcelModifier {
                         message: failure.message.clone(),
                         elapsed_ms: attempt_started.elapsed().as_millis(),
                     });
+                    if openpyxl_fallback_available {
+                        continue;
+                    }
                     return Err(execution_error(
                         ExcelModifierErrorKind::BackendFailed,
                         Some(engine),
@@ -1135,21 +1246,27 @@ impl ExcelModifier {
                 }
             }
 
-            let metadata = fs::metadata(output_candidate.path()).map_err(|error| {
-                attempts.push(BackendAttempt {
-                    engine,
-                    outcome: BackendAttemptOutcome::Failed,
-                    message: format!("candidate output is missing: {error}"),
-                    elapsed_ms: attempt_started.elapsed().as_millis(),
-                });
-                execution_error(
-                    ExcelModifierErrorKind::BackendFailed,
-                    Some(engine),
-                    "backend did not create its candidate output",
-                    &route,
-                    &attempts,
-                )
-            })?;
+            let metadata = match fs::metadata(output_candidate.path()) {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    attempts.push(BackendAttempt {
+                        engine,
+                        outcome: BackendAttemptOutcome::Failed,
+                        message: format!("candidate output is missing: {error}"),
+                        elapsed_ms: attempt_started.elapsed().as_millis(),
+                    });
+                    if openpyxl_fallback_available {
+                        continue;
+                    }
+                    return Err(execution_error(
+                        ExcelModifierErrorKind::BackendFailed,
+                        Some(engine),
+                        "backend did not create its candidate output",
+                        &route,
+                        &attempts,
+                    ));
+                }
+            };
             if !metadata.is_file() || metadata.len() == 0 {
                 let message = "backend produced an empty or non-file output".to_owned();
                 attempts.push(BackendAttempt {
@@ -1158,6 +1275,9 @@ impl ExcelModifier {
                     message: message.clone(),
                     elapsed_ms: attempt_started.elapsed().as_millis(),
                 });
+                if openpyxl_fallback_available {
+                    continue;
+                }
                 return Err(execution_error(
                     ExcelModifierErrorKind::BackendFailed,
                     Some(engine),
@@ -1174,10 +1294,13 @@ impl ExcelModifier {
                     message: message.clone(),
                     elapsed_ms: attempt_started.elapsed().as_millis(),
                 });
+                if openpyxl_fallback_available {
+                    continue;
+                }
                 return Err(execution_error(
                     ExcelModifierErrorKind::OutputValidationFailed,
                     Some(engine),
-                    format!("backend output validation failed; fallback stopped: {message}"),
+                    format!("backend output validation failed: {message}"),
                     &route,
                     &attempts,
                 ));
@@ -1190,10 +1313,13 @@ impl ExcelModifier {
                     message: message.clone(),
                     elapsed_ms: attempt_started.elapsed().as_millis(),
                 });
+                if openpyxl_fallback_available {
+                    continue;
+                }
                 return Err(execution_error(
                     ExcelModifierErrorKind::OutputValidationFailed,
                     Some(engine),
-                    format!("output validation failed; fallback stopped: {message}"),
+                    format!("output validation failed: {message}"),
                     &route,
                     &attempts,
                 ));

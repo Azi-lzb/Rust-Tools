@@ -1,0 +1,84 @@
+{
+  "changed_cells": 20,
+  "committed_files": 1,
+  "completed_files": 1,
+  "created_copies": 0,
+  "elapsed_ms": 30088,
+  "failed_files": 0,
+  "feature_id": "PT-7-1",
+  "files": 1,
+  "items": [
+    {
+      "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\2026.09 本外币_village_split_055c4071.xlsx",
+      "changed_cells": 20,
+      "elapsed_ms": 30087,
+      "execution": {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 1946,
+          "operation": "replaced",
+          "sha256_after": "68f0da05abbf76e852bc9754a4244772b88c160ae305b417d8e8b66571aa2ae1",
+          "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+        },
+        "engine": "openpyxl",
+        "execution": {
+          "attempts": [
+            {
+              "elapsed_ms": 16268,
+              "engine": "openpyxl_worker",
+              "message": "validated output published",
+              "outcome": "succeeded"
+            }
+          ],
+          "elapsed_ms": 16268,
+          "engine": "openpyxl_worker",
+          "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx",
+          "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\.pytools-inplace-7620-1794473148467121800.xlsx",
+          "route_decisions": [
+            {
+              "eligible": true,
+              "engine": "openpyxl_worker",
+              "rejected_reasons": []
+            }
+          ]
+        },
+        "mode": "in_place",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+      },
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx",
+      "matched_sheets": 0,
+      "output_copy": null,
+      "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\pytools-village-split-20261112_164536_594316500\\target-0001.plan.json",
+      "status": "committed",
+      "target_commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 1946,
+        "operation": "replaced",
+        "sha256_after": "68f0da05abbf76e852bc9754a4244772b88c160ae305b417d8e8b66571aa2ae1",
+        "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+      },
+      "warnings": []
+    }
+  ],
+  "matched_sheets": 0,
+  "mode": "in_place",
+  "plan_dir": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\pytools-village-split-20261112_164536_594316500",
+  "planned_files": 1,
+  "run_id": "pytools-pt-7-1-7620-1794473136595955900",
+  "run_log_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\logs\\PT-7-1_pytools-pt-7-1-7620-1794473136595955900.run.json",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\logs\\run-unified\\PT-7-1_pytools-pt-7-1-7620-1794473136595955900.json",
+  "status": "succeeded"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:45:36.596068100+08:00","phase":"planning","status":"started","user_message":"开始拆分第 1/1 个工作簿中的村镇银行数据","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T16:45:48.459541200+08:00","phase":"planning","status":"completed","user_message":"已完成业务计算并生成工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":11843,"total_elapsed_ms":11863,"components":["pytools-core","excel-reader","calamine"],"actual_engine":"calamine"}
+{"sequence":3,"timestamp":"2026-11-12T16:45:48.460748100+08:00","phase":"plan_persistence","status":"completed","user_message":"已保存工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1,"total_elapsed_ms":11864,"components":["pytools-core"]}
+[2026-11-12 16:46:06] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 2026.09 本外币.xlsx，耗时 16268 ms
+{"sequence":4,"timestamp":"2026-11-12T16:46:06.683612300+08:00","phase":"engine_execution","status":"completed","user_message":"已完成工作簿候选修改与引擎验证","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":18222,"total_elapsed_ms":30087,"components":["pytools-core","excel-editor"],"actual_engine":"openpyxl"}
+{"sequence":5,"timestamp":"2026-11-12T16:46:06.683731900+08:00","phase":"safe_commit","status":"completed","user_message":"候选校验通过；已备份并安全替换所选源工作簿","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":0,"total_elapsed_ms":30087,"components":["pytools-core","file-commit"],"actual_engine":"openpyxl"}
+{"sequence":6,"timestamp":"2026-11-12T16:46:06.684015600+08:00","phase":"file_summary","status":"completed","user_message":"当前工作簿已安全提交","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":1,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":30087,"total_elapsed_ms":30088,"components":["pytools-core"]}

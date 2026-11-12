@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 20:28:35] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-rename-crg6qc53\OpenpyxlOnly\source.xlsx: AllBackendsRejectedBeforeWrite: all qualified backends rejected the file before writing: openpyxl_worker: openpyxl worker 失败（类别=执行失败）：INDIRECT selector Sheet1!H21 contains a worksheet name being renamed; refusing an incomplete rewrite；建议：请查看运行日志获取详情

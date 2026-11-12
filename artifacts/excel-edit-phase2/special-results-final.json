@@ -1,0 +1,144 @@
+[
+  {
+    "menu": "5-4",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\0-5-4-OpenpyxlOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\0-5-4-OpenpyxlOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\0-5-4-OpenpyxlOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\0-5-4-OpenpyxlOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\final-0-5-4-OpenpyxlOnly.log",
+    "engine_lines": [
+      "[2026-11-12 19:27:30] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 10438 ms"
+    ],
+    "plan_files": []
+  },
+  {
+    "menu": "5-4",
+    "mode": "RustNativeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\1-5-4-RustNativeOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\1-5-4-RustNativeOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\1-5-4-RustNativeOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\1-5-4-RustNativeOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\final-1-5-4-RustNativeOnly.log",
+    "engine_lines": [
+      "[2026-11-12 19:27:40] [INFO] ExcelEditPlan 路由：模式 RustNativeOnly，引擎 rust_native_ooxml，文件 2026.09 外发用.xlsx，耗时 4155 ms"
+    ],
+    "plan_files": []
+  },
+  {
+    "menu": "5-4",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\2-5-4-UMYAOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\2-5-4-UMYAOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\2-5-4-UMYAOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\2-5-4-UMYAOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\final-2-5-4-UMYAOnly.log",
+    "engine_lines": [],
+    "plan_files": []
+  },
+  {
+    "menu": "5-4",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\final-3-5-4-Auto.log",
+    "engine_lines": [
+      "[2026-11-12 19:27:57] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 rust_native_ooxml，文件 2026.09 外发用.xlsx，耗时 7932 ms"
+    ],
+    "plan_files": []
+  }
+]

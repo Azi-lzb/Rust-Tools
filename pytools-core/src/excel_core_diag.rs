@@ -17,8 +17,11 @@ use excel_editor::{BackendAttemptOutcome, EditExecutionReport, EngineId, ExcelMo
 pub fn engine_label(engine: EngineId) -> &'static str {
     match engine {
         EngineId::OoxmlPatch => "ooxml-patch",
+        EngineId::RustNativeOoxml => "rust-native-ooxml",
         EngineId::UmyaSpreadsheet => "umya-spreadsheet",
+        EngineId::BetterOffice => "betteroffice",
         EngineId::OpenpyxlWorker => "openpyxl",
+        EngineId::Composite => "in-memory-composite",
     }
 }
 

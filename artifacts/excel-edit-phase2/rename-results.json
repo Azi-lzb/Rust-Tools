@@ -1,0 +1,78 @@
+[
+  {
+    "menu": "4-5",
+    "mode": "LegacyDefault",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\LegacyDefault\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 16:37:36] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\LegacyDefault\\source.xlsx: 工作表改名失败（阶段：重新读取并校验）：ValueError: 工作表 'Sheet1' 非公式单元格 A21 发生变化\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\OpenpyxlOnly\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 16:37:46] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\OpenpyxlOnly\\source.xlsx: OutputValidationFailed: backend output validation failed: openpyxl changed worksheet page settings\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\UMYAOnly\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 16:37:50] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\UMYAOnly\\source.xlsx: UMYAOnly refuses workbooks with comments, charts, external links, macros, or other complex objects\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\Auto\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 16:37:57] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-css9umpb\\Auto\\source.xlsx: OutputValidationFailed: backend output validation failed: openpyxl changed worksheet page settings\n",
+    "original_unchanged": true
+  }
+]

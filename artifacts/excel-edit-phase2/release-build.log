@@ -1,0 +1,1319 @@
+   Compiling syn v3.0.9
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+   Compiling crc32fast v1.5.3
+   Compiling log v0.4.34
+   Compiling zopfli v0.8.4
+   Compiling flate2 v1.1.10
+   Compiling cc v1.9.0
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling encoding_rs v0.8.42
+   Compiling zstd-safe v7.3.0
+   Compiling ctutils v0.4.3
+   Compiling quick-xml v0.41.0
+   Compiling itoa v1.0.18
+   Compiling const-oid v0.10.2
+   Compiling digest v0.11.3
+   Compiling inout v0.2.5
+   Compiling zip v9.0.5
+   Compiling betteroffice-xlsx-model v0.5.1 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\vendor\betteroffice-xlsx-model)
+   Compiling smallvec v1.16.3
+   Compiling libbz2-rs-sys v0.2.5
+   Compiling bzip2 v0.6.1
+   Compiling zeroize v1.9.1
+   Compiling serde_json v1.0.154
+   Compiling zstd v0.13.3
+   Compiling cipher v0.5.2
+   Compiling zip v8.6.0
+   Compiling zip v6.0.0
+   Compiling parking_lot_core v0.9.12
+   Compiling quick-xml v0.42.0
+   Compiling codepage v0.1.3
+   Compiling betteroffice-drawingml v0.5.1
+   Compiling thiserror-impl v2.0.21
+   Compiling roxmltree v0.21.1
+   Compiling uuid v1.28.0
+   Compiling jiff-core v0.1.1
+   Compiling cfb v0.14.0
+   Compiling dashmap v6.2.1
+   Compiling calamine v0.37.0
+   Compiling jiff v0.2.38
+   Compiling aes v0.9.3
+   Compiling thiserror v2.0.21
+   Compiling chrono v0.4.45
+   Compiling cbc v0.2.1
+   Compiling smallstr v0.3.1
+   Compiling betteroffice-xlsx-calc v0.5.1 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\vendor\betteroffice-xlsx-calc)
+   Compiling sha2 v0.11.1
+   Compiling md-5 v0.11.0
+   Compiling hmac v0.13.0
+   Compiling arc-swap v1.9.4
+   Compiling async-trait v0.1.92
+   Compiling betteroffice-xlsx-render v0.5.1
+   Compiling yrs v0.27.4
+   Compiling umya-spreadsheet v3.1.1
+   Compiling betteroffice-xlsx-ops v0.5.1
+   Compiling excel-reader v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-reader)
+   Compiling ooxml-patch v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\ooxml-patch)
+warning: unused import: `clear_empty_formula_cache`
+    --> crates\ooxml-patch\src\lib.rs:4446:17
+     |
+4446 |     use super::{clear_empty_formula_cache, MAIN_NS};
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `roxmltree::Document`
+    --> crates\ooxml-patch\src\lib.rs:4448:9
+     |
+4448 |     use roxmltree::Document;
+     |         ^^^^^^^^^^^^^^^^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+    --> crates\ooxml-patch\src\lib.rs:4451:14
+     |
+4451 |         fs::{self, File},
+     |              ^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `local_sheet_names`
+   --> crates\ooxml-patch\src\excel_open_repair.rs:691:5
+    |
+691 |     local_sheet_names: &[String],
+    |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_local_sheet_names`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `temp_path` is never used
+    --> crates\ooxml-patch\src\lib.rs:4457:8
+     |
+4457 |     fn temp_path(label: &str) -> PathBuf {
+     |        ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `write_fixture` is never used
+    --> crates\ooxml-patch\src\lib.rs:4470:8
+     |
+4470 |     fn write_fixture(path: &PathBuf, cached_value: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+     |        ^^^^^^^^^^^^^
+
+warning: function `read_entries` is never used
+    --> crates\ooxml-patch\src\lib.rs:4520:8
+     |
+4520 |     fn read_entries(path: &PathBuf) -> Result<BTreeMap<String, Vec<u8>>> {
+     |        ^^^^^^^^^^^^
+
+warning: `ooxml-patch` (lib) generated 7 warnings (run `cargo fix --lib -p ooxml-patch` to apply 4 suggestions)
+   Compiling betteroffice-xlsx-parse v0.5.1
+   Compiling betteroffice-opc v0.5.1
+   Compiling rust_xlsxwriter v0.101.0
+   Compiling windows-sys v0.61.2
+   Compiling pytools-core v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core)
+   Compiling csv v1.4.0
+   Compiling excel-editor v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor)
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:2779:22
+     |
+2779 |                     .get_cell(cell.as_str())
+     |                      ^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:2797:22
+     |
+2797 |                     .get_cell(cell.as_str())
+     |                      ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:3947:10
+     |
+3947 |         .get_cell(address)
+     |          ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:739:14
+    |
+739 |             .get_cell(inserted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:791:14
+    |
+791 |             .get_cell(shifted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:998:14
+    |
+998 |             .get_cell(adjusted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1753:18
+     |
+1753 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Cell::get_style_mut`: Use style_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1777:26
+     |
+1777 |                         .get_style_mut()
+     |                          ^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Style::get_number_format_mut`: Use number_format_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1778:26
+     |
+1778 |                         .get_number_format_mut()
+     |                          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1798:18
+     |
+1798 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1810:18
+     |
+1810 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1833:18
+     |
+1833 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1848:18
+     |
+1848 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1877:22
+     |
+1877 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1879:40
+     |
+1879 |                     .all(|sheet| sheet.get_name() != new_name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1883:18
+     |
+1883 |                 .get_sheet_by_name_mut(old_name)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1894:18
+     |
+1894 |                 .get_sheet_by_name_mut(new_name)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1917:22
+     |
+1917 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1919:40
+     |
+1919 |                     .all(|sheet| sheet.get_name() != name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1935:22
+     |
+1935 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1937:40
+     |
+1937 |                     .all(|sheet| sheet.get_name() != name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1944:39
+     |
+1944 |             let collection = workbook.get_sheet_collection_mut();
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1959:18
+     |
+1959 |                 .get_sheet_collection()
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1961:49
+     |
+1961 |                 .position(|candidate| candidate.get_name() == sheet.as_str())
+     |                                                 ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1964:39
+     |
+1964 |             let collection = workbook.get_sheet_collection_mut();
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1990:18
+     |
+1990 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_style_mut`: Use style_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1995:18
+     |
+1995 |                 .get_style_mut(cell.as_str())
+     |                  ^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Style::get_fill_mut`: Use fill_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1996:18
+     |
+1996 |                 .get_fill_mut()
+     |                  ^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Fill::get_pattern_fill_mut`: Use pattern_fill_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1997:18
+     |
+1997 |                 .get_pattern_fill_mut();
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_page_setup_mut`: Use page_setup_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2077:31
+     |
+2077 |             let page = target.get_page_setup_mut();
+     |                               ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2101:22
+     |
+2101 |                     .get_print_options_mut()
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2105:24
+     |
+2105 |                 target.get_print_options_mut().set_vertical_centered(value);
+     |                        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_header_footer_mut`: Use header_footer_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2114:22
+     |
+2114 |                     .get_header_footer_mut()
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::HeaderFooter::get_odd_footer_mut`: Use odd_footer_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2115:22
+     |
+2115 |                     .get_odd_footer_mut()
+     |                      ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2124:18
+     |
+2124 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2140:22
+     |
+2140 |                     .get_sheet_by_name_mut(sheet)
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2231:14
+     |
+2231 |             .get_sheet_by_name(source_sheet)
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\umya_backend.rs:2237:41
+     |
+2237 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2270:10
+     |
+2270 |         .get_sheet_by_name_mut(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2340:10
+     |
+2340 |         .get_sheet_by_name(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2348:14
+     |
+2348 |             .get_sheet_by_name(source_sheet)
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\umya_backend.rs:2354:41
+     |
+2354 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2425:63
+     |
+2425 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+     |                                                         ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2441:67
+     |
+2441 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+     |                                                         ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2459:66
+     |
+2459 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+     |                                                            ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2470:70
+     |
+2470 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+     |                                                            ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2482:10
+     |
+2482 |         .get_sheet_by_name_mut(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2598:10
+     |
+2598 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2600:28
+     |
+2600 |         .map(|sheet| sheet.get_name().to_owned())
+     |                            ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2611:31
+     |
+2611 |     let collection = workbook.get_sheet_collection_mut();
+     |                               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2623:18
+     |
+2623 |                 .get_sheet_collection()
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2625:41
+     |
+2625 |                 .position(|sheet| sheet.get_name() == name)
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2682:10
+     |
+2682 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2684:39
+     |
+2684 |         .filter(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                       ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2699:10
+     |
+2699 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2701:41
+     |
+2701 |         .position(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2704:32
+     |
+2704 |     let target = &mut workbook.get_sheet_collection_mut()[sheet_index];
+     |                                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2725:10
+     |
+2725 |         .get_sheet_collection_mut()
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2727:37
+     |
+2727 |         .find(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                     ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates\excel-editor\src\openpyxl_backend.rs:781:13
+    |
+781 |         let mut timed_out = false;
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `actual`
+    --> crates\excel-editor\src\openpyxl_backend.rs:3998:15
+     |
+3998 |         (Some(actual), Some(expected)) => {}
+     |               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_actual`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `expected`
+    --> crates\excel-editor\src\openpyxl_backend.rs:3998:29
+     |
+3998 |         (Some(actual), Some(expected)) => {}
+     |                             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_expected`
+
+warning: variable does not need to be mutable
+    --> crates\excel-editor\src\openpyxl_backend.rs:4917:9
+     |
+4917 |     let mut bytes = if !truncated {
+     |         ----^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: function `equal_defaulted` is never used
+    --> crates\excel-editor\src\openpyxl_backend.rs:4028:8
+     |
+4028 |     fn equal_defaulted<T>(actual: Option<&T>, expected: Option<&T>) -> bool
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `id` is never used
+   --> crates\excel-editor\src\worker_process.rs:105:19
+    |
+ 45 | impl WorkerProcess {
+    | ------------------ method in this implementation
+...
+105 |     pub(crate) fn id(&self) -> u32 {
+    |                   ^^
+
+warning: `excel-editor` (lib) generated 65 warnings (run `cargo fix --lib -p excel-editor` to apply 4 suggestions)
+   Compiling excel-writer v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-writer)
+   Compiling betteroffice-xlsx v0.5.1
+warning: unused import: `bail`
+ --> pytools-core\src\batch_ops.rs:3:14
+  |
+3 | use anyhow::{bail, Context, Result};
+  |              ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `anyhow`
+ --> pytools-core\src\betteroffice_edit.rs:3:14
+  |
+3 | use anyhow::{anyhow, bail, ensure, Context, Result};
+  |              ^^^^^^
+
+warning: unused import: `Context`
+  --> pytools-core\src\inplace_edit.rs:13:14
+   |
+13 | use anyhow::{Context, Result};
+   |              ^^^^^^^
+
+warning: unused import: `time::SystemTime`
+ --> pytools-core\src\quick.rs:8:5
+  |
+8 |     time::SystemTime,
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `CellNumberFormatSource`
+  --> pytools-core\src\summary_ops.rs:11:59
+   |
+11 |     read_xlsx_worksheet_extents, CellNumberFormatRequest, CellNumberFormatSource, CellValue,
+   |                                                           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_collection`: Use sheet_collection()
+   --> pytools-core\src\static_print_engines.rs:310:18
+    |
+310 |                 .get_sheet_collection()
+    |                  ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+   --> pytools-core\src\static_print_engines.rs:312:36
+    |
+312 |                 .map(|sheet| sheet.get_name().to_owned())
+    |                                    ^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:316:22
+    |
+316 |                     .get_sheet_by_name(&name)
+    |                      ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_highest_row`: Use highest_row()
+   --> pytools-core\src\static_print_engines.rs:317:40
+    |
+317 |                     .map(|sheet| sheet.get_highest_row() <= 1 && sheet.get_highest_column() <= 1)
+    |                                        ^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_highest_column`: Use highest_column()
+   --> pytools-core\src\static_print_engines.rs:317:72
+    |
+317 |                     .map(|sheet| sheet.get_highest_row() <= 1 && sheet.get_highest_column() <= 1)
+    |                                                                        ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:384:45
+    |
+384 |             let source_lookup = source_book.get_sheet_by_name(&task.source_ws);
+    |                                             ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:410:18
+    |
+410 |                 .get_sheet_by_name(&task.source_ws)
+    |                  ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:418:21
+    |
+418 |             if book.get_sheet_by_name(&target_name).is_ok() {
+    |                     ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:421:22
+    |
+421 |                     .get_sheet_by_name_mut(&target_name)
+    |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_highest_column_and_row`: Use highest_column_and_row()
+   --> pytools-core\src\static_print_engines.rs:423:39
+    |
+423 |                 let (_, rows) = sheet.get_highest_column_and_row();
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_highest_column_and_row`: Use highest_column_and_row()
+   --> pytools-core\src\static_print_engines.rs:438:55
+    |
+438 |                 let (max_col, max_row) = source_sheet.get_highest_column_and_row();
+    |                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:479:61
+    |
+479 |                         let Ok(source_ws_ref) = source_book.get_sheet_by_name(&source_sheet_name)
+    |                                                             ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> pytools-core\src\static_print_engines.rs:483:63
+    |
+483 |                         let Some(source_cell) = source_ws_ref.get_cell(src_address.as_str()) else {
+    |                                                               ^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Cell::get_style`: Use style()
+   --> pytools-core\src\static_print_engines.rs:486:49
+    |
+486 |                         let style = source_cell.get_style().clone();
+    |                                                 ^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Cell::get_raw_value`: Use raw_value()
+   --> pytools-core\src\static_print_engines.rs:487:47
+    |
+487 |                         let raw = source_cell.get_raw_value().clone();
+    |                                               ^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:488:54
+    |
+488 |                         let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) else {
+    |                                                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Cell::get_data_type`: Use data_type()
+   --> pytools-core\src\static_print_engines.rs:499:78
+    |
+499 |                         copy_raw_value_static(&raw, target_cell, source_cell.get_data_type());
+    |                                                                              ^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:505:52
+    |
+505 |                     let format = match source_book.get_sheet_by_name(&source_sheet_name) {
+    |                                                    ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_sheet_format_properties`: Use sheet_format_properties()
+   --> pytools-core\src\static_print_engines.rs:507:55
+    |
+507 | ...                   let props = source_ws_ref.get_sheet_format_properties();
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:512:53
+    |
+512 |                     if let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) {
+    |                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_sheet_format_properties_mut`: Use sheet_format_properties_mut()
+   --> pytools-core\src\static_print_engines.rs:514:55
+    |
+514 | ...                   let props = target_ws_ref.get_sheet_format_properties_mut();
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:533:43
+    |
+533 |                         match source_book.get_sheet_by_name(&source_sheet_name) {
+    |                                           ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_column_dimension_by_number`: Use column_dimension_by_number()
+   --> pytools-core\src\static_print_engines.rs:538:42
+    |
+538 | ...                   .get_column_dimension_by_number(&src_col)
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Column::get_width`: Use width()
+   --> pytools-core\src\static_print_engines.rs:539:75
+    |
+539 | ...                   .map(|column| (1 + offset, column.get_width()))
+    |                                                         ^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:545:43
+    |
+545 |                         match source_book.get_sheet_by_name(&source_sheet_name) {
+    |                                           ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_row_dimension`: Use row_dimension()
+   --> pytools-core\src\static_print_engines.rs:549:51
+    |
+549 | ...                   source_ws_ref.get_row_dimension(&src_row).map(|row| {
+    |                                     ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Row::get_height`: Use height()
+   --> pytools-core\src\static_print_engines.rs:550:82
+    |
+550 | ...                   (dst_start_row_for_segment + offset, row.get_height())
+    |                                                                ^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:557:53
+    |
+557 |                     if let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) {
+    |                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_column_dimension_mut`: Use column_dimension_mut()
+   --> pytools-core\src\static_print_engines.rs:560:34
+    |
+560 | ...                   .get_column_dimension_mut(&column_letters(column as usize))
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_row_dimension_mut`: Use row_dimension_mut()
+   --> pytools-core\src\static_print_engines.rs:564:43
+    |
+564 | ...                   target_ws_ref.get_row_dimension_mut(&row).set_height(height);
+    |                                     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name`: Use sheet_by_name()
+   --> pytools-core\src\static_print_engines.rs:570:22
+    |
+570 |                     .get_sheet_by_name(&source_sheet_name)
+    |                      ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_merge_cells`: Use merge_cells()
+   --> pytools-core\src\static_print_engines.rs:573:26
+    |
+573 |                         .get_merge_cells()
+    |                          ^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Range::get_range`: Use range()
+   --> pytools-core\src\static_print_engines.rs:576:69
+    |
+576 | ...                   let parsed = parse_range_bounds(&merged.get_range())?;
+    |                                                               ^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:597:53
+    |
+597 |                     if let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) {
+    |                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+   --> pytools-core\src\static_print_engines.rs:621:49
+    |
+621 |                 if let Ok(target_ws_ref) = book.get_sheet_by_name_mut(&target_name) {
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_page_setup_mut`: Use page_setup_mut()
+   --> pytools-core\src\static_print_engines.rs:622:46
+    |
+622 |                     let page = target_ws_ref.get_page_setup_mut();
+    |                                              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
+   --> pytools-core\src\static_print_engines.rs:631:49
+    |
+631 |                     let options = target_ws_ref.get_print_options_mut();
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `excel_editor::Workbook::get_sheet_collection`: Use sheet_collection()
+   --> pytools-core\src\static_print_engines.rs:640:22
+    |
+640 |                     .get_sheet_collection()
+    |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+   --> pytools-core\src\static_print_engines.rs:642:45
+    |
+642 |                     .position(|sheet| sheet.get_name() == target_name)
+    |                                             ^^^^^^^^
+
+warning: unused import: `OutputValidator`
+ --> pytools-core\src\dedup_ops.rs:6:68
+  |
+6 |     inspect_xlsx_profile, CellValue, EditOperation, ExcelEditPlan, OutputValidator,
+  |                                                                    ^^^^^^^^^^^^^^^
+
+warning: unused import: `std::io::Read`
+  --> pytools-core\src\ooxml_cell_styles.rs:13:5
+   |
+13 | use std::io::Read;
+   |     ^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> pytools-core\src\conversion_engine.rs:369:9
+    |
+369 |     let mut child = command.spawn().with_context(|| {
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `is_xls_target`
+    --> pytools-core\src\dedup_ops.rs:1004:13
+     |
+1004 |         let is_xls_target = target_ext == "xls";
+     |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_is_xls_target`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable pattern
+   --> pytools-core\src\edit_plan.rs:164:13
+    |
+164 |             other => anyhow::bail!("no runtime adapter is registered for backend {other}"),
+    |             ^^^^^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> pytools-core\src\edit_plan.rs:164:13
+    |
+141 |             EngineId::UmyaSpreadsheet => backends.push(Arc::new(UmyaXlsxBackend::new(capability)?)),
+    |             ------------------------- matches some of the same values
+142 |             EngineId::OoxmlPatch => {
+    |             -------------------- matches some of the same values
+...
+145 |             EngineId::OpenpyxlWorker => {
+    |             ------------------------ matches some of the same values
+...
+153 |             EngineId::RustNativeOoxml => {
+    |             ------------------------- matches some of the same values
+...
+164 |             other => anyhow::bail!("no runtime adapter is registered for backend {other}"),
+    |             ^^^^^ ...and 2 other patterns collectively make this unreachable
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `binary`
+   --> pytools-core\src\inplace_edit.rs:147:30
+    |
+147 | fn capability_for_plain_xlsx(binary: &Path) -> excel_editor::BackendCapability {
+    |                              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_binary`
+
+warning: variable does not need to be mutable
+   --> pytools-core\src\ooxml_cell_styles.rs:157:13
+    |
+157 |         let mut tables_snapshot = std::sync::OnceLock::new();
+    |             ----^^^^^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `region_reorg_ms`
+   --> pytools-core\src\print_ops.rs:813:9
+    |
+813 |     let region_reorg_ms = std::cell::Cell::new(0u128);
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_region_reorg_ms`
+
+warning: variable does not need to be mutable
+    --> pytools-core\src\print_ops.rs:1656:17
+     |
+1656 |                 mut format: rust_xlsxwriter::Format,
+     |                 ----^^^^^^
+     |                 |
+     |                 help: remove this `mut`
+
+warning: unused variable: `color`
+    --> pytools-core\src\print_ops.rs:1660:34
+     |
+1660 |                 let Some((style, color)) = edge else {
+     |                                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_color`
+
+warning: variable does not need to be mutable
+    --> pytools-core\src\sheet_extract.rs:2125:9
+     |
+2125 |     let mut workbook_profile = inspect_xlsx_profile(existing_path).with_context(|| {
+     |         ----^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: unused variable: `template_path`
+   --> pytools-core\src\summary_ops.rs:147:5
+    |
+147 |     template_path: &Path,
+    |     ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_template_path`
+
+warning: value assigned to `batch_elapsed` is never read
+   --> pytools-core\src\summary_ops.rs:199:9
+    |
+199 |         batch_elapsed = Duration::ZERO;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> pytools-core\src\summary_ops.rs:4908:9
+     |
+4908 |     let mut expected_names = if specs.is_empty() {
+     |         ----^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: multiple fields are never read
+  --> pytools-core\src\bo_calc.rs:54:9
+   |
+50 | pub(crate) struct BoCalcOutcome {
+   |                   ------------- fields in this struct
+...
+54 |     pub limited_cells: usize,
+   |         ^^^^^^^^^^^^^
+55 |     pub error_cells: usize,
+   |         ^^^^^^^^^^^
+56 |     pub name_error_cells: usize,
+   |         ^^^^^^^^^^^^^^^^
+57 |     pub style_cells_stripped: usize,
+   |         ^^^^^^^^^^^^^^^^^^^^
+58 |     pub open_elapsed: std::time::Duration,
+   |         ^^^^^^^^^^^^
+59 |     pub calc_elapsed: std::time::Duration,
+   |         ^^^^^^^^^^^^
+60 |     pub save_elapsed: std::time::Duration,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `BoCalcOutcome` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `fallback_libreoffice` is never read
+  --> pytools-core\src\bo_calc.rs:96:9
+   |
+90 | pub(crate) struct BoCalcConfig {
+   |                   ------------ field in this struct
+...
+96 |     pub fallback_libreoffice: bool,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `BoCalcConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `ensure` is never used
+   --> pytools-core\src\bo_calc.rs:340:4
+    |
+340 | fn ensure(condition: bool, message: impl std::fmt::Display) -> Result<()> {
+    |    ^^^^^^
+
+warning: field `staged_output` is never read
+   --> pytools-core\src\conversion_engine.rs:260:5
+    |
+258 | struct LibreOfficeJob {
+    |        -------------- field in this struct
+259 |     staged_input: PathBuf,
+260 |     staged_output: PathBuf,
+    |     ^^^^^^^^^^^^^
+
+warning: function `select_fidelity_engine` is never used
+   --> pytools-core\src\conversion_engine.rs:390:15
+    |
+390 | pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
+    |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `compute_named_validation_regions`, `recalculate_named_validation_regions`, and `libreoffice_covers` are never used
+    --> pytools-core\src\conversion_engine.rs:899:19
+     |
+ 497 | impl ConversionRuntime {
+     | ---------------------- methods in this implementation
+...
+ 899 |     pub(crate) fn compute_named_validation_regions(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 911 |     pub(crate) fn recalculate_named_validation_regions(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1524 |     pub(crate) fn libreoffice_covers(&self, input: &Path, target: &str) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^
+
+warning: field `copied_formula_cells` is never read
+    --> pytools-core\src\conversion_engine.rs:1599:9
+     |
+1594 | pub(crate) struct NamedValidationCalculation {
+     |                   -------------------------- field in this struct
+...
+1599 |     pub copied_formula_cells: usize,
+     |         ^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `NamedValidationCalculation` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `cell_values_equal` is never used
+    --> pytools-core\src\conversion_engine.rs:2801:4
+     |
+2801 | fn cell_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `cell_kind` is never used
+    --> pytools-core\src\conversion_engine.rs:2836:4
+     |
+2836 | fn cell_kind(value: &serde_json::Value) -> &str {
+     |    ^^^^^^^^^
+
+warning: function `date_iso_empty` is never used
+    --> pytools-core\src\dedup_ops.rs:3317:4
+     |
+3317 | fn date_iso_empty() -> std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>
+     |    ^^^^^^^^^^^^^^
+
+warning: constant `MAIN_NS` is never used
+  --> pytools-core\src\ooxml_cell_styles.rs:18:7
+   |
+18 | const MAIN_NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+   |       ^^^^^^^
+
+warning: constant `PKG_REL_NS` is never used
+  --> pytools-core\src\ooxml_cell_styles.rs:20:7
+   |
+20 | const PKG_REL_NS: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
+   |       ^^^^^^^^^^
+
+warning: fields `apply_number_format`, `apply_font`, `apply_fill`, `apply_border`, and `apply_alignment` are never read
+   --> pytools-core\src\ooxml_cell_styles.rs:126:5
+    |
+119 | struct CellXfEntry {
+    |        ----------- fields in this struct
+...
+126 |     apply_number_format: bool,
+    |     ^^^^^^^^^^^^^^^^^^^
+127 |     apply_font: bool,
+    |     ^^^^^^^^^^
+128 |     apply_fill: bool,
+    |     ^^^^^^^^^^
+129 |     apply_border: bool,
+    |     ^^^^^^^^^^^^
+130 |     apply_alignment: bool,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `CellXfEntry` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `font_raw`, `fill_raw`, and `border_raw` are never used
+   --> pytools-core\src\ooxml_cell_styles.rs:551:8
+    |
+550 | impl StylesheetTables {
+    | --------------------- methods in this implementation
+551 |     fn font_raw(&self, id: usize) -> Option<FontRaw> {
+    |        ^^^^^^^^
+...
+554 |     fn fill_raw(&self, id: usize) -> Option<FillRaw> {
+    |        ^^^^^^^^
+...
+557 |     fn border_raw(&self, id: usize) -> Option<BorderRaw> {
+    |        ^^^^^^^^^^
+
+warning: function `ensure_result_directory` is never used
+   --> pytools-core\src\sheet_rename.rs:481:4
+    |
+481 | fn ensure_result_directory(path: &Path, create: bool) -> Result<()> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `path_exists_including_symlink` is never used
+   --> pytools-core\src\sheet_rename.rs:501:4
+    |
+501 | fn path_exists_including_symlink(path: &Path) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `used_bounds` is never used
+  --> pytools-core\src\static_print_engines.rs:62:4
+   |
+62 | fn used_bounds(sheet: &SheetDump) -> (usize, usize, usize, usize) {
+   |    ^^^^^^^^^^^
+
+warning: function `is_zero_like` is never used
+   --> pytools-core\src\static_print_engines.rs:133:4
+    |
+133 | fn is_zero_like(value: &serde_json::Value) -> bool {
+    |    ^^^^^^^^^^^^
+
+warning: field `header` is never read
+    --> pytools-core\src\summary_ops.rs:1189:5
+     |
+1185 | struct NamedRegionGroup {
+     |        ---------------- field in this struct
+...
+1189 |     header: NamedRegionBounds,
+     |     ^^^^^^
+     |
+     = note: `NamedRegionGroup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: unused `Result` that must be used
+    --> pytools-core\src\print_ops.rs:1722:21
+     |
+1722 | /                     worksheet.write_string_with_format(
+1723 | |                         row,
+1724 | |                         column,
+1725 | |                         data.as_str().unwrap_or_default(),
+1726 | |                         format,
+1727 | |                     );
+     | |_____________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+1722 |                     let _ = worksheet.write_string_with_format(
+     |                     +++++++
+
+warning: unused `Result` that must be used
+    --> pytools-core\src\print_ops.rs:1743:21
+     |
+1743 |                     worksheet.write_number_with_format(row, column, number, format);
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1743 |                     let _ = worksheet.write_number_with_format(row, column, number, format);
+     |                     +++++++
+
+warning: unused `Result` that must be used
+    --> pytools-core\src\print_ops.rs:1755:21
+     |
+1755 |                     worksheet.write_number_with_format(row, column, number, format);
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1755 |                     let _ = worksheet.write_number_with_format(row, column, number, format);
+     |                     +++++++
+
+warning: unused `Result` that must be used
+    --> pytools-core\src\print_ops.rs:1777:21
+     |
+1777 | /                     worksheet.write_boolean_with_format(
+1778 | |                         row,
+1779 | |                         column,
+1780 | |                         data.as_bool().context("static print boolean is invalid")?,
+1781 | |                         format,
+1782 | |                     );
+     | |_____________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1777 |                     let _ = worksheet.write_boolean_with_format(
+     |                     +++++++
+
+warning: unused `Result` that must be used
+    --> pytools-core\src\print_ops.rs:1798:21
+     |
+1798 | /                     worksheet.write_string_with_format(
+1799 | |                         row,
+1800 | |                         column,
+1801 | |                         data.as_str().unwrap_or("#N/A"),
+1802 | |                         format,
+1803 | |                     );
+     | |_____________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1798 |                     let _ = worksheet.write_string_with_format(
+     |                     +++++++
+
+warning: `pytools-core` (lib) generated 82 warnings (run `cargo fix --lib -p pytools-core` to apply 15 suggestions)
+warning: unused import: `Level`
+     --> pytools-core\src\bin\RustTools.rs:23031:77
+      |
+23031 |             use pytools_core::run_logging::{BatchEventKind, BatchLogPolicy, Level};
+      |                                                                             ^^^^^
+      |
+      = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> pytools-core\src\bin\RustTools.rs:4310:9
+     |
+4310 |     let mut diagnostic = ConfiguredRunLog::new(global, feature_id, label, log_view);
+     |         ----^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> pytools-core\src\bin\RustTools.rs:7768:21
+     |
+7768 |                 let mut com_runtime = pytools_core::conversion_engine::ConversionRuntime::default();
+     |                     ----^^^^^^^^^^^
+     |                     |
+     |                     help: remove this `mut`
+
+warning: unused variable: `com_runtime`
+    --> pytools-core\src\bin\RustTools.rs:7768:21
+     |
+7768 |                 let mut com_runtime = pytools_core::conversion_engine::ConversionRuntime::default();
+     |                     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_com_runtime`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `item`
+     --> pytools-core\src\bin\RustTools.rs:12268:29
+      |
+12268 |                         (Ok(item), Err(error)) => {
+      |                             ^^^^ help: if this is intentional, prefix it with an underscore: `_item`
+
+warning: value assigned to `destination_row` is never read
+     --> pytools-core\src\bin\RustTools.rs:16552:39
+      |
+16552 |             let mut destination_row = append.write_start_row;
+      |                                       ^^^^^^^^^^^^^^^^^^^^^^ this value is reassigned later and never used
+16553 |             for mapping in column_plan {
+16554 |                 destination_row = append.write_start_row;
+      |                 ---------------------------------------- `destination_row` is overwritten here before the previous value is read
+      |
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `name`
+     --> pytools-core\src\bin\RustTools.rs:17246:26
+      |
+17246 |                     for (name, position) in &key_positions {
+      |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: value assigned to `log_write_warning_emitted` is never read
+     --> pytools-core\src\bin\RustTools.rs:19296:21
+      |
+19296 |                     log_write_warning_emitted = true;
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+
+warning: unused variable: `source_path`
+     --> pytools-core\src\bin\RustTools.rs:21164:18
+      |
+21164 |     for (index, (source_path, row_status)) in rows.iter().enumerate() {
+      |                  ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_source_path`
+
+warning: unused variable: `unified_path`
+     --> pytools-core\src\bin\RustTools.rs:22201:17
+      |
+22201 |             let unified_path =
+      |                 ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_unified_path`
+
+warning: value assigned to `log_write_warning_emitted` is never read
+     --> pytools-core\src\bin\RustTools.rs:22197:25
+      |
+22197 |                         log_write_warning_emitted = true;
+      |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+
+warning: function `run_interactive_quick_menu` is never used
+    --> pytools-core\src\bin\RustTools.rs:1026:4
+     |
+1026 | fn run_interactive_quick_menu<R, W>(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `run_interactive_timeline_menu` is never used
+    --> pytools-core\src\bin\RustTools.rs:2213:4
+     |
+2213 | fn run_interactive_timeline_menu<R, W>(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `label` and `accepts` are never used
+    --> pytools-core\src\bin\RustTools.rs:6066:8
+     |
+6065 | impl SpecialReportEngine {
+     | ------------------------ methods in this implementation
+6066 |     fn label(self) -> &'static str {
+     |        ^^^^^
+...
+6073 |     fn accepts(self, path: &Path) -> bool {
+     |        ^^^^^^^
+
+warning: function `dedup_config_check_result` is never used
+    --> pytools-core\src\bin\RustTools.rs:7494:4
+     |
+7494 | fn dedup_config_check_result(arguments: Vec<String>) -> Result<serde_json::Value> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `dedup_config_delete_result` is never used
+    --> pytools-core\src\bin\RustTools.rs:7498:4
+     |
+7498 | fn dedup_config_delete_result(arguments: Vec<String>) -> Result<serde_json::Value> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `dedup_config_result` is never used
+    --> pytools-core\src\bin\RustTools.rs:7502:4
+     |
+7502 | fn dedup_config_result(
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `build_print_config_native_report` is never used
+    --> pytools-core\src\bin\RustTools.rs:8180:4
+     |
+8180 | fn build_print_config_native_report(arguments: Vec<String>) -> Result<serde_json::Value> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `pytools-core` (bin "RustTools") generated 18 warnings (run `cargo fix --bin "RustTools" -p pytools-core` to apply 8 suggestions)
+    Finished `release` profile [optimized] target(s) in 20m 43s
+CARGO_EXIT=0

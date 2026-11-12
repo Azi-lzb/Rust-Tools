@@ -22,6 +22,9 @@ use std::path::{Path, PathBuf};
 pub enum InPlaceEngine {
     Openpyxl,
     Umya,
+    BetterOffice,
+    RustNative,
+    Composite,
 }
 
 impl InPlaceEngine {
@@ -29,6 +32,9 @@ impl InPlaceEngine {
         match self {
             Self::Openpyxl => "openpyxl",
             Self::Umya => "umya-spreadsheet",
+            Self::BetterOffice => "betteroffice",
+            Self::RustNative => "rust-native-ooxml",
+            Self::Composite => "in-memory-composite",
         }
     }
 
@@ -36,6 +42,22 @@ impl InPlaceEngine {
         match self {
             Self::Openpyxl => EngineId::OpenpyxlWorker,
             Self::Umya => EngineId::UmyaSpreadsheet,
+            Self::BetterOffice => EngineId::BetterOffice,
+            Self::RustNative => EngineId::RustNativeOoxml,
+            Self::Composite => EngineId::Composite,
+        }
+    }
+
+    pub(crate) fn from_engine(engine: EngineId) -> Self {
+        match engine {
+            EngineId::OpenpyxlWorker => Self::Openpyxl,
+            EngineId::UmyaSpreadsheet => Self::Umya,
+            EngineId::BetterOffice => Self::BetterOffice,
+            EngineId::RustNativeOoxml => Self::RustNative,
+            EngineId::Composite => Self::Composite,
+            EngineId::OoxmlPatch => {
+                unreachable!("OOXML patch is not an ExcelEditPlan route engine")
+            }
         }
     }
 
@@ -47,7 +69,9 @@ impl InPlaceEngine {
             .unwrap_or_default()
             .to_ascii_lowercase();
         match self {
-            Self::Umya => matches!(extension.as_str(), "xlsx" | "xltx"),
+            Self::Umya | Self::BetterOffice | Self::RustNative | Self::Composite => {
+                matches!(extension.as_str(), "xlsx" | "xltx")
+            }
             Self::Openpyxl => matches!(extension.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm"),
         }
     }
@@ -64,7 +88,11 @@ impl InPlaceEngine {
                 "{} 是旧版/二进制格式（.{extension}），不支持就地修改；请先用 4-4 格式转换另存为 .xlsx 后再处理",
                 path.display()
             )
-        } else if self == Self::Umya && matches!(extension.as_str(), "xlsm" | "xltm") {
+        } else if matches!(
+            self,
+            Self::Umya | Self::BetterOffice | Self::RustNative | Self::Composite
+        ) && matches!(extension.as_str(), "xlsm" | "xltm")
+        {
             format!(
                 "{} 是含宏工作簿（.{extension}），umya 保存会丢失宏；请改选 openpyxl 引擎",
                 path.display()
@@ -86,7 +114,7 @@ pub(crate) fn platform_id() -> String {
 }
 
 /// 由 plan 推导运行时能力记录（引擎随产品编译并逐项回读校验）。
-fn capability_for(plan: &ExcelEditPlan, engine: InPlaceEngine) -> BackendCapability {
+pub(crate) fn capability_for(plan: &ExcelEditPlan, engine: InPlaceEngine) -> BackendCapability {
     let platform = platform_id();
     BackendCapability {
         engine: engine.engine_id(),
@@ -185,6 +213,17 @@ pub fn execute_candidate(
     plan: &ExcelEditPlan,
     engine: InPlaceEngine,
 ) -> Result<EditExecutionReport> {
+    if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
+        let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+        return crate::excel_edit_router::execute_candidate_with_route_config(plan, &route_config);
+    }
+    execute_candidate_with_engine(plan, engine)
+}
+
+fn execute_candidate_with_engine(
+    plan: &ExcelEditPlan,
+    engine: InPlaceEngine,
+) -> Result<EditExecutionReport> {
     anyhow::ensure!(
         engine.accepts(&plan.input),
         "{}",
@@ -197,6 +236,14 @@ pub fn execute_candidate(
 
 /// 就地执行一个 plan：先出候选、校验，再替换目标原文件。
 pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
+    if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
+        let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+        return crate::excel_edit_router::execute_in_place_with_route_config(plan, &route_config);
+    }
+    execute_in_place_with_engine(plan, engine)
+}
+
+fn execute_in_place_with_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
     anyhow::ensure!(
         engine.accepts(&plan.input),
         "{}",
@@ -212,7 +259,7 @@ pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<I
     })
 }
 
-fn plan_for_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> ExcelEditPlan {
+pub(crate) fn plan_for_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> ExcelEditPlan {
     let mut execution_plan = plan.clone();
     if engine == InPlaceEngine::Openpyxl {
         // Legacy PyCode saves existing workbooks through openpyxl. It rewrites

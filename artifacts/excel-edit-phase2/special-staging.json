@@ -1,0 +1,44 @@
+{
+  "scratch": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96",
+  "exit": 0,
+  "source_hashes": {
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2025.09 商业银行共享一批.xls": "f3cbf034b52e127a2154fbdd7c8154c6a3d3a9708beee2f4de9de69d8175f05c",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 全金融机构总行表.xls": "a95f13a207abb68dc021ed6ef0f0edfe03db3abf79e7ab19d9f4b3d29ea2fa4c",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 商业银行共享一批.xls": "ec70d759d09bec02fa578386311fd775a3d97171eb65d0bfa46867d09316e8af",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 外发用.xls": "54b0df7df961562bfcef9f9d5d25e21fb6666ccbd8c46091f0c263de48498fe9",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 本外币.xls": "eb484ec7b95caa7d92e4a03d517b9032943b6413428e4a0c29d9bcca01b1cb7b",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\5-7\\2026.08. 专项二批次.xls": "637c6b533f1954d1e43604129f8f18ccee59f882498d7b832ae3811371c872be",
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\5-7\\2026.09. 专项二批次.xls": "3b656c99a156746d717ea2fd1bf511139f650b2fd78f9e2cbdb6bc9ec20c2e22"
+  },
+  "originals_unchanged": true,
+  "derived_xlsx": [
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "sha256": "d8cf6cb9a9b443f876a4a4414ba56011101fb3c92d965a7a32e3e2d43cc7e7f8"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "sha256": "e9bc646c5ffe027a852a46de75cd600739c14ac5fa84f11b38023bcdbfe98d30"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 全金融机构总行表.xlsx",
+      "sha256": "033b8f4364c947deaf72eaf43c27753c77ba1aa7848b9069411de48f1ead4e62"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "sha256": "3e24b1e2b9888d5130298a85f80c9048ea5f51ef86541d721d607325cac63e61"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+      "sha256": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 本外币.xlsx",
+      "sha256": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333"
+    },
+    {
+      "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+      "sha256": "0d04d9c303f13ccb67e4fbced541d4f74c03cd3d32dc689351aa946895202431"
+    }
+  ]
+}

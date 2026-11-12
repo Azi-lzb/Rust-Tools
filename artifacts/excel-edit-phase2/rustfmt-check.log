@@ -1,0 +1,325 @@
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor\src\lib.rs:3:
+ use anyhow::{Context, Result};
+ use std::path::Path;
+
+-mod ooxml_header_backend;
+ mod native_ooxml_backend;
++mod ooxml_header_backend;
+ mod openpyxl_backend;
+ mod plan;
+ mod umya_backend;
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor\src\lib.rs:11:
+ mod workbook_profile;
+ mod worker_process;
+
++pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
+ pub use ooxml_header_backend::{OoxmlHeaderTextBackend, OoxmlHeaderTextValidator};
+ pub use openpyxl_backend::{OpenpyxlWorkerConfig, OpenpyxlXlsxBackend, OpenpyxlXlsxValidator};
+-pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
+ pub use plan::{
+     BackendAttempt, BackendAttemptOutcome, BackendCapability, BackendErrorKind, BackendFailure,
+     BackendRouteDecision, CapabilityEvidence, CapabilityStatus, CellValue, EditBackend,
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor\src\lib.rs:20:
+     EditExecutionReport, EditOperation, EditOperationKind, EngineId, ExcelEditPlan, ExcelModifier,
+     ExcelModifierError, ExcelModifierErrorKind, OutputValidator, PageMargins, PageOrientation,
+-    PageSettings,
+-    PreservationRequirement, RangeStyleMode, WorkbookFeature, WorkbookFormat, WorkbookProfile,
++    PageSettings, PreservationRequirement, RangeStyleMode, WorkbookFeature, WorkbookFormat,
++    WorkbookProfile,
+ };
+ pub use umya_backend::{apply_umya_append_operations, UmyaXlsxBackend, UmyaXlsxValidator};
+ pub use umya_spreadsheet::{BorderStyleValues, Cell, Workbook};
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor\src\plan.rs:647:
+                     bail!("page-margin update must specify at least one margin");
+                 }
+             }
+-            Self::SetDefinedName { name, formula, local_sheet } => {
++            Self::SetDefinedName {
++                name,
++                formula,
++                local_sheet,
++            } => {
+                 if name.trim().is_empty() {
+                     bail!("defined-name update requires a non-empty name");
+                 }
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\crates\excel-editor\src\plan.rs:654:
+-                if formula.as_ref().is_some_and(|value| value.trim().is_empty()) {
++                if formula
++                    .as_ref()
++                    .is_some_and(|value| value.trim().is_empty())
++                {
+                     bail!("defined-name formula must not be empty when specified");
+                 }
+-                if local_sheet.as_ref().is_some_and(|sheet| sheet.trim().is_empty()) {
++                if local_sheet
++                    .as_ref()
++                    .is_some_and(|sheet| sheet.trim().is_empty())
++                {
+                     bail!("defined-name worksheet scope must not be empty when specified");
+                 }
+             }
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:16517:
+                 source_end as usize,
+                 source_end_col as usize,
+             );
+-            let target_column_letter = pytools_core::rule_engine::cell_address(
+-                1,
+-                target_start_col as usize,
+-            )
+-            .trim_end_matches('1')
+-            .to_owned();
++            let target_column_letter =
++                pytools_core::rule_engine::cell_address(1, target_start_col as usize)
++                    .trim_end_matches('1')
++                    .to_owned();
+             operations.push(EditOperation::ImportRange {
+                 source_workbook: summary_path.to_path_buf(),
+                 source_sheet: summary_sheet.to_owned(),
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:16978:
+         let rule_name = &rule_name_for_message;
+         let header_match_value = rule.target_header_match.trim();
+         let header_match_strict = header_match_value == "严格";
+-        if !header_match_strict
+-            && !header_match_value.is_empty()
+-            && header_match_value != "宽松"
++        if !header_match_strict && !header_match_value.is_empty() && header_match_value != "宽松"
+         {
+             any_failed = true;
+             let message = format!(
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:17052:
+                 } else {
+                     // 宽松模式：固定前缀列存在性检查 + 按列头文本映射 + 新列扩展。
+                     let summary_header_texts: Vec<(u32, String)> = (1..=summary_max_col)
+-                        .map(|column| {
+-                            (column, wide_dump_cell_display(summary_sheet, column, 1))
+-                        })
++                        .map(|column| (column, wide_dump_cell_display(summary_sheet, column, 1)))
+                         .collect();
+                     let mut required_prefix: Vec<String> = vec![
+                         "工作簿名".to_owned(),
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:17061:
+                         "工作表名".to_owned(),
+                         "数据日期".to_owned(),
+                     ];
+-                    required_prefix
+-                        .extend(rule.set_items.iter().map(|(name, _)| name.clone()));
++                    required_prefix.extend(rule.set_items.iter().map(|(name, _)| name.clone()));
+                     if summary_header_texts
+                         .iter()
+                         .any(|(_, text)| text == "行头路径")
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:17070:
+                         required_prefix.push("行头路径".to_owned());
+                     }
+                     let target_header_texts: Vec<(u32, String)> = (1..=target_max_col)
+-                        .map(|column| {
+-                            (column, wide_dump_cell_display(target_ws, column, 1))
+-                        })
++                        .map(|column| (column, wide_dump_cell_display(target_ws, column, 1)))
+                         .collect();
+                     let missing_prefix: Vec<String> = required_prefix
+                         .iter()
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:17261:
+                 }
+                 None => {
+                     dedup_enabled = !key_positions.is_empty();
+-                    summary_key_columns = key_positions.iter().map(|(_, position)| *position).collect();
++                    summary_key_columns = key_positions
++                        .iter()
++                        .map(|(_, position)| *position)
++                        .collect();
+                     target_key_columns = summary_key_columns.clone();
+                 }
+             }
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\bin\RustTools.rs:17404:
+                 return Ok(false);
+             }
+             let candidate = wide_target_candidate_path(target)?;
+-            let writer_rows =
+-                pytools_core::timeline_ops::write_wide_summary_new_target_candidate(
+-                    summary_path,
+-                    rule,
+-                    &target_sheet_name,
+-                    candidate.path(),
+-                )?;
++            let writer_rows = pytools_core::timeline_ops::write_wide_summary_new_target_candidate(
++                summary_path,
++                rule,
++                &target_sheet_name,
++                candidate.path(),
++            )?;
+             anyhow::ensure!(
+                 writer_rows == kept_rows.len(),
+                 "Rust XlsxWriter 与目标去重规划的行数不一致：计划 {} 行，实际 {} 行",
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\edit_plan.rs:150:
+                     "pytools",
+                 )?))
+             }
+-            EngineId::RustNativeOoxml => {
+-                backends.push(Arc::new(excel_editor::RustNativeOoxmlBackend::new(
+-                    capability,
+-                )?))
+-            }
++            EngineId::RustNativeOoxml => backends.push(Arc::new(
++                excel_editor::RustNativeOoxmlBackend::new(capability)?,
++            )),
+             EngineId::BetterOffice => {
+                 backends.push(Arc::new(BetterOfficeAdapter::new(capability)?))
+             }
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\inplace_edit.rs:243:
+     execute_in_place_with_engine(plan, engine)
+ }
+
+-fn execute_in_place_with_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
++fn execute_in_place_with_engine(
++    plan: &ExcelEditPlan,
++    engine: InPlaceEngine,
++) -> Result<InPlaceOutcome> {
+     anyhow::ensure!(
+         engine.accepts(&plan.input),
+         "{}",
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\src\lib.rs:16:
+ pub mod date_parse;
+ pub mod dedup_ops;
+ pub mod edit_plan;
+-pub mod excel_edit_router;
+ pub mod engine_diag;
+ pub mod excel_core_diag;
++pub mod excel_edit_router;
+ pub mod excel_open_repair_batch;
+ pub mod file_commit;
+ pub mod file_sort_prefix;
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:2761:
+         .arg("--log-view")
+         .arg(log_view);
+     if let Some(python) = &isolated_runtime {
+-        command
+-            .env("PYTOOLS_OPENPYXL_PYTHON", python)
+-            .env(
+-                "PYTOOLS_OPENPYXL_WORKER",
+-                Path::new(env!("CARGO_MANIFEST_DIR"))
+-                    .join("../crates/excel-editor/python/openpyxl_worker.py"),
+-            );
++        command.env("PYTOOLS_OPENPYXL_PYTHON", python).env(
++            "PYTOOLS_OPENPYXL_WORKER",
++            Path::new(env!("CARGO_MANIFEST_DIR"))
++                .join("../crates/excel-editor/python/openpyxl_worker.py"),
++        );
+     }
+     let mut child = command
+         .stdin(Stdio::piped())
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:2827:
+     let root = TestDirectory::new()?;
+     // 子进程通过显式覆盖使用隔离运行时（与执行侧同一解析入口）；
+     // 未设置时跳过，避免在无运行时环境里失败。
+-    let isolated_python =
+-        std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON").map(PathBuf::from);
++    let isolated_python = std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON").map(PathBuf::from);
+     let source = root.path().join("sample wide.xlsx");
+     {
+         let mut workbook = rust_xlsxwriter::Workbook::new();
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:2953:
+     let target = root.path().join("batched-target.xlsx");
+     {
+         let mut workbook = rust_xlsxwriter::Workbook::new();
+-        let write_header_row = |sheet: &mut rust_xlsxwriter::Worksheet,
+-                                headers: &[String]|
+-         -> Result<()> {
+-            for (index, header) in headers.iter().enumerate() {
+-                sheet.write_string(0, index as u16, header)?;
+-            }
+-            Ok(())
+-        };
++        let write_header_row =
++            |sheet: &mut rust_xlsxwriter::Worksheet, headers: &[String]| -> Result<()> {
++                for (index, header) in headers.iter().enumerate() {
++                    sheet.write_string(0, index as u16, header)?;
++                }
++                Ok(())
++            };
+         let sheet_jia = workbook.add_worksheet();
+         sheet_jia.set_name("二批房地产")?;
+         write_header_row(sheet_jia, &headers_jia)?;
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3013:
+         jia.values.contains_key("A2"),
+         "甲批 must append its data row after the target header"
+     );
+-    assert!(yi.values.contains_key("A2"), "乙批 must append its data row");
++    assert!(
++        yi.values.contains_key("A2"),
++        "乙批 must append its data row"
++    );
+     let bad_after = appended_sheet("坏表头表").values.clone();
+     assert_eq!(
+         bad_after, bad_sheet_before,
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3090:
+             5 => Some(3),
+             _ => None,
+         };
+-        reordered.push(summary_headers[swap.unwrap_or(*column as usize) - 1].1.clone());
++        reordered.push(
++            summary_headers[swap.unwrap_or(*column as usize) - 1]
++                .1
++                .clone(),
++        );
+     }
+     reordered.push("目标独有列".to_owned());
+     let reordered_headers: Vec<String> = reordered.clone();
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3107:
+         workbook.save(&target)?;
+     }
+
+-    let config_with_target = create_multi_rule_wide_config_single_with_mode(
+-        root.path(),
+-        Some(&target),
+-        "宽松",
+-    )?;
++    let config_with_target =
++        create_multi_rule_wide_config_single_with_mode(root.path(), Some(&target), "宽松")?;
+     let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+         .arg("wide-summary")
+         .arg("--config")
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3166:
+     );
+     // 其余映射列抽查：工作表名(A3)=Report1、行头路径(C3)=宽松组织、
+     // 行序号(F3)=5——全部按键名落位而非位置。
+-    let sheet_name_address =
+-        format!("{}3", column_letters_for_test(target_col_of("工作表名").context("工作表名 missing")?));
++    let sheet_name_address = format!(
++        "{}3",
++        column_letters_for_test(target_col_of("工作表名").context("工作表名 missing")?)
++    );
+     assert_eq!(
+         target_sheet
+             .values
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3237:
+         global.set_name("全局配置")?;
+         let settings = [
+             ("输入目录", app.join("input").to_string_lossy().into_owned()),
+-            ("输出目录", app.join("output").to_string_lossy().into_owned()),
++            (
++                "输出目录",
++                app.join("output").to_string_lossy().into_owned(),
++            ),
+             ("日志目录", app.join("logs").to_string_lossy().into_owned()),
+             ("错误策略", "continue".to_owned()),
+             ("时序规则命中策略", "all_match".to_owned()),
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3309:
+     Ok(config)
+ }
+
+-
+ /// 多规则 1-1 配置：三条规则共享同一目标工作簿（可选启用目标写入）。
+ fn create_multi_rule_wide_config(
+     root: &Path,
+Diff in \\?\C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core\tests\timeline_menu_cli.rs:3329:
+         global.set_name("全局配置")?;
+         let settings = [
+             ("输入目录", app.join("input").to_string_lossy().into_owned()),
+-            ("输出目录", app.join("output").to_string_lossy().into_owned()),
++            (
++                "输出目录",
++                app.join("output").to_string_lossy().into_owned(),
++            ),
+             ("日志目录", app.join("logs").to_string_lossy().into_owned()),
+             ("错误策略", "continue".to_owned()),
+             ("时序规则命中策略", "all_match".to_owned()),

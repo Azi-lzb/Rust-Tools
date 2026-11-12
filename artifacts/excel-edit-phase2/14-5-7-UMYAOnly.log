@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 16:48:09] [ERROR] 命令执行失败：UMYAOnly refuses workbooks with comments, charts, external links, macros, or other complex objects

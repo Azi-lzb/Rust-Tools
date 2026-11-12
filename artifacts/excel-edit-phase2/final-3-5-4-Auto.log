@@ -1,0 +1,232 @@
+{
+  "committed_files": 1,
+  "completed_files": 1,
+  "created_copies": 0,
+  "elapsed_ms": 8434,
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "input_validation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-12T19:27:49.612397800+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始检查第 1/1 个工作簿的外汇页眉并准备生成副本"
+    },
+    {
+      "actual_engine": "inspect_xlsx_profile",
+      "components": [
+        "excel-editor",
+        "excel-reader"
+      ],
+      "phase": "profile_inspection",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "stage_elapsed_ms": 40,
+      "status": "completed",
+      "timestamp": "2026-11-12T19:27:49.664529500+08:00",
+      "total_elapsed_ms": 52,
+      "user_message": "已检查工作簿格式与对象特征"
+    },
+    {
+      "actual_engine": "read_header_inventory",
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 44,
+      "status": "completed",
+      "timestamp": "2026-11-12T19:27:49.709513400+08:00",
+      "total_elapsed_ms": 97,
+      "user_message": "已完成页眉检查并生成修改计划"
+    },
+    {
+      "actual_engine": "rust-native-ooxml",
+      "components": [
+        "pytools-core",
+        "excel-editor",
+        "openpyxl_worker"
+      ],
+      "phase": "engine_execution",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "stage_elapsed_ms": 8335,
+      "status": "completed",
+      "timestamp": "2026-11-12T19:27:58.045397900+08:00",
+      "total_elapsed_ms": 8433,
+      "user_message": "OOXML 定点补丁不适用，已由 Openpyxl 保护回退并校验候选"
+    },
+    {
+      "actual_engine": "rust-native-ooxml",
+      "components": [
+        "pytools-core",
+        "file-commit"
+      ],
+      "phase": "safe_commit",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 5,
+      "stage_elapsed_ms": 8432,
+      "status": "completed",
+      "timestamp": "2026-11-12T19:27:58.045529+08:00",
+      "total_elapsed_ms": 8433,
+      "user_message": "页眉修改候选已校验并安全替换原工作簿"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "file_summary",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 6,
+      "stage_elapsed_ms": 8433,
+      "status": "completed",
+      "timestamp": "2026-11-12T19:27:58.045981500+08:00",
+      "total_elapsed_ms": 8434,
+      "user_message": "当前工作簿的页眉修改已安全提交"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "run_summary",
+      "progress": {
+        "completed_files": 1,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 7,
+      "status": "succeeded",
+      "timestamp": "2026-11-12T19:27:58.046049200+08:00",
+      "total_elapsed_ms": 8434,
+      "user_message": "外汇页眉处理完成：成功 1，失败 0"
+    }
+  ],
+  "failed_files": 0,
+  "feature_id": "PT-7-4",
+  "files": 1,
+  "function": "fx-header",
+  "fx_sheets": 3,
+  "history_report": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\logs\\PT-7-4_20261112T192749_18716_1794482869612172100.json",
+  "items": [
+    {
+      "candidate": null,
+      "elapsed_ms": 8432,
+      "execution": {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 356,
+          "operation": "replaced",
+          "sha256_after": "3ec4dc2bbbb7d5eddbcfdc6b921ff7789e1d79de14749a39ceaa2e490252f4af",
+          "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\2026.09 外发用.xlsx"
+        },
+        "engine": "rust-native-ooxml",
+        "execution": "validated_ooxml_patch_and_safe_replace",
+        "modified_sheets": 3,
+        "replacements": 3
+      },
+      "fx_sheets": 3,
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\2026.09 外发用.xlsx",
+      "modified_sheets": 3,
+      "output_copy": null,
+      "plan_file": null,
+      "status": "committed",
+      "target_commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 356,
+        "operation": "replaced",
+        "sha256_after": "3ec4dc2bbbb7d5eddbcfdc6b921ff7789e1d79de14749a39ceaa2e490252f4af",
+        "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\2026.09 外发用.xlsx"
+      }
+    }
+  ],
+  "mode": "in_place",
+  "modified_sheets": 3,
+  "plan_dir": null,
+  "planned_files": 0,
+  "product": "pytools",
+  "run_id": "pytools-pt-7-4-18716-1794482869612172100",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-x58vceub\\3-5-4-Auto\\logs\\run-unified\\PT-7-4_pytools-pt-7-4-18716-1794482869612172100.json",
+  "saved_files": 1,
+  "schema_version": 1,
+  "started_at": "2026-11-12T19:27:49.611581+08:00",
+  "status": "succeeded"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T19:27:49.612397800+08:00","phase":"input_validation","status":"started","user_message":"开始检查第 1/1 个工作簿的外汇页眉并准备生成副本","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T19:27:49.664529500+08:00","phase":"profile_inspection","status":"completed","user_message":"已检查工作簿格式与对象特征","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":40,"total_elapsed_ms":52,"components":["excel-editor","excel-reader"],"actual_engine":"inspect_xlsx_profile"}
+{"sequence":3,"timestamp":"2026-11-12T19:27:49.709513400+08:00","phase":"plan_build","status":"completed","user_message":"已完成页眉检查并生成修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":44,"total_elapsed_ms":97,"components":["pytools-core","excel-reader"],"actual_engine":"read_header_inventory"}
+[2026-11-12 19:27:57] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 rust_native_ooxml，文件 2026.09 外发用.xlsx，耗时 7932 ms
+{"sequence":4,"timestamp":"2026-11-12T19:27:58.045397900+08:00","phase":"engine_execution","status":"completed","user_message":"OOXML 定点补丁不适用，已由 Openpyxl 保护回退并校验候选","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":8335,"total_elapsed_ms":8433,"components":["pytools-core","excel-editor","openpyxl_worker"],"actual_engine":"rust-native-ooxml"}
+{"sequence":5,"timestamp":"2026-11-12T19:27:58.045529+08:00","phase":"safe_commit","status":"completed","user_message":"页眉修改候选已校验并安全替换原工作簿","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":8432,"total_elapsed_ms":8433,"components":["pytools-core","file-commit"],"actual_engine":"rust-native-ooxml"}
+{"sequence":6,"timestamp":"2026-11-12T19:27:58.045981500+08:00","phase":"file_summary","status":"completed","user_message":"当前工作簿的页眉修改已安全提交","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":1,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":8433,"total_elapsed_ms":8434,"components":["pytools-core"]}
+{"sequence":7,"timestamp":"2026-11-12T19:27:58.046049200+08:00","phase":"run_summary","status":"succeeded","user_message":"外汇页眉处理完成：成功 1，失败 0","progress":{"total_inputs":1,"total_files":1,"current_file":null,"processed_files":1,"completed_files":1,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":8434,"components":["pytools-core"]}

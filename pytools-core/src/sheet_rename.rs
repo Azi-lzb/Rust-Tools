@@ -324,29 +324,46 @@ fn run_batch_sheet_rename_impl(
                     "工作簿包含数字签名、ActiveX、外部链接或宏，当前 Openpyxl 改名路径未验证，拒绝覆盖源文件"
                 );
             }
-            candidate_owned = true;
-            let mut original = fs::File::open(&input)
-                .with_context(|| format!("读取源工作簿失败：{}", input.display()))?;
-            let mut temporary = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&candidate)
-                .with_context(|| format!("创建改名临时候选失败：{}", candidate.display()))?;
-            candidate_owned = true;
-            std::io::copy(&mut original, &mut temporary)?;
-            temporary.sync_all()?;
-            drop(temporary);
-            // Windows cannot replace the source while this read handle is open.
-            drop(original);
-            let engine = if input_is_xls {
-                excel_runtime
-                    .rename_sheets_com_in_candidate(&candidate, &changes)
-                    .with_context(|| format!("Excel/WPS COM 工作表改名失败：{}", input.display()))?
+            let (execution, engine) = if let (Some(plan), true) = (
+                plan.as_ref(),
+                std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some(),
+            ) {
+                candidate_owned = true;
+                let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+                let execution = crate::excel_edit_router::execute_candidate_with_route_config(
+                    plan,
+                    &route_config,
+                )
+                .with_context(|| format!("ExcelEditPlan 工作表改名失败：{}", input.display()))?;
+                let engine = crate::excel_core_diag::engine_label(execution.engine).to_owned();
+                (Some(execution), engine)
             } else {
-                excel_runtime
-                    .rename_sheets_in_candidate(&candidate, &changes)
-                    .with_context(|| format!("Openpyxl 工作表改名失败：{}", input.display()))?;
-                "openpyxl".to_owned()
+                candidate_owned = true;
+                let mut original = fs::File::open(&input)
+                    .with_context(|| format!("读取源工作簿失败：{}", input.display()))?;
+                let mut temporary = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&candidate)
+                    .with_context(|| format!("创建改名临时候选失败：{}", candidate.display()))?;
+                std::io::copy(&mut original, &mut temporary)?;
+                temporary.sync_all()?;
+                drop(temporary);
+                // Windows cannot replace the source while this read handle is open.
+                drop(original);
+                let engine = if input_is_xls {
+                    excel_runtime
+                        .rename_sheets_com_in_candidate(&candidate, &changes)
+                        .with_context(|| {
+                            format!("Excel/WPS COM 工作表改名失败：{}", input.display())
+                        })?
+                } else {
+                    excel_runtime
+                        .rename_sheets_in_candidate(&candidate, &changes)
+                        .with_context(|| format!("Openpyxl 工作表改名失败：{}", input.display()))?;
+                    "openpyxl".to_owned()
+                };
+                (None, engine)
             };
             let editing_ms = editing_started.elapsed().as_millis();
             let commit_started = Instant::now();
@@ -363,7 +380,7 @@ fn run_batch_sheet_rename_impl(
                 })?
             };
             commit.elapsed_ms = commit_started.elapsed().as_millis();
-            Ok((None, commit, editing_ms, engine))
+            Ok((execution, commit, editing_ms, engine))
         })();
         let cleanup = if candidate_owned {
             match fs::remove_file(&candidate) {

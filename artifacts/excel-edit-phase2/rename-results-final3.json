@@ -1,0 +1,90 @@
+[
+  {
+    "menu": "4-5",
+    "mode": "LegacyDefault",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\LegacyDefault\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_equal_original": true,
+    "formula_and_cache_expected_after_rename": false,
+    "output_copy_unchanged": true,
+    "dynamic_reference_rejected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 20:28:28] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\LegacyDefault\\source.xlsx: 工作表改名失败（阶段：重新读取并校验）：ValueError: 工作表 'Sheet1' 非公式单元格 A21 发生变化\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\OpenpyxlOnly\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_equal_original": true,
+    "formula_and_cache_expected_after_rename": false,
+    "output_copy_unchanged": true,
+    "dynamic_reference_rejected": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 20:28:35] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\OpenpyxlOnly\\source.xlsx: AllBackendsRejectedBeforeWrite: all qualified backends rejected the file before writing: openpyxl_worker: openpyxl worker 失败（类别=执行失败）：INDIRECT selector Sheet1!H21 contains a worksheet name being renamed; refusing an incomplete rewrite；建议：请查看运行日志获取详情\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\UMYAOnly\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_equal_original": true,
+    "formula_and_cache_expected_after_rename": false,
+    "output_copy_unchanged": true,
+    "dynamic_reference_rejected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 20:28:40] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\UMYAOnly\\source.xlsx: UMYAOnly cannot rename worksheets while formula or defined-name references require validation\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\Auto\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_equal_original": true,
+    "formula_and_cache_expected_after_rename": false,
+    "output_copy_unchanged": true,
+    "dynamic_reference_rejected": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 20:28:48] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-crg6qc53\\Auto\\source.xlsx: AllBackendsRejectedBeforeWrite: all qualified backends rejected the file before writing: openpyxl_worker: openpyxl worker 失败（类别=执行失败）：INDIRECT selector Sheet1!H21 contains a worksheet name being renamed; refusing an incomplete rewrite；建议：请查看运行日志获取详情\n",
+    "original_unchanged": true
+  }
+]

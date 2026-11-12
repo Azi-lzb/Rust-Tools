@@ -13,6 +13,7 @@ ooxml-patch = { path = "../ooxml-patch" }
 excel-reader = { path = "../excel-reader" }
 zip.workspace = true
 roxmltree.workspace = true
+quick-xml.workspace = true
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Security",

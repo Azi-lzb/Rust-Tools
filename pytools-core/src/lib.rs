@@ -6,6 +6,7 @@
 pub mod archive_ops;
 pub mod batch_ops;
 pub mod batch_rename;
+pub(crate) mod betteroffice_edit;
 pub mod bo_calc;
 pub mod bo_calc_batch;
 pub mod config;
@@ -15,6 +16,7 @@ pub mod conversion_engine;
 pub mod date_parse;
 pub mod dedup_ops;
 pub mod edit_plan;
+pub mod excel_edit_router;
 pub mod engine_diag;
 pub mod excel_core_diag;
 pub mod excel_open_repair_batch;

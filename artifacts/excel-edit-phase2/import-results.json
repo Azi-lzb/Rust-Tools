@@ -1,0 +1,229 @@
+[
+  {
+    "menu": "1-1",
+    "mode": "OpenpyxlOnly",
+    "command": [
+      "wide-summary",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-OpenpyxlOnly\\config.xlsx",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-OpenpyxlOnly\\source.xlsx"
+    ],
+    "exit": 0,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-OpenpyxlOnly\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-OpenpyxlOnly\\target.xlsx",
+    "changed": false,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "expected_new_sheet_present": false,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\1-1-OpenpyxlOnly-import.log",
+    "engine_lines": [],
+    "originals_unchanged": true
+  },
+  {
+    "menu": "1-1",
+    "mode": "UMYAOnly",
+    "command": [
+      "wide-summary",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-UMYAOnly\\config.xlsx",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-UMYAOnly\\source.xlsx"
+    ],
+    "exit": 0,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-UMYAOnly\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-UMYAOnly\\target.xlsx",
+    "changed": false,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "expected_new_sheet_present": false,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\1-1-UMYAOnly-import.log",
+    "engine_lines": [],
+    "originals_unchanged": true
+  },
+  {
+    "menu": "1-1",
+    "mode": "Auto",
+    "command": [
+      "wide-summary",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-Auto\\config.xlsx",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-Auto\\source.xlsx"
+    ],
+    "exit": 0,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-Auto\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\1-1-Auto\\target.xlsx",
+    "changed": false,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "expected_new_sheet_present": false,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\1-1-Auto-import.log",
+    "engine_lines": [],
+    "originals_unchanged": true
+  },
+  {
+    "menu": "5-6",
+    "mode": "OpenpyxlOnly",
+    "command": [
+      "extract-sheets",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-OpenpyxlOnly\\config.xlsx",
+      "--append-existing",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-OpenpyxlOnly\\source.xlsx"
+    ],
+    "exit": 0,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-OpenpyxlOnly\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-OpenpyxlOnly\\target.xlsx",
+    "changed": true,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构",
+      "业务提取"
+    ],
+    "expected_new_sheet_present": true,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet3.xml"
+    ],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 3,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\5-6-OpenpyxlOnly-import.log",
+    "engine_lines": [
+      "[2026-11-12 16:55:24] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 target.xlsx，耗时 5918 ms"
+    ],
+    "originals_unchanged": true
+  },
+  {
+    "menu": "5-6",
+    "mode": "UMYAOnly",
+    "command": [
+      "extract-sheets",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-UMYAOnly\\config.xlsx",
+      "--append-existing",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-UMYAOnly\\source.xlsx"
+    ],
+    "exit": 2,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-UMYAOnly\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-UMYAOnly\\target.xlsx",
+    "changed": false,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "expected_new_sheet_present": false,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\5-6-UMYAOnly-import.log",
+    "engine_lines": [],
+    "originals_unchanged": true
+  },
+  {
+    "menu": "5-6",
+    "mode": "Auto",
+    "command": [
+      "extract-sheets",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-Auto\\config.xlsx",
+      "--append-existing",
+      "--log-view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-Auto\\source.xlsx"
+    ],
+    "exit": 0,
+    "source": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-Auto\\source.xlsx",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-imports-i6n4w32u\\5-6-Auto\\target.xlsx",
+    "changed": true,
+    "sheet_names": [
+      "Sheet1",
+      "五篇大文章分机构",
+      "业务提取"
+    ],
+    "expected_new_sheet_present": true,
+    "existing_formulas_and_caches_equal": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet3.xml"
+    ],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 3,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\5-6-Auto-import.log",
+    "engine_lines": [
+      "[2026-11-12 16:55:54] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 target.xlsx，耗时 14623 ms"
+    ],
+    "originals_unchanged": true
+  }
+]

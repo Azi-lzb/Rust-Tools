@@ -751,6 +751,7 @@ where
             output,
             "  7  时序配置预校验  【时序提取规则；路径标准化映射；全局配置】"
         )?;
+        writeln!(output, "  8  Excel 编辑引擎路由（当前进程）")?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "--------------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -765,14 +766,51 @@ where
             "5" => "data.named_validation_extract",
             "6" => "data.header_path_compare",
             "7" => "data.timeline_precheck",
+            "8" => "data.excel_edit_route",
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2、3、4、5、6、7 或 0")?;
+                writeln!(output, "仅接受 1、2、3、4、5、6、7、8 或 0")?;
                 continue;
             }
         };
 
         match feature_id {
+            "data.excel_edit_route" => {
+                let current = pytools_core::excel_edit_router::RouteConfig::from_environment()?;
+                writeln!(output, "------ Excel 编辑引擎路由 ------")?;
+                writeln!(output, "当前模式：{}", current.mode.as_str())?;
+                writeln!(output, "  1  OpenpyxlOnly（默认 Worker）")?;
+                writeln!(output, "  2  UMYAOnly")?;
+                writeln!(output, "  3  BetterOfficeOnly")?;
+                writeln!(output, "  4  RustNativeOnly")?;
+                writeln!(output, "  5  Auto")?;
+                writeln!(output, "  0  返回")?;
+                let Some(route_choice) = read_menu_choice(input, output, "路由模式> ")? else {
+                    continue;
+                };
+                let mode = match route_choice.as_str() {
+                    "1" => Some(pytools_core::excel_edit_router::RouteMode::OpenpyxlOnly),
+                    "2" => Some(pytools_core::excel_edit_router::RouteMode::UmyaOnly),
+                    "3" => Some(pytools_core::excel_edit_router::RouteMode::BetterOfficeOnly),
+                    "4" => Some(pytools_core::excel_edit_router::RouteMode::RustNativeOnly),
+                    "5" => Some(pytools_core::excel_edit_router::RouteMode::Auto),
+                    "0" => None,
+                    _ => {
+                        writeln!(output, "仅接受 1、2、3、4、5 或 0")?;
+                        continue;
+                    }
+                };
+                if let Some(mode) = mode {
+                    pytools_core::excel_edit_router::RouteConfig::new(mode)
+                        .set_for_current_process();
+                    writeln!(
+                        output,
+                        "已设置 Excel 编辑路由：{}（仅当前进程；由菜单启动的子命令会继承）",
+                        mode.as_str()
+                    )?;
+                }
+                continue;
+            }
             "data.timeline_wide_summary" => {
                 if config_error.is_some() {
                     writeln!(output, "当前配置不可用；请先进入 7-1 初始化/修复配置。")?;
@@ -12768,6 +12806,46 @@ fn create_fx_header_copy(
         preflight.replacements > 0,
         "FX header patch found no matching text"
     );
+    if std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some() {
+        anyhow::ensure!(
+            !candidate.exists(),
+            "拒绝覆盖已存在的 FX 页眉路由候选文件：{}",
+            candidate.display()
+        );
+        let route_config = pytools_core::excel_edit_router::RouteConfig::from_environment()?;
+        let execution = pytools_core::excel_edit_router::execute_candidate_with_route_config(
+            plan,
+            &route_config,
+        )
+        .context("ExcelEditPlan FX 页眉路由执行失败")?;
+        ooxml_patch::validate_header_text_patch(input, candidate, &updates)
+            .context("validate routed FX header candidate")?;
+        verify_planning_snapshot(input, Some(expected_source_hash))?;
+
+        if !publish_copy {
+            return Ok(serde_json::json!({
+                "engine": pytools_core::excel_core_diag::engine_label(execution.engine),
+                "execution": "validated_excel_edit_plan_candidate",
+                "modified_sheets": preflight.modified_sheets,
+                "replacements": preflight.replacements,
+            }));
+        }
+        let output = specialized_report_copy_path(input, "PyTools_专用报表处理结果")?;
+        let publication = create_target_from_candidate(candidate, &output).with_context(|| {
+            format!(
+                "publish FX header copy to {}",
+                display_path_for_user(&output)
+            )
+        })?;
+        return Ok(serde_json::json!({
+            "engine": pytools_core::excel_core_diag::engine_label(execution.engine),
+            "execution": "created_and_validated_excel_edit_plan_copy",
+            "output": output,
+            "modified_sheets": preflight.modified_sheets,
+            "replacements": preflight.replacements,
+            "publication": publication,
+        }));
+    }
     let written = ooxml_patch::replace_header_text(input, candidate, &updates)
         .context("write temporary FX header copy")?;
     anyhow::ensure!(
@@ -12825,6 +12903,10 @@ fn execute_fx_header_in_place(
                 .context("remove rejected OOXML header candidate before Openpyxl fallback")?;
             verify_planning_snapshot(input, Some(expected_source_hash))
                 .context("source changed after OOXML header route; refusing fallback")?;
+            if std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some() {
+                return Err(ooxml_error)
+                    .context("the configured ExcelEditPlan route failed; manual mode does not switch engines");
+            }
             let mut fallback = execute_optional_plan(options, Some(plan))
                 .with_context(|| format!("OOXML header patch failed ({ooxml_error:#}); protected Openpyxl fallback also failed"))?;
             fallback["fallback_reason"] = serde_json::json!(format!("{ooxml_error:#}"));
