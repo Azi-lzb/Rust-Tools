@@ -41,3 +41,8 @@ It also carries two narrowly scoped BetterOffice transitive-dependency
 compatibility shims required to compile with Rocky's system Rust 1.92.0; see
 `reports/01_ENGINE_CAPABILITIES.md`. These are experiment-only and do not
 modify production code. See `reports/` for measured results and limitations.
+
+The focused 1-4 validation formula cache check is documented in
+`reports/08_1-4_VALIDATION_CACHE_CHECK.md`; it uses the formula from the
+existing 1-4 LibreOffice integration test and is not a real business workbook
+acceptance.
