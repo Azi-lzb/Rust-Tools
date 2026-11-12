@@ -702,6 +702,7 @@ dependencies = [
  "excel-reader",
  "libc",
  "ooxml-patch",
+ "quick-xml 0.41.0",
  "roxmltree",
  "rust_xlsxwriter",
  "serde",

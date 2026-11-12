@@ -1375,13 +1375,19 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     );
 
     let result = (|| -> Result<()> {
-        let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
-        crate::edit_plan::apply_plan(
-            edit_plan,
-            &[capability],
-            &crate::inplace_edit::platform_id(),
-        )
-        .context("openpyxl 修改目标候选文件失败")?;
+        if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
+            let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+            crate::excel_edit_router::execute_candidate_with_route_config(edit_plan, &route_config)
+                .context("按 ExcelEditPlan 路由生成目标追加候选文件失败")?;
+        } else {
+            let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
+            crate::edit_plan::apply_plan(
+                edit_plan,
+                &[capability],
+                &crate::inplace_edit::platform_id(),
+            )
+            .context("openpyxl 修改目标候选文件失败")?;
+        }
         let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
         validate_append_candidate(edit_plan, &before, &after)?;
         let actual_names = read_defined_names(&plan.candidate)?;

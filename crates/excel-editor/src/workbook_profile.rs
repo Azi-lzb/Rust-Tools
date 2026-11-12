@@ -42,6 +42,9 @@ pub fn inspect_xlsx_profile(path: impl AsRef<Path>) -> Result<WorkbookProfile> {
         if lower == "xl/metadata.xml" {
             features.insert(WorkbookFeature::CellMetadata);
         }
+        if lower == "xl/calcchain.xml" {
+            features.insert(WorkbookFeature::CalcChain);
+        }
         if lower.starts_with("xl/comments") && lower.ends_with(".xml") {
             features.insert(WorkbookFeature::Comments);
         }

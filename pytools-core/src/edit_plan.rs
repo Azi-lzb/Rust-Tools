@@ -14,6 +14,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::betteroffice_edit::BetterOfficeAdapter;
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum CapabilityDocument {
@@ -148,6 +150,17 @@ pub(crate) fn apply_plan(
                     "pytools",
                 )?))
             }
+            EngineId::RustNativeOoxml => {
+                backends.push(Arc::new(excel_editor::RustNativeOoxmlBackend::new(
+                    capability,
+                )?))
+            }
+            EngineId::BetterOffice => {
+                backends.push(Arc::new(BetterOfficeAdapter::new(capability)?))
+            }
+            EngineId::Composite => backends.push(Arc::new(
+                crate::excel_edit_router::CompositeAdapter::new(capability)?,
+            )),
             other => anyhow::bail!("no runtime adapter is registered for backend {other}"),
         }
     }

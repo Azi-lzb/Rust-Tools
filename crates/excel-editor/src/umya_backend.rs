@@ -42,6 +42,19 @@ impl EditBackend for UmyaXlsxBackend {
                 "umya candidate supports XLSX only",
             ));
         }
+        if plan.operations.iter().any(|operation| {
+            matches!(
+                operation,
+                EditOperation::SetMargins { .. }
+                    | EditOperation::SetDefinedName { .. }
+                    | EditOperation::DeleteColumns { .. }
+                    | EditOperation::InsertColumns { .. }
+            )
+        }) {
+            return Err(BackendFailure::unsupported_before_write(
+                "umya adapter does not support page margins, defined-name edits, or column insertion/deletion",
+            ));
+        }
         ooxml_patch::reject_unverified_parts(&plan.input).map_err(|error| {
             BackendFailure::unsupported_before_write(format!(
                 "unverified workbook structure: {error:#}"
@@ -225,6 +238,10 @@ impl EditBackend for UmyaXlsxBackend {
             })?;
         }
         Ok(())
+    }
+
+    fn validate_output(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
+        crate::OpenpyxlXlsxValidator.validate(plan, candidate_output)
     }
 }
 
@@ -2139,6 +2156,12 @@ fn apply_operation(workbook: &mut crate::Workbook, operation: &EditOperation) ->
         }
         EditOperation::ReplaceHeaderText { .. } => {
             bail!("header replacement must use the namespace-aware OOXML header backend")
+        }
+        EditOperation::SetMargins { .. }
+        | EditOperation::SetDefinedName { .. }
+        | EditOperation::DeleteColumns { .. }
+        | EditOperation::InsertColumns { .. } => {
+            bail!("operation is outside the umya adapter's supported capability")
         }
     }
     Ok(())
