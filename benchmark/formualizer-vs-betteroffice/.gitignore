@@ -1,0 +1,5 @@
+/target/
+/results/**
+!/results/README.md
+!/fixtures/synthetic/*.xlsx
+!/fixtures/synthetic/*.json

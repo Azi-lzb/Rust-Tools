@@ -1,0 +1,8 @@
+LibXL 5.2.0.1 PDF API inspection
+Source inspected: official Linux SDK C++ headers in include_cpp and include_c.
+Command: rg -n -i 'pdf' include_cpp include_c
+Result: no PDF tokens found (rg exit status 1).
+Command: rg -n 'save\(|virtual.*save|saveA|saveW|enum.*Format|FormatType' include_cpp
+Result: IBookT.h exposes save(const TCHAR* filename, bool useTempFile = false) and saveRaw(const char** data, unsigned* size); there is no PDF format selector in the public C++ headers.
+Official product formats page: https://www.libxl.com/home.html describes XLS and XLSX/XLSM reading/writing, not PDF output.
+Conclusion: PDF export is UNSUPPORTED_BY_DESIGN for the tested LibXL C++ API; no PDF operation was attempted.

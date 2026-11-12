@@ -1,0 +1,46 @@
+.NET SDK:
+ Version:           10.0.404
+ Commit:            2ab2854867
+ Workload version:  10.0.400-manifests.ad9f6d83
+ MSBuild version:   18.9.15+2ab285486
+
+运行时环境:
+ OS Name:     Windows
+ OS Version:  10.0.26200
+ OS Platform: Windows
+ RID:         win-x64
+ Base Path:   C:\Users\AZI\AppData\Local\Temp\dotnet-sdk-10.0.404-expanded\sdk\10.0.404\
+
+已安装 .NET 工作负载:
+没有要显示的已安装工作负载。
+已配置为在安装新清单时使用 workload sets。
+未安装任何 workload sets。运行 “dotnet workload restore” 以安装工作负载集。
+
+Host:
+  Version:      10.0.15
+  Architecture: x64
+  Commit:       8e0f8ed231
+
+.NET SDKs installed:
+  10.0.404 [C:\Users\AZI\AppData\Local\Temp\dotnet-sdk-10.0.404-expanded\sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 10.0.15 [C:\Users\AZI\AppData\Local\Temp\dotnet-sdk-10.0.404-expanded\shared\Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App 10.0.15 [C:\Users\AZI\AppData\Local\Temp\dotnet-sdk-10.0.404-expanded\shared\Microsoft.NETCore.App]
+  Microsoft.WindowsDesktop.App 10.0.15 [C:\Users\AZI\AppData\Local\Temp\dotnet-sdk-10.0.404-expanded\shared\Microsoft.WindowsDesktop.App]
+
+Other architectures found:
+  x86   [C:\Program Files (x86)\dotnet]
+    registered at [HKLM\SOFTWARE\dotnet\Setup\InstalledVersions\x86\InstallLocation]
+
+Environment variables:
+  Not set
+
+global.json file:
+  Not found
+
+Learn more:
+  https://aka.ms/dotnet/info
+
+Download .NET:
+  https://aka.ms/dotnet/download

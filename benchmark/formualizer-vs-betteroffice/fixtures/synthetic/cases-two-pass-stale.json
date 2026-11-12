@@ -1,0 +1,276 @@
+{
+  "targets": [
+    {
+      "sheet": "Calc",
+      "row": 1,
+      "col": 1,
+      "address": "Calc!B2",
+      "formula": "=SUM(Data!$B$2:$B$5)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 2,
+      "col": 1,
+      "address": "Calc!B3",
+      "formula": "=SUMIF(Data!$A$2:$A$6,\"East\",Data!$B$2:$B$6)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 3,
+      "col": 1,
+      "address": "Calc!B4",
+      "formula": "=SUMIFS(Data!$B$2:$B$6,Data!$A$2:$A$6,\"East\",Data!$C$2:$C$6,\"Retail\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 4,
+      "col": 1,
+      "address": "Calc!B5",
+      "formula": "=COUNTIF(Data!$A$2:$A$6,\"East\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 5,
+      "col": 1,
+      "address": "Calc!B6",
+      "formula": "=COUNTIFS(Data!$A$2:$A$6,\"East\",Data!$C$2:$C$6,\"Retail\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 6,
+      "col": 1,
+      "address": "Calc!B7",
+      "formula": "=IF(Data!B2>5,\"yes\",\"no\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 7,
+      "col": 1,
+      "address": "Calc!B8",
+      "formula": "=IFS(Data!B2>5,\"high\",Data!B2>0,\"low\",TRUE,\"zero\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 8,
+      "col": 1,
+      "address": "Calc!B9",
+      "formula": "=AND(Data!B2>0,Data!B3>0)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 9,
+      "col": 1,
+      "address": "Calc!B10",
+      "formula": "=OR(Data!B2=0,Data!B3>0)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 10,
+      "col": 1,
+      "address": "Calc!B11",
+      "formula": "=ROUND(2.345,2)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 11,
+      "col": 1,
+      "address": "Calc!B12",
+      "formula": "=ROUNDUP(2.341,2)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 12,
+      "col": 1,
+      "address": "Calc!B13",
+      "formula": "=ROUNDDOWN(2.349,2)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 13,
+      "col": 1,
+      "address": "Calc!B14",
+      "formula": "=VLOOKUP(\"West\",Data!$A$2:$C$6,2,FALSE)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 14,
+      "col": 1,
+      "address": "Calc!B15",
+      "formula": "=XLOOKUP(\"South\",Data!$A$2:$A$6,Data!$B$2:$B$6,\"missing\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 15,
+      "col": 1,
+      "address": "Calc!B16",
+      "formula": "=INDEX(Data!$B$2:$B$6,MATCH(\"South\",Data!$A$2:$A$6,0))"
+    },
+    {
+      "sheet": "Calc",
+      "row": 16,
+      "col": 1,
+      "address": "Calc!B17",
+      "formula": "=IFERROR(1/0,\"safe\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 17,
+      "col": 1,
+      "address": "Calc!B18",
+      "formula": "=DATE(2024,2,29)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 18,
+      "col": 1,
+      "address": "Calc!B19",
+      "formula": "=YEAR(B18)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 19,
+      "col": 1,
+      "address": "Calc!B20",
+      "formula": "=MONTH(B18)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 20,
+      "col": 1,
+      "address": "Calc!B21",
+      "formula": "=DAY(B18)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 21,
+      "col": 1,
+      "address": "Calc!B22",
+      "formula": "=LEFT(\"formula\",3)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 22,
+      "col": 1,
+      "address": "Calc!B23",
+      "formula": "=RIGHT(\"formula\",3)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 23,
+      "col": 1,
+      "address": "Calc!B24",
+      "formula": "=MID(\"formula\",2,3)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 24,
+      "col": 1,
+      "address": "Calc!B25",
+      "formula": "=TEXT(1234.5,\"0.00\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 25,
+      "col": 1,
+      "address": "Calc!B26",
+      "formula": "=CONCAT(\"rust\",\"Tools\")"
+    },
+    {
+      "sheet": "Calc",
+      "row": 26,
+      "col": 1,
+      "address": "Calc!B27",
+      "formula": "=Data!B2+Data!B3*2"
+    },
+    {
+      "sheet": "Calc",
+      "row": 27,
+      "col": 1,
+      "address": "Calc!B28",
+      "formula": "=NamedInput+Data!$B$2"
+    },
+    {
+      "sheet": "Calc",
+      "row": 28,
+      "col": 1,
+      "address": "Calc!B29",
+      "formula": "=SUM(Data!B2:B6)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 29,
+      "col": 1,
+      "address": "Calc!B30",
+      "formula": "=Data!B2+Data!$B2+$B2+$B$2"
+    },
+    {
+      "sheet": "Calc",
+      "row": 30,
+      "col": 1,
+      "address": "Calc!B31",
+      "formula": "=Data!B6+1"
+    },
+    {
+      "sheet": "Calc",
+      "row": 31,
+      "col": 1,
+      "address": "Calc!B32",
+      "formula": "=1/0"
+    },
+    {
+      "sheet": "Calc",
+      "row": 32,
+      "col": 1,
+      "address": "Calc!B33",
+      "formula": "=SUM(Data!B2:B6)+1"
+    },
+    {
+      "sheet": "Calc",
+      "row": 33,
+      "col": 1,
+      "address": "Calc!B34",
+      "formula": "=SUM(B2:B3)"
+    },
+    {
+      "sheet": "Calc",
+      "row": 39,
+      "col": 1,
+      "address": "Calc!B40",
+      "formula": "=INDIRECT(\"Data!B2\")+1"
+    },
+    {
+      "sheet": "Calc",
+      "row": 40,
+      "col": 1,
+      "address": "Calc!B41",
+      "formula": "=B40+1"
+    },
+    {
+      "sheet": "Calc",
+      "row": 41,
+      "col": 1,
+      "address": "Calc!B42",
+      "formula": "=INDIRECT(\"Data!B2\")+B41"
+    },
+    {
+      "sheet": "Calc",
+      "row": 42,
+      "col": 1,
+      "address": "Calc!B43",
+      "formula": "=SUM(B40:B42)"
+    }
+  ],
+  "mutations": [
+    {
+      "sheet": "Data",
+      "row": 1,
+      "col": 1,
+      "value": 35
+    }
+  ],
+  "notes": [
+    "Excel COM generated",
+    "INDIRECT formulas with downstream dependencies",
+    "zero-based coordinates"
+  ]
+}

@@ -1,0 +1,535 @@
+{
+  "fixtures": {
+    "capabilities.xlsx": {
+      "bytes": 9578,
+      "sha256": "7e1c7c49a57ded54e9ec419377c6bf8a8592a775551619453f532d9bd7d5fa6c"
+    },
+    "capabilities.xls": {
+      "bytes": 5632,
+      "sha256": "1441a277b9c982e1675285c975a64e8005f00e63c7b7252dc839a801f6d68d2e"
+    }
+  },
+  "engines": {
+    "aspose": {
+      "aspose-noop.xlsx": {
+        "bytes": 14754,
+        "sha256": "30f93dcbf3108890d506918570d4e8591c691e48db223a08f29cca4df0175534",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "'Data'!$A$1:$F$11",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "&BPhase 2 fixture",
+          "footer_right": "Page &P of &N"
+        }
+      },
+      "aspose-edited.xlsx": {
+        "bytes": 15504,
+        "sha256": "75c497cf4b355e0bcc0096180df9c9c0f41bab681667ee6d86be402a0be96399",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning",
+            "Evaluation Warning (1)"
+          ],
+          "A3": "item-2",
+          "B3": 3,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "'Data'!$A$1:$F$11",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "&BPhase 2 fixture",
+          "footer_right": "Page &P of &N"
+        }
+      },
+      "aspose-capabilities.xlsx": {
+        "bytes": 32636,
+        "sha256": "32f100b7d8104d9ac92a1610ddce38f7b7b2b7860666ad0c067b2350a7158ee6",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 22.7142857142857,
+          "row4_hidden": false,
+          "column_I_hidden": false,
+          "print_area": "'Data'!$A$1:$F$1011",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "&BPhase 2",
+          "footer_right": "Page &P of &N"
+        }
+      },
+      "aspose-noop.xls": {
+        "bytes": 7168,
+        "sha256": "6bfa84989c39b9977c140a29d8174e2e3404ef8515f01b5b57c9fcff1f7f592c",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning"
+          ],
+          "dimensions": [
+            11,
+            9
+          ],
+          "A2": "item-1",
+          "B3": 2.0,
+          "B3_type": 2,
+          "merged_ranges": [
+            [
+              0,
+              1,
+              7,
+              9
+            ]
+          ]
+        }
+      },
+      "aspose-edited.xls": {
+        "bytes": 7680,
+        "sha256": "6b6a54d98b71f241bdbb54bf91488e7dbbf5559e0d0693672d02ecffa3ce242a",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning",
+            "Evaluation Warning (1)"
+          ],
+          "dimensions": [
+            11,
+            9
+          ],
+          "A2": "item-1",
+          "B3": 3.0,
+          "B3_type": 2,
+          "merged_ranges": [
+            [
+              0,
+              1,
+              7,
+              9
+            ]
+          ]
+        }
+      },
+      "aspose-converted.xlsx": {
+        "bytes": 10233,
+        "sha256": "68cb8328845b60ba3de0a5a38afa95c619fd74ce6fabd28b27be8a43e79f3f1b",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc",
+            "Evaluation Warning"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 0,
+          "data_validations": 0,
+          "A2_comment": false,
+          "A3_hyperlink": null,
+          "defined_names": [],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "",
+          "print_title_rows": null,
+          "print_title_columns": null,
+          "orientation": "portrait",
+          "paper_size": 9,
+          "header_center": "&P",
+          "footer_right": null
+        }
+      },
+      "xlsx_noop_package_parts": {
+        "input_count": 16,
+        "output_count": 19,
+        "removed": [
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/worksheets/sheet3.xml"
+        ]
+      },
+      "formula_check": {
+        "formulas": [
+          "=SUM(InputValues)*2",
+          "=SUMIF(Data!A2:A4,\"b\",Data!B2:B4)",
+          "=COUNTIF(Data!B2:B4,\">2\")",
+          "=IF(AND(Data!B2>0,Data!B3>0),ROUND(Data!B2*Data!B3,2),0)",
+          "=IF(OR(Data!B2=0,Data!B3=3),1,0)",
+          "=VLOOKUP(\"b\",Data!A2:B4,2,FALSE)",
+          "=INDEX(Data!B2:B4,MATCH(\"b\",Data!A2:A4,0))",
+          "=DATE(2026,1,2)",
+          "=SUM(Data!B2:B4)+Data!B2",
+          "=1/0"
+        ],
+        "cached_values": [
+          24,
+          7,
+          3,
+          15,
+          1,
+          3,
+          3,
+          46024,
+          17,
+          "#DIV/0!"
+        ],
+        "sha256": "8fe800595c78338554110465e3db07714a062d7154a7865a86b531faaa3777eb",
+        "bytes": 9506
+      }
+    },
+    "gembox": {
+      "gembox-noop.xlsx": {
+        "bytes": 11322,
+        "sha256": "c8895559bf54dfb23fd7b564c9587ea3c9b3402264cf78ef9348c8a1aa602708",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "'Data'!$A$1:$F$11",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "",
+          "footer_right": "Page &P of &N"
+        }
+      },
+      "gembox-edited.xlsx": {
+        "bytes": 11320,
+        "sha256": "075ad8efa0ac84dcaaad430e3bed5ab42c89baddc4cde413f8d42b8a916cd2a5",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "A3": "item-2",
+          "B3": 3,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "'Data'!$A$1:$F$11",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "",
+          "footer_right": "Page &P of &N"
+        }
+      },
+      "gembox-capabilities.xlsx": {
+        "bytes": 12962,
+        "sha256": "bff9b90e6c139ad31d6d200dfc00ec2fb2ea5d9feb75df44ae12547e69664d9b",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 1,
+          "data_validations": 1,
+          "A2_comment": true,
+          "A3_hyperlink": "https://example.invalid/item-2",
+          "defined_names": [
+            "InputValues"
+          ],
+          "row1_height": 28.0,
+          "column_A_width": 22.0,
+          "row4_hidden": false,
+          "column_I_hidden": false,
+          "print_area": "'Data'!$A$1:$F$111",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": null,
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "",
+          "footer_right": "Page &P of &N&P / &N"
+        }
+      },
+      "gembox-noop.xls": {
+        "bytes": 7168,
+        "sha256": "1b78a86f49f276cc0d6e5fee757ee88ba04cfb62467fd94c5661234b3b606acd",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "dimensions": [
+            11,
+            9
+          ],
+          "A2": "item-1",
+          "B3": 2.0,
+          "B3_type": 2,
+          "merged_ranges": [
+            [
+              0,
+              1,
+              7,
+              9
+            ]
+          ]
+        }
+      },
+      "gembox-edited.xls": {
+        "bytes": 7168,
+        "sha256": "edb994748e6976b74c8678c5dbf9cbfb2ee2e5710167382769506256106d2922",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "dimensions": [
+            11,
+            9
+          ],
+          "A2": "item-1",
+          "B3": 3.0,
+          "B3_type": 2,
+          "merged_ranges": [
+            [
+              0,
+              1,
+              7,
+              9
+            ]
+          ]
+        }
+      },
+      "gembox-converted.xlsx": {
+        "bytes": 7712,
+        "sha256": "6e273ebc8c3da0ecbe64cd0b460e63426520b48f9fa4b2a4fee6bd50a76d64e5",
+        "semantics": {
+          "sheet_names": [
+            "Data",
+            "Calc"
+          ],
+          "A3": "item-2",
+          "B3": 2,
+          "calc_A1_formula": "=SUM(Data!B2:B11)",
+          "merge_ranges": [
+            "H1:I1"
+          ],
+          "charts": 0,
+          "data_validations": 0,
+          "A2_comment": false,
+          "A3_hyperlink": null,
+          "defined_names": [],
+          "row1_height": 28.0,
+          "column_A_width": 18.0,
+          "row4_hidden": true,
+          "column_I_hidden": true,
+          "print_area": "",
+          "print_title_rows": null,
+          "print_title_columns": null,
+          "orientation": "portrait",
+          "paper_size": 9,
+          "header_center": "",
+          "footer_right": ""
+        }
+      },
+      "xlsx_noop_package_parts": {
+        "input_count": 16,
+        "output_count": 17,
+        "removed": [
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "added": [
+          "xl/GemComments1.xml",
+          "xl/drawings/GemVmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ]
+      },
+      "formula_check": {
+        "formulas": [
+          "=SUM(Data!InputValues)*2",
+          "=SUMIF(Data!A2:A4, \"b\", Data!B2:B4)",
+          "=COUNTIF(Data!B2:B4, \">2\")",
+          "=IF(AND(Data!B2 > 0, Data!B3 > 0), ROUND(Data!B2 * Data!B3, 2), 0)",
+          "=IF(OR(Data!B2 = 0, Data!B3 = 3), 1, 0)",
+          "=VLOOKUP(\"b\", Data!A2:B4, 2, FALSE)",
+          "=INDEX(Data!B2:B4, MATCH(\"b\", Data!A2:A4, 0))",
+          "=DATE(2026,1,2)",
+          "=SUM(Data!B2:B4) + Data!B2",
+          "=1/0"
+        ],
+        "cached_values": [
+          24,
+          7,
+          3,
+          15,
+          1,
+          3,
+          3,
+          "2026-01-02T00:00:00",
+          17,
+          "#DIV/0!"
+        ],
+        "sha256": "0726d1a90ff73c14d75fe12624b16fa39e1f0057bb919f0b4c7359c6de8d7afe",
+        "bytes": 6713
+      }
+    },
+    "libxl": {
+      "libxl-capabilities.xls": {
+        "bytes": 14336,
+        "sha256": "bae93e7d1ff436db6750e9285367fab2b247866a3b784456c781afcdcb7dbefd",
+        "semantics": {
+          "sheet_names": [
+            "Data"
+          ],
+          "dimensions": [
+            105,
+            255
+          ],
+          "A2": "中文读取验证",
+          "B3": "",
+          "B3_type": 0,
+          "merged_ranges": [
+            [
+              0,
+              1,
+              0,
+              2
+            ]
+          ]
+        }
+      },
+      "libxl-capabilities.xlsx": {
+        "bytes": 5633,
+        "sha256": "96a94069c45c01d00dffafa91a594e82fe346bb1ba69469df4e4df6463758d6b",
+        "semantics": {
+          "sheet_names": [
+            "Data"
+          ],
+          "A3": 10,
+          "B3": null,
+          "calc_A1_formula": null,
+          "merge_ranges": [
+            "A1:IV1"
+          ],
+          "charts": 0,
+          "data_validations": 0,
+          "A2_comment": false,
+          "A3_hyperlink": null,
+          "defined_names": [],
+          "row1_height": 20.0,
+          "column_A_width": 22.7109375,
+          "row4_hidden": false,
+          "column_I_hidden": false,
+          "print_area": "'Data'!$A$2:$C$105",
+          "print_title_rows": "$1:$1",
+          "print_title_columns": "$A:$A",
+          "orientation": "landscape",
+          "paper_size": 9,
+          "header_center": "",
+          "footer_right": ""
+        }
+      }
+    }
+  }
+}

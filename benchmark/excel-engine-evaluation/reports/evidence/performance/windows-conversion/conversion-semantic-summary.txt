@@ -1,0 +1,3 @@
+aspose  PARTIAL=8
+excel-com  PASS=8
+gembox  PASS=8

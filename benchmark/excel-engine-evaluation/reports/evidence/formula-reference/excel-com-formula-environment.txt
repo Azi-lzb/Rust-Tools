@@ -1,0 +1,5 @@
+Excel 16.0 build 20527
+startup_ms=887.381
+full_rebuild_initial_ms=4.648
+full_rebuild_after_edit_ms=0.992
+formula_fixture=10 formulas; input B2 changed 2→5; A1 formula changed

@@ -1,0 +1,13 @@
+[package]
+name = "betteroffice-formula-reference"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+xlsx_calc = { package = "betteroffice-xlsx-calc", path = "../../../../vendor/betteroffice-xlsx-calc" }
+xlsx_model = { package = "betteroffice-xlsx-model", path = "../../../../vendor/betteroffice-xlsx-model" }
+
+[patch.crates-io]
+betteroffice-xlsx-model = { path = "../../../../vendor/betteroffice-xlsx-model" }

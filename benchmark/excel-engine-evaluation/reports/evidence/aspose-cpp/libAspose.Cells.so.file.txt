@@ -1,0 +1,1 @@
+/opt/aspose-sdk/Aspose.Cells/lib/linux_x86_64/libAspose.Cells.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=46cb7745dfea76dc369687d4fd95271ff071ee6b, stripped

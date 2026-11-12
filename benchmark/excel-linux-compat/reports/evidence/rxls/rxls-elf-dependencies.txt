@@ -1,0 +1,120 @@
+/opt/target/release/xls2x-bench: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=70887d01b2d3e715de7c203e8a4290f5d339493d, not stripped
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              DYN (Shared object file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x126590
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          6964696 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         12
+  Size of section headers:           64 (bytes)
+  Number of section headers:         37
+  Section header string table index: 35
+
+Dynamic section at offset 0x565800 contains 32 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libdl.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-x86-64.so.2]
+ 0x000000000000001e (FLAGS)              BIND_NOW
+ 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE
+ 0x0000000000000015 (DEBUG)              0x0
+ 0x0000000000000007 (RELA)               0x1a40
+ 0x0000000000000008 (RELASZ)             157392 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x000000006ffffff9 (RELACOUNT)          6430
+ 0x0000000000000017 (JMPREL)             0x28110
+ 0x0000000000000002 (PLTRELSZ)           120 (bytes)
+ 0x0000000000000003 (PLTGOT)             0x56a198
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000006 (SYMTAB)             0x340
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000005 (STRTAB)             0x129c
+ 0x000000000000000a (STRSZ)              1952 (bytes)
+ 0x000000006ffffef5 (GNU_HASH)           0x1280
+ 0x0000000000000019 (INIT_ARRAY)         0x5677f0
+ 0x000000000000001b (INIT_ARRAYSZ)       16 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x5677e8
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (bytes)
+ 0x000000000000000c (INIT)               0x54c6c4
+ 0x000000000000000d (FINI)               0x54c6e0
+ 0x000000006ffffff0 (VERSYM)             0xfd0
+ 0x000000006ffffffe (VERNEED)            0x10dc
+ 0x000000006fffffff (VERNEEDNUM)         6
+ 0x0000000000000000 (NULL)               0x0
+  000:   0 (*local*)       2 (GLIBC_2.2.5)   0 (*local*)       0 (*local*)    
+  004:   0 (*local*)       2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  008:   3 (GLIBC_2.14)    4 (GCC_3.0)       2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  00c:   5 (GLIBC_2.2.5)   6 (GLIBC_2.3)     7 (GLIBC_2.2.5)   7 (GLIBC_2.2.5)
+  010:   2 (GLIBC_2.2.5)   7 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)
+  014:   8 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  018:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)
+  01c:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   4 (GCC_3.0)       0 (*local*)    
+  020:   2 (GLIBC_2.2.5)   9 (GLIBC_2.4)     5 (GLIBC_2.2.5)   9 (GLIBC_2.4)  
+  024:   a (GCC_3.3)       a (GCC_3.3)       2 (GLIBC_2.2.5)   4 (GCC_3.0)    
+  028:   4 (GCC_3.0)       2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  02c:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  030:   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  034:   5 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   b (GLIBC_2.17) 
+  038:   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   0 (*local*)    
+  03c:   0 (*local*)       0 (*local*)       2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  040:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  044:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  048:   2 (GLIBC_2.2.5)   c (GLIBC_2.15)    2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  04c:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  050:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  054:   0 (*local*)       2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)
+  058:   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   a (GCC_3.3)    
+  05c:   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  060:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)
+  064:   5 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  068:   2 (GLIBC_2.2.5)   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   d (GLIBC_2.3)  
+  06c:   2 (GLIBC_2.2.5)   e (GLIBC_2.28)    f (GLIBC_2.9)    10 (GLIBC_2.25) 
+  070:  11 (GLIBC_2.18)    9 (GLIBC_2.4)    12 (GLIBC_2.3.4)   2 (GLIBC_2.2.5)
+  074:   5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)  13 (GLIBC_2.16)    2 (GLIBC_2.2.5)
+  078:  14 (GLIBC_2.12)    5 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  080:   4 (GCC_3.0)       4 (GCC_3.0)       4 (GCC_3.0)       2 (GLIBC_2.2.5)
+  084:   2 (GLIBC_2.2.5)   2 (GLIBC_2.2.5)
+  0x0090:   Name: GLIBC_2.2.5  Flags: none  Version: 5
+  0x00a0:   Name: GLIBC_2.12  Flags: none  Version: 20
+  0x00b0:   Name: GLIBC_2.2.5  Flags: none  Version: 7
+  0x00c0:   Name: GLIBC_2.2.5  Flags: none  Version: 8
+  0x00d0:   Name: GLIBC_2.2.5  Flags: none  Version: 2
+  0x00e0:   Name: GLIBC_2.3  Flags: none  Version: 13
+  0x00f0:   Name: GLIBC_2.3.4  Flags: none  Version: 18
+  0x0100:   Name: GLIBC_2.4  Flags: none  Version: 9
+  0x0110:   Name: GLIBC_2.9  Flags: none  Version: 15
+  0x0120:   Name: GLIBC_2.14  Flags: none  Version: 3
+  0x0130:   Name: GLIBC_2.15  Flags: none  Version: 12
+  0x0140:   Name: GLIBC_2.16  Flags: none  Version: 19
+  0x0150:   Name: GLIBC_2.17  Flags: none  Version: 11
+  0x0160:   Name: GLIBC_2.18  Flags: WEAK  Version: 17
+  0x0170:   Name: GLIBC_2.25  Flags: WEAK  Version: 16
+  0x0180:   Name: GLIBC_2.28  Flags: WEAK  Version: 14
+  0x0190:   Name: GLIBC_2.3  Flags: none  Version: 6
+	linux-vdso.so.1 (0x0000719eee7bf000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x0000719eedc7b000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x0000719eeda5b000)
+	libm.so.6 => /lib64/libm.so.6 (0x0000719eed6d9000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x0000719eed4d5000)
+	libc.so.6 => /lib64/libc.so.6 (0x0000719eed0ff000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000719eee400000)
+	linux-vdso.so.1 (0x000071cc73c4f000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x000071cc7327b000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x000071cc7305b000)
+	libm.so.6 => /lib64/libm.so.6 (0x000071cc72cd9000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x000071cc72ad5000)
+	libc.so.6 => /lib64/libc.so.6 (0x000071cc726ff000)
+	/lib64/ld-linux-x86-64.so.2 (0x000071cc73a00000)

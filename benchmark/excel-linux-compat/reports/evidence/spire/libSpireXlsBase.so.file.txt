@@ -1,0 +1,1 @@
+/opt/spire-sdk/lib/linux/libSpireXlsBase.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=e52866987573b85354d3a2faab561cbe55725b6d, with debug_info, not stripped

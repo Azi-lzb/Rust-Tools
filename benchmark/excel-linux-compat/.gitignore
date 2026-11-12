@@ -1,0 +1,18 @@
+# Build and publish output; never commit commercial SDK binaries or runtime bundles.
+**/bin/
+**/obj/
+**/publish/
+**/target/
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.lic
+*license-key*
+
+# These are synthetic Excel fixtures and measured outputs intentionally retained here.
+!fixtures/
+!fixtures/**
+!reports/samples/
+!reports/samples/**

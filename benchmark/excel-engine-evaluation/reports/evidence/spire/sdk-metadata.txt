@@ -1,0 +1,24 @@
+Vendor: e-iceblue
+Product: Spire.XLS for C++ Linux x64 SDK
+Version: 16.7.0
+Package: official NuGet package Spire.XLS.Cpp.Linux 16.7.0
+Package size: 56,669,315 bytes
+Package SHA-256: 41E41A965582E9201A3771B73742CA73394FB78139E2E3152450A28918D675BA
+Official product and trial downloads: https://download.e-iceblue.cn/Downloads/Spire-XLS-CPP.html
+No vendor license key or SDK binary is stored in Git.
+Test used the evaluation package without a paid or temporary key.
+
+Observed Linux-native package libraries:
+- libSpireXlsCpp.so
+- libSpireXlsBase.so
+- libSkiaSharp.so
+
+Rocky Linux 8.9 x86_64, glibc 2.28:
+- libSpireXlsCpp.so and libSpireXlsBase.so direct ELF dependencies resolve.
+- SDK umbrella header initially failed to compile because its byte typedef is conditionally omitted when __cpp_lib_byte is set; the smoke wrapper pre-includes <cstddef> and undefines the macro before including the vendor header.
+- SDK core required explicit linking of both libSpireXlsCpp.so and libSpireXlsBase.so to resolve Workbook_CreateWorkbook.
+- After compiling and bundling the SDK libraries plus Rocky 8 ICU, Workbook construction fails with TypeInitialization_Type_NoTypeAvailable while initializing worksheet types. Loader traces show runtime attempts to load libSkiaSharp.so.
+- libSkiaSharp.so has direct dependencies on libfontconfig.so.1 and libm.so.6. `readelf --version-info` shows GLIBC_2.29, which is unavailable on the tested glibc 2.28 host. It also requires fontconfig/freetype stack components.
+- Therefore the package cannot pass the required glibc 2.28 workbook load/modify/save smoke with the official 16.7.0 Linux SDK. Status: INCOMPATIBLE for the tested package/build path.
+
+Raw compiler, ELF, dependency, offline runtime and dynamic-loader traces are in this directory. Evaluation/trial behavior is not a commercial redistribution grant; obtain the correct vendor license before any product use.

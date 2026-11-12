@@ -1,0 +1,6 @@
+OS=Microsoft Windows 11 专业版 10.0.26200
+CPU=AMD Ryzen 5 2600X Six-Core Processor           
+logical_processors=12
+physical_memory_bytes=17098489856
+input=C:\Users\AZI\Desktop\VibeCode\Rust-Tools-test\benchmark\excel-engine-evaluation\fixtures\performance
+workbooks=8 XLS x 3 rounds; one resident Release process per engine

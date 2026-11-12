@@ -1,0 +1,70 @@
+{
+  "tool_version": "0.1.0",
+  "engine": "rxls",
+  "started_at_epoch_ms": 1794422410402,
+  "finished_at_epoch_ms": 1794422410514,
+  "ok_count": 1,
+  "failed_count": 0,
+  "skipped_count": 0,
+  "total_ms": 112.366501,
+  "init_ms": 0.0,
+  "input_total_bytes": 5632,
+  "output_total_bytes": 4824,
+  "files": [
+    {
+      "input": "/input/capabilities.xls",
+      "output": "/output/capabilities.xlsx",
+      "status": "ok",
+      "timing": {
+        "read_ms": 3.090665,
+        "parse_ms": 56.196394,
+        "serialize_ms": 10.305021,
+        "validate_ms": 32.075140000000005,
+        "write_ms": 2.578543,
+        "total_ms": 110.749054
+      },
+      "input_bytes": 5632,
+      "output_bytes": 4824,
+      "input_sha256": "1441a277b9c982e1675285c975a64e8005f00e63c7b7252dc839a801f6d68d2e",
+      "output_sha256": "03762b75839153e0de08f783bc59161b0d82bf64422d5b98a3f94f5d4f327d63",
+      "rxls_diag": {
+        "cells": 58,
+        "defined_names": 0,
+        "evaluation": {
+          "cached": 1,
+          "computed": 11,
+          "errors": 0,
+          "truncated": false,
+          "unsupported": 1
+        },
+        "features": {
+          "charts": 0,
+          "comments": 0,
+          "data_validations": 0,
+          "hyperlinks": 0,
+          "images": 0,
+          "merged_ranges": 1,
+          "tables": 0
+        },
+        "formulas": 12,
+        "local_defined_names": 0,
+        "report_schema": 2,
+        "sheets": [
+          {
+            "name": "Data",
+            "print_losses": [],
+            "style_fidelity": "Partial",
+            "style_losses": []
+          },
+          {
+            "name": "Calc",
+            "print_losses": [],
+            "style_fidelity": "Partial",
+            "style_losses": []
+          }
+        ],
+        "warnings_count": 1
+      }
+    }
+  ]
+}

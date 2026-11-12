@@ -1,0 +1,23 @@
+[package]
+name = "formualizer-vs-betteroffice"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+betteroffice-xlsx = { version = "0.5.1", default-features = false }
+formualizer-workbook = { version = "0.14.0", default-features = false, features = ["umya", "xlsx-recalc", "system-clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Formualizer 0.14.0's cache-rewrite source expects zip 7.2's u64 data_start API.
+zip = { version = "=7.2.0", default-features = false, features = ["deflate"] }
+
+[patch.crates-io]
+betteroffice-xlsx-model = { path = "../../vendor/betteroffice-xlsx-model" }
+betteroffice-xlsx-calc = { path = "../../vendor/betteroffice-xlsx-calc" }
+betteroffice-xlsx-render = { path = "vendor/betteroffice-xlsx-render" }
+yrs = { path = "vendor/yrs" }
+

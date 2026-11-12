@@ -1,0 +1,17 @@
+Vendor: Aspose
+Product: Aspose.Cells for C++ Linux x86_64 SDK
+Version: 26.10
+Archive: Aspose.Cells-for-Cpp-26.10-linux.tar.gz
+Archive size: 80,084,267 bytes
+Archive SHA-256: 3AF80A102405E970C2A3045E5736CB9E05DF5BF41E06BDB4CCD33627C7D94AC1
+Official release page: https://releases.aspose.com/cells/cpp/new-releases/aspose.cells-for-c++-26.10linux/
+No SDK archive or license file is stored in Git.
+The release page offered the evaluation download; no commercial key was used.
+
+The Linux SDK includes libAspose.Cells.so (ELF64 x86-64), headers and CMake config. The official requirements list fontconfig as a Linux dependency. A custom C++17 read/modify/save smoke program compiled with Rocky Linux 8 GCC 8.5.0 but failed at link time against the vendor library:
+
+- undefined reference to GLIBCXX_3.4.26
+- undefined reference to log2/exp2/log/exp/pow@GLIBC_2.29
+- undefined reference to FreeType palette symbols absent from Rocky 8's installed FreeType
+
+The SDK library requests GLIBC 2.29 symbols, above the target glibc 2.28. No target libc was replaced. This test therefore stops at compile/link and is incompatible with the tested glibc 2.28 toolchain. C++ compiler/link output and ELF dependency files are retained beside this file.

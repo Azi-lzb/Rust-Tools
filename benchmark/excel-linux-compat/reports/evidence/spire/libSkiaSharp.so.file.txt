@@ -1,0 +1,1 @@
+/opt/spire-sdk/lib/linux/libSkiaSharp.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=a8db02dedb666539b6e6ec5cf10d5846e86a1fb9, stripped

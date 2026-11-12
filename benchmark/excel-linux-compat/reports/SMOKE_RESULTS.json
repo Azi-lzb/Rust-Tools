@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-12",
+  "target": {
+    "os": "Rocky Linux 8.9 (Green Obsidian)",
+    "architecture": "x86_64",
+    "glibc": "2.28",
+    "kylin_v10": "NOT_TESTED",
+    "uos_v20": "NOT_TESTED",
+    "network": "disabled during runtime tests",
+    "preinstalled_excel_or_wps": false,
+    "preinstalled_dotnet_java_python_libreoffice": false
+  },
+  "engines": [
+    {
+      "id": "aspose-cpp",
+      "sdk": "Aspose.Cells C++ Linux SDK 26.10",
+      "status": "INCOMPATIBLE",
+      "build": "link failed on Rocky 8: SDK requires GLIBC_2.29 and GLIBCXX_3.4.26; missing FreeType palette symbols also reported",
+      "xlsx_edit": "NOT_TESTED",
+      "xls_edit": "NOT_TESTED",
+      "xls_to_xlsx": "NOT_TESTED",
+      "offline": "NOT_TESTED",
+      "pdf": "NOT_TESTED",
+      "license": "BLOCKED_LICENSE_REVIEW",
+      "evidence": ["evidence/aspose-cpp/aspose-cpp-build-container.log", "evidence/aspose-cpp/libAspose.Cells.so.symbol-versions.txt"]
+    },
+    {
+      "id": "aspose-dotnet",
+      "sdk": "Aspose.Cells 26.10.0; .NET SDK 10.0.404/runtime 10.0.15",
+      "status": "PASS",
+      "publish": "directory-based self-contained linux-x64; no trimming/AOT",
+      "publish_size": "143 MiB including the self-contained runtime and bundled native assets",
+      "xlsx_edit": "PASS",
+      "xls_edit": "PASS",
+      "xls_to_xlsx": "PASS",
+      "offline": "PASS",
+      "capabilities_append_rows": 1000,
+      "formula_calculation": "PASS for synthetic fixture smoke formulas",
+      "pdf": "PASS, signature %PDF-, 6345 bytes",
+      "license": "BLOCKED_LICENSE_REVIEW; no commercial key was supplied; evaluation warning sheets were present in output workbooks",
+      "evidence": ["evidence/aspose/offline-runtime.log", "evidence/aspose/dotnet-publish.log"]
+    },
+    {
+      "id": "spire-cpp",
+      "sdk": "Spire.XLS C++ 16.7.0",
+      "status": "INCOMPATIBLE",
+      "build": "PASS with GCC 8.5.0",
+      "runtime": "Workbook initialization fails; delayed libSkiaSharp.so needs GLIBC_2.29; Rocky ldd reports version not found",
+      "xlsx_edit": "NOT_TESTED",
+      "xls_edit": "NOT_TESTED",
+      "xls_to_xlsx": "NOT_TESTED",
+      "offline": "FAIL",
+      "pdf": "NOT_TESTED",
+      "license": "BLOCKED_LICENSE_REVIEW",
+      "evidence": ["evidence/spire/spire-offline-runtime.log", "evidence/spire/libSkiaSharp-rocky8-ldd.txt"]
+    },
+    {
+      "id": "gembox-dotnet",
+      "sdk": "GemBox.Spreadsheet 2026.10.101; .NET SDK 10.0.404/runtime 10.0.15",
+      "status": "PASS",
+      "publish": "directory-based self-contained linux-x64; no trimming/AOT",
+      "publish_size": "150 MiB including the self-contained runtime and bundled native assets",
+      "xlsx_edit": "PASS",
+      "xls_edit": "PASS",
+      "xls_to_xlsx": "PASS",
+      "offline": "PASS",
+      "capabilities_append_rows": "100 (Free-Limited license test cap)",
+      "formula_calculation": "PASS for synthetic fixture smoke formulas",
+      "pdf": "PASS, signature %PDF-, 12785 bytes",
+      "license": "BLOCKED_LICENSE_REVIEW; Free-Limited behavior was active and capped append test at 100 rows",
+      "evidence": ["evidence/gembox/offline-runtime.log", "evidence/gembox/dotnet-publish.log"]
+    },
+    {
+      "id": "libxl-cpp",
+      "sdk": "LibXL 5.2.0.1",
+      "status": "PASS",
+      "build": "PASS with GCC 8.5.0",
+      "xlsx_edit": "PASS; reopened and verified changed text/value",
+      "xls_edit": "PASS; reopened and verified changed text/value",
+      "xls_to_xlsx": "UNSUPPORTED natively; tested output is scalar/formula reconstruction only",
+      "offline": "PASS with SDK libxl.so privately staged beside application",
+      "self_contained": "PARTIAL; system libstdc++ and glibc remain required and were not bundled",
+      "append_style_row_column_page_setup": "PASS on synthetic XLS and XLSX smoke fixture",
+      "formula_calculation": "UNSUPPORTED_BY_DESIGN",
+      "pdf": "UNSUPPORTED_BY_DESIGN; no PDF export API in public 5.2.0.1 C/C++ headers",
+      "license": "BLOCKED_LICENSE_REVIEW",
+      "evidence": ["evidence/libxl/libxl-offline-runtime.log", "evidence/libxl/libxl-smoke-ldd.txt", "evidence/libxl/libxl-pdf-api-review.txt"]
+    },
+    {
+      "id": "rxls-historical",
+      "sdk": "benchmark source from commit fb05ebc (harness 0.1.0; rxls dependency 0.1.4)",
+      "status": "PASS_FOR_CONVERSION_ONLY",
+      "build": "PASS release build on Rocky 8 glibc 2.28",
+      "xlsx_edit": "NOT_TESTED",
+      "xls_edit": "UNSUPPORTED_BY_DESIGN in tested converter flow",
+      "xls_to_xlsx": "PASS for one synthetic XLS; generated XLSX reopened with openpyxl",
+      "offline": "PASS; 112.37 ms reported; 0 failures",
+      "self_contained": "PARTIAL; single executable still relies on standard system libraries",
+      "pdf": "UNSUPPORTED_BY_DESIGN in tested converter flow",
+      "license": "OPEN_SOURCE_LICENSE_REVIEW_REQUIRED",
+      "evidence": ["evidence/rxls/rxls-build.log", "evidence/rxls/rxls-offline-runtime.log", "evidence/rxls/rxls-convert-report.json", "evidence/rxls/rxls-elf-dependencies.txt"]
+    }
+  ],
+  "status_legend": ["PASS", "PARTIAL", "FAIL", "UNSUPPORTED", "BLOCKED", "NOT_TESTED", "INCOMPATIBLE"]
+}
+

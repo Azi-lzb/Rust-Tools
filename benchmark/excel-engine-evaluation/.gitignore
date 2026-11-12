@@ -1,0 +1,12 @@
+# Keep commercial SDK/runtime binaries and local build products out of Git.
+**/bin/
+**/obj/
+**/publish/
+**/target/
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.lic
+*license-key*

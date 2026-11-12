@@ -1,0 +1,234 @@
+x86_64
+glibc 2.28
+ldd (GNU libc) 2.28
+=== self-contained apphost ===
+/app/GemboxTest: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=1fff4edbea15005a697800998f4fa75e32d22feb, stripped
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              DYN (Shared object file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x7190
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          76080 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         12
+  Size of section headers:           64 (bytes)
+  Number of section headers:         33
+  Section header string table index: 31
+	linux-vdso.so.1 (0x0000775c91bd9000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x0000775c915fc000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x0000775c913dc000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x0000775c91047000)
+	libm.so.6 => /lib64/libm.so.6 (0x0000775c90cc5000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x0000775c90aad000)
+	libc.so.6 => /lib64/libc.so.6 (0x0000775c906d7000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000775c91800000)
+=== self-contained native libraries ===
+--- /app/libHarfBuzzSharp.so
+/app/libHarfBuzzSharp.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, not stripped
+  0x0080:   Name: GLIBC_2.2.5  Flags: none  Version: 9
+  0x0090:   Name: GLIBC_2.2.5  Flags: none  Version: 3
+	linux-vdso.so.1 (0x00007de98c01e000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007de98b5f7000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007de98b3d7000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007de98b055000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007de98ac7f000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007de98bc00000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007de98aa67000)
+--- /app/libSkiaSharp.so
+/app/libSkiaSharp.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, not stripped
+  0x0160:   Name: GLIBC_2.17  Flags: none  Version: 19
+  0x0170:   Name: GLIBC_2.3  Flags: none  Version: 14
+	linux-vdso.so.1 (0x000074a54c029000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x000074a54af50000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x000074a54ad30000)
+	libfontconfig.so.1 => /lib64/libfontconfig.so.1 (0x000074a54aaeb000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x000074a54a8e7000)
+	libm.so.6 => /lib64/libm.so.6 (0x000074a54a565000)
+	libc.so.6 => /lib64/libc.so.6 (0x000074a54a18f000)
+	/lib64/ld-linux-x86-64.so.2 (0x000074a54bc00000)
+	librt.so.1 => /lib64/librt.so.1 (0x000074a549f87000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x000074a549d6f000)
+	libfreetype.so.6 => /lib64/libfreetype.so.6 (0x000074a549ab3000)
+	libexpat.so.1 => /lib64/libexpat.so.1 (0x000074a549877000)
+	libuuid.so.1 => /lib64/libuuid.so.1 (0x000074a54966f000)
+	libbz2.so.1 => /lib64/libbz2.so.1 (0x000074a54945e000)
+	libpng16.so.16 => /lib64/libpng16.so.16 (0x000074a549229000)
+	libz.so.1 => /lib64/libz.so.1 (0x000074a549011000)
+--- /app/libSystem.Globalization.Native.so
+/app/libSystem.Globalization.Native.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=2cd3702ca4121ed56589484eba0dba5dfaf9e2b8, stripped
+  0x0030:   Name: GLIBC_2.2.5  Flags: none  Version: 2
+  0x0040:   Name: GLIBC_2.4  Flags: none  Version: 3
+	linux-vdso.so.1 (0x0000719914892000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007199143fc000)
+	libc.so.6 => /lib64/libc.so.6 (0x0000719914026000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000719914600000)
+--- /app/libSystem.IO.Compression.Native.so
+/app/libSystem.IO.Compression.Native.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=71368243e20a1584df4fc9fb5c67fa18055fc5d2, stripped
+  0x0050:   Name: GLIBC_2.14  Flags: none  Version: 4
+  0x0060:   Name: GLIBC_2.16  Flags: none  Version: 6
+	linux-vdso.so.1 (0x000078eb0b3bf000)
+	libm.so.6 => /lib64/libm.so.6 (0x000078eb0ac7e000)
+	libc.so.6 => /lib64/libc.so.6 (0x000078eb0a8a8000)
+	/lib64/ld-linux-x86-64.so.2 (0x000078eb0b000000)
+--- /app/libSystem.Native.so
+/app/libSystem.Native.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=bb76abab76506fd5ed05dde2bbddb4a42a8eee01, stripped
+  0x0080:   Name: GLIBC_2.4  Flags: none  Version: 5
+  0x0090:   Name: GLIBC_2.6  Flags: none  Version: 10
+	linux-vdso.so.1 (0x000074db432d4000)
+	librt.so.1 => /lib64/librt.so.1 (0x000074db42df8000)
+	libc.so.6 => /lib64/libc.so.6 (0x000074db42a22000)
+	/lib64/ld-linux-x86-64.so.2 (0x000074db43000000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x000074db42802000)
+undefined symbol: dlopen	(/app/libSystem.Native.so)
+undefined symbol: dlerror	(/app/libSystem.Native.so)
+undefined symbol: dlsym	(/app/libSystem.Native.so)
+undefined symbol: dlclose	(/app/libSystem.Native.so)
+--- /app/libSystem.Net.Security.Native.so
+/app/libSystem.Net.Security.Native.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=c70d291f2eee3b40406c4f58773ee8fc9527bceb, stripped
+  0x0040:   Name: GLIBC_2.4  Flags: none  Version: 3
+  0x0050:   Name: GLIBC_2.14  Flags: none  Version: 4
+	linux-vdso.so.1 (0x000072ee3fb76000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x000072ee3f5fc000)
+	libc.so.6 => /lib64/libc.so.6 (0x000072ee3f226000)
+	/lib64/ld-linux-x86-64.so.2 (0x000072ee3f800000)
+--- /app/libSystem.Security.Cryptography.Native.OpenSsl.so
+/app/libSystem.Security.Cryptography.Native.OpenSsl.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=256e84f9873e323549ee7e472b6e4c96dd2bc53f, stripped
+  0x0060:   Name: GLIBC_2.4  Flags: none  Version: 4
+  0x0070:   Name: GLIBC_2.14  Flags: none  Version: 5
+	linux-vdso.so.1 (0x000072cb183df000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x000072cb17dfc000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x000072cb17bdc000)
+	libc.so.6 => /lib64/libc.so.6 (0x000072cb17806000)
+	/lib64/ld-linux-x86-64.so.2 (0x000072cb18000000)
+--- /app/libclrgc.so
+/app/libclrgc.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=710dc32f1eb55e80802b5dd446020d61f89677b6, stripped
+  0x0080:   Name: GLIBC_2.3.2  Flags: none  Version: 12
+  0x0090:   Name: GLIBC_2.3.4  Flags: none  Version: 9
+	linux-vdso.so.1 (0x00007d1c3ac7d000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007d1c3a66b000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007d1c3a2e9000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007d1c3a0d1000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007d1c39cfb000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007d1c3aa00000)
+undefined symbol: pthread_condattr_setclock	(/app/libclrgc.so)
+undefined symbol: pthread_mutexattr_init	(/app/libclrgc.so)
+undefined symbol: pthread_mutexattr_settype	(/app/libclrgc.so)
+undefined symbol: pthread_mutexattr_destroy	(/app/libclrgc.so)
+--- /app/libclrgcexp.so
+/app/libclrgcexp.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=315d4712e3ac6331864a274915e7741a24105b2a, stripped
+  0x0110:   Name: GLIBC_2.17  Flags: none  Version: 15
+  0x0120:   Name: GLIBC_2.3  Flags: none  Version: 12
+	linux-vdso.so.1 (0x000072e2fa1ca000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x000072e2f9a6b000)
+	libm.so.6 => /lib64/libm.so.6 (0x000072e2f96e9000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x000072e2f94d1000)
+	libc.so.6 => /lib64/libc.so.6 (0x000072e2f90fb000)
+	/lib64/ld-linux-x86-64.so.2 (0x000072e2f9e00000)
+undefined symbol: pthread_condattr_setclock	(/app/libclrgcexp.so)
+undefined symbol: pthread_mutexattr_init	(/app/libclrgcexp.so)
+undefined symbol: pthread_mutexattr_settype	(/app/libclrgcexp.so)
+undefined symbol: pthread_mutexattr_destroy	(/app/libclrgcexp.so)
+--- /app/libclrjit.so
+/app/libclrjit.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=3770f11caf1cf9af70d2194b16917f50939f7611, stripped
+  0x0180:   Name: GLIBC_2.7  Flags: none  Version: 21
+  0x0190:   Name: GLIBC_2.9  Flags: none  Version: 18
+	linux-vdso.so.1 (0x00007c5f3493d000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007c5f33f14000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007c5f33cf4000)
+	librt.so.1 => /lib64/librt.so.1 (0x00007c5f33aec000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007c5f338e8000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007c5f33553000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007c5f331d1000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007c5f32dfb000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007c5f34600000)
+--- /app/libcoreclr.so
+/app/libcoreclr.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=c75d55af618b5f1a0769385ed23079bbe267be0d, stripped
+  0x0190:   Name: GLIBC_2.6  Flags: none  Version: 17
+  0x0200:   Name: GLIBC_2.3  Flags: none  Version: 8
+	linux-vdso.so.1 (0x000072e4a70a0000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x000072e4a64c8000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x000072e4a62a8000)
+	librt.so.1 => /lib64/librt.so.1 (0x000072e4a60a0000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x000072e4a5e9c000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x000072e4a5b07000)
+	libm.so.6 => /lib64/libm.so.6 (0x000072e4a5785000)
+	libc.so.6 => /lib64/libc.so.6 (0x000072e4a53af000)
+	/lib64/ld-linux-x86-64.so.2 (0x000072e4a6e00000)
+--- /app/libcoreclrtraceptprovider.so
+/app/libcoreclrtraceptprovider.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=d2d4eb573876039cc53494d44bb1bfda9de8ec1b, stripped
+  0x0010:   Name: GLIBC_2.2.5  Flags: none  Version: 2
+  0x0020:   Name: GLIBC_2.4  Flags: none  Version: 3
+	linux-vdso.so.1 (0x0000707917197000)
+	liblttng-ust.so.0 => not found
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x0000707916a6b000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007079166e9000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007079164d1000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007079160fb000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000707916e00000)
+undefined symbol: dlopen	(/app/libcoreclrtraceptprovider.so)
+undefined symbol: dlsym	(/app/libcoreclrtraceptprovider.so)
+undefined symbol: dlclose	(/app/libcoreclrtraceptprovider.so)
+undefined symbol: lttng_probe_register	(/app/libcoreclrtraceptprovider.so)
+undefined symbol: lttng_probe_unregister	(/app/libcoreclrtraceptprovider.so)
+--- /app/libhostfxr.so
+/app/libhostfxr.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=1bb89eda7b2dfde505001d0627c04c99664985ab, stripped
+  0x0180:   Name: GLIBC_2.16  Flags: none  Version: 21
+  0x0190:   Name: GLIBC_2.3  Flags: none  Version: 11
+	linux-vdso.so.1 (0x0000789d2f86a000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x0000789d2f3fc000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x0000789d2f1dc000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x0000789d2ee47000)
+	libm.so.6 => /lib64/libm.so.6 (0x0000789d2eac5000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x0000789d2e8ad000)
+	libc.so.6 => /lib64/libc.so.6 (0x0000789d2e4d7000)
+	/lib64/ld-linux-x86-64.so.2 (0x0000789d2f600000)
+--- /app/libhostpolicy.so
+/app/libhostpolicy.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=b027d23d8c5e2453da057b8d9794fad14259da5d, stripped
+  0x0180:   Name: GLIBC_2.14  Flags: none  Version: 5
+  0x0190:   Name: GLIBC_2.16  Flags: none  Version: 22
+	linux-vdso.so.1 (0x00007f2b98f2f000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007f2b989fc000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007f2b987dc000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f2b98447000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007f2b980c5000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f2b97ead000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007f2b97ad7000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f2b98c00000)
+--- /app/libmscordaccore.so
+/app/libmscordaccore.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=6d4d20b2c3e1f3b6510b5096adcafacc60abe9a7, stripped
+  0x0180:   Name: GLIBC_2.9  Flags: none  Version: 21
+  0x0190:   Name: GLIBC_2.14  Flags: none  Version: 8
+	linux-vdso.so.1 (0x00007a04d371d000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007a04d2f50000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007a04d2d30000)
+	librt.so.1 => /lib64/librt.so.1 (0x00007a04d2b28000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007a04d2924000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007a04d258f000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007a04d220d000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007a04d1e37000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007a04d3400000)
+--- /app/libmscordbi.so
+/app/libmscordbi.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=ba0741b9aa4f7b45e9f999fbe36d4b443c06bd24, stripped
+  0x00e0:   Name: GLIBC_2.3  Flags: none  Version: 11
+  0x0090:   Name: GLIBC_2.2.5  Flags: none  Version: 3
+	linux-vdso.so.1 (0x00007f86f6525000)
+	libmscordaccore.so => /app/libmscordaccore.so (0x00007f86f5f68000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f86f5bd3000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007f86f5851000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f86f5639000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007f86f5263000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f86f6200000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007f86f5043000)
+	librt.so.1 => /lib64/librt.so.1 (0x00007f86f4e3b000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007f86f4c37000)
+=== publish size ===
+150M	/app
