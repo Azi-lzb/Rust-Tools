@@ -24,6 +24,16 @@ limited to the listed functions and synthetic data. It is not evidence that
 either engine has full Excel calculation compatibility or exceeds the other
 on the actual rustTools business formula set.
 
+## Explicitly not tested
+
+| Feature / input | Status |
+|---|---|
+| Dynamic array formulas and spill ranges | NOT_TESTED |
+| Shared formulas | NOT_TESTED |
+| Circular references and iterative calculation | NOT_TESTED |
+| Actual rustTools 1-4 business workbooks/formulas | NOT_TESTED; no such sample was present under the repository benchmark/test fixture directories |
+| XLS formula calculation | NOT_TESTED |
+
 ## Coverage limitation behavior
 
 The basic suite contains `FORMUALIZER_UNKNOWN_FN(1)`. Resident calculation

@@ -37,7 +37,8 @@ it is not a full deb or target Kylin/UOS validation.
 
 This is a formula-engine experiment on Excel COM-generated synthetic XLSX
 fixtures. It is not a broad Excel compatibility certification. No `.xls`,
-macros, real 1-4 files, or business output was tested. The 70k and 100k files
+macros, dynamic array/spill formulas, shared formulas, circular/iterative
+calculation, real 1-4 files, or business output were tested. The 70k and 100k files
 repeat seven formula groups over a small data table; they measure graph/cell
 scale, not realistic dependency diversity. Per-engine peak memory was not
 isolated. See the six detailed reports for methods and evidence.
