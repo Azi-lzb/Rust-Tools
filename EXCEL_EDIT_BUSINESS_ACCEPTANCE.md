@@ -54,19 +54,24 @@
 | Auto 路由混合计划回归 | 已通过，3 项 | `router-regression-final.log` |
 | workspace `cargo fmt --all --check` | 未通过 | `rustfmt-check.log` 指向若干未改动既有文件的格式差异；本轮未为通过而改写无关业务文件 |
 | 本轮修改 Rust 文件定点 rustfmt（edition 2021） | 已通过 | 5 个修改/新增 Rust 文件 |
-| `cargo test --offline -p pytools-core --no-fail-fast` | 失败：427 passed、7 failed、12 ignored；53 个目标结果中 5 个目标失败 | `cargo-test-final.log`；失败项及原因见下方 |
-| Debug / Release 构建 | Debug 和最终 Release 均通过 | `debug-build-after-rename-fix.log`；`release-build-final.log`（exit 0，10m 22s） |
+| `cargo test --offline -p pytools-core --no-fail-fast` | 失败：422 passed、12 failed、12 ignored；4 个目标失败 | `cargo-test-final.log`；本次设置隔离测试 Worker 后运行 |
+| Debug / Release 构建 | Debug、Release 均通过；Release 6m 52s | `debug-build-final.log`；`release-build-final.log` |
 | 10/50/100 文件性能对比 | 未执行 | 正确性存在未通过/未验收项，按任务门槛不启动性能比较 |
 
 ### 全量测试失败项
 
-- `conversion_menu_cli`：2 项 COM 测试失败。它们将 Worker 指向 Feature 的 `dist/python/python.exe`，该解释器没有 `pythoncom`；本机 Python 3.12 有该模块，但这两个测试显式使用打包解释器。
-- `dedup_comment_delete_umya`：2 项失败，候选验证报告未修改的 `Commented!H1` 公式变化。
-- `foreign_bank_batch_execution`：1 项失败，外资行批处理测试实际输出数量为 1，而断言期望 2。
+- `conversion_menu_cli`：6 项失败，包含 4 项 Sheet 改名测试和 2 项 COM 转换测试；运行时选择的 pywin32 Python 缺少 `pythoncom`，另一个转换用例找不到打包的 Excel Worker。
+- `sheet_rename_execution`：4 项失败，均因打包 COM Worker 的 Python 缺少 `pythoncom`；1 项需 Office/WPS 的测试按要求忽略。
 - `print_comment_execution`：1 项失败，候选缺少 `__pt_print_seed_1` 工作表。
 - `print_config_new_target`：1 项失败，候选 `Printed!C2` 值/类型与预期不符。
 
-后四个目标也出现在先前全量运行日志中；本轮未修改这些菜单的业务代码，因此本轮仅记录并保留失败证据，不扩大修复范围。性能对比仍因正确性未通过而跳过。
+UMYA 删除行回归 `dedup_comment_delete_umya`（2 项）和去重菜单回归 `dedup_menu_cli`（17 项）在本轮代码修正后通过；外资行批处理回归也通过。打印失败不是本轮目标，未扩大修复范围。全量测试仍未全通过，性能对比因此跳过。
+
+### 本轮回归修复
+
+- UMYA 行删除会物化一个默认列宽记录；适配器现在只在计划未改列定义且工作表集合不变时，把原始 `<cols>` 节点恢复到候选包，避免把默认宽度误写成自定义宽度。
+- 候选验证器现在按行删除映射预期公式、合并区域与定义名称；无删除行计划不再经过 UMYA 名称地址规范化。
+- `dedup_comment_delete_umya` 2 项通过；`dedup_menu_cli` 17 项通过；`cargo test` 全量结果及原始终端日志见 `cargo-test-final.log`。
 
 ## 最终问题 A-G
 

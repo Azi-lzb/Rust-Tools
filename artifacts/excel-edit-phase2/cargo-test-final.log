@@ -65,359 +65,365 @@ warning: function `read_entries` is never used
 
 warning: `ooxml-patch` (lib) generated 7 warnings (run `cargo fix --lib -p ooxml-patch` to apply 4 suggestions)
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-    --> crates\excel-editor\src\openpyxl_backend.rs:2816:22
+    --> crates\excel-editor\src\openpyxl_backend.rs:2844:22
      |
-2816 |                     .get_cell(cell.as_str())
+2844 |                     .get_cell(cell.as_str())
      |                      ^^^^^^^^
      |
      = note: `#[warn(deprecated)]` on by default
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-    --> crates\excel-editor\src\openpyxl_backend.rs:2834:22
+    --> crates\excel-editor\src\openpyxl_backend.rs:2862:22
      |
-2834 |                     .get_cell(cell.as_str())
+2862 |                     .get_cell(cell.as_str())
      |                      ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-    --> crates\excel-editor\src\openpyxl_backend.rs:3984:10
+    --> crates\excel-editor\src\openpyxl_backend.rs:4012:10
      |
-3984 |         .get_cell(address)
+4012 |         .get_cell(address)
      |          ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-   --> crates\excel-editor\src\umya_backend.rs:739:14
+   --> crates\excel-editor\src\umya_backend.rs:794:14
     |
-739 |             .get_cell(inserted_address.as_str())
+794 |             .get_cell(inserted_address.as_str())
     |              ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-   --> crates\excel-editor\src\umya_backend.rs:791:14
+   --> crates\excel-editor\src\umya_backend.rs:846:14
     |
-791 |             .get_cell(shifted_address.as_str())
+846 |             .get_cell(shifted_address.as_str())
     |              ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-   --> crates\excel-editor\src\umya_backend.rs:998:14
-    |
-998 |             .get_cell(adjusted_address.as_str())
-    |              ^^^^^^^^
+    --> crates\excel-editor\src\umya_backend.rs:1053:14
+     |
+1053 |             .get_cell(adjusted_address.as_str())
+     |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\umya_backend.rs:1095:14
+     |
+1095 |             .get_cell("A1")
+     |              ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1753:18
+    --> crates\excel-editor\src\umya_backend.rs:1900:18
      |
-1753 |                 .get_sheet_by_name_mut(sheet)
+1900 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Cell::get_style_mut`: Use style_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1777:26
+    --> crates\excel-editor\src\umya_backend.rs:1924:26
      |
-1777 |                         .get_style_mut()
+1924 |                         .get_style_mut()
      |                          ^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Style::get_number_format_mut`: Use number_format_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1778:26
+    --> crates\excel-editor\src\umya_backend.rs:1925:26
      |
-1778 |                         .get_number_format_mut()
+1925 |                         .get_number_format_mut()
      |                          ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1798:18
+    --> crates\excel-editor\src\umya_backend.rs:1945:18
      |
-1798 |                 .get_sheet_by_name_mut(sheet)
+1945 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1810:18
+    --> crates\excel-editor\src\umya_backend.rs:1957:18
      |
-1810 |                 .get_sheet_by_name_mut(sheet)
+1957 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1833:18
+    --> crates\excel-editor\src\umya_backend.rs:1980:18
      |
-1833 |                 .get_sheet_by_name_mut(sheet)
+1980 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1848:18
+    --> crates\excel-editor\src\umya_backend.rs:1995:18
      |
-1848 |                 .get_sheet_by_name_mut(sheet)
+1995 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:1877:22
+    --> crates\excel-editor\src\umya_backend.rs:2024:22
      |
-1877 |                     .get_sheet_collection()
+2024 |                     .get_sheet_collection()
      |                      ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:1879:40
+    --> crates\excel-editor\src\umya_backend.rs:2026:40
      |
-1879 |                     .all(|sheet| sheet.get_name() != new_name),
+2026 |                     .all(|sheet| sheet.get_name() != new_name),
      |                                        ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1883:18
+    --> crates\excel-editor\src\umya_backend.rs:2030:18
      |
-1883 |                 .get_sheet_by_name_mut(old_name)
+2030 |                 .get_sheet_by_name_mut(old_name)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1894:18
+    --> crates\excel-editor\src\umya_backend.rs:2041:18
      |
-1894 |                 .get_sheet_by_name_mut(new_name)
+2041 |                 .get_sheet_by_name_mut(new_name)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:1917:22
+    --> crates\excel-editor\src\umya_backend.rs:2064:22
      |
-1917 |                     .get_sheet_collection()
+2064 |                     .get_sheet_collection()
      |                      ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:1919:40
+    --> crates\excel-editor\src\umya_backend.rs:2066:40
      |
-1919 |                     .all(|sheet| sheet.get_name() != name),
+2066 |                     .all(|sheet| sheet.get_name() != name),
      |                                        ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:1935:22
+    --> crates\excel-editor\src\umya_backend.rs:2082:22
      |
-1935 |                     .get_sheet_collection()
+2082 |                     .get_sheet_collection()
      |                      ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:1937:40
+    --> crates\excel-editor\src\umya_backend.rs:2084:40
      |
-1937 |                     .all(|sheet| sheet.get_name() != name),
+2084 |                     .all(|sheet| sheet.get_name() != name),
      |                                        ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1944:39
+    --> crates\excel-editor\src\umya_backend.rs:2091:39
      |
-1944 |             let collection = workbook.get_sheet_collection_mut();
+2091 |             let collection = workbook.get_sheet_collection_mut();
      |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:1959:18
+    --> crates\excel-editor\src\umya_backend.rs:2106:18
      |
-1959 |                 .get_sheet_collection()
+2106 |                 .get_sheet_collection()
      |                  ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:1961:49
+    --> crates\excel-editor\src\umya_backend.rs:2108:49
      |
-1961 |                 .position(|candidate| candidate.get_name() == sheet.as_str())
+2108 |                 .position(|candidate| candidate.get_name() == sheet.as_str())
      |                                                 ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1964:39
+    --> crates\excel-editor\src\umya_backend.rs:2111:39
      |
-1964 |             let collection = workbook.get_sheet_collection_mut();
+2111 |             let collection = workbook.get_sheet_collection_mut();
      |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1990:18
+    --> crates\excel-editor\src\umya_backend.rs:2137:18
      |
-1990 |                 .get_sheet_by_name_mut(sheet)
+2137 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_style_mut`: Use style_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1995:18
+    --> crates\excel-editor\src\umya_backend.rs:2142:18
      |
-1995 |                 .get_style_mut(cell.as_str())
+2142 |                 .get_style_mut(cell.as_str())
      |                  ^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Style::get_fill_mut`: Use fill_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1996:18
+    --> crates\excel-editor\src\umya_backend.rs:2143:18
      |
-1996 |                 .get_fill_mut()
+2143 |                 .get_fill_mut()
      |                  ^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Fill::get_pattern_fill_mut`: Use pattern_fill_mut()
-    --> crates\excel-editor\src\umya_backend.rs:1997:18
+    --> crates\excel-editor\src\umya_backend.rs:2144:18
      |
-1997 |                 .get_pattern_fill_mut();
+2144 |                 .get_pattern_fill_mut();
      |                  ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_page_setup_mut`: Use page_setup_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2077:31
+    --> crates\excel-editor\src\umya_backend.rs:2224:31
      |
-2077 |             let page = target.get_page_setup_mut();
+2224 |             let page = target.get_page_setup_mut();
      |                               ^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2101:22
+    --> crates\excel-editor\src\umya_backend.rs:2248:22
      |
-2101 |                     .get_print_options_mut()
+2248 |                     .get_print_options_mut()
      |                      ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2105:24
+    --> crates\excel-editor\src\umya_backend.rs:2252:24
      |
-2105 |                 target.get_print_options_mut().set_vertical_centered(value);
+2252 |                 target.get_print_options_mut().set_vertical_centered(value);
      |                        ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_header_footer_mut`: Use header_footer_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2114:22
+    --> crates\excel-editor\src\umya_backend.rs:2261:22
      |
-2114 |                     .get_header_footer_mut()
+2261 |                     .get_header_footer_mut()
      |                      ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::HeaderFooter::get_odd_footer_mut`: Use odd_footer_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2115:22
+    --> crates\excel-editor\src\umya_backend.rs:2262:22
      |
-2115 |                     .get_odd_footer_mut()
+2262 |                     .get_odd_footer_mut()
      |                      ^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2124:18
+    --> crates\excel-editor\src\umya_backend.rs:2271:18
      |
-2124 |                 .get_sheet_by_name_mut(sheet)
+2271 |                 .get_sheet_by_name_mut(sheet)
      |                  ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2140:22
+    --> crates\excel-editor\src\umya_backend.rs:2287:22
      |
-2140 |                     .get_sheet_by_name_mut(sheet)
+2287 |                     .get_sheet_by_name_mut(sheet)
      |                      ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
-    --> crates\excel-editor\src\umya_backend.rs:2231:14
+    --> crates\excel-editor\src\umya_backend.rs:2378:14
      |
-2231 |             .get_sheet_by_name(source_sheet)
+2378 |             .get_sheet_by_name(source_sheet)
      |              ^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-    --> crates\excel-editor\src\umya_backend.rs:2237:41
+    --> crates\excel-editor\src\umya_backend.rs:2384:41
      |
-2237 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+2384 |                 let Some(cell) = source.get_cell(address.as_str()) else {
      |                                         ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2270:10
+    --> crates\excel-editor\src\umya_backend.rs:2417:10
      |
-2270 |         .get_sheet_by_name_mut(target_sheet)
+2417 |         .get_sheet_by_name_mut(target_sheet)
      |          ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
-    --> crates\excel-editor\src\umya_backend.rs:2340:10
+    --> crates\excel-editor\src\umya_backend.rs:2487:10
      |
-2340 |         .get_sheet_by_name(target_sheet)
+2487 |         .get_sheet_by_name(target_sheet)
      |          ^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
-    --> crates\excel-editor\src\umya_backend.rs:2348:14
+    --> crates\excel-editor\src\umya_backend.rs:2495:14
      |
-2348 |             .get_sheet_by_name(source_sheet)
+2495 |             .get_sheet_by_name(source_sheet)
      |              ^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
-    --> crates\excel-editor\src\umya_backend.rs:2354:41
+    --> crates\excel-editor\src\umya_backend.rs:2501:41
      |
-2354 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+2501 |                 let Some(cell) = source.get_cell(address.as_str()) else {
      |                                         ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
-    --> crates\excel-editor\src\umya_backend.rs:2425:63
+    --> crates\excel-editor\src\umya_backend.rs:2572:63
      |
-2425 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+2572 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
      |                                                         ^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
-    --> crates\excel-editor\src\umya_backend.rs:2441:67
+    --> crates\excel-editor\src\umya_backend.rs:2588:67
      |
-2441 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+2588 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
      |                                                         ^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
-    --> crates\excel-editor\src\umya_backend.rs:2459:66
+    --> crates\excel-editor\src\umya_backend.rs:2606:66
      |
-2459 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+2606 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
      |                                                            ^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
-    --> crates\excel-editor\src\umya_backend.rs:2470:70
+    --> crates\excel-editor\src\umya_backend.rs:2617:70
      |
-2470 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+2617 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
      |                                                            ^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2482:10
+    --> crates\excel-editor\src\umya_backend.rs:2629:10
      |
-2482 |         .get_sheet_by_name_mut(target_sheet)
+2629 |         .get_sheet_by_name_mut(target_sheet)
      |          ^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:2598:10
+    --> crates\excel-editor\src\umya_backend.rs:2745:10
      |
-2598 |         .get_sheet_collection()
+2745 |         .get_sheet_collection()
      |          ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:2600:28
+    --> crates\excel-editor\src\umya_backend.rs:2747:28
      |
-2600 |         .map(|sheet| sheet.get_name().to_owned())
+2747 |         .map(|sheet| sheet.get_name().to_owned())
      |                            ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2611:31
+    --> crates\excel-editor\src\umya_backend.rs:2758:31
      |
-2611 |     let collection = workbook.get_sheet_collection_mut();
+2758 |     let collection = workbook.get_sheet_collection_mut();
      |                               ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:2623:18
+    --> crates\excel-editor\src\umya_backend.rs:2770:18
      |
-2623 |                 .get_sheet_collection()
+2770 |                 .get_sheet_collection()
      |                  ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:2625:41
+    --> crates\excel-editor\src\umya_backend.rs:2772:41
      |
-2625 |                 .position(|sheet| sheet.get_name() == name)
+2772 |                 .position(|sheet| sheet.get_name() == name)
      |                                         ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:2682:10
+    --> crates\excel-editor\src\umya_backend.rs:2829:10
      |
-2682 |         .get_sheet_collection()
+2829 |         .get_sheet_collection()
      |          ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:2684:39
+    --> crates\excel-editor\src\umya_backend.rs:2831:39
      |
-2684 |         .filter(|sheet_obj| sheet_obj.get_name() == sheet)
+2831 |         .filter(|sheet_obj| sheet_obj.get_name() == sheet)
      |                                       ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
-    --> crates\excel-editor\src\umya_backend.rs:2699:10
+    --> crates\excel-editor\src\umya_backend.rs:2846:10
      |
-2699 |         .get_sheet_collection()
+2846 |         .get_sheet_collection()
      |          ^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:2701:41
+    --> crates\excel-editor\src\umya_backend.rs:2848:41
      |
-2701 |         .position(|sheet_obj| sheet_obj.get_name() == sheet)
+2848 |         .position(|sheet_obj| sheet_obj.get_name() == sheet)
      |                                         ^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2704:32
+    --> crates\excel-editor\src\umya_backend.rs:2851:32
      |
-2704 |     let target = &mut workbook.get_sheet_collection_mut()[sheet_index];
+2851 |     let target = &mut workbook.get_sheet_collection_mut()[sheet_index];
      |                                ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
-    --> crates\excel-editor\src\umya_backend.rs:2725:10
+    --> crates\excel-editor\src\umya_backend.rs:2872:10
      |
-2725 |         .get_sheet_collection_mut()
+2872 |         .get_sheet_collection_mut()
      |          ^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
-    --> crates\excel-editor\src\umya_backend.rs:2727:37
+    --> crates\excel-editor\src\umya_backend.rs:2874:37
      |
-2727 |         .find(|sheet_obj| sheet_obj.get_name() == sheet)
+2874 |         .find(|sheet_obj| sheet_obj.get_name() == sheet)
      |                                     ^^^^^^^^
 
 warning: variable does not need to be mutable
@@ -431,23 +437,23 @@ warning: variable does not need to be mutable
     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `actual`
-    --> crates\excel-editor\src\openpyxl_backend.rs:4035:15
+    --> crates\excel-editor\src\openpyxl_backend.rs:4063:15
      |
-4035 |         (Some(actual), Some(expected)) => {}
+4063 |         (Some(actual), Some(expected)) => {}
      |               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_actual`
      |
      = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `expected`
-    --> crates\excel-editor\src\openpyxl_backend.rs:4035:29
+    --> crates\excel-editor\src\openpyxl_backend.rs:4063:29
      |
-4035 |         (Some(actual), Some(expected)) => {}
+4063 |         (Some(actual), Some(expected)) => {}
      |                             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_expected`
 
 warning: variable does not need to be mutable
-    --> crates\excel-editor\src\openpyxl_backend.rs:5082:9
+    --> crates\excel-editor\src\openpyxl_backend.rs:5158:9
      |
-5082 |     let mut bytes = if !truncated {
+5158 |     let mut bytes = if !truncated {
      |         ----^^^^^
      |         |
      |         help: remove this `mut`
@@ -461,9 +467,9 @@ warning: function `per_sheet_entries_match` is never used
      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: function `equal_defaulted` is never used
-    --> crates\excel-editor\src\openpyxl_backend.rs:4065:8
+    --> crates\excel-editor\src\openpyxl_backend.rs:4093:8
      |
-4065 |     fn equal_defaulted<T>(actual: Option<&T>, expected: Option<&T>) -> bool
+4093 |     fn equal_defaulted<T>(actual: Option<&T>, expected: Option<&T>) -> bool
      |        ^^^^^^^^^^^^^^^
 
 warning: method `id` is never used
@@ -475,7 +481,7 @@ warning: method `id` is never used
 105 |     pub(crate) fn id(&self) -> u32 {
     |                   ^^
 
-warning: `excel-editor` (lib) generated 66 warnings (run `cargo fix --lib -p excel-editor` to apply 4 suggestions)
+warning: `excel-editor` (lib) generated 67 warnings (run `cargo fix --lib -p excel-editor` to apply 4 suggestions)
 warning: unused import: `bail`
  --> pytools-core\src\batch_ops.rs:3:14
   |
@@ -1121,15 +1127,6 @@ help: use `let _ = ...` to ignore the resulting value
 
 warning: `pytools-core` (lib) generated 82 warnings (run `cargo fix --lib -p pytools-core` to apply 15 suggestions)
    Compiling pytools-core v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature\pytools-core)
-warning: use of deprecated method `umya_spreadsheet::structs::worksheet::Worksheet::get_cell`: Use cell()
-   --> pytools-core\tests\dedup_comment_delete_umya.rs:198:10
-    |
-198 |         .get_cell(address)
-    |          ^^^^^^^^
-    |
-    = note: `#[warn(deprecated)]` on by default
-
-warning: `pytools-core` (test "dedup_comment_delete_umya") generated 1 warning
 warning: unused import: `Level`
      --> pytools-core\src\bin\RustTools.rs:23031:77
       |
@@ -1280,64 +1277,7 @@ warning: function `menu_history_json` is never used
      |    ^^^^^^^^^^^^^^^^^
 
 warning: `pytools-core` (test "dedup_menu_cli") generated 2 warnings
-warning: unused variable: `user_stdout`
-    --> pytools-core\tests\sheet_extract_area_operation_parity.rs:1243:9
-     |
-1243 |     let user_stdout = String::from_utf8_lossy(&user_output.stdout);
-     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_user_stdout`
-     |
-     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: `pytools-core` (test "sheet_extract_area_operation_parity") generated 1 warning (run `cargo fix --test "sheet_extract_area_operation_parity" -p pytools-core` to apply 1 suggestion)
-warning: function `run_menu` is never used
-   --> pytools-core\tests\submission_check_parity.rs:696:4
-    |
-696 | fn run_menu(config: &Path, input: &str) -> Result<Output> {
-    |    ^^^^^^^^
-    |
-    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: `pytools-core` (test "submission_check_parity") generated 1 warning
-warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
-    --> pytools-core\tests\timeline_menu_cli.rs:1632:30
-     |
-1632 |         let other = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
-     |                              ^^^^^^^^^^^^^^^^^^^^^
-     |
-     = note: `#[warn(deprecated)]` on by default
-
-warning: unused variable: `event_log`
-   --> pytools-core\tests\timeline_menu_cli.rs:140:9
-    |
-140 |     let event_log = fs::read_dir(&events_dir)?
-    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_log`
-    |
-    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `header`
-    --> pytools-core\tests\timeline_menu_cli.rs:3085:18
-     |
-3085 |     for (column, header) in &summary_headers {
-     |                  ^^^^^^ help: if this is intentional, prefix it with an underscore: `_header`
-
-warning: function `run_menu_with_capabilities` is never used
-    --> pytools-core\tests\timeline_menu_cli.rs:2789:4
-     |
-2789 | fn run_menu_with_capabilities(
-     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
-     |
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: `pytools-core` (test "timeline_menu_cli") generated 4 warnings (run `cargo fix --test "timeline_menu_cli" -p pytools-core` to apply 2 suggestions)
-warning: function `run_action_with_engines_disabled` is never used
-    --> pytools-core\tests\conversion_menu_cli.rs:1615:4
-     |
-1615 | fn run_action_with_engines_disabled(
-     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-     |
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: `pytools-core` (test "conversion_menu_cli") generated 1 warning
+warning: `pytools-core` (bin "RustTools") generated 18 warnings (18 duplicates)
 warning: use of deprecated method `umya_spreadsheet::structs::worksheet::Worksheet::get_cell`: Use cell()
    --> pytools-core\tests\dedup_append_execution.rs:118:10
     |
@@ -1347,7 +1287,33 @@ warning: use of deprecated method `umya_spreadsheet::structs::worksheet::Workshe
     = note: `#[warn(deprecated)]` on by default
 
 warning: `pytools-core` (test "dedup_append_execution") generated 1 warning
-warning: `pytools-core` (bin "RustTools") generated 18 warnings (18 duplicates)
+warning: unused variable: `user_stdout`
+    --> pytools-core\tests\sheet_extract_area_operation_parity.rs:1243:9
+     |
+1243 |     let user_stdout = String::from_utf8_lossy(&user_output.stdout);
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_user_stdout`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `pytools-core` (test "sheet_extract_area_operation_parity") generated 1 warning (run `cargo fix --test "sheet_extract_area_operation_parity" -p pytools-core` to apply 1 suggestion)
+warning: use of deprecated method `umya_spreadsheet::structs::worksheet::Worksheet::get_cell`: Use cell()
+   --> pytools-core\tests\dedup_comment_delete_umya.rs:198:10
+    |
+198 |         .get_cell(address)
+    |          ^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `pytools-core` (test "dedup_comment_delete_umya") generated 1 warning
+warning: function `run_menu` is never used
+   --> pytools-core\tests\submission_check_parity.rs:696:4
+    |
+696 | fn run_menu(config: &Path, input: &str) -> Result<Output> {
+    |    ^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `pytools-core` (test "submission_check_parity") generated 1 warning
 warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
    --> pytools-core\tests\formula_print_preservation.rs:286:22
     |
@@ -1393,6 +1359,46 @@ warning: use of deprecated method `umya_spreadsheet::Row::get_height`: Use heigh
     |                        ^^^^^^^^^^
 
 warning: `pytools-core` (test "formula_print_preservation") generated 7 warnings
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> pytools-core\tests\timeline_menu_cli.rs:1632:30
+     |
+1632 |         let other = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+     |                              ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+
+warning: unused variable: `event_log`
+   --> pytools-core\tests\timeline_menu_cli.rs:140:9
+    |
+140 |     let event_log = fs::read_dir(&events_dir)?
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_log`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `header`
+    --> pytools-core\tests\timeline_menu_cli.rs:3085:18
+     |
+3085 |     for (column, header) in &summary_headers {
+     |                  ^^^^^^ help: if this is intentional, prefix it with an underscore: `_header`
+
+warning: function `run_menu_with_capabilities` is never used
+    --> pytools-core\tests\timeline_menu_cli.rs:2789:4
+     |
+2789 | fn run_menu_with_capabilities(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `pytools-core` (test "timeline_menu_cli") generated 4 warnings (run `cargo fix --test "timeline_menu_cli" -p pytools-core` to apply 2 suggestions)
+warning: function `run_action_with_engines_disabled` is never used
+    --> pytools-core\tests\conversion_menu_cli.rs:1615:4
+     |
+1615 | fn run_action_with_engines_disabled(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `pytools-core` (test "conversion_menu_cli") generated 1 warning
 warning: unused import: `read_workbook`
     --> pytools-core\src\conversion.rs:1634:24
      |
@@ -1510,207 +1516,207 @@ help: use `let _ = ...` to ignore the resulting value
      |                     +++++++
 
 warning: `pytools-core` (lib test) generated 78 warnings (70 duplicates) (run `cargo fix --lib -p pytools-core --tests` to apply 1 suggestion)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 66m 20s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7m 33s
      Running unittests src\lib.rs (F:\RustBuild\pytools-feature\debug\deps\pytools_core-63b9cff6504442e4.exe)
 
 running 157 tests
 test batch_rename::tests::cell_coordinates_round_trip_for_multiletter_columns ... ok
-test batch_rename::tests::ordered_mapping_updates_value_without_changing_match_priority ... ok
 test betteroffice_edit::tests::column_width_calibration_preserves_raw_excel_character_width ... ok
-test betteroffice_edit::tests::column_width_calibration_rejects_non_finite_or_out_of_range_values ... ok
-test batch_rename::tests::integral_numeric_config_values_match_python_object_stringification ... ok
-test bo_calc::tests::config_sheet_takes_priority_over_env ... ok
-test bo_calc::tests::builtin_defaults_survive_bad_values ... ok
-test bo_calc::tests::defaults_enable_betteroffice_with_two_rounds ... ok
 test batch_rename::tests::date_serial_config_values_match_python_datetime_text_for_both_epochs ... ok
+test batch_rename::tests::ordered_mapping_updates_value_without_changing_match_priority ... ok
+test batch_rename::tests::integral_numeric_config_values_match_python_object_stringification ... ok
+test betteroffice_edit::tests::column_width_calibration_rejects_non_finite_or_out_of_range_values ... ok
 test batch_rename::tests::date_setting_uses_filename_safe_date_for_excel_date_values ... ok
+test bo_calc::tests::builtin_defaults_survive_bad_values ... ok
+test bo_calc::tests::config_sheet_takes_priority_over_env ... ok
+test bo_calc::tests::defaults_enable_betteroffice_with_two_rounds ... ok
 test bo_calc::tests::env_used_when_config_key_missing ... ok
 test config::tests::verbatim_prefixes_are_stripped_while_long_paths_keep_them ... ok
 test conversion::tests::conversion_report_names_the_pywin32_office_engine ... ok
 test conversion::tests::et_engine_rejection_explains_source_format_without_staging_path ... ok
-test config::tests::explicit_log_directory_uses_config_base_and_missing_value_uses_user_state ... ok
 test archive_ops::tests::archive_scan_error_creates_no_target_or_report_directory ... ok
+test config::tests::explicit_log_directory_uses_config_base_and_missing_value_uses_user_state ... ok
 test conversion::tests::native_value_conversion_refuses_iso_date_and_duration_cells_before_writing ... ok
 test conversion::tests::native_value_conversion_rejects_empty_text_before_writing ... ok
-test archive_ops::tests::archive_directory_walk_stops_at_an_active_canonical_directory ... ok
 test archive_ops::tests::archive_directory_scan_errors_are_propagated ... ok
-test conversion::tests::invalid_engine_selection_is_rejected_before_touching_files ... ok
+test archive_ops::tests::archive_directory_walk_stops_at_an_active_canonical_directory ... ok
 test conversion::tests::native_value_conversion_skips_empty_formula_cache_during_preflight ... ok
-test conversion::tests::native_value_conversion_refuses_et_without_external_engine ... ok
+test conversion::tests::invalid_engine_selection_is_rejected_before_touching_files ... ok
 test conversion::tests::renamed_xlsx_requires_verified_legacy_excel_file_format ... ok
+test conversion::tests::native_value_conversion_refuses_et_without_external_engine ... ok
 test conversion::tests::wps_native_sidecar_must_explicitly_verify_native_source_format ... ok
 test conversion_engine::tests::automatic_windows_conversion_uses_the_packaged_pywin32_worker ... ok
+test conversion::tests::same_extension_xlsx_rejects_unknown_non_zip_containers_before_com ... ok
 test conversion_engine::tests::libreoffice_batch_request_matrix_matches_per_file_routing ... ok
-test batch_rename::tests::no_replace_rename_keeps_an_existing_destination_unchanged ... ok
 test conversion_engine::tests::libreoffice_profile_path_is_encoded_as_a_file_uri ... ok
-test conversion_engine::tests::conversion_value_tolerance_absorbs_float_tails_only ... ok
 test conversion_engine::tests::conversion_only_blocks_structural_changes ... ok
 test conversion_engine::tests::libreoffice_user_installation_argument_creates_profile ... ok
-test conversion::tests::same_extension_xlsx_rejects_unknown_non_zip_containers_before_com ... ok
+test conversion_engine::tests::conversion_value_tolerance_absorbs_float_tails_only ... ok
 test conversion::tests::et_sidecar_input_is_staged_so_engine_cannot_modify_source ... ok
+test conversion_engine::tests::lo_batch_process_failure_marks_all_files_failed ... ok
 test conversion_engine::tests::named_validation_uses_protected_openpyxl_fallback_for_unsupported_helper_relations ... ignored, requires the packaged Openpyxl runtime; run explicitly for fallback verification
-test conversion::tests::legacy_xls_content_with_xlsx_suffix_is_staged_as_xls_without_touching_source ... ok
-test conversion::tests::batch_conversion_never_copies_same_extension_xlsx_without_save_as ... ok
+test conversion_engine::tests::lo_batch_startup_failure_fails_all_covered_files_without_retry ... ok
 test conversion_engine::tests::office_candidate_uses_the_final_output_directory_and_is_unique ... ok
 test date_parse::tests::matches_shared_python_date_parse_vectors ... ok
 test dedup_ops::tests::date_keys_match_python_date_and_datetime_normalization ... ok
-test conversion::tests::native_value_rebuild_is_rejected_for_excel_workbook_conversion ... ok
-test engine_diag::tests::epoch_prefix_converts_to_local_time ... ok
-test dedup_ops::tests::excel_date_epochs_differ_by_1462_days ... ok
-test engine_diag::tests::failure_line_follows_unified_shape ... ok
-test engine_diag::tests::timestamp_prefix_matches_pytools_format ... ok
-test conversion_engine::tests::lo_batch_missing_output_fails_only_that_file ... ok
-test excel_core_diag::tests::modifier_error_keeps_original_message_and_attempts ... ok
 test conversion_engine::tests::lo_batch_converts_all_files_in_one_process ... ok
+test dedup_ops::tests::excel_date_epochs_differ_by_1462_days ... ok
+test engine_diag::tests::epoch_prefix_converts_to_local_time ... ok
+test conversion_engine::tests::lo_batch_missing_output_fails_only_that_file ... ok
+test batch_rename::tests::no_replace_rename_keeps_an_existing_destination_unchanged ... ok
+test conversion::tests::native_value_rebuild_is_rejected_for_excel_workbook_conversion ... ok
+test engine_diag::tests::timestamp_prefix_matches_pytools_format ... ok
+test engine_diag::tests::failure_line_follows_unified_shape ... ok
+test conversion::tests::batch_conversion_never_copies_same_extension_xlsx_without_save_as ... ok
+test excel_core_diag::tests::modifier_error_keeps_original_message_and_attempts ... ok
+test conversion_engine::tests::lo_word_batch_uses_two_processes_and_preextracts_texts ... ok
+test excel_core_diag::tests::read_and_write_events_flag_errors ... ok
+test excel_core_diag::tests::rejected_attempt_maps_to_skipped ... ok
 test excel_core_diag::tests::successful_execution_yields_attempt_and_save_events ... ok
-test excel_edit_router::tests::auto_uses_rustnative_for_simple_cell_value ... ok
-test excel_edit_router::tests::auto_uses_single_openpyxl_for_mixed_native_and_structural_edits ... ok
 test excel_edit_router::tests::auto_routes_structural_edits_with_calcchain_to_openpyxl ... ok
-test excel_edit_router::tests::default_route_keeps_openpyxl_worker ... ok
+test excel_edit_router::tests::auto_uses_rustnative_for_simple_cell_value ... ok
 test excel_edit_router::tests::manual_rewrite_routes_refuse_incomplete_workbook_inventory ... ok
 test excel_edit_router::tests::ordinary_ooxml_relationship_parts_do_not_block_rewrite_engines ... ok
 test excel_edit_router::tests::umya_manual_route_rejects_comment_edits ... ok
-test excel_core_diag::tests::read_and_write_events_flag_errors ... ok
-test file_sort_prefix::tests::legacy_xls_content_numbers_match_com_float_text ... ok
-test conversion_engine::tests::lo_batch_process_failure_marks_all_files_failed ... ok
-test excel_core_diag::tests::rejected_attempt_maps_to_skipped ... ok
-test conversion_engine::tests::lo_batch_startup_failure_fails_all_covered_files_without_retry ... ok
+test excel_edit_router::tests::auto_uses_single_openpyxl_for_mixed_native_and_structural_edits ... ok
+test excel_edit_router::tests::default_route_keeps_openpyxl_worker ... ok
 test excel_edit_router::tests::umya_refuses_sheet_rename_when_formula_references_are_present ... ok
-test inplace_edit::tests::xls_gets_a_conversion_hint ... ok
-test file_sort_prefix::tests::removal_content_prefix_helpers_match_source_behavior ... ok
+test config::tests::config_workbook_matches_original_python_loader_report ... ok
 test inplace_edit::tests::openpyxl_accepts_macro_formats ... ok
-test inplace_edit::tests::umya_accepts_only_plain_ooxml ... ok
-test institution_normalize::tests::empty_mapping_skips_all_files ... ok
 test inplace_edit::tests::xlsm_under_umya_suggests_openpyxl ... ok
+test file_sort_prefix::tests::removal_content_prefix_helpers_match_source_behavior ... ok
+test institution_normalize::tests::empty_mapping_skips_all_files ... ok
 test institution_normalize::tests::floating_mapping_keys_use_python_float_string_format ... ok
-test file_sort_prefix::tests::collision_move_does_not_overwrite_and_rollback_restores_source ... ok
+test file_sort_prefix::tests::legacy_xls_content_numbers_match_com_float_text ... ok
+test conversion::tests::legacy_xls_content_with_xlsx_suffix_is_staged_as_xls_without_touching_source ... ok
+test inplace_edit::tests::umya_accepts_only_plain_ooxml ... ok
+test inplace_edit::tests::xls_gets_a_conversion_hint ... ok
 test institution_normalize::tests::helper_uses_exact_match_then_first_case_insensitive_substring ... ok
-test ooxml_cell_styles::tests::builtin_num_fmt_covers_common_report_codes ... ok
-test conversion_engine::tests::lo_word_batch_uses_two_processes_and_preextracts_texts ... ok
-test ooxml_cell_styles::tests::normalize_rgb_handles_six_and_eight_digit_forms ... ok
-test local_filename_map::tests::filename_suffix_matches_python_pathlib_for_trailing_dot_and_dotfile ... ok
 test local_filename_map::tests::mappings_apply_in_order_to_stem_and_preserve_suffix ... ok
-test ooxml_cell_styles::tests::tint_lightens_and_darkens_channels ... ok
+test ooxml_cell_styles::tests::builtin_num_fmt_covers_common_report_codes ... ok
+test dedup_ops::tests::dedup_precheck_validates_enabled_rows_sharing_one_source_workbook ... ok
+test local_filename_map::tests::filename_suffix_matches_python_pathlib_for_trailing_dot_and_dotfile ... ok
 test print_ops::tests::static_print_allows_excel_error_cells_in_selected_ranges ... ok
-test print_ops::tests::static_print_autofit_distinguishes_numeric_zero_from_text_zero ... ok
+test ooxml_cell_styles::tests::normalize_rgb_handles_six_and_eight_digit_forms ... ok
 test path_map::tests::matches_shared_python_keyword_and_column_vectors ... ok
-test print_ops::tests::time_only_numfmt_detection ... ok
+test ooxml_cell_styles::tests::tint_lightens_and_darkens_channels ... ok
 test region_sum::tests::numeric_conversion_preserves_source_blank_boolean_and_date_rules ... ok
+test file_sort_prefix::tests::report_write_failure_rolls_back_completed_file_moves ... ok
+test ooxml_cell_styles::tests::excel_baked_default_font_maps_to_real_font ... ok
 test region_sum::tests::numeric_text_underscores_match_python_float_grammar ... ok
+test print_ops::tests::static_print_autofit_distinguishes_numeric_zero_from_text_zero ... ok
+test print_ops::tests::time_only_numfmt_detection ... ok
+test region_sum::tests::sheet_check_parses_valid_numeric_separators_and_ignores_malformed_values ... ok
+test rule_engine::configured_range_boundary_tests::configured_data_start_after_sheet_tail_returns_no_cells ... ok
+test file_sort_prefix::tests::collision_move_does_not_overwrite_and_rollback_restores_source ... ok
 test region_sum::tests::region_sum_accepts_legacy_xls_for_calamine_reads ... ok
 test region_sum::tests::sheet_check_counts_numeric_mismatches_but_preserves_missing_region_text ... ok
-test rule_engine::configured_range_boundary_tests::configured_data_start_after_sheet_tail_returns_no_cells ... ok
-test region_sum::tests::sheet_check_parses_valid_numeric_separators_and_ignores_malformed_values ... ok
-test rule_engine::path_map_tests::standardization_matches_shared_python_vectors ... ok
-test run_logging::tests::business_findings_and_metrics_are_formatted_without_failing_execution ... ok
-test run_logging::tests::batch_log_policy_throttles_redirected_routine_events_only ... ok
-test run_logging::tests::configuration_task_summary_does_not_invent_file_counts ... ok
 test run_logging::tests::default_log_directory_is_absolute_and_uses_application_state_suffix ... ok
-test run_logging::tests::event_identity_and_dates_are_correlated ... ok
-test run_logging::tests::duplicate_file_names_gain_only_the_directory_context_needed ... ok
-test run_logging::tests::execution_failure_summary_includes_stage_and_input_location ... ok
-test run_logging::tests::invalid_log_path_fails_without_changing_inputs ... ok
-test run_logging::tests::jsonl_write_failure_is_returned_to_the_caller ... ok
-test run_logging::tests::optional_business_fields_are_omitted_when_empty ... ok
-test run_logging::tests::no_op_cancellation_and_pending_are_distinct ... ok
-test file_sort_prefix::tests::report_write_failure_rolls_back_completed_file_moves ... ok
-test dedup_ops::tests::dedup_precheck_validates_enabled_rows_sharing_one_source_workbook ... ok
-test config::tests::config_workbook_matches_original_python_loader_report ... ok
+test run_logging::tests::business_findings_and_metrics_are_formatted_without_failing_execution ... ok
 test file_sort_prefix::tests::removal_report_write_failure_rolls_back_completed_file_moves ... ok
-test run_logging::tests::output_stats_do_not_turn_unknown_values_into_zero_or_false ... ok
-test run_logging::tests::sheet_ledger_keeps_multiple_results_and_failure_location ... ok
-test ooxml_cell_styles::tests::excel_baked_default_font_maps_to_real_font ... ok
-test run_logging::tests::states_are_exclusive_and_reading_is_not_success ... ok
+test run_logging::tests::configuration_task_summary_does_not_invent_file_counts ... ok
+test run_logging::tests::batch_log_policy_throttles_redirected_routine_events_only ... ok
+test rule_engine::path_map_tests::standardization_matches_shared_python_vectors ... ok
+test run_logging::tests::duplicate_file_names_gain_only_the_directory_context_needed ... ok
+test run_logging::tests::invalid_log_path_fails_without_changing_inputs ... ok
+test run_logging::tests::no_op_cancellation_and_pending_are_distinct ... ok
+test run_logging::tests::jsonl_write_failure_is_returned_to_the_caller ... ok
 test run_logging::tests::shared_output_failure_overrides_successful_input ... ok
-test run_logging::tests::user_diagnostic_path_is_relative_and_developer_path_keeps_location ... ok
-test run_logging::tests::windows_extended_paths_do_not_leak_into_file_names ... ok
-test run_logging::tests::jsonl_preserves_unicode_and_optional_location ... ok
+test run_logging::tests::states_are_exclusive_and_reading_is_not_success ... ok
+test run_logging::tests::execution_failure_summary_includes_stage_and_input_location ... ok
+test run_logging::tests::sheet_ledger_keeps_multiple_results_and_failure_location ... ok
 test sheet_extract::merged_child_values_tests::suppresses_stored_values_in_merged_children_but_keeps_anchor ... ok
-test sheet_rename::tests::prior_rename_target_is_reserved_for_later_operations ... ok
+test run_logging::tests::output_stats_do_not_turn_unknown_values_into_zero_or_false ... ok
+test run_logging::tests::event_identity_and_dates_are_correlated ... ok
+test run_logging::tests::windows_extended_paths_do_not_leak_into_file_names ... ok
+test run_logging::tests::user_diagnostic_path_is_relative_and_developer_path_keeps_location ... ok
+test run_logging::tests::optional_business_fields_are_omitted_when_empty ... ok
 test sheet_rename::tests::sheet_name_conflicts_are_case_insensitive ... ok
 test sheet_rename::tests::sheet_can_keep_its_own_name_or_change_only_its_case ... ok
+test sheet_rename::tests::prior_rename_target_is_reserved_for_later_operations ... ok
 test submission_check::tests::report_retry_only_handles_target_name_conflicts ... ok
 test summary_ops::comment_region_tests::builtin_date_format_ids_cover_regional_and_east_asian_variants ... ok
-test bo_calc_batch::tests::all_copies_succeed_and_order_is_preserved ... ok
-test summary_ops::comment_region_tests::comment_summary_output_sheet_names_match_python_normalization ... ok
-test bo_calc_batch::tests::a_broken_copy_is_refused_without_failing_the_group ... ok
-test summary_ops::comment_region_tests::custom_date_formats_ignore_quoted_and_bracketed_text ... ok
+test run_logging::tests::jsonl_preserves_unicode_and_optional_location ... ok
 test submission_check::tests::recursive_scan_reports_read_dir_errors ... ok
-test summary_ops::comment_region_tests::elapsed_time_format_detection_matches_openpyxl_markers ... ok
+test summary_ops::comment_region_tests::comment_summary_output_sheet_names_match_python_normalization ... ok
+test summary_ops::comment_region_tests::custom_date_formats_ignore_quoted_and_bracketed_text ... ok
+test summary_ops::comment_region_tests::duplicate_region_markers_use_last_row_major_boundary ... ok
 test summary_ops::comment_region_tests::duration_serial_value_matches_python_timedelta_days ... ok
+test summary_ops::comment_region_tests::duration_serial_text_matches_python_timedelta_millisecond_rounding ... ok
 test summary_ops::comment_region_tests::empty_set_capture_is_ignored_but_whitespace_capture_is_retained ... ok
 test summary_ops::comment_region_tests::set_marker_search_uses_original_unicode_byte_offsets ... ok
-test summary_ops::comment_region_tests::duplicate_region_markers_use_last_row_major_boundary ... ok
-test summary_ops::merged_cell_tests::merged_range_non_anchor_cells_are_omitted ... ok
-test summary_ops::comment_region_tests::duration_serial_text_matches_python_timedelta_millisecond_rounding ... ok
+test summary_ops::comment_region_tests::elapsed_time_format_detection_matches_openpyxl_markers ... ok
 test summary_ops::comment_region_tests::style_projection_recognizes_builtin_and_custom_elapsed_formats ... ok
-test summary_ops::merged_cell_tests::structure_preflight_accepts_repeated_values_inside_a_merge ... ok
 test summary_ops::comment_region_tests::template_header_text_matches_python_for_empty_and_boolean_values ... ok
+test summary_ops::merged_cell_tests::merged_range_non_anchor_cells_are_omitted ... ok
+test summary_ops::merged_cell_tests::structure_preflight_accepts_repeated_values_inside_a_merge ... ok
 test summary_ops::named_range_spec_tests::dynamic_rows_keep_zero_and_skip_empty_values ... ok
 test summary_ops::named_range_spec_tests::error_result_counts_as_a_saved_formula_cache ... ok
-test summary_ops::named_range_spec_tests::skip_summary_names_the_workbook_and_sheet ... ok
+test summary_ops::named_range_spec_tests::named_regions_accept_audit_and_numbered_names ... ok
 test summary_ops::named_range_spec_tests::region_bounds_normalize_absolute_a1_references ... ok
+test summary_ops::named_range_spec_tests::skip_summary_names_the_workbook_and_sheet ... ok
 test summary_ops::named_range_spec_tests::validation_results_split_the_error_type_and_keep_zero_padding ... ok
 test summary_ops::named_range_spec_tests::validation_route_kind_identifies_template_source ... ok
-test summary_ops::named_range_spec_tests::validation_template_does_not_require_summary_regions ... ok
-test summary_ops::named_range_spec_tests::named_regions_accept_audit_and_numbered_names ... ok
-test timeline_ops::keyword_match_tests::elapsed_serials_use_python_timedelta_projection_without_touching_dates ... ok
-test timeline_ops::keyword_match_tests::wide_date_projection_does_not_reclassify_subday_serials ... ok
-test timeline_ops::keyword_match_tests::sheet_keywords_match_python_case_and_delimiter_semantics ... ok
-test timeline_ops::keyword_match_tests::header_path_compare_does_not_treat_column_a_data_as_row_header_when_unconfigured ... ok
-test summary_ops::used_range_datetime_compat_tests::unknown_builtin_date_format_matches_openpyxl_numeric_values ... ok
-test timeline_ops::keyword_match_tests::wide_summary_treats_empty_and_error_cells_as_missing_like_pycode ... ok
-test workbook_extract::tests::workbook_cell_datetime_text_drops_time_and_uses_iso_date ... ok
 test run_logging::tests::retention_preserves_unfinished_and_unrelated_files ... ok
+test timeline_ops::keyword_match_tests::elapsed_serials_use_python_timedelta_projection_without_touching_dates ... ok
+test summary_ops::named_range_spec_tests::validation_template_does_not_require_summary_regions ... ok
+test summary_ops::used_range_datetime_compat_tests::unknown_builtin_date_format_matches_openpyxl_numeric_values ... ok
+test timeline_ops::keyword_match_tests::header_path_compare_does_not_treat_column_a_data_as_row_header_when_unconfigured ... ok
+test timeline_ops::keyword_match_tests::sheet_keywords_match_python_case_and_delimiter_semantics ... ok
+test timeline_ops::keyword_match_tests::wide_date_projection_does_not_reclassify_subday_serials ... ok
 test timeline_ops::keyword_match_tests::wide_subday_normalization_only_changes_typed_datetime_serials ... ok
+test timeline_ops::keyword_match_tests::wide_summary_treats_empty_and_error_cells_as_missing_like_pycode ... ok
 test timeline_ops::keyword_match_tests::wide_subday_values_match_openpyxl_time_and_rounding_semantics ... ok
-test summary_ops::patch_error_cells_tests::failed_patch_does_not_remove_a_preexisting_output ... ok
+test workbook_extract::tests::workbook_cell_datetime_text_drops_time_and_uses_iso_date ... ok
 test submission_check::tests::report_publication_does_not_overwrite_an_existing_target ... ok
+test summary_ops::patch_error_cells_tests::failed_patch_does_not_remove_a_preexisting_output ... ok
 test sheet_rename::tests::plan_skips_case_insensitive_collision_with_another_sheet ... ok
+test workbook_extract::tests::workbook_extraction_matches_original_python_helper ... ok
+test bo_calc_batch::tests::a_broken_copy_is_refused_without_failing_the_group ... ok
 test institution_normalize::tests::workbook_normalization_matches_python_baseline_and_preserves_fixture_metadata ... ok
 test institution_normalize::tests::repeated_paths_are_processed_sequentially_without_double_mapping ... ok
-test workbook_extract::tests::workbook_extraction_matches_original_python_helper ... ok
+test bo_calc_batch::tests::all_copies_succeed_and_order_is_preserved ... ok
 test submission_check::tests::recursive_scan_follows_directory_junctions_and_stops_cycles ... ok
 
-test result: ok. 156 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.40s
+test result: ok. 156 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.05s
 
      Running unittests src\bin\RustTools.rs (F:\RustBuild\pytools-feature\debug\deps\RustTools-b900c195c9e6ee56.exe)
 
 running 3 tests
 test wide_summary_path_tests::strips_windows_extended_prefix_from_user_facing_paths ... ok
-     Running tests\archive_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\archive_menu_cli-31af08575f7589c6.exe)
 test unified_run_session_tests::developer_run_log_keeps_the_error_chain_and_failed_stage ... ok
 test unified_run_session_tests::user_run_summary_correlates_file_results_and_hides_absolute_paths ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
+     Running tests\archive_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\archive_menu_cli-31af08575f7589c6.exe)
 
 running 2 tests
 test archive_copy_menu_supports_current_level_and_recursive_folder_selection ... ok
 test interactive_archive_menu_routes_all_five_workflows ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.83s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
 
      Running tests\archive_parity.rs (F:\RustBuild\pytools-feature\debug\deps\archive_parity-3192364ee375e014.exe)
 
 running 5 tests
-test date_archive_preview_preserves_dots_inside_the_file_stem_when_suffixing ... ok
 test date_archive_preview_uses_native_path_case_rules_for_target_collisions ... ok
+test date_archive_preview_preserves_dots_inside_the_file_stem_when_suffixing ... ok
 test date_archive_preview_uses_python_windows_path_order_before_target_planning ... ok
 test date_archive_cli_accepts_the_python_compatible_extension_filter_config ... ok
 test archive_previews_and_copy_workflows_match_python_baseline ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
 
      Running tests\batch_rename_parity.rs (F:\RustBuild\pytools-feature\debug\deps\batch_rename_parity-e4f0bd72af3777ca.exe)
 
 running 4 tests
 test missing_rename_sheet_is_rejected_before_touching_inputs ... ok
-test rust_operation_matches_python_baseline_and_keeps_contents_and_collisions ... ok
 test date_serial_configuration_uses_safe_filename_and_preserves_contents ... ok
+test rust_operation_matches_python_baseline_and_keeps_contents_and_collisions ... ok
 test rust_cli_runs_the_same_operation_and_writes_a_log ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
 
      Running tests\batch_tools_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\batch_tools_menu_cli-ee61e1e00f883a40.exe)
 
@@ -1719,39 +1725,39 @@ test interactive_foreign_bank_menu_stops_before_file_selection_when_mapping_is_e
 test interactive_batch_menu_runs_region_sum_check_through_real_cli ... ok
 test interactive_region_sum_menu_records_user_developer_and_off_views ... ok
 test interactive_batch_menu_summarizes_large_region_sum_selection ... ok
-test interactive_institution_normalize_menu_applies_only_with_temporary_capability ... ok
 test interactive_quarterly_rural_loan_menu_uses_openpyxl_without_capability ... ok
 test interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user_history ... ok
-test interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_history ... ok
-test interactive_foreign_bank_menu_off_view_has_no_events_or_history ... ok
 test interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view ... ok
-test interactive_rural_loan_menu_off_view_does_not_write_run_history ... ok
+test interactive_institution_normalize_menu_applies_only_with_temporary_capability ... ok
+test interactive_foreign_bank_menu_off_view_has_no_events_or_history ... ok
+test interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_history ... ok
 test interactive_foreign_bank_menu_uses_openpyxl_without_capability_and_preserves_source ... ok
+test interactive_rural_loan_menu_off_view_does_not_write_run_history ... ok
 test interactive_rural_loan_menu_uses_openpyxl_without_capability ... ok
 test interactive_village_split_menu_commits_source_without_capability ... ok
 test interactive_institution_normalize_menu_recursively_creates_copies_and_skips_result_folder ... ok
 test interactive_village_split_menu_off_view_modifies_source_without_run_history ... ok
-test interactive_village_split_updates_target_with_openpyxl_and_preserves_period_inputs ... ok
-test interactive_village_split_menu_updates_source_in_place_without_creating_copy ... ok
 test village_split_keeps_full_precision_and_matches_legacy_numeric_conversion ... ok
+test interactive_village_split_menu_updates_source_in_place_without_creating_copy ... ok
+test interactive_village_split_updates_target_with_openpyxl_and_preserves_period_inputs ... ok
 test interactive_institution_normalize_menu_updates_source_in_user_developer_and_off_views ... ok
 
-test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.71s
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.17s
 
      Running tests\config_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\config_menu_cli-b308951563065234.exe)
 
 running 9 tests
 test config_initialize_or_repair_requires_explicit_second_confirmation ... ok
 test malformed_configuration_repair_logs_failure_without_config_contents ... ok
-test config_view_off_keeps_requested_view_but_suppresses_progress_and_history ... ok
 test ambiguous_configuration_headers_fail_closed_without_creating_a_repair_plan ... ok
-test reloading_configuration_updates_output_directory_for_the_running_menu ... ok
+test config_view_off_keeps_requested_view_but_suppresses_progress_and_history ... ok
 test missing_configuration_bootstraps_through_menu_and_can_be_viewed ... ok
 test config_menu_history_records_writer_and_view_without_config_contents ... ok
 test default_menu_configuration_is_created_beside_executable_not_working_directory ... ok
+test reloading_configuration_updates_output_directory_for_the_running_menu ... ok
 test existing_configuration_repair_menu_uses_openpyxl_without_external_capability ... ok
 
-test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.31s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.27s
 
      Running tests\config_repair_execution.rs (F:\RustBuild\pytools-feature\debug\deps\config_repair_execution-026b6e9357832995.exe)
 
@@ -1764,7 +1770,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 1 test
 test task_config_loaders_match_python_baseline ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
 
      Running tests\config_vba_workbook_parity.rs (F:\RustBuild\pytools-feature\debug\deps\config_vba_workbook_parity-0140a7ff449c177b.exe)
 
@@ -1780,7 +1786,7 @@ test operation_46_xls_integer_values_match_legacy_com_float_text ... ok
 test operation_46_matches_python_for_prefixes_conflicts_and_skips ... ok
 test operation_46_cli_executes_rust_workflow_against_python_baseline ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
 
      Running tests\content_unrename_47_parity.rs (F:\RustBuild\pytools-feature\debug\deps\content_unrename_47_parity-8fd036606880c472.exe)
 
@@ -1790,13 +1796,13 @@ test operation_47_cli_keeps_legacy_behavior_without_sort_config_sheet ... ok
 test operation_47_matches_python_for_xlsx_xlsm_prefixes_collisions_and_failures ... ok
 test operation_47_cli_executes_rust_workflow_against_python_baseline ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
 
      Running tests\conversion_lo_session.rs (F:\RustBuild\pytools-feature\debug\deps\conversion_lo_session-dd1c0ed71e607999.exe)
 
 running 3 tests
-test native_value_rebuild_is_rejected_for_legacy_excel_format_conversion ... ok
 test explicit_libreoffice_office_conversion_rejects_word_targets_without_output ... ok
+test native_value_rebuild_is_rejected_for_legacy_excel_format_conversion ... ok
 test explicit_libreoffice_spreadsheet_conversion_is_routed_to_lo ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
@@ -1809,28 +1815,181 @@ test conversion_cli_does_not_publish_xls_payload_mislabeled_as_et ... ignored, r
 test conversion_menu_batch_uses_pywin32_and_preserves_sources ... ignored, requires Windows Excel/WPS COM and the bundled pywin32 runtime; converts temporary copies through the V2 menu
 test native_conversion_help_lists_legacy_epoch_formats ... ok
 test batch_rename_menu_persists_configuration_failure_log_without_touching_input ... ok
-test sheet_rename_menu_decline_keeps_the_source_and_writes_no_plan_or_copy ... ok
-test sheet_rename_menu_without_capability_can_be_cancelled ... ok
 test conversion_cli_rejects_xlsx_payload_mislabeled_as_et ... ok
+test sheet_rename_menu_executes_openpyxl_after_confirmation ... FAILED
+test sheet_rename_menu_decline_keeps_the_source_and_writes_no_plan_or_copy ... ok
+test sheet_rename_legacy_capability_does_not_route_to_umya ... FAILED
+test sheet_rename_menu_without_capability_can_be_cancelled ... ok
 test v2_file_menu_hides_cancelled_local_mapping ... ok
-test batch_rename_menu_supports_user_developer_and_off_progress_views ... ok
 test v2_file_menu_hides_native_value_conversion ... ok
+test sheet_rename_openpyxl_does_not_require_excel_com ... FAILED
+test batch_rename_menu_supports_user_developer_and_off_progress_views ... ok
 test file_sort_menu_supports_user_developer_and_off_progress_views ... ok
 test sheet_rename_menu_excel_updates_cross_sheet_formula ... FAILED
-test conversion_menu_and_cli_emit_redacted_dual_view_progress ... ok
 test workbook_content_naming_menu_logs_user_developer_and_off_views ... ok
+test conversion_menu_and_cli_emit_redacted_dual_view_progress ... ok
 test v2_file_menu_routes_supported_workflows ... ok
-test sheet_rename_menu_executes_openpyxl_after_confirmation ... ok
-test sheet_rename_openpyxl_does_not_require_excel_com ... ok
-test sheet_rename_legacy_capability_does_not_route_to_umya ... ok
 test conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as ... FAILED
-test conversion_writes_recalculated_formula_cache_for_calamine ... ok
+test conversion_writes_recalculated_formula_cache_for_calamine ... FAILED
 
 failures:
 
+---- sheet_rename_menu_executes_openpyxl_after_confirmation stdout ----
+
+thread 'sheet_rename_menu_executes_openpyxl_after_confirmation' (25244) panicked at pytools-core\tests\conversion_menu_cli.rs:793:5:
+expected a successful sheet-rename summary, got:
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 文件处理 ------
+  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】
+  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】
+  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】
+  4  Office 格式转换（Excel 工作簿 → XLSX；支持 .xlsx 规范另存，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】
+  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】
+  6  机构提交完整性检查  【提交检查配置】
+  7  修复 Excel COM 无法打开的工作簿（生成修复副本；原件不变）  【自动补全角括号表名引号/修正冻结窗格矛盾】
+  0  返回
+----------------------
+子菜单选择> → 批量修改 Sheet 名
+  1  选择文件（可多选）
+  2  选择文件夹（仅当前层）
+  3  选择文件夹（递归子目录）
+  0  取消
+选择方式> → 正在打开文件选择窗口：批量修改 Sheet 名
+→ 可手动输入路径（分号分隔），或输入 0 取消：
+文件路径> → 已选择文件 1 个：
+  1. rename-confirmed.xlsx
+[确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。
+[引擎] .xlsx 使用 openpyxl 改名并更新公式/命名区域引用；.xls 请先在 Windows 通过 4-4 转为 .xlsx。
+输入 y/yes/是 执行；其他输入取消，不生成计划文件> [失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：Openpyxl 工作表改名失败：\\?\C:\Users\AZI\AppData\Local\Temp\pytools-conversion-menu-4052-1794507251771109500-8\rename-confirmed.xlsx: 未找到 pywin32 Excel 转换 Worker；请重新暂存 dist\python
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- sheet_rename_legacy_capability_does_not_route_to_umya stdout ----
+
+thread 'sheet_rename_legacy_capability_does_not_route_to_umya' (2868) panicked at pytools-core\tests\conversion_menu_cli.rs:912:5:
+expected a successful sheet-rename summary, got:
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 文件处理 ------
+  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】
+  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】
+  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】
+  4  Office 格式转换（Excel 工作簿 → XLSX；支持 .xlsx 规范另存，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】
+  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】
+  6  机构提交完整性检查  【提交检查配置】
+  7  修复 Excel COM 无法打开的工作簿（生成修复副本；原件不变）  【自动补全角括号表名引号/修正冻结窗格矛盾】
+  0  返回
+----------------------
+子菜单选择> → 批量修改 Sheet 名
+  1  选择文件（可多选）
+  2  选择文件夹（仅当前层）
+  3  选择文件夹（递归子目录）
+  0  取消
+选择方式> → 正在打开文件选择窗口：批量修改 Sheet 名
+→ 可手动输入路径（分号分隔），或输入 0 取消：
+文件路径> → 已选择文件 1 个：
+  1. rename-legacy-formula.xlsx
+[确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。
+[引擎] .xlsx 使用 openpyxl 改名并更新公式/命名区域引用；.xls 请先在 Windows 通过 4-4 转为 .xlsx。
+输入 y/yes/是 执行；其他输入取消，不生成计划文件> [失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：Openpyxl 工作表改名失败：\\?\C:\Users\AZI\AppData\Local\Temp\pytools-conversion-menu-4052-1794507251770152400-5\rename-legacy-formula.xlsx: 未找到 pywin32 Excel 转换 Worker；请重新暂存 dist\python
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
+
+
+---- sheet_rename_openpyxl_does_not_require_excel_com stdout ----
+
+thread 'sheet_rename_openpyxl_does_not_require_excel_com' (12088) panicked at pytools-core\tests\conversion_menu_cli.rs:885:5:
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 文件处理 ------
+  1  文件名机构标准化  【重命名配置：简称/全称/代码；键/值】
+  2  文件排序前缀管理（添加 / 清理）  【文件排序配置：是否启用/排序前缀/匹配关键词】
+  3  工作簿内容命名前缀（添加 / 清理）  【重命名配置：内容重命名启用/内容重命名取值规则】
+  4  Office 格式转换（Excel 工作簿 → XLSX；支持 .xlsx 规范另存，DOC/WPS/WPT → DOCX）  【全局配置：excel目的格式/word目的格式】
+  5  按配置修改 Sheet 名  【重命名配置：原表名/新表名（默认 J:K）】
+  6  机构提交完整性检查  【提交检查配置】
+  7  修复 Excel COM 无法打开的工作簿（生成修复副本；原件不变）  【自动补全角括号表名引号/修正冻结窗格矛盾】
+  0  返回
+----------------------
+子菜单选择> → 批量修改 Sheet 名
+  1  选择文件（可多选）
+  2  选择文件夹（仅当前层）
+  3  选择文件夹（递归子目录）
+  0  取消
+选择方式> → 正在打开文件选择窗口：批量修改 Sheet 名
+→ 可手动输入路径（分号分隔），或输入 0 取消：
+文件路径> → 已选择文件 1 个：
+  1. rename-engine-disabled.xlsx
+[确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。
+[引擎] .xlsx 使用 openpyxl 改名并更新公式/命名区域引用；.xls 请先在 Windows 通过 4-4 转为 .xlsx。
+输入 y/yes/是 执行；其他输入取消，不生成计划文件> [失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：Openpyxl 工作表改名失败：\\?\C:\Users\AZI\AppData\Local\Temp\pytools-conversion-menu-4052-1794507251906477500-10\rename-engine-disabled.xlsx: 未找到 pywin32 Excel 转换 Worker；请重新暂存 dist\python
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 20:15
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
+
+
 ---- sheet_rename_menu_excel_updates_cross_sheet_formula stdout ----
 
-thread 'sheet_rename_menu_excel_updates_cross_sheet_formula' (30732) panicked at pytools-core\tests\conversion_menu_cli.rs:964:5:
+thread 'sheet_rename_menu_excel_updates_cross_sheet_formula' (32036) panicked at pytools-core\tests\conversion_menu_cli.rs:964:5:
 source not updated; stdout========= rustTools 菜单 ========
   v0.1.0  构建 2026-11-12 20:15
   1  数据提取与汇总
@@ -1863,7 +2022,7 @@ source not updated; stdout========= rustTools 菜单 ========
   1. rename-excel.xlsx
 [确认] 将直接修改所选源工作簿的工作表名称；先生成临时候选并校验，再安全替换原文件。
 [引擎] .xlsx 使用 openpyxl 改名并更新公式/命名区域引用；.xls 请先在 Windows 通过 4-4 转为 .xlsx。
-输入 y/yes/是 执行；其他输入取消，不生成计划文件> [失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：Openpyxl 工作表改名失败：\\?\C:\Users\AZI\AppData\Local\Temp\pytools-conversion-menu-31912-1794501447829683400-7\rename-excel.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+输入 y/yes/是 执行；其他输入取消，不生成计划文件> [失败] 工作表改名未全部完成；已处理文件以汇总为准。错误：Openpyxl 工作表改名失败：\\?\C:\Users\AZI\AppData\Local\Temp\pytools-conversion-menu-4052-1794507251771059200-7\rename-excel.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
 ======== rustTools 菜单 ========
   v0.1.0  构建 2026-11-12 20:15
   1  数据提取与汇总
@@ -1877,20 +2036,29 @@ source not updated; stdout========= rustTools 菜单 ========
 ==============================
 主菜单选择> 再见。
  stderr=
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
 ---- conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as stdout ----
 
-thread 'conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as' (396) panicked at pytools-core\tests\conversion_menu_cli.rs:387:5:
-renamed legacy XLS should be opened as XLS and saved as XLSX: [2026-11-13 00:37:32] [ERROR] 命令执行失败：conversion failed: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+thread 'conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as' (28752) panicked at pytools-core\tests\conversion_menu_cli.rs:387:5:
+renamed legacy XLS should be opened as XLS and saved as XLSX: [2026-11-13 02:14:15] [ERROR] 命令执行失败：conversion failed: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+
+
+---- conversion_writes_recalculated_formula_cache_for_calamine stdout ----
+
+thread 'conversion_writes_recalculated_formula_cache_for_calamine' (20848) panicked at pytools-core\tests\conversion_menu_cli.rs:1755:5:
+xls → xlsx conversion failed: [2026-11-13 02:14:18] [ERROR] 命令执行失败：conversion failed: 未找到 pywin32 Excel 转换 Worker；请重新暂存 dist\python
 
 
 
 failures:
     conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as
+    conversion_writes_recalculated_formula_cache_for_calamine
+    sheet_rename_legacy_capability_does_not_route_to_umya
     sheet_rename_menu_excel_updates_cross_sheet_formula
+    sheet_rename_menu_executes_openpyxl_after_confirmation
+    sheet_rename_openpyxl_does_not_require_excel_com
 
-test result: FAILED. 16 passed; 2 failed; 3 ignored; 0 measured; 0 filtered out; finished in 14.89s
+test result: FAILED. 12 passed; 6 failed; 3 ignored; 0 measured; 0 filtered out; finished in 6.37s
 
 error: test failed, to rerun pass `-p pytools-core --test conversion_menu_cli`
      Running tests\conversion_pywin32_windows.rs (F:\RustBuild\pytools-feature\debug\deps\conversion_pywin32_windows-d35067d9accccd8b.exe)
@@ -1907,21 +2075,21 @@ running 2 tests
 test print_uses_configured_target_groups_sheets_and_refuses_existing_file ... ok
 test foreign_bank_in_place_deletes_only_matching_rows_without_copy_or_plan ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.61s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
 
      Running tests\dedup_append_execution.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_append_execution-d883f1f603fb60d2.exe)
 
 running 8 tests
 test pt_2_5_refuses_to_overwrite_target_created_after_plan ... ok
-test pt_2_5_absent_target_appends_unique_rows_through_the_rust_cli ... ok
 test pt_1_3_pt_1_4_refuse_commit_if_target_changed_after_planning ... ok
+test pt_2_5_absent_target_appends_unique_rows_through_the_rust_cli ... ok
 test pt_2_5_explicitly_commit_new_target_and_return_commit_receipt ... ok
 test pt_2_5_skips_existing_targets_when_header_names_order_or_width_differ ... ok
-test pt_1_3_pt_1_4_explicitly_commit_existing_target_after_capability_validation ... ok
 test pt_2_5_existing_target_edits_a_candidate_without_overwriting_the_target ... ok
+test pt_1_3_pt_1_4_explicitly_commit_existing_target_after_capability_validation ... ok
 test pt_2_5_chart_target_falls_back_to_openpyxl_and_keeps_charts ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.30s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.95s
 
      Running tests\dedup_append_target_edges.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_append_target_edges-de2284b77c64149c.exe)
 
@@ -1933,32 +2101,16 @@ test direct_existing_append_refuses_stale_target_and_preserves_changes ... ok
 test direct_existing_append_does_not_overwrite_existing_candidate ... ok
 test existing_header_only_target_appends_all_unique_rows ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.51s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
 
      Running tests\dedup_comment_delete_umya.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_comment_delete_umya-6b7e5d7024e0046e.exe)
 
 running 2 tests
-test pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references ... FAILED
-test pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch ... FAILED
+test pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references ... ok
+test pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch ... ok
 
-failures:
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
 
----- pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references stdout ----
-Error: pytools failed: [2026-11-13 00:38:16] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: unmodified formula changed at Commented!H1
-
-
----- pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch stdout ----
-Error: pytools failed: [2026-11-13 00:38:16] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: unmodified formula changed at Commented!H1
-
-
-
-failures:
-    pt_2_2_comment_duplicate_delete_tracks_excel_row_objects_and_references
-    pt_2_4_config_duplicate_delete_executes_as_one_umya_workbook_batch
-
-test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
-
-error: test failed, to rerun pass `-p pytools-core --test dedup_comment_delete_umya`
      Running tests\dedup_comment_openpyxl.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_comment_openpyxl-1b691763047a7747.exe)
 
 running 0 tests
@@ -1968,25 +2120,25 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
      Running tests\dedup_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_menu_cli-435b20521f82bf79.exe)
 
 running 17 tests
-test interactive_dedup_append_rejects_unknown_package_parts ... ok
 test interactive_dedup_append_rejects_whitespace_header_mismatch ... ok
+test interactive_dedup_append_rejects_unknown_package_parts ... ok
 test interactive_dedup_append_directly_creates_a_new_target ... ok
 test interactive_dedup_append_repeated_run_filters_existing_target_rows ... ok
-test interactive_dedup_append_preserves_formula_cache_and_rich_features ... ok
-test interactive_dedup_append_directly_updates_existing_target_without_capability ... ok
-test zero_duplicate_scan_is_reported_as_info_without_false_warning ... ok
-test interactive_dedup_append_uses_openpyxl_without_legacy_capability ... ok
 test configured_duplicate_delete_refuses_formula_cache_loss ... ok
-test configured_duplicate_check_marks_comment_workbook_in_place ... ok
-test interactive_dedup_append_direct_preserves_comments_merges_and_names ... ok
-test interactive_dedup_append_commits_existing_target_with_matching_capability ... ok
-test interactive_dedup_append_direct_copies_source_formula_and_summarizes ... ok
-test interactive_dedup_append_creates_missing_sheet_in_existing_target ... ok
 test configured_duplicate_check_marks_formula_workbook_in_place ... ok
-test interactive_dedup_menu_routes_four_v2_actions_without_committing_edits ... ok
+test configured_duplicate_check_marks_comment_workbook_in_place ... ok
+test zero_duplicate_scan_is_reported_as_info_without_false_warning ... ok
+test interactive_dedup_append_creates_missing_sheet_in_existing_target ... ok
+test interactive_dedup_append_directly_updates_existing_target_without_capability ... ok
+test interactive_dedup_append_direct_copies_source_formula_and_summarizes ... ok
+test interactive_dedup_append_commits_existing_target_with_matching_capability ... ok
+test interactive_dedup_append_preserves_formula_cache_and_rich_features ... ok
+test interactive_dedup_append_uses_openpyxl_without_legacy_capability ... ok
+test interactive_dedup_append_direct_preserves_comments_merges_and_names ... ok
 test interactive_dedup_menu_reports_in_place_marking_without_json ... ok
+test interactive_dedup_menu_routes_four_v2_actions_without_committing_edits ... ok
 
-test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.17s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.44s
 
      Running tests\dedup_number_format_inheritance.rs (F:\RustBuild\pytools-feature\debug\deps\dedup_number_format_inheritance-8eb45feae9977ea3.exe)
 
@@ -1994,7 +2146,7 @@ running 2 tests
 test configured_delete_preserves_numeric_zero_padding_format ... ok
 test configured_delete_preserves_inherited_number_formats ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
 
      Running tests\excel_edit_phase2_router.rs (F:\RustBuild\pytools-feature\debug\deps\excel_edit_phase2_router-183607728dfb4a63.exe)
 
@@ -2010,11 +2162,11 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 5 tests
 test invalid_candidate_is_rejected_before_existing_target_is_changed ... ok
 test create_target_publishes_valid_workbook_without_overwrite ... ok
-test planning_snapshot_rejects_changed_or_new_targets ... ok
 test replace_target_refuses_stale_hash_without_touching_newer_target ... ok
+test planning_snapshot_rejects_changed_or_new_targets ... ok
 test replace_target_reopens_candidate_and_reports_before_after_hashes ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
 
      Running tests\file_sort_prefix_operation_parity.rs (F:\RustBuild\pytools-feature\debug\deps\file_sort_prefix_operation_parity-47a6736f3389583d.exe)
 
@@ -2023,7 +2175,7 @@ test output_directory_failure_leaves_source_files_untouched ... ok
 test operation_49_matches_python_rename_and_report_baseline ... ok
 test operation_49_cli_executes_rust_workflow_against_python_baseline ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
 
      Running tests\file_sort_prefix_parity.rs (F:\RustBuild\pytools-feature\debug\deps\file_sort_prefix_parity-5d9c17d0a960ab85.exe)
 
@@ -2035,45 +2187,30 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
      Running tests\file_sort_prefix_remove_parity.rs (F:\RustBuild\pytools-feature\debug\deps\file_sort_prefix_remove_parity-98516158e22ec883.exe)
 
 running 6 tests
-test operation_410_progress_reports_output_directory_failure ... ok
 test operation_410_requires_at_least_one_valid_sort_rule ... ok
+test operation_410_progress_reports_output_directory_failure ... ok
 test operation_410_empty_input_matches_python_blank_report_sheet ... ok
 test operation_410_cli_accepts_empty_input_and_writes_blank_report ... ok
 test operation_410_matches_python_prefix_removal_and_report_baseline ... ok
 test operation_410_cli_executes_rust_workflow_against_python_baseline ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
 
      Running tests\foreign_bank_batch_execution.rs (F:\RustBuild\pytools-feature\debug\deps\foreign_bank_batch_execution-93d2543f890049c8.exe)
 
 running 2 tests
-test pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets ... FAILED
 test pt_7_3_refuses_dynamic_or_complex_cross_sheet_references_before_writing ... ok
+test pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets ... ok
 
-failures:
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
 
----- pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets stdout ----
-
-thread 'pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets' (1908) panicked at pytools-core\tests\foreign_bank_batch_execution.rs:242:5:
-assertion `left == right` failed
-  left: Number(1)
- right: 2
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-
-
-failures:
-    pt_7_3_batch_plan_and_execution_copy_without_overwriting_inputs_or_targets
-
-test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
-
-error: test failed, to rerun pass `-p pytools-core --test foreign_bank_batch_execution`
      Running tests\formula_print_preservation.rs (F:\RustBuild\pytools-feature\debug\deps\formula_print_preservation-c88f26677f597e6d.exe)
 
 running 2 tests
 test openpyxl_print_preserves_formula_cached_values_and_formats ... ok
 test openpyxl_print_copies_column_widths_and_row_heights ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
 
      Running tests\fx_header_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\fx_header_menu_cli-cbf465fe55fb74f0.exe)
 
@@ -2083,7 +2220,7 @@ test fx_header_menu_off_view_saves_no_history_or_events ... ok
 test fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls ... ok
 test fx_header_menu_matches_python_baseline_without_external_capability ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
 
      Running tests\fx_header_parity.rs (F:\RustBuild\pytools-feature\debug\deps\fx_header_parity-92af7a5e5c6682f2.exe)
 
@@ -2091,7 +2228,7 @@ running 2 tests
 test files_without_matching_headers_produce_no_edit_plan ... ok
 test xlsx_header_fix_matches_python_and_preserves_unmodified_workbook_content ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
      Running tests\institution_normalize_batch_cli.rs (F:\RustBuild\pytools-feature\debug\deps\institution_normalize_batch_cli-55c55e6247da7727.exe)
 
@@ -2099,12 +2236,12 @@ running 7 tests
 test configuration_failure_is_saved_in_user_and_developer_history ... ok
 test empty_mapping_still_emits_a_completed_task_summary ... ok
 test duplicate_mapping_keys_use_last_value_without_changing_first_match_order ... ok
-test apply_without_a_passed_capability_refuses_to_modify_source ... ok
 test in_place_preflight_reports_unusable_openpyxl_runtime_before_any_write ... ok
+test apply_without_a_passed_capability_refuses_to_modify_source ... ok
 test floating_mapping_key_with_python_scientific_notation_is_planned_by_cli ... ok
 test batch_plan_cli_matches_python_baseline_and_filters_user_view ... ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
 
      Running tests\institution_normalize_openpyxl.rs (F:\RustBuild\pytools-feature\debug\deps\institution_normalize_openpyxl-7ec112668ec02126.exe)
 
@@ -2117,24 +2254,24 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 1 test
 test edit_plan_matches_python_baseline_without_modifying_source ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
      Running tests\local_filename_map_48_parity.rs (F:\RustBuild\pytools-feature\debug\deps\local_filename_map_48_parity-f54a4662b60cc432.exe)
 
 running 4 tests
-test operation_48_matches_pandas_nan_stringification_for_missing_config_cells ... ok
 test operation_48_rejects_an_empty_mapping ... ok
+test operation_48_matches_pandas_nan_stringification_for_missing_config_cells ... ok
 test operation_48_matches_python_order_collision_and_skip_behavior ... ok
 test operation_48_cli_executes_rust_mapping_against_python_baseline ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
 
      Running tests\plan_file_output_toggle.rs (F:\RustBuild\pytools-feature\debug\deps\plan_file_output_toggle-e9e985aa1c3338e0.exe)
 
 running 1 test
 test plan_files_toggle_controls_plan_artifacts_only ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
 
      Running tests\print_comment_execution.rs (F:\RustBuild\pytools-feature\debug\deps\print_comment_execution-2d90abceb0131b9a.exe)
 
@@ -2144,14 +2281,14 @@ test pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier ... FAILED
 failures:
 
 ---- pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier stdout ----
-Error: pytools failed: [2026-11-13 00:39:02] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: style-preservation output sheet "__pt_print_seed_1" missing
+Error: pytools failed: [2026-11-13 02:14:51] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: style-preservation output sheet "__pt_print_seed_1" missing
 
 
 
 failures:
     pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier
 
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
 
 error: test failed, to rerun pass `-p pytools-core --test print_comment_execution`
      Running tests\print_config_new_target.rs (F:\RustBuild\pytools-feature\debug\deps\print_config_new_target-a20cd3d884e2f8df.exe)
@@ -2164,28 +2301,28 @@ test pt_3_3_new_target_creates_a_plan_without_touching_source_or_target ... FAIL
 failures:
 
 ---- pt_3_3_new_target_creates_a_plan_without_touching_source_or_target stdout ----
-Error: pytools failed: [2026-11-13 00:39:06] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: copied cell value/type mismatch at Printed!C2
+Error: pytools failed: [2026-11-13 02:14:53] [ERROR] 命令执行失败：OutputValidationFailed: backend output validation failed: copied cell value/type mismatch at Printed!C2
 
 
 
 failures:
     pt_3_3_new_target_creates_a_plan_without_touching_source_or_target
 
-test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
 
 error: test failed, to rerun pass `-p pytools-core --test print_config_new_target`
      Running tests\print_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\print_menu_cli-7a9eb81b7c299045.exe)
 
 running 7 tests
 test v2_print_menu_hides_removed_pdf_entry ... ok
-test configured_static_print_failure_shows_reason_and_returns_to_menu ... ok
 test rust_print_entry_refuses_xlsm_target_with_clear_message ... ok
+test configured_static_print_failure_shows_reason_and_returns_to_menu ... ok
 test rust_print_entry_writes_isolated_styled_output ... ok
 test print_precheck_reports_history_and_off_suppresses_progress ... ok
 test interactive_static_print_executes_without_confirmation ... ok
 test interactive_print_menu_uses_openpyxl_and_precheck ... ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
 
      Running tests\quick_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\quick_menu_cli-6845a5f201227952.exe)
 
@@ -2196,7 +2333,7 @@ test launching_with_global_menu_options_without_command_opens_the_menu ... ok
 test launching_without_arguments_honors_the_legacy_config_path_override ... ok
 test v2_configuration_menu_routes_all_three_quick_actions_without_starting_a_desktop_app ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
      Running tests\real_config_schema_compat.rs (F:\RustBuild\pytools-feature\debug\deps\real_config_schema_compat-44a7b929c6e26bda.exe)
 
@@ -2204,7 +2341,7 @@ running 2 tests
 test loaders_accept_the_real_config_workbook_schema ... ok
 test real_project_config_loads_when_present ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.80s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.45s
 
      Running tests\region_sum_parity.rs (F:\RustBuild\pytools-feature\debug\deps\region_sum_parity-ed856096509b2795.exe)
 
@@ -2218,18 +2355,18 @@ test region_sum_cli_runs_python_baseline_workflow ... ok
 test interactive_region_sum_menu_matches_python_baseline_workbook ... ok
 test region_sum_cli_throttles_large_batches_and_keeps_failures_and_names_visible ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.81s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
 
      Running tests\rural_loan_regressions.rs (F:\RustBuild\pytools-feature\debug\deps\rural_loan_regressions-73735721dacd7200.exe)
 
 running 5 tests
-test quarterly_rural_loan_reports_follow_institution_row_order ... ok
 test rural_loan_plan_preserves_unrounded_difference ... ok
 test rural_loan_reports_and_plan_follow_institution_row_order ... ok
+test quarterly_rural_loan_reports_follow_institution_row_order ... ok
 test quarterly_summary_keeps_invalid_regions_and_fails_overall_check ... ok
 test rural_loan_plans_match_legacy_formula_read_modes ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
 
      Running tests\sheet_extract_area_operation_parity.rs (F:\RustBuild\pytools-feature\debug\deps\sheet_extract_area_operation_parity-8b5256e204cfe8eb.exe)
 
@@ -2238,21 +2375,21 @@ test append_cli_preserves_existing_workbook_properties_and_imports_full_sheet_la
 test floating_point_comparison_uses_relative_tolerance ... ok
 test interactive_menu_routes_full_sheet_import_against_python_helper_baseline ... ignored, 5-6 统一走值提取（不保留格式）；整表样式导入路径已移除，待人工确认后可删
 test area_extraction_matches_python_baseline_and_preserves_inputs ... ok
-test full_sheet_extraction_creates_output_and_existing_targets_are_protected ... ok
-test interactive_menu_allows_full_sheet_tasks_without_capability_files ... ok
 test cli_loads_config_and_runs_the_area_extraction_candidate ... ok
+test interactive_menu_allows_full_sheet_tasks_without_capability_files ... ok
 test interactive_menu_extracts_date_cells_as_excel_datetimes ... ok
-test interactive_menu_extracts_elapsed_duration_values ... ok
-test interactive_menu_warns_and_does_not_publish_for_invalid_area_configuration ... ok
-test interactive_menu_routes_area_extraction_matches_python_and_records_engines ... ok
+test full_sheet_extraction_creates_output_and_existing_targets_are_protected ... ok
 test interactive_menu_preserves_excel_error_cells_during_area_extraction ... ok
+test interactive_menu_routes_area_extraction_matches_python_and_records_engines ... ok
+test interactive_menu_warns_and_does_not_publish_for_invalid_area_configuration ... ok
+test interactive_menu_extracts_elapsed_duration_values ... ok
 test interactive_menu_supports_user_and_off_log_views ... ok
 test interactive_menu_writes_area_extraction_to_configured_target_sheet ... ok
 test append_cli_keeps_previous_python_extraction_sheets ... ok
 test interactive_menu_appends_after_confirmation_without_capability_files ... ok
 test interactive_menu_extracts_macro_enabled_xlsm_area_to_new_xlsx ... ok
 
-test result: ok. 15 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 7.34s
+test result: ok. 15 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.96s
 
      Running tests\sheet_extract_parity.rs (F:\RustBuild\pytools-feature\debug\deps\sheet_extract_parity-c9c5389f4276ae5a.exe)
 
@@ -2266,13 +2403,39 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 5 tests
 test legacy_xls_sheet_rename_uses_dedicated_com_route ... ignored, requires an installed Excel or WPS COM server
-test legacy_capability_does_not_route_sheet_rename_away_from_openpyxl ... ok
-test sheet_rename_preserves_saved_formula_cache ... ok
-test sheet_rename_cli_rewrites_references_and_protects_source_snapshot ... ok
-test recursive_directory_batch_reports_unsupported_inputs_without_touching_them ... ok
+test sheet_rename_cli_rewrites_references_and_protects_source_snapshot ... FAILED
+test recursive_directory_batch_reports_unsupported_inputs_without_touching_them ... FAILED
+test sheet_rename_preserves_saved_formula_cache ... FAILED
+test legacy_capability_does_not_route_sheet_rename_away_from_openpyxl ... FAILED
 
-test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.96s
+failures:
 
+---- sheet_rename_cli_rewrites_references_and_protects_source_snapshot stdout ----
+Error: rename-sheets CLI failed: [2026-11-13 02:15:07] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\pytools-pt45-execution-27264-2\input.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+
+
+---- recursive_directory_batch_reports_unsupported_inputs_without_touching_them stdout ----
+Error: recursive rename-sheets CLI failed: [2026-11-13 02:15:07] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\pytools-pt45-recursive-27264-1\input\a.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+
+
+---- sheet_rename_preserves_saved_formula_cache stdout ----
+Error: rename-sheets CLI failed: [2026-11-13 02:15:07] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\pytools-pt45-formula-cache-27264-3\input.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+
+
+---- legacy_capability_does_not_route_sheet_rename_away_from_openpyxl stdout ----
+Error: legacy capability was not ignored: [2026-11-13 02:15:07] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\pytools-pt45-legacy-capability-27264-0\input.xlsx: pywin32 worker 启动失败：COM worker 初始化失败：No module named 'pythoncom'
+
+
+
+failures:
+    legacy_capability_does_not_route_sheet_rename_away_from_openpyxl
+    recursive_directory_batch_reports_unsupported_inputs_without_touching_them
+    sheet_rename_cli_rewrites_references_and_protects_source_snapshot
+    sheet_rename_preserves_saved_formula_cache
+
+test result: FAILED. 0 passed; 4 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+error: test failed, to rerun pass `-p pytools-core --test sheet_rename_execution`
      Running tests\submission_check_parity.rs (F:\RustBuild\pytools-feature\debug\deps\submission_check_parity-16ec98348fcc4d31.exe)
 
 running 6 tests
@@ -2283,20 +2446,20 @@ test submission_check_menu_matches_python_date_keyword_semantics ... ok
 test submission_check_cli_matches_python_workbook_and_statistics ... ok
 test submission_check_menu_logs_user_developer_and_off_views ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
 
      Running tests\summary_comments_cli.rs (F:\RustBuild\pytools-feature\debug\deps\summary_comments_cli-840e31119966031b.exe)
 
 running 7 tests
 test summary_comments_cli_records_template_validation_failure ... ok
 test summary_comments_cli_uses_merge_anchor_for_non_anchor_cells ... ok
-test summary_comments_cli_ignores_empty_set_marker_like_pycode ... ok
-test summary_comments_cli_preserves_formula_and_blank_template_headers ... ok
 test summary_comments_cli_parses_set_marker_after_unicode_case_mapping ... ok
+test summary_comments_cli_preserves_formula_and_blank_template_headers ... ok
+test summary_comments_cli_ignores_empty_set_marker_like_pycode ... ok
 test summary_comments_cli_preserves_excel_errors_and_textualizes_unknown_error_tokens ... ok
 test summary_comments_cli_logs_actual_stages_and_preserves_output_across_views ... ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
 
      Running tests\summary_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\summary_menu_cli-4628ac24aea514eb.exe)
 
@@ -2304,26 +2467,26 @@ running 21 tests
 test comment_summary_is_exposed_by_the_data_menu ... ok
 test interactive_menu_returns_failure_when_summary_input_is_corrupt ... ok
 test named_summary_accepts_a_saved_empty_formula_result ... ok
+test named_summary_fallback_merges_source_sheets_and_modes_into_one_tab ... ok
 test named_summary_orders_multiple_regions_before_source_files ... ok
 test named_summary_adds_global_and_local_single_cell_fields ... ok
-test named_summary_fallback_merges_source_sheets_and_modes_into_one_tab ... ok
 test interactive_named_range_template_error_keeps_menu_open_and_logs_detail ... ok
-test interactive_menu_routes_used_range_summary_through_global_config ... ok
 test named_summary_rejects_duplicate_and_multicell_metadata_fields ... ok
-test named_summary_rejects_formula_without_a_saved_result ... ok
-test summary_comments_cli_matches_python_missing_region_error ... ok
-test named_range_summary_pairs_single_region_groups_by_worksheet ... ok
+test interactive_menu_routes_used_range_summary_through_global_config ... ok
 test named_range_summary_uses_each_header_sheet_and_ignores_unconfigured_sheets ... ok
-test named_summary_uses_header_region_as_labels_without_structure_validation ... ok
+test named_summary_rejects_formula_without_a_saved_result ... ok
+test named_range_summary_pairs_single_region_groups_by_worksheet ... ok
+test summary_comments_cli_matches_python_missing_region_error ... ok
 test named_summary_uses_saved_formula_results_without_changing_source ... ok
+test named_summary_uses_header_region_as_labels_without_structure_validation ... ok
 test named_summary_recursive_folder_prefers_nested_sources_and_ignores_results ... ok
-test named_template_sheet_only_routes_to_a_matching_source_sheet ... ok
 test named_summary_uses_structure_checked_fallback_after_direct_route_mismatch ... ok
+test named_template_sheet_only_routes_to_a_matching_source_sheet ... ok
 test interactive_v2_named_range_summary_uses_optional_structure_to_skip_mismatching_sheet ... ok
 test summary_named_ranges_cli_is_a_real_standalone_entry ... ok
 test interactive_named_range_summary_collects_valid_rows_through_row_200 ... ok
 
-test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
 
      Running tests\summary_used_range_error.rs (F:\RustBuild\pytools-feature\debug\deps\summary_used_range_error-e9b2f35548f515d7.exe)
 
@@ -2335,57 +2498,57 @@ test summary_used_range_cli_preserves_common_and_textual_error_token_matrix ... 
 test summary_used_range_cli_preserves_unknown_xlsx_error_value_as_text ... ok
 test summary_used_range_cli_preserves_excel_error_cells ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
 
      Running tests\timeline_menu_cli.rs (F:\RustBuild\pytools-feature\debug\deps\timeline_menu_cli-175c0a218e076ccf.exe)
 
 running 35 tests
 test launching_without_arguments_opens_the_numbered_main_menu ... ok
 test excluded_pt_1_2_is_not_exposed_by_the_v2_data_menu ... ok
-test timeline_extract_cli_with_empty_default_input_directory_skips_output ... ok
-test header_path_compare_displays_merged_multilevel_paths_like_wide_summary ... ok
-test wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass ... ignored, requires an isolated openpyxl test runtime; run with --ignored
-test header_path_compare_formats_date_headers_as_python_datetime_text ... ok
 test timeline_precheck_menu_prints_readable_success_and_returns_to_main ... ok
+test timeline_extract_cli_with_empty_default_input_directory_skips_output ... ok
+test wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass ... ignored, requires an isolated openpyxl test runtime; run with --ignored
+test header_path_compare_displays_merged_multilevel_paths_like_wide_summary ... ok
+test header_path_compare_formats_date_headers_as_python_datetime_text ... ok
 test header_path_compare_menu_records_terminal_failure_summary ... ok
-test interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup ... ok
 test timeline_extract_cli_discovers_default_sources_recursively_and_skips_lock_files ... ok
+test interactive_wide_summary_writes_the_configured_intermediate_for_later_dedup ... ok
 test interactive_wide_summary_intermediate_preserves_negative_date_serial ... ok
 test timeline_precheck_menu_reports_errors_without_terminating_menu ... ok
 test header_path_compare_reports_unmatched_rules_and_worksheets_in_logs ... ok
 test header_path_compare_menu_supports_user_developer_and_off_views ... ok
 test wide_summary_cli_filters_missing_and_unconfigured_extensions_before_reading ... ok
-test interactive_v2_data_menu_routes_compare_wide_summary_and_precheck ... ok
 test wide_summary_cli_processes_legacy_xls_without_ooxml_metadata ... ok
 test wide_summary_cli_discovers_default_sources_for_both_row_modes ... ok
+test interactive_v2_data_menu_routes_compare_wide_summary_and_precheck ... ok
 test wide_summary_loose_mode_maps_by_header_and_extends_new_columns ... ignored, requires an isolated openpyxl test runtime; run with --ignored
-test wide_summary_cli_resolves_relative_configured_directories_for_discovery ... ok
 test wide_summary_cli_projects_1900_zero_serial_as_midnight_time ... ok
 test wide_summary_continue_policy_explains_read_failure_without_leaking_input ... ok
+test wide_summary_cli_resolves_relative_configured_directories_for_discovery ... ok
 test wide_summary_cli_projects_elapsed_duration_as_numeric_for_both_row_modes ... ok
-test wide_summary_matches_filenames_before_reading_and_reports_counts ... ok
 test wide_summary_cli_summarizes_nonempty_legacy_xls_elapsed_values ... ok
 test wide_summary_menu_failure_history_identifies_read_stage_without_source_data ... ok
+test wide_summary_matches_filenames_before_reading_and_reports_counts ... ok
 test wide_summary_menu_current_folder_mode_excludes_nested_sources ... ok
-test wide_summary_refuses_header_mismatch_without_clearing_target ... ok
-test wide_summary_cli_preserves_excel_1900_leap_boundary_dates_in_both_row_modes ... ok
 test wide_summary_cli_preserves_time_format_serials_at_and_above_one_day ... ok
+test wide_summary_cli_preserves_excel_1900_leap_boundary_dates_in_both_row_modes ... ok
+test wide_summary_refuses_header_mismatch_without_clearing_target ... ok
 test wide_summary_menu_logging_views_record_progress_and_respect_off ... ok
 test wide_summary_cli_projects_clock_formats_across_midnight_rounding ... ok
-test wide_summary_fills_preexisting_blank_target_sheet ... ok
 test interactive_wide_summary_rewrites_existing_intermediate_directly ... ok
+test wide_summary_fills_preexisting_blank_target_sheet ... ok
 test wide_summary_appends_rows_to_matching_existing_sheet ... ok
 
-test result: ok. 33 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.50s
+test result: ok. 33 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 3.85s
 
      Running tests\xls_com_routes.rs (F:\RustBuild\pytools-feature\debug\deps\xls_com_routes-34e57a1277105442.exe)
 
 running 3 tests
+test dedup_xls_com_routes_mark_and_delete ... ok
 test remove_foreign_bank_xls_com_creates_financial_bureau_copy ... ok
 test fx_header_xls_com_replaces_unit_in_place ... ok
-test dedup_xls_com_routes_mark_and_delete ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.33s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
    Doc-tests pytools_core
 
@@ -2393,9 +2556,8 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-error: 5 targets failed:
+error: 4 targets failed:
     `-p pytools-core --test conversion_menu_cli`
-    `-p pytools-core --test dedup_comment_delete_umya`
-    `-p pytools-core --test foreign_bank_batch_execution`
     `-p pytools-core --test print_comment_execution`
     `-p pytools-core --test print_config_new_target`
+    `-p pytools-core --test sheet_rename_execution`

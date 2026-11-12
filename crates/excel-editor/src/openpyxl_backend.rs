@@ -1389,7 +1389,7 @@ fn validate_preserved_dimensions(
             let actual_rows = canonical_row_dimensions(output_rows, &modified_rows)?;
             anyhow::ensure!(
                 expected_columns == actual_columns,
-                "openpyxl changed preserved column dimensions on worksheet {source_sheet:?}"
+                "openpyxl changed preserved column dimensions on worksheet {source_sheet:?}: expected={expected_columns:?}, actual={actual_columns:?}"
             );
             anyhow::ensure!(
                 row_dimension_maps_match(&expected_rows, &actual_rows),
@@ -2079,6 +2079,12 @@ fn canonical_xml_element(node: roxmltree::Node<'_, '_>) -> CanonicalXmlElement {
             )
         })
         .collect::<Vec<_>>();
+    if node.tag_name().name() == "definedName" {
+        // Some writers materialize the default `hidden="0"` value while
+        // preserving the same defined name. Keep non-default hidden state
+        // strict, but do not treat this explicit default as a semantic change.
+        attributes.retain(|(_, name, value)| !(name == "hidden" && value == "0"));
+    }
     attributes.sort();
     let children = node
         .children()
@@ -2247,8 +2253,9 @@ fn validate_preserved_defined_names(
     for defined_name in &source.defined_names {
         let Some(source_scope) = &defined_name.scope else {
             let mut rewritten = defined_name.clone();
-            rewrite_defined_name_sheet_references(&mut rewritten, &plan.operations);
-            expected.push(rewritten);
+            if rewrite_defined_name_sheet_references(&mut rewritten, None, &plan.operations)? {
+                expected.push(rewritten);
+            }
             continue;
         };
         if let Some(final_scope) = retained_sheets.get(source_scope) {
@@ -2282,8 +2289,13 @@ fn validate_preserved_defined_names(
                 scope: Some(final_scope.clone()),
                 element: defined_name.element.clone(),
             };
-            rewrite_defined_name_sheet_references(&mut rewritten, &plan.operations);
-            expected.push(rewritten);
+            if rewrite_defined_name_sheet_references(
+                &mut rewritten,
+                Some(source_scope),
+                &plan.operations,
+            )? {
+                expected.push(rewritten);
+            }
             continue;
         }
         if let Some(deleted_as) = deleted_sheets.get(source_scope) {
@@ -2351,7 +2363,7 @@ fn validate_preserved_defined_names(
     expected.sort();
     actual.sort();
     let mut unmatched_output = actual;
-    let mut missing_count = 0;
+    let mut missing_names = Vec::new();
     for expected_name in &expected {
         if let Some(index) = unmatched_output
             .iter()
@@ -2359,15 +2371,31 @@ fn validate_preserved_defined_names(
         {
             unmatched_output.remove(index);
         } else {
-            missing_count += 1;
+            missing_names.push(defined_name_identity(expected_name));
         }
     }
-    let unexpected_count = unmatched_output.len();
     anyhow::ensure!(
-        missing_count == 0 && unexpected_count == 0,
-        "openpyxl changed workbook defined names after worksheet-scope normalization; missing={missing_count}, added_or_changed={unexpected_count}"
+        missing_names.is_empty() && unmatched_output.is_empty(),
+        "openpyxl changed workbook defined names after worksheet-scope normalization; missing={missing_names:?}, added_or_changed={:?}",
+        unmatched_output
+            .iter()
+            .map(defined_name_identity)
+            .collect::<Vec<_>>()
     );
     Ok(())
+}
+
+fn defined_name_identity(name: &CanonicalDefinedName) -> (Option<String>, String) {
+    let scope = name.scope.clone();
+    let defined_name = name
+        .element
+        .attributes
+        .iter()
+        .find_map(|(namespace, attribute, value)| {
+            (namespace.is_empty() && attribute == "name").then_some(value.clone())
+        })
+        .unwrap_or_else(|| "unnamed".to_owned());
+    (scope, defined_name)
 }
 
 fn is_print_area_name(element: &CanonicalXmlElement) -> bool {
@@ -4513,7 +4541,12 @@ fn validate_preserved_formulas(
             {
                 continue;
             }
-            let expected_formula = rewrite_formula_sheet_references(formula, &renamed);
+            let expected_formula = crate::umya_backend::expected_formula_after_row_deletions(
+                &old_sheet.name,
+                formula,
+                &plan.operations,
+            )?;
+            let expected_formula = rewrite_formula_sheet_references(&expected_formula, &renamed);
             anyhow::ensure!(
                 new_sheet.formulas.get(&output_address) == Some(&expected_formula),
                 "unmodified formula changed at {}!{}",
@@ -4587,14 +4620,19 @@ fn validate_preserved_merges(
             continue;
         }
         let output_name = renamed.get(&old_sheet.name).unwrap_or(&old_sheet.name);
-        expected.insert(
-            output_name.clone(),
-            old_sheet
-                .merges
-                .iter()
-                .map(|range| normalize_range(range))
-                .collect(),
-        );
+        let row_map = plan_row_map(plan, &old_sheet.name)?;
+        let mut preserved_ranges = BTreeSet::new();
+        for range in &old_sheet.merges {
+            let normalized = normalize_range(range);
+            let expected_range = match &row_map {
+                Some(map) => map_range_rows(&normalized, map)?,
+                None => Some(normalized),
+            };
+            if let Some(expected_range) = expected_range {
+                preserved_ranges.insert(expected_range);
+            }
+        }
+        expected.insert(output_name.clone(), preserved_ranges);
     }
     for operation in &plan.operations {
         match operation {
@@ -4680,6 +4718,24 @@ fn validate_preserved_merges(
     Ok(())
 }
 
+fn map_range_rows(range: &str, row_map: &PlanRowMap) -> Result<Option<String>> {
+    let (min_row, min_column, max_row, max_column) = parse_range(range)?;
+    let mut mapped_rows = (min_row..=max_row).filter_map(|row| row_map.output_row(row));
+    let Some(first_row) = mapped_rows.next() else {
+        return Ok(None);
+    };
+    let (first_row, last_row) = mapped_rows.fold((first_row, first_row), |(min, max), row| {
+        (min.min(row), max.max(row))
+    });
+    Ok(Some(format!(
+        "{}{}:{}{}",
+        column_letters(min_column),
+        first_row,
+        column_letters(max_column),
+        last_row
+    )))
+}
+
 fn sheet_name_changes(
     operations: &[EditOperation],
 ) -> (BTreeMap<String, String>, BTreeSet<String>) {
@@ -4704,12 +4760,32 @@ fn sheet_name_changes(
 
 fn rewrite_defined_name_sheet_references(
     defined_name: &mut CanonicalDefinedName,
+    source_scope: Option<&str>,
     operations: &[EditOperation],
-) {
+) -> Result<bool> {
     let (renames, _) = sheet_name_changes(operations);
     if let Some(text) = defined_name.element.text.as_mut() {
-        *text = rewrite_formula_sheet_references(text, &renames);
+        let name = defined_name
+            .element
+            .attributes
+            .iter()
+            .find_map(|(namespace, attribute, value)| {
+                (namespace.is_empty() && attribute == "name").then_some(value.as_str())
+            })
+            .unwrap_or("unnamed");
+        let Some(expected_address) =
+            crate::umya_backend::expected_defined_name_address_after_row_deletions(
+                name,
+                text,
+                source_scope,
+                operations,
+            )?
+        else {
+            return Ok(false);
+        };
+        *text = rewrite_formula_sheet_references(&expected_address, &renames);
     }
+    Ok(true)
 }
 
 /// Match the direct worksheet-reference rewrite used by the Openpyxl Worker.
