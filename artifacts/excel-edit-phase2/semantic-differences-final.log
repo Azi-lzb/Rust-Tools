@@ -1,0 +1,10 @@
+5-2 OpenpyxlOnly True True True
+5-2 RustNativeOnly True True True
+5-2 UMYAOnly False False True
+5-2 BetterOfficeOnly True True True
+5-2 Auto True True True
+5-7 OpenpyxlOnly True True True
+5-7 RustNativeOnly False True True
+5-7 UMYAOnly False False True
+5-7 BetterOfficeOnly False False True
+5-7 Auto True True True

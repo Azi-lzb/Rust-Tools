@@ -1,0 +1,57 @@
+{
+  "elapsed_ms": 2197,
+  "files": [
+    {
+      "commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 101,
+        "operation": "replaced",
+        "sha256_after": "b8d1eb8a69d9fd02ac799cdd1fbb8ff055b3cae5394b76c3abf9a286b3a0b5d0",
+        "sha256_before": "72a8ddd4a7ca6b6b5362fc2e2a1a7d806ac86774aad38223febb77c2c7e9a277",
+        "target": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\source.xlsx"
+      },
+      "commit_ms": 101,
+      "editing_ms": 2032,
+      "elapsed_ms": 2184,
+      "engine": "openpyxl",
+      "execution": {
+        "attempts": [
+          {
+            "elapsed_ms": 2031,
+            "engine": "openpyxl_worker",
+            "message": "validated output published",
+            "outcome": "succeeded"
+          }
+        ],
+        "elapsed_ms": 2031,
+        "engine": "openpyxl_worker",
+        "input": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\source.xlsx",
+        "output": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\.pytools-sheet-rename-9776-0.xlsx",
+        "route_decisions": [
+          {
+            "eligible": true,
+            "engine": "openpyxl_worker",
+            "rejected_reasons": []
+          }
+        ]
+      },
+      "input": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\source.xlsx",
+      "output": "\\\\?\\C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\source.xlsx",
+      "planning_ms": 49,
+      "reason": null,
+      "renamed": 1,
+      "skipped": 0,
+      "status": "renamed"
+    }
+  ],
+  "files_scanned": 1,
+  "rename_ok": 1,
+  "run_id": "pytools-pt-4-5-9776-1794482907716482800-0",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\rust-tools\\logs\\PT-4-5_pytools-pt-4-5-9776-1794482907716482800-0.run.json",
+  "skip": 0,
+  "workbooks": 1
+}
+
+[STDERR]
+[2026-11-12 19:28:29] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 source.xlsx，耗时 2031 ms

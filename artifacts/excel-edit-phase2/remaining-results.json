@@ -1,0 +1,387 @@
+[
+  {
+    "menu": "5-2",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly",
+    "command": [
+      "institution-normalize",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly\\config.xlsx",
+      "--apply",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly\\source.xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly\\source.xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:53:15] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 source.xlsx，耗时 6627 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": false
+  },
+  {
+    "menu": "5-2",
+    "mode": "RustNativeOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly",
+    "command": [
+      "institution-normalize",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\config.xlsx",
+      "--apply",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:53:25] [INFO] ExcelEditPlan 路由：模式 RustNativeOnly，引擎 rust_native_ooxml，文件 source.xlsx，耗时 5157 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": false
+  },
+  {
+    "menu": "5-2",
+    "mode": "UMYAOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\2-5-2-UMYAOnly",
+    "command": [
+      "institution-normalize",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\2-5-2-UMYAOnly\\config.xlsx",
+      "--apply",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\2-5-2-UMYAOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": true
+  },
+  {
+    "menu": "5-2",
+    "mode": "BetterOfficeOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly",
+    "command": [
+      "institution-normalize",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly\\config.xlsx",
+      "--apply",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly\\source.xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly\\source.xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:53:59] [INFO] ExcelEditPlan 路由：模式 BetterOfficeOnly，引擎 betteroffice，文件 source.xlsx，耗时 18466 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": false
+  },
+  {
+    "menu": "5-2",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto",
+    "command": [
+      "institution-normalize",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto\\config.xlsx",
+      "--apply",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto\\source.xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto\\source.xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:54:10] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 rust_native_ooxml，文件 source.xlsx，耗时 5087 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": false
+  },
+  {
+    "menu": "5-3",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly",
+    "command": [
+      "remove-foreign-bank",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\config.xlsx",
+      "--create-copy",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\logs",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\source(金融局).xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\5-5-3-OpenpyxlOnly\\source(金融局).xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": false,
+    "acceptance": "copy_created_zero_rows_deleted"
+  },
+  {
+    "menu": "5-3",
+    "mode": "UMYAOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly",
+    "command": [
+      "remove-foreign-bank",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\config.xlsx",
+      "--create-copy",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\logs",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\source(金融局).xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\6-5-3-UMYAOnly\\source(金融局).xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": false,
+    "acceptance": "copy_created_zero_rows_deleted"
+  },
+  {
+    "menu": "5-3",
+    "mode": "BetterOfficeOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly",
+    "command": [
+      "remove-foreign-bank",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\config.xlsx",
+      "--create-copy",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\logs",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source(金融局).xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\7-5-3-BetterOfficeOnly\\source(金融局).xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": false,
+    "acceptance": "copy_created_zero_rows_deleted"
+  },
+  {
+    "menu": "5-3",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto",
+    "command": [
+      "remove-foreign-bank",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\config.xlsx",
+      "--create-copy",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\logs",
+      "--view",
+      "developer",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\source.xlsx"
+    ],
+    "changed_or_created_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\source(金融局).xlsx"
+    ],
+    "com": {
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\8-5-3-Auto\\source(金融局).xlsx": {
+        "status": "opened_read_only",
+        "sheets": 10,
+        "read_only": true,
+        "saved": false
+      }
+    },
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": false,
+    "acceptance": "copy_created_zero_rows_deleted"
+  },
+  {
+    "menu": "7-1",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\9-7-1-OpenpyxlOnly",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\9-7-1-OpenpyxlOnly\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "failure_reason": "ambiguous timeline header at S1; expected column 20",
+    "acceptance": "rejected_by_ambiguous-header-guard"
+  },
+  {
+    "menu": "7-1",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\10-7-1-Auto",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\10-7-1-Auto\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "failure_reason": "ambiguous timeline header at S1; expected column 20",
+    "acceptance": "rejected_by_ambiguous-header-guard"
+  },
+  {
+    "menu": "2-3",
+    "mode": "OpenpyxlOnly",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\11-2-3-OpenpyxlOnly",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\11-2-3-OpenpyxlOnly\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:56:22] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 target.xlsx，耗时 4865 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "acceptance": "rejected_by_existing-cell-preservation-validation"
+  },
+  {
+    "menu": "2-3",
+    "mode": "Auto",
+    "exit": 0,
+    "case_directory": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\12-2-3-Auto",
+    "command": [
+      "menu",
+      "--config",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\12-2-3-Auto\\config.xlsx",
+      "--log-view",
+      "developer"
+    ],
+    "changed_or_created_files": [],
+    "com": {},
+    "has_error_line": false,
+    "engine_lines": [
+      "[2026-11-12 16:56:30] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 target.xlsx，耗时 4892 ms"
+    ],
+    "production_config_unchanged": true,
+    "has_failure_marker": true,
+    "acceptance": "rejected_by_existing-cell-preservation-validation"
+  }
+]

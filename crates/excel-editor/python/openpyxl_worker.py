@@ -1905,6 +1905,223 @@ def _cell_value(value: Dict[str, Any]) -> Any:
     raise WorkerError("invalid_operation", "unknown CellValue variant: " + str(kind))
 
 
+def _sheet_rename_map(operations: List[Dict[str, Any]]) -> Dict[str, str]:
+    return {
+        operation["old_name"]: operation["new_name"]
+        for operation in operations
+        if operation.get("operation") == "rename_sheet"
+    }
+
+
+def _split_formula_string_literals(value: str) -> List[Tuple[bool, str]]:
+    """Split formula text so sheet references inside Excel string literals stay data."""
+    parts: List[Tuple[bool, str]] = []
+    start = 0
+    index = 0
+    while index < len(value):
+        if value[index] != '"':
+            index += 1
+            continue
+        parts.append((False, value[start:index]))
+        end = index + 1
+        while end < len(value):
+            if value[end] == '"':
+                if end + 1 < len(value) and value[end + 1] == '"':
+                    end += 2
+                    continue
+                break
+            end += 1
+        parts.append((True, value[index : min(end + 1, len(value))]))
+        index = min(end + 1, len(value))
+        start = index
+    parts.append((False, value[start:]))
+    return parts
+
+
+def _needs_sheet_name_quotes(name: str) -> bool:
+    return (
+        not name
+        or name[:1].isdigit()
+        or any(character.isspace() or character in ":\\/?*[]'" for character in name)
+    )
+
+
+_QUOTED_SHEET_REFERENCE = re.compile(r"'((?:[^']|'')*)'!")
+_BARE_SHEET_REFERENCE = re.compile(r"([^\W\d][\w.]*)!", re.UNICODE)
+
+
+def _rewrite_formula_sheet_references(value: str, renames: Dict[str, str]) -> str:
+    """Rewrite direct internal sheet references, leaving formula string data untouched."""
+    if not renames:
+        return value
+
+    def rewrite_segment(segment: str) -> str:
+        def quoted(match: re.Match[str]) -> str:
+            name = match.group(1).replace("''", "'")
+            replacement = renames.get(name)
+            if replacement is None:
+                return match.group(0)
+            if _needs_sheet_name_quotes(replacement):
+                return "'" + replacement.replace("'", "''") + "'!"
+            return replacement + "!"
+
+        segment = _QUOTED_SHEET_REFERENCE.sub(quoted, segment)
+
+        def bare(match: re.Match[str]) -> str:
+            # A sheet name following `]` belongs to an external workbook.
+            if match.start() > 0 and segment[match.start() - 1] == "]":
+                return match.group(0)
+            replacement = renames.get(match.group(1))
+            if replacement is None:
+                return match.group(0)
+            if _needs_sheet_name_quotes(replacement):
+                return "'" + replacement.replace("'", "''") + "'!"
+            return replacement + "!"
+
+        return _BARE_SHEET_REFERENCE.sub(bare, segment)
+
+    return "".join(
+        part if is_literal else rewrite_segment(part)
+        for is_literal, part in _split_formula_string_literals(value)
+    )
+
+
+def _formula_text(value: Any) -> Optional[str]:
+    from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
+
+    if isinstance(value, ArrayFormula):
+        return value.text or ""
+    if isinstance(value, DataTableFormula):
+        return None
+    if isinstance(value, str) and value.startswith("="):
+        return value
+    return None
+
+
+def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, Any]]) -> None:
+    """Reject INDIRECT selectors that point at a renamed sheet-name value.
+
+    A sheet rename cannot update a dynamic reference whose worksheet name is
+    assembled from cell contents. The generic plan does not yet express those
+    dependent string-cell edits, so fail before editing the in-memory workbook.
+    """
+    renames = _sheet_rename_map(operations)
+    if not renames:
+        return
+    from openpyxl.formula import Tokenizer
+    from openpyxl.utils.cell import range_boundaries
+    from openpyxl.worksheet.formula import DataTableFormula
+
+    for worksheet in workbook.worksheets:
+        for row in worksheet.iter_rows():
+            for cell in row:
+                value = cell.value
+                if isinstance(value, DataTableFormula):
+                    raise WorkerError(
+                        "unsupported_sheet_rename_formula",
+                        "sheet rename cannot prove DataTableFormula references",
+                        unsupported=True,
+                    )
+                formula = _formula_text(value)
+                if formula:
+                    for is_literal, segment in _split_formula_string_literals(formula):
+                        if is_literal:
+                            continue
+                        for reference_prefix in segment.split("!")[:-1]:
+                            if ":" in reference_prefix and any(
+                                old_name in reference_prefix for old_name in renames
+                            ):
+                                raise WorkerError(
+                                    "unsupported_sheet_rename_formula",
+                                    "sheet rename cannot safely rewrite a 3-D worksheet reference",
+                                    unsupported=True,
+                                )
+                if not formula or "INDIRECT(" not in formula.upper():
+                    continue
+                try:
+                    tokens = Tokenizer(formula).items
+                except Exception as error:
+                    if any(old_name in formula for old_name in renames):
+                        raise WorkerError(
+                            "unsupported_dynamic_sheet_reference",
+                            "cannot parse an INDIRECT formula that may reference a renamed sheet",
+                            unsupported=True,
+                        ) from error
+                    continue
+                for token in tokens:
+                    if token.type != "OPERAND" or token.subtype != "RANGE":
+                        continue
+                    reference = token.value
+                    if "[" in reference or "]" in reference:
+                        continue
+                    target_sheet = worksheet
+                    target = reference
+                    if "!" in reference:
+                        sheet_reference, target = reference.rsplit("!", 1)
+                        source_sheet_name = sheet_reference.strip("'").replace("''", "'")
+                        target_sheet_name = renames.get(source_sheet_name, source_sheet_name)
+                        lookup_name = (
+                            source_sheet_name
+                            if source_sheet_name in workbook.sheetnames
+                            else target_sheet_name
+                        )
+                        if lookup_name not in workbook.sheetnames:
+                            continue
+                        target_sheet = workbook[lookup_name]
+                    target = target.replace("$", "")
+                    try:
+                        min_col, min_row, max_col, max_row = range_boundaries(target)
+                    except ValueError:
+                        continue
+                    if min_col != max_col or min_row != max_row:
+                        continue
+                    selector_value = target_sheet.cell(min_row, min_col).value
+                    if isinstance(selector_value, str) and selector_value in renames:
+                        raise WorkerError(
+                            "unsupported_dynamic_sheet_reference",
+                            "INDIRECT selector {}!{} contains a worksheet name being renamed; refusing an incomplete rewrite".format(
+                                target_sheet.title, target
+                            ),
+                            unsupported=True,
+                        )
+                if any(old_name + "!" in formula or "'" + old_name.replace("'", "''") + "'!" in formula
+                       for old_name in renames):
+                    raise WorkerError(
+                        "unsupported_dynamic_sheet_reference",
+                        "INDIRECT formula embeds a worksheet reference that cannot be safely rewritten as cell data",
+                        unsupported=True,
+                    )
+
+
+def _rewrite_sheet_references_before_rename(workbook: Any, operations: List[Dict[str, Any]]) -> None:
+    """Update formulas and defined-name expressions once for the whole rename map."""
+    renames = _sheet_rename_map(operations)
+    if not renames:
+        return
+    from openpyxl.worksheet.formula import ArrayFormula
+
+    _preflight_dynamic_sheet_rename(workbook, operations)
+    for worksheet in workbook.worksheets:
+        for row in worksheet.iter_rows():
+            for cell in row:
+                value = cell.value
+                if isinstance(value, ArrayFormula):
+                    rewritten = _rewrite_formula_sheet_references(value.text or "", renames)
+                    if rewritten != value.text:
+                        value.text = rewritten
+                elif isinstance(value, str) and value.startswith("="):
+                    cell.value = _rewrite_formula_sheet_references(value, renames)
+    defined_name_collections = [workbook.defined_names] + [
+        worksheet.defined_names for worksheet in workbook.worksheets
+    ]
+    for collection in defined_name_collections:
+        for defined_name in collection.values():
+            if defined_name.attr_text:
+                defined_name.attr_text = _rewrite_formula_sheet_references(
+                    defined_name.attr_text, renames
+                )
+
+
 def _preserve_significant_string_whitespace(path: Path) -> None:
     """Restore OOXML's xml:space marker after openpyxl serializes string cells.
 
@@ -2813,6 +3030,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         raise WorkerError("workbook_open_failed", str(error))
     try:
         initial_sheet_names = list(workbook.sheetnames)
+        _rewrite_sheet_references_before_rename(workbook, operations)
         if _formula_cache_values(input_path) and any(
             operation.get("operation")
             in ("set_cell_value", "set_formula_text", "delete_rows", "insert_rows", "copy_range", "import_range")

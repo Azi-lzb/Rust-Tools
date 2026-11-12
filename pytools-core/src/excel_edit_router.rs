@@ -206,7 +206,7 @@ fn auto_route(plan: &ExcelEditPlan) -> Result<(EngineId, bool, &'static str)> {
         ));
     }
 
-    if contains_umya_style_or_dimension(plan) {
+    if contains_umya_style_or_dimension(plan) && plan.operations.iter().all(umya_supports) {
         return Ok((
             EngineId::UmyaSpreadsheet,
             true,
@@ -238,48 +238,6 @@ fn auto_route(plan: &ExcelEditPlan) -> Result<(EngineId, bool, &'static str)> {
         ));
     }
 
-    let native_exclusive_count = plan
-        .operations
-        .iter()
-        .filter(|operation| native_supports(operation) && !betteroffice_supports(operation.kind()))
-        .count();
-    let betteroffice_exclusive_count = plan
-        .operations
-        .iter()
-        .filter(|operation| betteroffice_supports(operation.kind()) && !native_supports(operation))
-        .count();
-    if native_exclusive_count > 0
-        && betteroffice_exclusive_count > 0
-        && plan
-            .operations
-            .iter()
-            .all(|operation| native_supports(operation) || betteroffice_supports(operation.kind()))
-    {
-        return Ok((
-            EngineId::Composite,
-            true,
-            "mixed RustNative and BetterOffice edits use an in-memory composite",
-        ));
-    }
-
-    if has_structure {
-        return Ok((
-            EngineId::BetterOffice,
-            true,
-            "row/column structure edits route to BetterOffice",
-        ));
-    }
-    if plan
-        .operations
-        .iter()
-        .all(|operation| matches!(operation, EditOperation::SetCellValue { .. }))
-    {
-        return Ok((
-            EngineId::RustNativeOoxml,
-            true,
-            "cell-value edits route to RustNative",
-        ));
-    }
     Ok((
         EngineId::OpenpyxlWorker,
         false,
@@ -361,6 +319,33 @@ fn native_supports(operation: &EditOperation) -> bool {
     }
 }
 
+// This is an operation-level preflight only. Workbook-dependent restrictions
+// remain in the adapter and can trigger a fresh-source fallback in Auto.
+fn umya_supports(operation: &EditOperation) -> bool {
+    matches!(
+        operation,
+        EditOperation::SetCellValue { .. }
+            | EditOperation::SetFormulaText { .. }
+            | EditOperation::SetColumnWidth { .. }
+            | EditOperation::SetRowHeight { .. }
+            | EditOperation::DeleteRows { .. }
+            | EditOperation::InsertRows { .. }
+            | EditOperation::RenameSheet { .. }
+            | EditOperation::CreateSheet { .. }
+            | EditOperation::CreateSheetAt { .. }
+            | EditOperation::MoveSheet { .. }
+            | EditOperation::DeleteSheet { .. }
+            | EditOperation::SetFreezePanes { .. }
+            | EditOperation::SetAutoFilter { .. }
+            | EditOperation::SetCellFillColor { .. }
+            | EditOperation::CopyRange { .. }
+            | EditOperation::ImportRange { .. }
+            | EditOperation::SetWorkbookCalculationProperties { .. }
+            | EditOperation::SetPageSettings { .. }
+            | EditOperation::ReplaceHeaderText { .. }
+    )
+}
+
 fn ensure_native_plan(plan: &ExcelEditPlan) -> Result<()> {
     ensure!(
         plan.format == WorkbookFormat::Xlsx,
@@ -379,6 +364,10 @@ fn ensure_native_plan(plan: &ExcelEditPlan) -> Result<()> {
 
 fn ensure_umya_plan(plan: &ExcelEditPlan) -> Result<()> {
     ensure!(
+        plan.operations.iter().all(umya_supports),
+        "UMYAOnly cannot execute every operation in this plan (including comment edits)"
+    );
+    ensure!(
         plan.format == WorkbookFormat::Xlsx,
         "UMYAOnly accepts XLSX workbooks"
     );
@@ -386,6 +375,21 @@ fn ensure_umya_plan(plan: &ExcelEditPlan) -> Result<()> {
         plan.workbook.inventory_complete,
         "UMYAOnly refuses workbooks with an incomplete OOXML inventory"
     );
+    if plan
+        .operations
+        .iter()
+        .any(|operation| matches!(operation, EditOperation::RenameSheet { .. }))
+        && (plan
+            .workbook
+            .features_present
+            .contains(&WorkbookFeature::Formulas)
+            || plan
+                .workbook
+                .features_present
+                .contains(&WorkbookFeature::DefinedNames))
+    {
+        bail!("UMYAOnly cannot rename worksheets while formula or defined-name references require validation");
+    }
     ensure!(
         !has_complex_preservation_features(plan),
         "UMYAOnly refuses workbooks with comments, charts, external links, macros, or other complex objects"
@@ -721,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_uses_memory_composite_for_mixed_native_and_structural_edits() {
+    fn auto_uses_single_openpyxl_for_mixed_native_and_structural_edits() {
         let plan = minimal_plan(vec![
             EditOperation::SetMargins {
                 sheet: "Sheet1".to_owned(),
@@ -737,7 +741,27 @@ mod tests {
             },
         ]);
         let selection = route_plan(&plan, &RouteConfig::new(RouteMode::Auto)).unwrap();
-        assert_eq!(selection.engine, EngineId::Composite);
-        assert!(selection.fallback_to_openpyxl);
+        assert_eq!(selection.engine, EngineId::OpenpyxlWorker);
+        assert!(!selection.fallback_to_openpyxl);
+    }
+
+    #[test]
+    fn umya_refuses_sheet_rename_when_formula_references_are_present() {
+        let mut plan = minimal_plan(vec![EditOperation::RenameSheet {
+            old_name: "Old".to_owned(),
+            new_name: "New".to_owned(),
+        }]);
+        plan.workbook
+            .features_present
+            .insert(WorkbookFeature::Formulas);
+        let error = route_plan(&plan, &RouteConfig::new(RouteMode::UmyaOnly))
+            .expect_err("UMYA formula-reference preservation has not been verified");
+        assert!(error
+            .to_string()
+            .contains("formula or defined-name references"));
+
+        let automatic = route_plan(&plan, &RouteConfig::new(RouteMode::Auto)).unwrap();
+        assert_eq!(automatic.engine, EngineId::OpenpyxlWorker);
+        assert!(!automatic.fallback_to_openpyxl);
     }
 }

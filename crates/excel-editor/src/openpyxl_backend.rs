@@ -1469,7 +1469,12 @@ fn validate_preserved_ooxml_metadata(
         .contains(&PreservationRequirement::PageSettings)
     {
         anyhow::ensure!(
-            per_sheet_entries_match(&source.page_settings, &output.page_settings),
+            per_sheet_entries_match_for_plan(
+                &source.page_settings,
+                &output.page_settings,
+                &source.sheet_order,
+                plan
+            )?,
             "openpyxl changed worksheet page settings"
         );
     }
@@ -1493,7 +1498,12 @@ fn validate_preserved_ooxml_metadata(
             }
         }
         anyhow::ensure!(
-            per_sheet_entries_match(&expected, &output.header_footers),
+            per_sheet_entries_match_for_plan(
+                &expected,
+                &output.header_footers,
+                &source.sheet_order,
+                plan
+            )?,
             "openpyxl changed worksheet header/footer settings"
         );
     }
@@ -1530,10 +1540,12 @@ fn validate_preserved_ooxml_metadata(
         .contains(&PreservationRequirement::ConditionalFormatting)
     {
         anyhow::ensure!(
-            per_sheet_entries_match(
+            per_sheet_entries_match_for_plan(
                 &source.conditional_formatting,
-                &output.conditional_formatting
-            ),
+                &output.conditional_formatting,
+                &source.sheet_order,
+                plan
+            )?,
             "openpyxl changed conditional formatting rules"
         );
     }
@@ -1542,7 +1554,12 @@ fn validate_preserved_ooxml_metadata(
         .contains(&PreservationRequirement::DataValidations)
     {
         anyhow::ensure!(
-            per_sheet_entries_match(&source.data_validations, &output.data_validations),
+            per_sheet_entries_match_for_plan(
+                &source.data_validations,
+                &output.data_validations,
+                &source.sheet_order,
+                plan
+            )?,
             "openpyxl changed data validations"
         );
     }
@@ -1595,6 +1612,22 @@ fn replace_header_footer_text(element: &mut CanonicalXmlElement, search: &str, r
 /// every source worksheet must appear with identical content, position must
 /// not matter. Content within one worksheet keeps its exact-order
 /// comparison; sheet-order correctness is owned by `validate_sheet_names`.
+fn per_sheet_entries_match_for_plan<T: PartialEq>(
+    source: &[(String, T)],
+    output: &[(String, T)],
+    source_order: &[String],
+    plan: &ExcelEditPlan,
+) -> Result<bool> {
+    let (names, _) = planned_sheet_provenance(source_order, &plan.operations)?;
+    Ok(source.iter().all(|(source_name, expected)| {
+        let output_name = names.get(source_name).unwrap_or(source_name);
+        output
+            .iter()
+            .find(|(name, _)| name == output_name)
+            .is_some_and(|(_, actual)| actual == expected)
+    }))
+}
+
 fn per_sheet_entries_match<T: PartialEq>(source: &[(String, T)], output: &[(String, T)]) -> bool {
     source.iter().all(|(name, expected)| {
         output
@@ -2213,7 +2246,9 @@ fn validate_preserved_defined_names(
     let mut expected = Vec::with_capacity(source.defined_names.len());
     for defined_name in &source.defined_names {
         let Some(source_scope) = &defined_name.scope else {
-            expected.push(defined_name.clone());
+            let mut rewritten = defined_name.clone();
+            rewrite_defined_name_sheet_references(&mut rewritten, &plan.operations);
+            expected.push(rewritten);
             continue;
         };
         if let Some(final_scope) = retained_sheets.get(source_scope) {
@@ -2243,10 +2278,12 @@ fn validate_preserved_defined_names(
                     continue;
                 }
             }
-            expected.push(CanonicalDefinedName {
+            let mut rewritten = CanonicalDefinedName {
                 scope: Some(final_scope.clone()),
                 element: defined_name.element.clone(),
-            });
+            };
+            rewrite_defined_name_sheet_references(&mut rewritten, &plan.operations);
+            expected.push(rewritten);
             continue;
         }
         if let Some(deleted_as) = deleted_sheets.get(source_scope) {
@@ -4476,8 +4513,9 @@ fn validate_preserved_formulas(
             {
                 continue;
             }
+            let expected_formula = rewrite_formula_sheet_references(formula, &renamed);
             anyhow::ensure!(
-                new_sheet.formulas.get(&output_address) == Some(formula),
+                new_sheet.formulas.get(&output_address) == Some(&expected_formula),
                 "unmodified formula changed at {}!{}",
                 old_sheet.name,
                 address
@@ -4662,6 +4700,133 @@ fn sheet_name_changes(
         })
         .collect();
     (renamed, deleted)
+}
+
+fn rewrite_defined_name_sheet_references(
+    defined_name: &mut CanonicalDefinedName,
+    operations: &[EditOperation],
+) {
+    let (renames, _) = sheet_name_changes(operations);
+    if let Some(text) = defined_name.element.text.as_mut() {
+        *text = rewrite_formula_sheet_references(text, &renames);
+    }
+}
+
+/// Match the direct worksheet-reference rewrite used by the Openpyxl Worker.
+/// Formula string literals are kept byte-for-byte because text such as
+/// `"OldSheet!A1"` is data, while a token ending in `!` is a live reference.
+fn rewrite_formula_sheet_references(formula: &str, renames: &BTreeMap<String, String>) -> String {
+    if renames.is_empty() {
+        return formula.to_owned();
+    }
+    let characters: Vec<char> = formula.chars().collect();
+    let mut output = String::with_capacity(formula.len());
+    let mut outside = String::new();
+    let mut index = 0;
+    while index < characters.len() {
+        if characters[index] != '"' {
+            outside.push(characters[index]);
+            index += 1;
+            continue;
+        }
+        output.push_str(&rewrite_formula_reference_tokens(&outside, renames));
+        outside.clear();
+        output.push('"');
+        index += 1;
+        while index < characters.len() {
+            let character = characters[index];
+            output.push(character);
+            index += 1;
+            if character == '"' {
+                if index < characters.len() && characters[index] == '"' {
+                    output.push('"');
+                    index += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    output.push_str(&rewrite_formula_reference_tokens(&outside, renames));
+    output
+}
+
+fn rewrite_formula_reference_tokens(formula: &str, renames: &BTreeMap<String, String>) -> String {
+    let characters: Vec<char> = formula.chars().collect();
+    let mut output = String::with_capacity(formula.len());
+    let mut segment_start = 0;
+    for index in 0..characters.len() {
+        if characters[index] != '!' {
+            continue;
+        }
+        let prefix = &characters[segment_start..index];
+        output.push_str(&rewrite_sheet_reference_prefix(prefix, renames));
+        output.push('!');
+        segment_start = index + 1;
+    }
+    output.extend(characters[segment_start..].iter());
+    output
+}
+
+fn rewrite_sheet_reference_prefix(prefix: &[char], renames: &BTreeMap<String, String>) -> String {
+    if prefix.last() == Some(&'\'') {
+        let mut cursor = prefix.len().saturating_sub(1);
+        while cursor > 0 {
+            if prefix[cursor - 1] == '\'' {
+                if cursor >= 2 && prefix[cursor - 2] == '\'' {
+                    cursor -= 2;
+                    continue;
+                }
+                let old_name: String = prefix[cursor..prefix.len() - 1]
+                    .iter()
+                    .collect::<String>()
+                    .replace("''", "'");
+                if let Some(new_name) = renames.get(&old_name) {
+                    let mut result: String = prefix[..cursor - 1].iter().collect();
+                    result.push_str(&render_sheet_reference(new_name));
+                    return result;
+                }
+                break;
+            }
+            cursor -= 1;
+        }
+        return prefix.iter().collect();
+    }
+
+    let mut start = prefix.len();
+    while start > 0 && is_bare_sheet_character(prefix[start - 1]) {
+        start -= 1;
+    }
+    if start == prefix.len() || (start > 0 && prefix[start - 1] == ']') {
+        return prefix.iter().collect();
+    }
+    let old_name: String = prefix[start..].iter().collect();
+    let Some(new_name) = renames.get(&old_name) else {
+        return prefix.iter().collect();
+    };
+    let mut result: String = prefix[..start].iter().collect();
+    result.push_str(&render_sheet_reference(new_name));
+    result
+}
+
+fn is_bare_sheet_character(character: char) -> bool {
+    character.is_alphanumeric() || character == '_' || character == '.'
+}
+
+fn render_sheet_reference(name: &str) -> String {
+    let needs_quotes = name.is_empty()
+        || name
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+        || name
+            .chars()
+            .any(|character| character.is_whitespace() || ":\\/?*[]'".contains(character));
+    if needs_quotes {
+        format!("'{}'", name.replace('\'', "''"))
+    } else {
+        name.to_owned()
+    }
 }
 
 fn normalize_range(value: &str) -> String {
@@ -7206,5 +7371,70 @@ mod tests {
         assert!(cell_value_is_modified("Data", "A1", &operations));
         assert!(cell_formula_is_modified("Data", "A1", &operations));
         assert!(!cell_comment_is_modified("Data", "A1", &operations));
+    }
+}
+
+#[cfg(test)]
+mod phase2_metadata_identity_tests {
+    use super::*;
+    #[test]
+    fn metadata_follows_planned_sheet_identity_but_still_rejects_attribute_changes() -> Result<()> {
+        let plan = ExcelEditPlan {
+            request_id: "rename-metadata".into(),
+            input: "source.xlsx".into(),
+            output: "out.xlsx".into(),
+            format: WorkbookFormat::Xlsx,
+            workbook: crate::WorkbookProfile {
+                format: WorkbookFormat::Xlsx,
+                inventory_complete: true,
+                features_present: Default::default(),
+            },
+            operations: vec![EditOperation::RenameSheet {
+                old_name: "Old".into(),
+                new_name: "New".into(),
+            }],
+            preserve: Default::default(),
+            drop_allowed: Default::default(),
+        };
+        let source = vec![("Old".to_owned(), "landscape")];
+        let order = vec!["Old".to_owned()];
+        assert!(per_sheet_entries_match_for_plan(
+            &source,
+            &[("New".into(), "landscape")],
+            &order,
+            &plan
+        )?);
+        assert!(!per_sheet_entries_match_for_plan(
+            &source,
+            &[("New".into(), "portrait")],
+            &order,
+            &plan
+        )?);
+        assert!(!per_sheet_entries_match_for_plan(
+            &source,
+            &[("Old".into(), "landscape")],
+            &order,
+            &plan
+        )?);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod sheet_rename_formula_reference_tests {
+    use super::rewrite_formula_sheet_references;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn rewrites_direct_quoted_and_bare_references_but_not_string_or_external_data() {
+        let renames = BTreeMap::from([
+            ("Old Data".to_owned(), "New Data".to_owned()),
+            ("OldSheet".to_owned(), "Clean".to_owned()),
+        ]);
+        let formula = "SUM(OldSheet!A1,'Old Data'!$B$2)+\"OldSheet!C3\"+'[Book.xlsx]OldSheet'!D4";
+        assert_eq!(
+            rewrite_formula_sheet_references(formula, &renames),
+            "SUM(Clean!A1,'New Data'!$B$2)+\"OldSheet!C3\"+'[Book.xlsx]OldSheet'!D4"
+        );
     }
 }

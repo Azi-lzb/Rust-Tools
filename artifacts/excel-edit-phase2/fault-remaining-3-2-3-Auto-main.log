@@ -1,0 +1,53 @@
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 16:39
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 数据去重与追加 ------
+  1  按配置检查重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】
+  2  按配置删除重复  【去重追加数据配置：源数据工作簿/源数据工作表/标识列序号】
+  3  按配置去重追加到目标工作簿  【去重追加数据配置：源数据/标识列/目标工作簿/目标工作表】
+  4  去重/追加配置预校验  【去重追加数据配置】
+  0  返回
+----------------------
+子菜单选择> PT-2 开始：PT-2-5 config_append
+PT-2 失败：PT-2-5，提交 0 个目标，实际组件：Rust append planning, Calamine via excel-reader, OOXML workbook profile metadata，ExcelModifier 未调用，Excel writer 未调用，耗时 6.311 秒；运行记录：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-remaining-ym8mwjjm\3-2-3-Auto\日志目录\pytools-dedup-config_append-20261112_165810_647982900.json
+[
+  {
+    "appended_rows": 463,
+    "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\3-2-3-Auto\\输出目录\\dedup-config-append-20261112_165804_328894800\\target_dedup_candidate_20261112_165804_e4aa00f34f3cdedc.xlsx",
+    "duplicate_rows_filtered": 0,
+    "error": "stage=direct_append_candidate: 原有单元格 \"Sheet1\"!A10 未保留",
+    "execution": "failed",
+    "issues": [],
+    "merged_tasks": 0,
+    "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\3-2-3-Auto\\输出目录\\dedup-config-append-20261112_165804_328894800\\dedup-append-20261112_165805_315653600-0.json",
+    "status": "failed",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-ym8mwjjm\\3-2-3-Auto\\target.xlsx",
+    "target_existed": true,
+    "task_ok": 1,
+    "task_skipped": 0
+  }
+]
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 16:39
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
+
+[STDERR]
+[2026-11-12 16:58:10] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 target.xlsx，耗时 4886 ms
+[2026-11-12 16:58:10] [INFO] 运行编号 pytools-2-3-32112-1794473884325527800-0；运行记录：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-remaining-ym8mwjjm\3-2-3-Auto\日志目录\2-3_pytools-2-3-32112-1794473884325527800-0.run.json

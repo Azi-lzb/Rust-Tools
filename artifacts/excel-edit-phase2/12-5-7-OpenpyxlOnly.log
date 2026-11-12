@@ -1,0 +1,379 @@
+{
+  "edit": {
+    "changed_cells": 32,
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+    "matched_sheets": 1,
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\candidate.xlsx",
+    "plan": {
+      "drop_allowed": {},
+      "format": "xlsx",
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+      "operations": [
+        {
+          "cell": "D3",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "18319.429588"
+          }
+        },
+        {
+          "cell": "D4",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "22084.78304799972"
+          }
+        },
+        {
+          "cell": "D5",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-59349.70348400017"
+          }
+        },
+        {
+          "cell": "D6",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "33341.20814499981"
+          }
+        },
+        {
+          "cell": "D7",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "18073.34370700037"
+          }
+        },
+        {
+          "cell": "D8",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-804.5803499999747"
+          }
+        },
+        {
+          "cell": "D9",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-5328.297411999985"
+          }
+        },
+        {
+          "cell": "D10",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-2164.3258789999963"
+          }
+        },
+        {
+          "cell": "D11",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "0"
+          }
+        },
+        {
+          "cell": "D12",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "3028.4899999999907"
+          }
+        },
+        {
+          "cell": "D13",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-481.8954640000011"
+          }
+        },
+        {
+          "cell": "D14",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "719.1366630000011"
+          }
+        },
+        {
+          "cell": "D15",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-4185"
+          }
+        },
+        {
+          "cell": "D16",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "1346.9499999999825"
+          }
+        },
+        {
+          "cell": "D17",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "1909.4274100000039"
+          }
+        },
+        {
+          "cell": "D18",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "7559.433876000003"
+          }
+        },
+        {
+          "cell": "D19",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-713.4199999999983"
+          }
+        },
+        {
+          "cell": "D20",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "2181.0800000000017"
+          }
+        },
+        {
+          "cell": "D21",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "8501.48000000001"
+          }
+        },
+        {
+          "cell": "D22",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-215.2831499999993"
+          }
+        },
+        {
+          "cell": "D23",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-7864.737959999999"
+          }
+        },
+        {
+          "cell": "D24",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "8204.363618000003"
+          }
+        },
+        {
+          "cell": "D25",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "-344.9900000000198"
+          }
+        },
+        {
+          "cell": "D26",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "11578.01000000001"
+          }
+        },
+        {
+          "cell": "D27",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "21672.51000000001"
+          }
+        },
+        {
+          "cell": "D28",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "14919.39000000013"
+          }
+        },
+        {
+          "cell": "D29",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "6241.160000000033"
+          }
+        },
+        {
+          "cell": "D30",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "46.93727599999693"
+          }
+        },
+        {
+          "cell": "D31",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "0"
+          }
+        },
+        {
+          "cell": "D32",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "0"
+          }
+        },
+        {
+          "cell": "D33",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "0"
+          }
+        },
+        {
+          "cell": "D34",
+          "operation": "set_cell_value",
+          "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+          "value": {
+            "type": "decimal",
+            "value": "0"
+          }
+        }
+      ],
+      "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\candidate.xlsx",
+      "preserve": [
+        "cell_values_and_types",
+        "formula_text",
+        "comments_and_positions",
+        "styles",
+        "merged_ranges",
+        "defined_names",
+        "row_and_column_dimensions",
+        "page_settings",
+        "header_footer_text",
+        "relationships",
+        "unmodified_package_parts",
+        "sheet_identity_and_order"
+      ],
+      "request_id": "pytools-adjust-rural-loan",
+      "workbook": {
+        "features_present": [
+          "comments",
+          "merged_cells",
+          "formulas",
+          "relationships",
+          "headers_footers",
+          "calc_chain"
+        ],
+        "format": "xlsx",
+        "inventory_complete": true
+      }
+    },
+    "warnings": []
+  },
+  "execution": {
+    "commit": {
+      "backup_path": null,
+      "cleanup_warning": null,
+      "elapsed_ms": 2567,
+      "operation": "replaced",
+      "sha256_after": "8c5ee0085b408d3123f1602dc9335f6c67dab138355f9bb17bdda1b2894ebc7b",
+      "sha256_before": "0d04d9c303f13ccb67e4fbced541d4f74c03cd3d32dc689351aa946895202431",
+      "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx"
+    },
+    "engine": "openpyxl",
+    "execution": {
+      "attempts": [
+        {
+          "elapsed_ms": 16808,
+          "engine": "openpyxl_worker",
+          "message": "validated output published",
+          "outcome": "succeeded"
+        }
+      ],
+      "elapsed_ms": 16808,
+      "engine": "openpyxl_worker",
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+      "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\.pytools-inplace-3056-1794473236542144100.xlsx",
+      "route_decisions": [
+        {
+          "eligible": true,
+          "engine": "openpyxl_worker",
+          "rejected_reasons": []
+        }
+      ]
+    },
+    "mode": "in_place",
+    "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx"
+  },
+  "summary": {
+    "area_total": 98274.899632,
+    "consistent": true,
+    "error": null,
+    "fill_total": 98274.89963199993,
+    "matched": 32,
+    "previous_only": [],
+    "unmatched_current": []
+  }
+}
+
+[STDERR]
+[2026-11-12 16:47:35] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09. 专项二批次.xlsx，耗时 16808 ms

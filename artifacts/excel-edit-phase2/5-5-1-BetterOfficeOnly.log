@@ -1,0 +1,33 @@
+{
+  "changed_cells": 0,
+  "committed_files": 0,
+  "completed_files": 0,
+  "created_copies": 0,
+  "elapsed_ms": 11452,
+  "failed_files": 1,
+  "feature_id": "PT-7-1",
+  "files": 1,
+  "items": [
+    {
+      "elapsed_ms": 11452,
+      "error": "BetterOffice refuses row/column edits when calcChain is present",
+      "error_stage": "in_place_execution",
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\2026.09 外发用.xlsx",
+      "status": "failed"
+    }
+  ],
+  "matched_sheets": 0,
+  "mode": "in_place",
+  "plan_dir": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\output\\pytools-village-split-20261112_164523_157168200",
+  "planned_files": 0,
+  "run_id": "pytools-pt-7-1-21744-1794473123159025600",
+  "run_log_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\logs\\PT-7-1_pytools-pt-7-1-21744-1794473123159025600.run.json",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\logs\\run-unified\\PT-7-1_pytools-pt-7-1-21744-1794473123159025600.json",
+  "status": "failed"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:45:23.159140500+08:00","phase":"planning","status":"started","user_message":"开始拆分第 1/1 个工作簿中的村镇银行数据","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T16:45:34.609340500+08:00","phase":"planning","status":"completed","user_message":"已完成业务计算并生成工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":11437,"total_elapsed_ms":11450,"components":["pytools-core","excel-reader","calamine"],"actual_engine":"calamine"}
+{"sequence":3,"timestamp":"2026-11-12T16:45:34.610934400+08:00","phase":"plan_persistence","status":"completed","user_message":"已保存工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1,"total_elapsed_ms":11451,"components":["pytools-core"]}
+{"sequence":4,"timestamp":"2026-11-12T16:45:34.611307600+08:00","phase":"in_place_execution","status":"failed","user_message":"工作簿处理失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\2026.09 外发用.xlsx；阶段：in_place_execution；原因：BetterOffice refuses row/column edits when calcChain is present","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":0,"failed_files":1,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":11451,"total_elapsed_ms":11452,"components":["pytools-core"],"error_type":"village_split_stage_error"}

@@ -1,0 +1,52 @@
+{
+  "source": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+  "serialization_only_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-save-diagnostic-vj7_yrxr\\save.xlsx",
+  "A21_before": {
+    "value": "<openpyxl.worksheet.formula.ArrayFormula object at 0x0000019A6526AD20>",
+    "type": "f"
+  },
+  "A21_after": {
+    "value": "<openpyxl.worksheet.formula.ArrayFormula object at 0x0000019A65293200>",
+    "type": "f"
+  },
+  "before": {
+    "xl/worksheets/sheet1.xml": {
+      "pageSetup": [],
+      "pageMargins": [
+        "<ns0:pageMargins xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\" />"
+      ],
+      "printOptions": [],
+      "sheetPr": []
+    },
+    "xl/worksheets/sheet2.xml": {
+      "pageSetup": [],
+      "pageMargins": [
+        "<ns0:pageMargins xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\" />"
+      ],
+      "printOptions": [],
+      "sheetPr": []
+    }
+  },
+  "after": {
+    "xl/worksheets/sheet1.xml": {
+      "pageSetup": [],
+      "pageMargins": [
+        "<ns0:pageMargins xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\" />"
+      ],
+      "printOptions": [],
+      "sheetPr": [
+        "<ns0:sheetPr xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:outlinePr summaryBelow=\"1\" summaryRight=\"1\" /><ns0:pageSetUpPr /></ns0:sheetPr>"
+      ]
+    },
+    "xl/worksheets/sheet2.xml": {
+      "pageSetup": [],
+      "pageMargins": [
+        "<ns0:pageMargins xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\" />"
+      ],
+      "printOptions": [],
+      "sheetPr": [
+        "<ns0:sheetPr xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:outlinePr summaryBelow=\"1\" summaryRight=\"1\" /><ns0:pageSetUpPr /></ns0:sheetPr>"
+      ]
+    }
+  }
+}

@@ -1,0 +1,1435 @@
+[
+  {
+    "menu": "5-2",
+    "mode": "OpenpyxlOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\0-5-2-OpenpyxlOnly\\source.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-2",
+    "mode": "RustNativeOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\1-5-2-RustNativeOnly\\source.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-2",
+    "mode": "UMYAOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\2-5-2-UMYAOnly\\source.xlsx",
+    "values_equal_openpyxl_baseline_exact": false,
+    "values_equal_openpyxl_baseline_semantic": false,
+    "value_differences": [
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A25",
+        "baseline": [
+          "s",
+          "东莞农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "东莞农村商业银行有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A3",
+        "baseline": [
+          "s",
+          "中国农业发展银行"
+        ],
+        "actual": [
+          "s",
+          "农业发展银行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A29",
+        "baseline": [
+          "s",
+          "龙门农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东龙门农村商业银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A22",
+        "baseline": [
+          "s",
+          "广东南粤银行"
+        ],
+        "actual": [
+          "s",
+          "广东南粤银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A26",
+        "baseline": [
+          "s",
+          "惠州农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东惠州农商行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A20",
+        "baseline": [
+          "s",
+          "广东华润银行"
+        ],
+        "actual": [
+          "s",
+          "广东华润银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A21",
+        "baseline": [
+          "s",
+          "东莞银行"
+        ],
+        "actual": [
+          "s",
+          "东莞市商业银行                          "
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(1)惠州市本外币存贷款分机构表",
+        "cell": "A19",
+        "baseline": [
+          "s",
+          "广州银行"
+        ],
+        "actual": [
+          "s",
+          "广州市商业银行                          "
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A25",
+        "baseline": [
+          "s",
+          "东莞农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "东莞农村商业银行有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A3",
+        "baseline": [
+          "s",
+          "中国农业发展银行"
+        ],
+        "actual": [
+          "s",
+          "农业发展银行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A29",
+        "baseline": [
+          "s",
+          "龙门农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东龙门农村商业银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A22",
+        "baseline": [
+          "s",
+          "广东南粤银行"
+        ],
+        "actual": [
+          "s",
+          "广东南粤银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A26",
+        "baseline": [
+          "s",
+          "惠州农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东惠州农商行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A20",
+        "baseline": [
+          "s",
+          "广东华润银行"
+        ],
+        "actual": [
+          "s",
+          "广东华润银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A21",
+        "baseline": [
+          "s",
+          "东莞银行"
+        ],
+        "actual": [
+          "s",
+          "东莞市商业银行                          "
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(4)惠州市人民币存贷款分机构表",
+        "cell": "A19",
+        "baseline": [
+          "s",
+          "广州银行"
+        ],
+        "actual": [
+          "s",
+          "广州市商业银行                          "
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A25",
+        "baseline": [
+          "s",
+          "东莞农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "东莞农村商业银行有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A3",
+        "baseline": [
+          "s",
+          "中国农业发展银行"
+        ],
+        "actual": [
+          "s",
+          "农业发展银行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A29",
+        "baseline": [
+          "s",
+          "龙门农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东龙门农村商业银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A22",
+        "baseline": [
+          "s",
+          "广东南粤银行"
+        ],
+        "actual": [
+          "s",
+          "广东南粤银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A26",
+        "baseline": [
+          "s",
+          "惠州农村商业银行"
+        ],
+        "actual": [
+          "s",
+          "广东惠州农商行"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A20",
+        "baseline": [
+          "s",
+          "广东华润银行"
+        ],
+        "actual": [
+          "s",
+          "广东华润银行股份有限公司"
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A21",
+        "baseline": [
+          "s",
+          "东莞银行"
+        ],
+        "actual": [
+          "s",
+          "东莞市商业银行                          "
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(7)惠州市外汇存贷款分机构表",
+        "cell": "A19",
+        "baseline": [
+          "s",
+          "广州银行"
+        ],
+        "actual": [
+          "s",
+          "广州市商业银行                          "
+        ],
+        "numeric_delta": null
+      }
+    ],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-2",
+    "mode": "BetterOfficeOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\3-5-2-BetterOfficeOnly\\source.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-2",
+    "mode": "Auto",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-remaining-mqiq560j\\4-5-2-Auto\\source.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-7",
+    "mode": "OpenpyxlOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-7",
+    "mode": "RustNativeOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\2026.09. 专项二批次.xlsx",
+    "values_equal_openpyxl_baseline_exact": false,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [
+      {
+        "sheet": "(5)惠州市房地产贷款投向分机构（本外币）",
+        "cell": "BD11",
+        "baseline": [
+          "n",
+          -204.818168
+        ],
+        "actual": [
+          "n",
+          -204.81816800000001
+        ],
+        "numeric_delta": -2.842170943040401e-14
+      },
+      {
+        "sheet": "(13)惠州市中长期贷款按实际投向分机构表（本外币）",
+        "cell": "O6",
+        "baseline": [
+          "n",
+          1007139.619412
+        ],
+        "actual": [
+          "n",
+          1007139.6194120001
+        ],
+        "numeric_delta": 1.1641532182693481e-10
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D10",
+        "baseline": [
+          "n",
+          -2164.325878999996
+        ],
+        "actual": [
+          "n",
+          -2164.3258789999963
+        ],
+        "numeric_delta": -4.547473508864641e-13
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D20",
+        "baseline": [
+          "n",
+          2181.080000000002
+        ],
+        "actual": [
+          "n",
+          2181.0800000000017
+        ],
+        "numeric_delta": -4.547473508864641e-13
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D16",
+        "baseline": [
+          "n",
+          1346.949999999983
+        ],
+        "actual": [
+          "n",
+          1346.9499999999825
+        ],
+        "numeric_delta": -4.547473508864641e-13
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D17",
+        "baseline": [
+          "n",
+          1909.427410000004
+        ],
+        "actual": [
+          "n",
+          1909.4274100000039
+        ],
+        "numeric_delta": -2.2737367544323206e-13
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D12",
+        "baseline": [
+          "n",
+          3028.489999999991
+        ],
+        "actual": [
+          "n",
+          3028.4899999999907
+        ],
+        "numeric_delta": -4.547473508864641e-13
+      }
+    ],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-7",
+    "mode": "UMYAOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\2026.09. 专项二批次.xlsx",
+    "values_equal_openpyxl_baseline_exact": false,
+    "values_equal_openpyxl_baseline_semantic": false,
+    "value_differences": [
+      {
+        "sheet": "(5)惠州市房地产贷款投向分机构（本外币）",
+        "cell": "BD11",
+        "baseline": [
+          "n",
+          -204.818168
+        ],
+        "actual": [
+          "n",
+          -204.81816800000001
+        ],
+        "numeric_delta": -2.842170943040401e-14
+      },
+      {
+        "sheet": "(13)惠州市中长期贷款按实际投向分机构表（本外币）",
+        "cell": "O6",
+        "baseline": [
+          "n",
+          1007139.619412
+        ],
+        "actual": [
+          "n",
+          1007139.6194120001
+        ],
+        "numeric_delta": 1.1641532182693481e-10
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D24",
+        "baseline": [
+          "n",
+          8204.363618000003
+        ],
+        "actual": [
+          "n",
+          3812103.451676
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D6",
+        "baseline": [
+          "n",
+          33341.20814499981
+        ],
+        "actual": [
+          "n",
+          13987467.761496
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D33",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          253901.493666
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D4",
+        "baseline": [
+          "n",
+          22084.78304799972
+        ],
+        "actual": [
+          "n",
+          18652261.37781
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D10",
+        "baseline": [
+          "n",
+          -2164.325878999996
+        ],
+        "actual": [
+          "n",
+          2652766.313251
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D20",
+        "baseline": [
+          "n",
+          2181.080000000002
+        ],
+        "actual": [
+          "n",
+          2297167.96
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D3",
+        "baseline": [
+          "n",
+          18319.429588
+        ],
+        "actual": [
+          "n",
+          1422702.108619
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D8",
+        "baseline": [
+          "n",
+          -804.5803499999747
+        ],
+        "actual": [
+          "n",
+          3400390.602926
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D29",
+        "baseline": [
+          "n",
+          6241.160000000033
+        ],
+        "actual": [
+          "n",
+          846061.35
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D14",
+        "baseline": [
+          "n",
+          719.1366630000011
+        ],
+        "actual": [
+          "n",
+          1777936.610388
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D27",
+        "baseline": [
+          "n",
+          21672.51000000001
+        ],
+        "actual": [
+          "n",
+          1760991.4
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D7",
+        "baseline": [
+          "n",
+          18073.34370700037
+        ],
+        "actual": [
+          "n",
+          17222346.579317
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D16",
+        "baseline": [
+          "n",
+          1346.949999999983
+        ],
+        "actual": [
+          "n",
+          3395953.368727
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D23",
+        "baseline": [
+          "n",
+          -7864.737959999999
+        ],
+        "actual": [
+          "n",
+          1151273.928621
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D28",
+        "baseline": [
+          "n",
+          14919.39000000013
+        ],
+        "actual": [
+          "n",
+          2815469.21
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D25",
+        "baseline": [
+          "n",
+          -344.9900000000198
+        ],
+        "actual": [
+          "n",
+          773632.08
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D34",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          519851.41
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D21",
+        "baseline": [
+          "n",
+          8501.48000000001
+        ],
+        "actual": [
+          "n",
+          1059751.69
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D30",
+        "baseline": [
+          "n",
+          46.93727599999693
+        ],
+        "actual": [
+          "n",
+          128560.651976
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D32",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          61081.182151
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D18",
+        "baseline": [
+          "n",
+          7559.433876000003
+        ],
+        "actual": [
+          "n",
+          871129.722839
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D11",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          443242.392851
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D31",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          151985.029257
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D22",
+        "baseline": [
+          "n",
+          -215.2831499999993
+        ],
+        "actual": [
+          "n",
+          434308.9611
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D9",
+        "baseline": [
+          "n",
+          -5328.297411999985
+        ],
+        "actual": [
+          "n",
+          3645834.022141
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D26",
+        "baseline": [
+          "n",
+          11578.01000000001
+        ],
+        "actual": [
+          "n",
+          5021824.75
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D13",
+        "baseline": [
+          "n",
+          -481.8954640000011
+        ],
+        "actual": [
+          "n",
+          3241781.67671
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D17",
+        "baseline": [
+          "n",
+          1909.427410000004
+        ],
+        "actual": [
+          "n",
+          1923772.390205
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D19",
+        "baseline": [
+          "n",
+          -713.4199999999983
+        ],
+        "actual": [
+          "n",
+          1714076.74
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D12",
+        "baseline": [
+          "n",
+          3028.489999999991
+        ],
+        "actual": [
+          "n",
+          2397574.63
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D15",
+        "baseline": [
+          "n",
+          -4185
+        ],
+        "actual": [
+          "n",
+          2537039
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D5",
+        "baseline": [
+          "n",
+          -59349.70348400017
+        ],
+        "actual": [
+          "n",
+          16141424.46022
+        ],
+        "numeric_delta": null
+      }
+    ],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-7",
+    "mode": "BetterOfficeOnly",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\2026.09. 专项二批次.xlsx",
+    "values_equal_openpyxl_baseline_exact": false,
+    "values_equal_openpyxl_baseline_semantic": false,
+    "value_differences": [
+      {
+        "sheet": "(5)惠州市房地产贷款投向分机构（本外币）",
+        "cell": "BD11",
+        "baseline": [
+          "n",
+          -204.818168
+        ],
+        "actual": [
+          "n",
+          -204.81816800000001
+        ],
+        "numeric_delta": -2.842170943040401e-14
+      },
+      {
+        "sheet": "(13)惠州市中长期贷款按实际投向分机构表（本外币）",
+        "cell": "O6",
+        "baseline": [
+          "n",
+          1007139.619412
+        ],
+        "actual": [
+          "n",
+          1007139.6194120001
+        ],
+        "numeric_delta": 1.1641532182693481e-10
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D24",
+        "baseline": [
+          "n",
+          8204.363618000003
+        ],
+        "actual": [
+          "n",
+          3812103.451676
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D6",
+        "baseline": [
+          "n",
+          33341.20814499981
+        ],
+        "actual": [
+          "n",
+          13987467.761496
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D33",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          253901.493666
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D4",
+        "baseline": [
+          "n",
+          22084.78304799972
+        ],
+        "actual": [
+          "n",
+          18652261.37781
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D10",
+        "baseline": [
+          "n",
+          -2164.325878999996
+        ],
+        "actual": [
+          "n",
+          2652766.313251
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D20",
+        "baseline": [
+          "n",
+          2181.080000000002
+        ],
+        "actual": [
+          "n",
+          2297167.96
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D3",
+        "baseline": [
+          "n",
+          18319.429588
+        ],
+        "actual": [
+          "n",
+          1422702.108619
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D8",
+        "baseline": [
+          "n",
+          -804.5803499999747
+        ],
+        "actual": [
+          "n",
+          3400390.602926
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D29",
+        "baseline": [
+          "n",
+          6241.160000000033
+        ],
+        "actual": [
+          "n",
+          846061.35
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D14",
+        "baseline": [
+          "n",
+          719.1366630000011
+        ],
+        "actual": [
+          "n",
+          1777936.610388
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D27",
+        "baseline": [
+          "n",
+          21672.51000000001
+        ],
+        "actual": [
+          "n",
+          1760991.4
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D7",
+        "baseline": [
+          "n",
+          18073.34370700037
+        ],
+        "actual": [
+          "n",
+          17222346.579317
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D16",
+        "baseline": [
+          "n",
+          1346.949999999983
+        ],
+        "actual": [
+          "n",
+          3395953.368727
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D23",
+        "baseline": [
+          "n",
+          -7864.737959999999
+        ],
+        "actual": [
+          "n",
+          1151273.928621
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D28",
+        "baseline": [
+          "n",
+          14919.39000000013
+        ],
+        "actual": [
+          "n",
+          2815469.21
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D25",
+        "baseline": [
+          "n",
+          -344.9900000000198
+        ],
+        "actual": [
+          "n",
+          773632.08
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D34",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          519851.41
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D21",
+        "baseline": [
+          "n",
+          8501.48000000001
+        ],
+        "actual": [
+          "n",
+          1059751.69
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D30",
+        "baseline": [
+          "n",
+          46.93727599999693
+        ],
+        "actual": [
+          "n",
+          128560.651976
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D32",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          61081.182151
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D18",
+        "baseline": [
+          "n",
+          7559.433876000003
+        ],
+        "actual": [
+          "n",
+          871129.722839
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D11",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          443242.392851
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D31",
+        "baseline": [
+          "n",
+          0
+        ],
+        "actual": [
+          "n",
+          151985.029257
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D22",
+        "baseline": [
+          "n",
+          -215.2831499999993
+        ],
+        "actual": [
+          "n",
+          434308.9611
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D9",
+        "baseline": [
+          "n",
+          -5328.297411999985
+        ],
+        "actual": [
+          "n",
+          3645834.022141
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D26",
+        "baseline": [
+          "n",
+          11578.01000000001
+        ],
+        "actual": [
+          "n",
+          5021824.75
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D13",
+        "baseline": [
+          "n",
+          -481.8954640000011
+        ],
+        "actual": [
+          "n",
+          3241781.67671
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D17",
+        "baseline": [
+          "n",
+          1909.427410000004
+        ],
+        "actual": [
+          "n",
+          1923772.390205
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D19",
+        "baseline": [
+          "n",
+          -713.4199999999983
+        ],
+        "actual": [
+          "n",
+          1714076.74
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D12",
+        "baseline": [
+          "n",
+          3028.489999999991
+        ],
+        "actual": [
+          "n",
+          2397574.63
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D15",
+        "baseline": [
+          "n",
+          -4185
+        ],
+        "actual": [
+          "n",
+          2537039
+        ],
+        "numeric_delta": null
+      },
+      {
+        "sheet": "(18)惠州市-涉农贷款分机构表（月报）",
+        "cell": "D5",
+        "baseline": [
+          "n",
+          -59349.70348400017
+        ],
+        "actual": [
+          "n",
+          16141424.46022
+        ],
+        "numeric_delta": null
+      }
+    ],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-7",
+    "mode": "Auto",
+    "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\2026.09. 专项二批次.xlsx",
+    "values_equal_openpyxl_baseline_exact": true,
+    "values_equal_openpyxl_baseline_semantic": true,
+    "value_differences": [],
+    "styles_equal_original": true,
+    "comments_equal_original": true,
+    "printing_equal_original": true,
+    "row_col_dimensions_equal_original": true,
+    "merges_equal_original": true
+  },
+  {
+    "menu": "5-6",
+    "mode": "OpenpyxlOnly",
+    "imported_values_equal_source": true,
+    "existing_formulas_and_caches_equal": true
+  },
+  {
+    "menu": "5-6",
+    "mode": "Auto",
+    "imported_values_equal_source": true,
+    "existing_formulas_and_caches_equal": true
+  }
+]

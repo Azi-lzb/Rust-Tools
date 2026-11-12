@@ -1,0 +1,1833 @@
+[
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 3010 中国工商银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 3010 中国工商银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 19000,
+    "sha256": "b6ace039d2f995e96b86e97efae79772e74663d75cb03bdbc401c0d169e3c74f",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 3020 中国农业银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 3020 中国农业银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 13091,
+    "sha256": "67c93134a37117beb35c88ff77fe7000e31fef8e60e6cda0610e9892ccccbb43",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 3030 中国银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 3030 中国银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 20418,
+    "sha256": "df590abf89fce1fe70304f450a84a50e55ed8226ea749613f08c463635f45375",
+    "sheets": [
+      "1人民币",
+      "2外币",
+      "Sheet1"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 3040 中国建设银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 3040 中国建设银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 19349,
+    "sha256": "37f3982f72e269334b2ac441d81065eca08de987c487d9a2f978a262a5cf71de",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4010 交通银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4010 交通银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18788,
+    "sha256": "464f06693993569a5275e75d869e0bc991647cbdcac236e52bb217723ee9bac6",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4020 中信银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4020 中信银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 21346,
+    "sha256": "67fb93071b821578aabfb8fccf4c2963449bd646ba330a722864822f78d3ad72",
+    "sheets": [
+      "人民币",
+      "外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4030 中国光大银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4030 中国光大银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 99860,
+    "sha256": "c59596894b1ddf58caa30ecf57e2efa0b0be9ffe29eb6a2df1c01d5579f03c68",
+    "sheets": [
+      "1人民币",
+      "2外币",
+      "Sheet1",
+      "Sheet2"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/externalLinks/externalLink1.xml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml",
+      "xl/externalLinks/_rels/externalLink1.xml.rels"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4060 广发银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4060 广发银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 15185,
+    "sha256": "21f35b16a612d3aeb01e3b9ae7f9dc3f9b38381bf5e1569ff7c2c3306f5a0481",
+    "sheets": [
+      "1人民币 ",
+      "2外币 "
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4070 平安银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4070 平安银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 13157,
+    "sha256": "f7f6fb1083c202e7f8e11b10c1a4a094d3c24c3dc591543a95f9e870189e8105",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4080 招商银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4080 招商银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 20461,
+    "sha256": "5a23eee859df3f4cb9eb605ec196b78a0dfa187ef4eaff555e4809b13cf04579",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 4090 上海浦东发展银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 4090 上海浦东发展银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18166,
+    "sha256": "bd4d2e01e54ca61264983fa914d1a44e361c9a2798419e04460fde2e4662d273",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 40a0 兴业银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 40a0 兴业银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18066,
+    "sha256": "872bf7db4caa7ad95702dc6e209ea2825f3a4c44a005c91596d25380affa4780",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 40c0 中国民生银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 40c0 中国民生银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 20348,
+    "sha256": "b0a7bf8efbf604f6d33c887271a65559585aa899023744e1733b7346a66048aa",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 5k01 广州银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18841,
+    "sha256": "2da5db62aa81998f6ac149d0fe1793b56a0d733090d0a737029650042ed1b4e8",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 5k03 广东华润银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 5k03 广东华润银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 20897,
+    "sha256": "925d958c6388bba37284e7df47c483b5b6051fe2247b4895917d798dcd1a7474",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 5k04 东莞银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 5k04 东莞银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 12969,
+    "sha256": "76b9f4c14a916fbe8ba34223d3bdbb274f05405c6d491713b435e98c2d64c3ea",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 5k05 广东南粤银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 5k05 广东南粤银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 23050,
+    "sha256": "883bd0c57543caa278acb94cf4188b64f8c899fb453167eea9d8b751761861b9",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml",
+      "xl/comments1.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 5k06 广东华兴银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 5k06 广东华兴银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 17883,
+    "sha256": "c5c0ddd064fb62f826d2c5442f8638a87e0e59ad426ef75d2642547975bb7cd3",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 6k04 东莞农村商业银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 6k04 东莞农村商业银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 20229,
+    "sha256": "b6d1b3d6df1797beb8fd9f5fa6844053436d9e44e7c9d441bc02dbb7f538943a",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 6k0i 惠州农村商业银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 6k0i 惠州农村商业银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18798,
+    "sha256": "12570b1eb4473d420e7a6f0a039f2cc8ac7b0de3eb926162256deeaa7f5c68f3",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 7010 中国邮政储蓄银行 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 7010 中国邮政储蓄银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 18483,
+    "sha256": "33d1366b607283af468c2da9d89d75ceba0797fc01fdff1779b2dd2b6b33f3bf",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\2026.09 ck0a TCL财务公司 仲恺区存贷统计月报.xlsx",
+    "relative": "1（1-1，1-2，1-3，1-4）\\2026.09 ck0a TCL财务公司 仲恺区存贷统计月报.xlsx",
+    "bytes": 24245,
+    "sha256": "6d9cd4899ad547981b28110bd7e1a72e6c40c18029fb23caf624f05e96f41e5a",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\1（1-1，1-2，1-3，1-4）\\模板\\统计工具-报表工具(基础数据用)v1.0.4.9 (1).xls",
+    "relative": "1（1-1，1-2，1-3，1-4）\\模板\\统计工具-报表工具(基础数据用)v1.0.4.9 (1).xls",
+    "bytes": 2380800,
+    "sha256": "7bfadd7ad8d00d59fccf422bdd962c87f09b05d41510f60cb8c1fa11930579ed"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+    "relative": "2\\检查重复去重用例.xlsx",
+    "bytes": 30527,
+    "sha256": "8a12003efc9c7390cf4fe61d9802363ffa3516318db934029361004761bc255d",
+    "sheets": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "relative": "2\\目标用例.xlsx",
+    "bytes": 15181,
+    "sha256": "72a8ddd4a7ca6b6b5362fc2e2a1a7d806ac86774aad38223febb77c2c7e9a277",
+    "sheets": [
+      "Sheet1",
+      "五篇大文章分机构"
+    ],
+    "special_parts": [
+      "xl/metadata.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\compare_check1.json",
+    "relative": "3\\compare_check1.json",
+    "bytes": 4531,
+    "sha256": "060871297660f8e967257167ff599f410d7b02d2faea0a10200ae2e43c7f35a9"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\compare_check2.json",
+    "relative": "3\\compare_check2.json",
+    "bytes": 572,
+    "sha256": "483df79b2aa0e7e6934912322eaddcc9c2b38b7068aa810afe348548798d2d4b"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\compare_check3.json",
+    "relative": "3\\compare_check3.json",
+    "bytes": 220,
+    "sha256": "f8c25ceba48ec7efd1570bcb8577427860f6f54c933a512748553b0560a95a43"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\compare_check4.json",
+    "relative": "3\\compare_check4.json",
+    "bytes": 229,
+    "sha256": "fe89081419def3316ba9b1ce8060a82b9b390349b19ab9d785d4761e1042750b"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\config_check.xlsx",
+    "relative": "3\\config_check.xlsx",
+    "bytes": 6190,
+    "sha256": "08a2c5b85d224e6ac09e4d52d1f6b31d4d46bc20bc31eaa53849b6225d596423",
+    "sheets": [
+      "全局配置",
+      "打印配置"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\forensic_diff.py",
+    "relative": "3\\forensic_diff.py",
+    "bytes": 4634,
+    "sha256": "d72f31fc70db866933e37a3ab4dcd2bd589983fbc3fdac5b287c1d45e2815a4e"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check\\3-1-Rust_pytools-3-1-rust-20740-1794381193089607200-0.run.json",
+    "relative": "3\\logs_check\\3-1-Rust_pytools-3-1-rust-20740-1794381193089607200-0.run.json",
+    "bytes": 1093,
+    "sha256": "3a80b59fefe5672b3ec5732d133604633e7799382678364158ccad9e1188ea61"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check\\3-1_pytools-3-1-25736-1794381222427335200-0.run.json",
+    "relative": "3\\logs_check\\3-1_pytools-3-1-25736-1794381222427335200-0.run.json",
+    "bytes": 1060,
+    "sha256": "4ae0acd1c12a6e4493ebbd91ba807cc2144461ab6d960e4ae62d5605a0f7ad31"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check\\run-events\\3-1-Rust_pytools-3-1-rust-20740-1794381193089607200-0.jsonl",
+    "relative": "3\\logs_check\\run-events\\3-1-Rust_pytools-3-1-rust-20740-1794381193089607200-0.jsonl",
+    "bytes": 1601,
+    "sha256": "5520ffda153aae15d42431050a24f6c5f8cb72e9ab3569f4821668672c80048e"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check\\run-events\\3-1_pytools-3-1-25736-1794381222427335200-0.jsonl",
+    "relative": "3\\logs_check\\run-events\\3-1_pytools-3-1-25736-1794381222427335200-0.jsonl",
+    "bytes": 2224,
+    "sha256": "07de13b0731a74a75347c4cc82d07c506baf54ed8602c0b71c6ea1e8e8bc12af"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\3-1-Rust_pytools-3-1-rust-24184-1794381522105954000-0.run.json",
+    "relative": "3\\logs_check2\\3-1-Rust_pytools-3-1-rust-24184-1794381522105954000-0.run.json",
+    "bytes": 1093,
+    "sha256": "0ac41264abb2826808e73577af0f4c6680d498733d136add62f68d32e40cdd6e"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\3-1-Rust_pytools-3-1-rust-26476-1794383306105717000-0.run.json",
+    "relative": "3\\logs_check2\\3-1-Rust_pytools-3-1-rust-26476-1794383306105717000-0.run.json",
+    "bytes": 1093,
+    "sha256": "b7e45b15c80f4d9aadfbd32bc66f78b220b67e6d3e76bf84ba8d40fde902b596"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\3-1-Rust_pytools-3-1-rust-27548-1794381372139408400-0.run.json",
+    "relative": "3\\logs_check2\\3-1-Rust_pytools-3-1-rust-27548-1794381372139408400-0.run.json",
+    "bytes": 1093,
+    "sha256": "12c7a0dcc1b5ae91bdf392d2b73e219941edcc79422cf4783162ac22edb8971d"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\3-1-Rust_pytools-3-1-rust-5524-1794382850847101900-0.run.json",
+    "relative": "3\\logs_check2\\3-1-Rust_pytools-3-1-rust-5524-1794382850847101900-0.run.json",
+    "bytes": 1088,
+    "sha256": "83b6df579ca90f11aaaae85d68d24e945db5db4961514e695483a70ffe09f259"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\3-1_pytools-3-1-27584-1794381399789506500-0.run.json",
+    "relative": "3\\logs_check2\\3-1_pytools-3-1-27584-1794381399789506500-0.run.json",
+    "bytes": 1063,
+    "sha256": "b23876e5356366abc606029c78ad2e8f8d5524c0d93cec0eeb60e8b534e4abdd"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-24184-1794381522105954000-0.jsonl",
+    "relative": "3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-24184-1794381522105954000-0.jsonl",
+    "bytes": 1601,
+    "sha256": "65b62b6547fe3d4aee28756627a9f4c0da84d0ca48ab4cc6c26bb38f2a1b723a"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-26476-1794383306105717000-0.jsonl",
+    "relative": "3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-26476-1794383306105717000-0.jsonl",
+    "bytes": 1601,
+    "sha256": "24cbf739aa68b504b9d63e689b171995dec3590a3777669f18b851ed9f0149e9"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-27548-1794381372139408400-0.jsonl",
+    "relative": "3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-27548-1794381372139408400-0.jsonl",
+    "bytes": 1598,
+    "sha256": "01beb8b08adcb7d5bca7beb6cf99ad6d00840fac6e02416ef046e73ef51630d1"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-5524-1794382850847101900-0.jsonl",
+    "relative": "3\\logs_check2\\run-events\\3-1-Rust_pytools-3-1-rust-5524-1794382850847101900-0.jsonl",
+    "bytes": 1593,
+    "sha256": "9b3f15e36b632c6a946f735dc4a9c7149295b5c9273338685bb875d8bdd7491f"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\logs_check2\\run-events\\3-1_pytools-3-1-27584-1794381399789506500-0.jsonl",
+    "relative": "3\\logs_check2\\run-events\\3-1_pytools-3-1-27584-1794381399789506500-0.jsonl",
+    "bytes": 2224,
+    "sha256": "fbba84bc72e6b4254d7bf284fb08a88d526b74e7485aeee7824b125a2f00dd18"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\惠州市本外币存贷款简表_打印版.xlsx",
+    "relative": "3\\惠州市本外币存贷款简表_打印版.xlsx",
+    "bytes": 10249,
+    "sha256": "1b1fc05c31c67cabe2673de8f56e6c62f71c5c3bc4b5b5b1c76df341eeb858b6",
+    "sheets": [
+      "展示"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\惠州市本外币存贷款简表_打印版_Rust.xlsx",
+    "relative": "3\\惠州市本外币存贷款简表_打印版_Rust.xlsx",
+    "bytes": 10604,
+    "sha256": "299b699d744f3366058a3fc8c3a7ecf329e11d592cd8e814ef3d559c153dbb3f",
+    "sheets": [
+      "展示"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\检查_三币种.xlsx",
+    "relative": "3\\检查_三币种.xlsx",
+    "bytes": 276180,
+    "sha256": "e8fd390a564c2054262f8eb762f818fa5b4a72a627de0e184293074a3619d845",
+    "sheets": [
+      "本外币省信贷收支分地区排名",
+      "人民币省信贷收支分地区排名",
+      "外币省信贷收支分地区排名"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\检查_三币种_Rust.xlsx",
+    "relative": "3\\检查_三币种_Rust.xlsx",
+    "bytes": 260906,
+    "sha256": "aba683e0f1870429187b645422f3a027f4072a7fa295fdb37dbd2176527976ed",
+    "sheets": [
+      "本外币省信贷收支分地区排名",
+      "人民币省信贷收支分地区排名",
+      "外币省信贷收支分地区排名"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\检查_惠州简表.xlsx",
+    "relative": "3\\检查_惠州简表.xlsx",
+    "bytes": 10249,
+    "sha256": "93fb5209193495a1b87eecaa0fe8f443d0e28feb26c6c934a22b605a22b170fa",
+    "sheets": [
+      "展示"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\检查_惠州简表_Rust.xlsx",
+    "relative": "3\\检查_惠州简表_Rust.xlsx",
+    "bytes": 10681,
+    "sha256": "94c3f7ae499642877b51688407a8b1d4eeb13ba16b795f9c148c61f26300b5ea",
+    "sheets": [
+      "展示"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\省信贷收支分地区排名（三币种）_打印版.xlsx",
+    "relative": "3\\省信贷收支分地区排名（三币种）_打印版.xlsx",
+    "bytes": 276179,
+    "sha256": "a59a4b4f7a4fd959a6573da914a9a0b680d78375b1c9c41309da8d8b54401570",
+    "sheets": [
+      "本外币省信贷收支分地区排名",
+      "人民币省信贷收支分地区排名",
+      "外币省信贷收支分地区排名"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\省信贷收支分地区排名（三币种）_打印版_Rust.xlsx",
+    "relative": "3\\省信贷收支分地区排名（三币种）_打印版_Rust.xlsx",
+    "bytes": 258296,
+    "sha256": "49d49067ef9c067b2c89761076fb3293e99dd9bc7a8c7a985ee71eee2715463e",
+    "sheets": [
+      "本外币省信贷收支分地区排名",
+      "人民币省信贷收支分地区排名",
+      "外币省信贷收支分地区排名"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\3\\！省信贷收支一批（简表+排名）20260421.xlsx",
+    "relative": "3\\！省信贷收支一批（简表+排名）20260421.xlsx",
+    "bytes": 7127530,
+    "sha256": "a5ea94f6d21a0afa709e46c270062c219847eff2ee99533a3ae691d137329e74",
+    "sheets": [
+      "展示",
+      "排名广东省银行业金融机构基础指标分地区表",
+      "市信贷收支temp",
+      "本外币省信贷收支分地区排名",
+      "人民币省信贷收支分地区排名",
+      "外币省信贷收支分地区排名",
+      "本外币temp",
+      "人民币temp",
+      "外币temp",
+      "源数据→",
+      "市信贷收支一批",
+      "两项收入",
+      "中外资本外币分地区",
+      "中外资人民币分地区",
+      "中外资外币分地区"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing3.vml",
+      "xl/drawings/vmlDrawing4.vml",
+      "xl/drawings/vmlDrawing5.vml",
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments2.xml",
+      "xl/comments4.xml",
+      "xl/comments3.xml",
+      "xl/comments5.xml",
+      "xl/calcChain.xml",
+      "xl/comments1.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "bytes": 15225,
+    "sha256": "7c13bddd394c2ceb7ef468350f53dc7ba92111136529eecc10dcfb3f707f8512",
+    "sheets": [
+      "ces1",
+      "ces2"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "bytes": 11026,
+    "sha256": "b53c9b3b0e8b4a4e944caedff9156dcfd7defb281534b7b24848eb6fe0ce86a4",
+    "sheets": [
+      "ces1",
+      "ces2"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "bytes": 16896,
+    "sha256": "7fca9b0547a813762ad00aea33b4a40da85a69a055614c9dbce45c3313f960c0",
+    "sheets": [
+      "ces1",
+      "ces2",
+      "Sheet1"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "bytes": 15914,
+    "sha256": "21024d13083712c8b401a4544794ed477511738e78a8e7eacc886236d4b00c7c",
+    "sheets": [
+      "ces1",
+      "ces2"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "bytes": 15520,
+    "sha256": "25feb2854a2239e0bc76365ce8da3a8c0a061a8154cc92b990ffb470595cdc7f",
+    "sheets": [
+      "ces1",
+      "ces2"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "bytes": 18976,
+    "sha256": "1d95bedd3dc2d257ae6c79f8777e2c8b2871af07119cf187e228a70da404c011",
+    "sheets": [
+      "ces1",
+      "ces2"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4030 中国光大银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4030 中国光大银行 测试测试存贷重命名.xlsx",
+    "bytes": 99860,
+    "sha256": "c59596894b1ddf58caa30ecf57e2efa0b0be9ffe29eb6a2df1c01d5579f03c68",
+    "sheets": [
+      "1人民币",
+      "2外币",
+      "Sheet1",
+      "Sheet2"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/externalLinks/externalLink1.xml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml",
+      "xl/externalLinks/_rels/externalLink1.xml.rels"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "bytes": 11635,
+    "sha256": "40e1612c045cd8bf4ba79607c3239d2f27d7061eee3c0349f2773a0709884f42",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "bytes": 13157,
+    "sha256": "f7f6fb1083c202e7f8e11b10c1a4a094d3c24c3dc591543a95f9e870189e8105",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "bytes": 20461,
+    "sha256": "5a23eee859df3f4cb9eb605ec196b78a0dfa187ef4eaff555e4809b13cf04579",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "bytes": 18166,
+    "sha256": "bd4d2e01e54ca61264983fa914d1a44e361c9a2798419e04460fde2e4662d273",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "bytes": 18066,
+    "sha256": "872bf7db4caa7ad95702dc6e209ea2825f3a4c44a005c91596d25380affa4780",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "bytes": 20348,
+    "sha256": "b0a7bf8efbf604f6d33c887271a65559585aa899023744e1733b7346a66048aa",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 5k01 广州银行 1测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 5k01 广州银行 1测试测试存贷重命名.xlsx",
+    "bytes": 18841,
+    "sha256": "2da5db62aa81998f6ac149d0fe1793b56a0d733090d0a737029650042ed1b4e8",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "bytes": 20897,
+    "sha256": "925d958c6388bba37284e7df47c483b5b6051fe2247b4895917d798dcd1a7474",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "bytes": 12969,
+    "sha256": "76b9f4c14a916fbe8ba34223d3bdbb274f05405c6d491713b435e98c2d64c3ea",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "bytes": 23050,
+    "sha256": "883bd0c57543caa278acb94cf4188b64f8c899fb453167eea9d8b751761861b9",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml",
+      "xl/comments1.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "bytes": 17883,
+    "sha256": "c5c0ddd064fb62f826d2c5442f8638a87e0e59ad426ef75d2642547975bb7cd3",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 20229,
+    "sha256": "b6d1b3d6df1797beb8fd9f5fa6844053436d9e44e7c9d441bc02dbb7f538943a",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 18798,
+    "sha256": "12570b1eb4473d420e7a6f0a039f2cc8ac7b0de3eb926162256deeaa7f5c68f3",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "bytes": 18483,
+    "sha256": "33d1366b607283af468c2da9d89d75ceba0797fc01fdff1779b2dd2b6b33f3bf",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "relative": "4\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "bytes": 24245,
+    "sha256": "6d9cd4899ad547981b28110bd7e1a72e6c40c18029fb23caf624f05e96f41e5a",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 3010 中国工商银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 3010 中国工商银行 仲恺区存贷统计月报.xls",
+    "bytes": 36352,
+    "sha256": "63a5254b0b8d9b184a0705dbb576cdd14006c087e28b583a3016468b62962aec"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 3020 中国农业银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 3020 中国农业银行 仲恺区存贷统计月报.xls",
+    "bytes": 19968,
+    "sha256": "6287495986eec1037bccf9c8358e99fe7980282834c9e9c740baf93045b21558"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 3030 中国银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 3030 中国银行 仲恺区存贷统计月报.xls",
+    "bytes": 125440,
+    "sha256": "d7f533a6fc273e589559d690e3d932566256cd91eeff743bb900991f729900f4"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 3040 中国建设银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 3040 中国建设银行 仲恺区存贷统计月报.xls",
+    "bytes": 40960,
+    "sha256": "38a170ed0fbe0649fa855debf3089a53002dc2df7c6edea954e743d217f6f253"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4010 交通银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4010 交通银行 仲恺区存贷统计月报.xls",
+    "bytes": 37376,
+    "sha256": "e12c9add608b7ff1b8076b988b9174b8e8492e8097f26174458130f774ff2fa4"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4020 中信银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4020 中信银行 仲恺区存贷统计月报.xls",
+    "bytes": 38912,
+    "sha256": "517cbae25c794d0bf1e7fbe77080f03356d5354e17c5fa69a7c9dd1e3c45507b"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4030 中国光大银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4030 中国光大银行 仲恺区存贷统计月报.xls",
+    "bytes": 266752,
+    "sha256": "be27e91de4d64eaec2e9a68ea8daf1b3fd5dcc3c64508774a460f881cdfb654f"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4060 广发银行 仲恺区存贷统计月报.xlsx",
+    "relative": "4\\xls2xlsx\\2026.09 4060 广发银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 15185,
+    "sha256": "21f35b16a612d3aeb01e3b9ae7f9dc3f9b38381bf5e1569ff7c2c3306f5a0481",
+    "sheets": [
+      "1人民币 ",
+      "2外币 "
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4070 平安银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4070 平安银行 仲恺区存贷统计月报.xls",
+    "bytes": 27136,
+    "sha256": "8a2aa86588ffda423bf355bfd3d9c59fc759c983d858595d48231fad318a1228"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4080 招商银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4080 招商银行 仲恺区存贷统计月报.xls",
+    "bytes": 48128,
+    "sha256": "ec9081d6bc47f68794f26d624f9a8cdc3d20b732e6e09d3346869a043886a388"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 4090 上海浦东发展银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 4090 上海浦东发展银行 仲恺区存贷统计月报.xls",
+    "bytes": 35840,
+    "sha256": "fa42518465823e68dfdf37d4fac4a35e3da70ef844de9a92bdaff3f34c0443c2"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 40a0 兴业银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 40a0 兴业银行 仲恺区存贷统计月报.xls",
+    "bytes": 35328,
+    "sha256": "104c1c61c5414ad9f624d30bfbcdb64c24c13cf8e2c0d02a7a4fb479d02048f5"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 40c0 中国民生银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 40c0 中国民生银行 仲恺区存贷统计月报.xls",
+    "bytes": 48128,
+    "sha256": "a2645101059bc131ef3e01818214cc491819f37d2bd8898278720e481db5f04e"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 5k01 广州银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 5k01 广州银行 仲恺区存贷统计月报.xls",
+    "bytes": 35328,
+    "sha256": "9a583c3bff9e625fca0ed1d2f234f43c484ea3fcf8e9ee7b9339a1c92ee45c7d"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 5k03 广东华润银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 5k03 广东华润银行 仲恺区存贷统计月报.xls",
+    "bytes": 47616,
+    "sha256": "ee1cc68e026bff01abf2ad21972675e31f66bcf3ef9230b519b242e6a0792fdf"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 5k04 东莞银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 5k04 东莞银行 仲恺区存贷统计月报.xls",
+    "bytes": 25600,
+    "sha256": "4a9d5158774f9bfcc26ffed33fc1f61041c7f9aef930f00b9dfa923db9d1e220"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 5k05 广东南粤银行 仲恺区存贷统计月报.xlsx",
+    "relative": "4\\xls2xlsx\\2026.09 5k05 广东南粤银行 仲恺区存贷统计月报.xlsx",
+    "bytes": 23050,
+    "sha256": "883bd0c57543caa278acb94cf4188b64f8c899fb453167eea9d8b751761861b9",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml",
+      "xl/comments1.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 5k06 广东华兴银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 5k06 广东华兴银行 仲恺区存贷统计月报.xls",
+    "bytes": 36352,
+    "sha256": "71c5e2da36aecb75b8b66d1ed22c425eb8da96377b47de2bb420d0454c4aef15"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 6k04 东莞农村商业银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 6k04 东莞农村商业银行 仲恺区存贷统计月报.xls",
+    "bytes": 46592,
+    "sha256": "5ef8e0937c0223243e0e9e56c87eeff1021ddfa737c188e15738d7bfebb32e25"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 6k0i 惠州农村商业银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 6k0i 惠州农村商业银行 仲恺区存贷统计月报.xls",
+    "bytes": 38912,
+    "sha256": "11120b0e223984fd5dfc1f55d9e7d940d5e60586811b86bdf2567057ff58a3a5"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 7010 中国邮政储蓄银行 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 7010 中国邮政储蓄银行 仲恺区存贷统计月报.xls",
+    "bytes": 36352,
+    "sha256": "712c09cb009ae9c7308b4913001ff2b24d1c646df2594b2ac5d6d5cd752e3498"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xls2xlsx\\2026.09 ck0a TCL财务公司 仲恺区存贷统计月报.xls",
+    "relative": "4\\xls2xlsx\\2026.09 ck0a TCL财务公司 仲恺区存贷统计月报.xls",
+    "bytes": 45568,
+    "sha256": "fe1fce062209765cde3aa59dc4948d4b25dc9c5aedf227d1bc547ae3a6dbe6af"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "bytes": 14935,
+    "sha256": "528e58a335fa62b0e973674baea289c0f5ba19d73c7d8e111eb893a544d383c6",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "bytes": 10941,
+    "sha256": "c57ac10b064060043507832f5065a9c587bf14567a88ed07d8e46ac6a2ae26df",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "bytes": 16582,
+    "sha256": "598c6bf12705b3dd86868a0b3031197dcd2ee47097674c0a54d53254f7bdcdf7",
+    "sheets": [
+      "ces12",
+      "ces22",
+      "Sheet1"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "bytes": 15633,
+    "sha256": "c862281a35fc631443b889397806273a5574e36931f2de4917cec9963cda6e12",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "bytes": 15232,
+    "sha256": "774108ae74e6a9447c36522ec05b4ddc8fd71b0a3fec46540931d034bf731415",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "bytes": 18749,
+    "sha256": "54bc224bfc2f1d646bf52e075a591f6d09a2e3dd98f9b00a3475a51f50d18c6f",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "bytes": 10275,
+    "sha256": "e9879cae513639a5844be649168a7dcb00803643e64d5edf01703434e4421780",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "bytes": 11051,
+    "sha256": "c823e34572b96d21906932905fc085765bab8a2011e28ea1e4f2a1aad9f2955b",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "bytes": 15599,
+    "sha256": "e5cd721dc4907b654631680e96cd422ed6777320bea1e7409f14a421fdbb0ad8",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "bytes": 14931,
+    "sha256": "aad6729474ad77c2eb75aaa7854e4be772ea74c0e9d4bc71b31930a20d0c1a55",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "bytes": 14862,
+    "sha256": "073e10aabdc1553d69e26014762650743b9cd05e92a550f1139c5f7a4916b62a",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "bytes": 15627,
+    "sha256": "186daea49b02cd5fabc3d581ec315f83f745d6e8534402f2c9cf77870edfdfec",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 5k01 广州银行ggg 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 5k01 广州银行ggg 测试测试存贷重命名.xlsx",
+    "bytes": 15008,
+    "sha256": "4adb230d973481f29979a9da6310cb946a775f5c6c99ef2919cde3ed93b1cd00",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "bytes": 16121,
+    "sha256": "ff97353a1e950467d3d349a7619533418ffe19401022086c56250ab57e2e19c7",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "bytes": 11025,
+    "sha256": "ca6b960ebf346ed7119be54343e7a93881d10f415df4a70a406315ada3e64e86",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "bytes": 15472,
+    "sha256": "b5cf075ee8cafe3280df8a59332c267b502b88663fbdc88fcbad6633d639cff8",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "bytes": 14649,
+    "sha256": "cbe5d2510412828a42afcb91abe47e019cd42ed3566a3af1faf4fdad3b9b3d78",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 15302,
+    "sha256": "6f26cea5a548dc5da0e9bf4ec72c7b881678256c846ced39d0dbf42ad8f1f647",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 14951,
+    "sha256": "384778c98ac8420077ba32d54aeecbfd6f54454a2c08fef88404f5b89fdc0a23",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "bytes": 14788,
+    "sha256": "377cda1d6fee9319033e30e56e3546ae9f10bfb07b7795f87ad618eac7265d8a",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "bytes": 20346,
+    "sha256": "d11c97dc19b5dac3ef019ee7bcd2f1102336ab2d93f6876cb34f2f935a884872",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 3010 中国工商银行 测试测试存贷重命名.xlsx",
+    "bytes": 14935,
+    "sha256": "528e58a335fa62b0e973674baea289c0f5ba19d73c7d8e111eb893a544d383c6",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 3020 中国农业银行 测试测试存贷重命名.xlsx",
+    "bytes": 10941,
+    "sha256": "c57ac10b064060043507832f5065a9c587bf14567a88ed07d8e46ac6a2ae26df",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 3030 中国银行 测试测试存贷重命名.xlsx",
+    "bytes": 16582,
+    "sha256": "598c6bf12705b3dd86868a0b3031197dcd2ee47097674c0a54d53254f7bdcdf7",
+    "sheets": [
+      "ces12",
+      "ces22",
+      "Sheet1"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 3040 中国建设银行 测试测试存贷重命名.xlsx",
+    "bytes": 15633,
+    "sha256": "c862281a35fc631443b889397806273a5574e36931f2de4917cec9963cda6e12",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4010 交通银行 测试测试存贷重命名.xlsx",
+    "bytes": 15232,
+    "sha256": "774108ae74e6a9447c36522ec05b4ddc8fd71b0a3fec46540931d034bf731415",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4020 中信银行 测试测试存贷重命名.xlsx",
+    "bytes": 18749,
+    "sha256": "54bc224bfc2f1d646bf52e075a591f6d09a2e3dd98f9b00a3475a51f50d18c6f",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4060 广发银行 测试测试存贷重命名.xlsx",
+    "bytes": 10275,
+    "sha256": "e9879cae513639a5844be649168a7dcb00803643e64d5edf01703434e4421780",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4070 平安银行 测试测试存贷重命名.xlsx",
+    "bytes": 11051,
+    "sha256": "c823e34572b96d21906932905fc085765bab8a2011e28ea1e4f2a1aad9f2955b",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4080 招商银行 测试测试存贷重命名.xlsx",
+    "bytes": 15599,
+    "sha256": "e5cd721dc4907b654631680e96cd422ed6777320bea1e7409f14a421fdbb0ad8",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 4090 上海浦东发展银行 测试测试存贷重命名.xlsx",
+    "bytes": 14931,
+    "sha256": "aad6729474ad77c2eb75aaa7854e4be772ea74c0e9d4bc71b31930a20d0c1a55",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 40a0 兴业银行 测试测试存贷重命名.xlsx",
+    "bytes": 14862,
+    "sha256": "073e10aabdc1553d69e26014762650743b9cd05e92a550f1139c5f7a4916b62a",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 40c0 中国民生银行 测试测试存贷重命名.xlsx",
+    "bytes": 15627,
+    "sha256": "186daea49b02cd5fabc3d581ec315f83f745d6e8534402f2c9cf77870edfdfec",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 5k01 广州银行ggg 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 5k01 广州银行ggg 测试测试存贷重命名.xlsx",
+    "bytes": 15008,
+    "sha256": "4adb230d973481f29979a9da6310cb946a775f5c6c99ef2919cde3ed93b1cd00",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 5k03 广东华润银行 测试测试存贷重命名.xlsx",
+    "bytes": 16121,
+    "sha256": "ff97353a1e950467d3d349a7619533418ffe19401022086c56250ab57e2e19c7",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 5k04 东莞银行 测试测试存贷重命名.xlsx",
+    "bytes": 11025,
+    "sha256": "ca6b960ebf346ed7119be54343e7a93881d10f415df4a70a406315ada3e64e86",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": []
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 5k05 广东南粤银行 测试测试存贷重命名.xlsx",
+    "bytes": 15472,
+    "sha256": "b5cf075ee8cafe3280df8a59332c267b502b88663fbdc88fcbad6633d639cff8",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 5k06 广东华兴银行 测试测试存贷重命名.xlsx",
+    "bytes": 14649,
+    "sha256": "cbe5d2510412828a42afcb91abe47e019cd42ed3566a3af1faf4fdad3b9b3d78",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 6k04 东莞农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 15302,
+    "sha256": "6f26cea5a548dc5da0e9bf4ec72c7b881678256c846ced39d0dbf42ad8f1f647",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 6k0i 惠州农村商业银行 测试测试存贷重命名.xlsx",
+    "bytes": 14951,
+    "sha256": "384778c98ac8420077ba32d54aeecbfd6f54454a2c08fef88404f5b89fdc0a23",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 7010 中国邮政储蓄银行 测试测试存贷重命名.xlsx",
+    "bytes": 14788,
+    "sha256": "377cda1d6fee9319033e30e56e3546ae9f10bfb07b7795f87ad618eac7265d8a",
+    "sheets": [
+      "ces12",
+      "ces22"
+    ],
+    "special_parts": [
+      "xl/comments/comment1.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/comments/comment2.xml",
+      "xl/drawings/commentsDrawing2.vml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\4\\xlsx\\202601\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "relative": "4\\xlsx\\202601\\2026.1 ck0a TCL财务公司 测试测试存贷重命名.xlsx",
+    "bytes": 20346,
+    "sha256": "d11c97dc19b5dac3ef019ee7bcd2f1102336ab2d93f6876cb34f2f935a884872",
+    "sheets": [
+      "1人民币",
+      "2外币"
+    ],
+    "special_parts": [
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/calcChain.xml"
+    ]
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2025.09 商业银行共享一批.xls",
+    "relative": "5\\2025.09 商业银行共享一批.xls",
+    "bytes": 1750016,
+    "sha256": "f3cbf034b52e127a2154fbdd7c8154c6a3d3a9708beee2f4de9de69d8175f05c"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 全金融机构总行表.xls",
+    "relative": "5\\2026.09 全金融机构总行表.xls",
+    "bytes": 98816,
+    "sha256": "a95f13a207abb68dc021ed6ef0f0edfe03db3abf79e7ab19d9f4b3d29ea2fa4c"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 商业银行共享一批.xls",
+    "relative": "5\\2026.09 商业银行共享一批.xls",
+    "bytes": 1769472,
+    "sha256": "ec70d759d09bec02fa578386311fd775a3d97171eb65d0bfa46867d09316e8af"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 外发用.xls",
+    "relative": "5\\2026.09 外发用.xls",
+    "bytes": 95232,
+    "sha256": "54b0df7df961562bfcef9f9d5d25e21fb6666ccbd8c46091f0c263de48498fe9"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\2026.09 本外币.xls",
+    "relative": "5\\2026.09 本外币.xls",
+    "bytes": 301056,
+    "sha256": "eb484ec7b95caa7d92e4a03d517b9032943b6413428e4a0c29d9bcca01b1cb7b"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\5-7\\2026.08. 专项二批次.xls",
+    "relative": "5\\5-7\\2026.08. 专项二批次.xls",
+    "bytes": 444416,
+    "sha256": "637c6b533f1954d1e43604129f8f18ccee59f882498d7b832ae3811371c872be"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\5\\5-7\\2026.09. 专项二批次.xls",
+    "relative": "5\\5-7\\2026.09. 专项二批次.xls",
+    "bytes": 443392,
+    "sha256": "3b656c99a156746d717ea2fd1bf511139f650b2fd78f9e2cbdb6bc9ec20c2e22"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\image.png",
+    "relative": "image.png",
+    "bytes": 156805,
+    "sha256": "8b9a2f24447c9926f69c69fb4474bcead4c742b536ebc4225d2304a10acd7536"
+  },
+  {
+    "path": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\image2.png",
+    "relative": "image2.png",
+    "bytes": 156852,
+    "sha256": "0f2a38b7ddd99bad6e649e08b3bd9345754c8c76cdc9df7a4d6b4cc8417070fe"
+  }
+]

@@ -1,0 +1,1209 @@
+[
+  {
+    "menu": "5-1",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 本外币.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet11.xml",
+      "xl/worksheets/sheet12.xml",
+      "xl/worksheets/sheet13.xml",
+      "xl/worksheets/sheet14.xml",
+      "xl/worksheets/sheet15.xml",
+      "xl/worksheets/sheet16.xml",
+      "xl/worksheets/sheet17.xml",
+      "xl/worksheets/sheet18.xml",
+      "xl/worksheets/sheet19.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet20.xml",
+      "xl/worksheets/sheet21.xml",
+      "xl/worksheets/sheet22.xml",
+      "xl/worksheets/sheet23.xml",
+      "xl/worksheets/sheet24.xml",
+      "xl/worksheets/sheet25.xml",
+      "xl/worksheets/sheet26.xml",
+      "xl/worksheets/sheet27.xml",
+      "xl/worksheets/sheet28.xml",
+      "xl/worksheets/sheet29.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet30.xml",
+      "xl/worksheets/sheet31.xml",
+      "xl/worksheets/sheet32.xml",
+      "xl/worksheets/sheet33.xml",
+      "xl/worksheets/sheet34.xml",
+      "xl/worksheets/sheet35.xml",
+      "xl/worksheets/sheet36.xml",
+      "xl/worksheets/sheet37.xml",
+      "xl/worksheets/sheet38.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 38,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\0-5-1-OpenpyxlOnly.log",
+    "engine_lines": [
+      "[2026-11-12 16:43:38] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09 本外币.xlsx，耗时 17277 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164306_820572300\\target-0001.plan.json"
+    ],
+    "reported_status": "succeeded",
+    "reported_items": [
+      {
+        "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\output\\2026.09 本外币_village_split_cc8b8316.xlsx",
+        "changed_cells": 20,
+        "elapsed_ms": 31226,
+        "execution": {
+          "commit": {
+            "backup_path": null,
+            "cleanup_warning": null,
+            "elapsed_ms": 1866,
+            "operation": "replaced",
+            "sha256_after": "2fb49e16b736f3a389a584f182304576be88e51d3f79bad005086125d9a2249a",
+            "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+            "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx"
+          },
+          "engine": "openpyxl",
+          "execution": {
+            "attempts": [
+              {
+                "elapsed_ms": 17277,
+                "engine": "openpyxl_worker",
+                "message": "validated output published",
+                "outcome": "succeeded"
+              }
+            ],
+            "elapsed_ms": 17277,
+            "engine": "openpyxl_worker",
+            "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx",
+            "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\.pytools-inplace-32556-1794472998903476500.xlsx",
+            "route_decisions": [
+              {
+                "eligible": true,
+                "engine": "openpyxl_worker",
+                "rejected_reasons": []
+              }
+            ]
+          },
+          "mode": "in_place",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx"
+        },
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx",
+        "matched_sheets": 0,
+        "output_copy": null,
+        "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164306_820572300\\target-0001.plan.json",
+        "status": "committed",
+        "target_commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 1866,
+          "operation": "replaced",
+          "sha256_after": "2fb49e16b736f3a389a584f182304576be88e51d3f79bad005086125d9a2249a",
+          "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\0-5-1-OpenpyxlOnly\\2026.09 本外币.xlsx"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\1-5-1-OpenpyxlOnly.log",
+    "engine_lines": [
+      "[2026-11-12 16:44:00] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 5527 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164343_060733300\\target-0001.plan.json"
+    ],
+    "reported_status": "succeeded",
+    "reported_items": [
+      {
+        "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\2026.09 外发用_village_split_134b97be.xlsx",
+        "changed_cells": 60,
+        "elapsed_ms": 17283,
+        "execution": {
+          "commit": {
+            "backup_path": null,
+            "cleanup_warning": null,
+            "elapsed_ms": 403,
+            "operation": "replaced",
+            "sha256_after": "f359891e0c48abde9a7a41d52e2a0f5d2220d85b8e525d9caca5054a9e9fc589",
+            "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+            "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+          },
+          "engine": "openpyxl",
+          "execution": {
+            "attempts": [
+              {
+                "elapsed_ms": 5527,
+                "engine": "openpyxl_worker",
+                "message": "validated output published",
+                "outcome": "succeeded"
+              }
+            ],
+            "elapsed_ms": 5527,
+            "engine": "openpyxl_worker",
+            "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx",
+            "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\.pytools-inplace-33696-1794473034412031600.xlsx",
+            "route_decisions": [
+              {
+                "eligible": true,
+                "engine": "openpyxl_worker",
+                "rejected_reasons": []
+              }
+            ]
+          },
+          "mode": "in_place",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+        },
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx",
+        "matched_sheets": 0,
+        "output_copy": null,
+        "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164343_060733300\\target-0001.plan.json",
+        "status": "committed",
+        "target_commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 403,
+          "operation": "replaced",
+          "sha256_after": "f359891e0c48abde9a7a41d52e2a0f5d2220d85b8e525d9caca5054a9e9fc589",
+          "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 本外币.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\2026.09 本外币.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\2026.09 本外币.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 38,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\2-5-1-UMYAOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\output\\pytools-village-split-20261112_164404_645090000\\target-0001.plan.json"
+    ],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 38434,
+        "error": "OutputValidationFailed: backend output validation failed: openpyxl changed preserved column dimensions on worksheet \"(0)惠州市全金融机构（含外资）本外币信贷收支表\"",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\2026.09 本外币.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\3-5-1-UMYAOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\output\\pytools-village-split-20261112_164447_787072600\\target-0001.plan.json"
+    ],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 17233,
+        "error": "OutputValidationFailed: backend output validation failed: openpyxl changed workbook defined names after worksheet-scope normalization; missing=1, added_or_changed=1",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\3-5-1-UMYAOnly\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "BetterOfficeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 本外币.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\2026.09 本外币.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\2026.09 本外币.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 38,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\4-5-1-BetterOfficeOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\output\\pytools-village-split-20261112_164509_209689000\\target-0001.plan.json"
+    ],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 11728,
+        "error": "BetterOffice refuses row/column edits when calcChain is present",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\4-5-1-BetterOfficeOnly\\2026.09 本外币.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "BetterOfficeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\5-5-1-BetterOfficeOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\output\\pytools-village-split-20261112_164523_157168200\\target-0001.plan.json"
+    ],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 11452,
+        "error": "BetterOffice refuses row/column edits when calcChain is present",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\5-5-1-BetterOfficeOnly\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 本外币.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet11.xml",
+      "xl/worksheets/sheet12.xml",
+      "xl/worksheets/sheet13.xml",
+      "xl/worksheets/sheet14.xml",
+      "xl/worksheets/sheet15.xml",
+      "xl/worksheets/sheet16.xml",
+      "xl/worksheets/sheet17.xml",
+      "xl/worksheets/sheet18.xml",
+      "xl/worksheets/sheet19.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet20.xml",
+      "xl/worksheets/sheet21.xml",
+      "xl/worksheets/sheet22.xml",
+      "xl/worksheets/sheet23.xml",
+      "xl/worksheets/sheet24.xml",
+      "xl/worksheets/sheet25.xml",
+      "xl/worksheets/sheet26.xml",
+      "xl/worksheets/sheet27.xml",
+      "xl/worksheets/sheet28.xml",
+      "xl/worksheets/sheet29.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet30.xml",
+      "xl/worksheets/sheet31.xml",
+      "xl/worksheets/sheet32.xml",
+      "xl/worksheets/sheet33.xml",
+      "xl/worksheets/sheet34.xml",
+      "xl/worksheets/sheet35.xml",
+      "xl/worksheets/sheet36.xml",
+      "xl/worksheets/sheet37.xml",
+      "xl/worksheets/sheet38.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 38,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\6-5-1-Auto.log",
+    "engine_lines": [
+      "[2026-11-12 16:46:06] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 2026.09 本外币.xlsx，耗时 16268 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\pytools-village-split-20261112_164536_594316500\\target-0001.plan.json"
+    ],
+    "reported_status": "succeeded",
+    "reported_items": [
+      {
+        "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\2026.09 本外币_village_split_055c4071.xlsx",
+        "changed_cells": 20,
+        "elapsed_ms": 30087,
+        "execution": {
+          "commit": {
+            "backup_path": null,
+            "cleanup_warning": null,
+            "elapsed_ms": 1946,
+            "operation": "replaced",
+            "sha256_after": "68f0da05abbf76e852bc9754a4244772b88c160ae305b417d8e8b66571aa2ae1",
+            "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+            "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+          },
+          "engine": "openpyxl",
+          "execution": {
+            "attempts": [
+              {
+                "elapsed_ms": 16268,
+                "engine": "openpyxl_worker",
+                "message": "validated output published",
+                "outcome": "succeeded"
+              }
+            ],
+            "elapsed_ms": 16268,
+            "engine": "openpyxl_worker",
+            "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx",
+            "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\.pytools-inplace-7620-1794473148467121800.xlsx",
+            "route_decisions": [
+              {
+                "eligible": true,
+                "engine": "openpyxl_worker",
+                "rejected_reasons": []
+              }
+            ]
+          },
+          "mode": "in_place",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+        },
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx",
+        "matched_sheets": 0,
+        "output_copy": null,
+        "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\output\\pytools-village-split-20261112_164536_594316500\\target-0001.plan.json",
+        "status": "committed",
+        "target_commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 1946,
+          "operation": "replaced",
+          "sha256_after": "68f0da05abbf76e852bc9754a4244772b88c160ae305b417d8e8b66571aa2ae1",
+          "sha256_before": "a26a4dd5590d77a4aec012e073185f30083a4a296813155baa9189a597086333",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\6-5-1-Auto\\2026.09 本外币.xlsx"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  {
+    "menu": "5-1",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx",
+    "command": [
+      "village-split",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 商业银行共享一批.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2025.09 商业银行共享一批.xlsx",
+      "--in-place",
+      "openpyxl",
+      "--log-view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\7-5-1-Auto.log",
+    "engine_lines": [
+      "[2026-11-12 16:46:26] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 5294 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\output\\pytools-village-split-20261112_164608_978993900\\target-0001.plan.json"
+    ],
+    "reported_status": "succeeded",
+    "reported_items": [
+      {
+        "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\output\\2026.09 外发用_village_split_6aee686d.xlsx",
+        "changed_cells": 60,
+        "elapsed_ms": 17175,
+        "execution": {
+          "commit": {
+            "backup_path": null,
+            "cleanup_warning": null,
+            "elapsed_ms": 410,
+            "operation": "replaced",
+            "sha256_after": "f767bbc5b62c3baa77ca407987a1aa726c8553f44a9d840e6b4219376a47290b",
+            "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+            "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx"
+          },
+          "engine": "openpyxl",
+          "execution": {
+            "attempts": [
+              {
+                "elapsed_ms": 5293,
+                "engine": "openpyxl_worker",
+                "message": "validated output published",
+                "outcome": "succeeded"
+              }
+            ],
+            "elapsed_ms": 5294,
+            "engine": "openpyxl_worker",
+            "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx",
+            "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\.pytools-inplace-34352-1794473180449693600.xlsx",
+            "route_decisions": [
+              {
+                "eligible": true,
+                "engine": "openpyxl_worker",
+                "rejected_reasons": []
+              }
+            ]
+          },
+          "mode": "in_place",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx"
+        },
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx",
+        "matched_sheets": 0,
+        "output_copy": null,
+        "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\output\\pytools-village-split-20261112_164608_978993900\\target-0001.plan.json",
+        "status": "committed",
+        "target_commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 410,
+          "operation": "replaced",
+          "sha256_after": "f767bbc5b62c3baa77ca407987a1aa726c8553f44a9d840e6b4219376a47290b",
+          "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\7-5-1-Auto\\2026.09 外发用.xlsx"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  {
+    "menu": "5-4",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\8-5-4-OpenpyxlOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\8-5-4-OpenpyxlOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\8-5-4-OpenpyxlOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\8-5-4-OpenpyxlOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\8-5-4-OpenpyxlOnly.log",
+    "engine_lines": [
+      "[2026-11-12 16:46:38] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 10718 ms"
+    ],
+    "plan_files": [],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 10861,
+        "error": "the configured ExcelEditPlan route failed; manual mode does not switch engines: validate routed FX header candidate: candidate ZIP part count differs from source",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\8-5-4-OpenpyxlOnly\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-4",
+    "mode": "RustNativeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\9-5-4-RustNativeOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\9-5-4-RustNativeOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\9-5-4-RustNativeOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\9-5-4-RustNativeOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\9-5-4-RustNativeOnly.log",
+    "engine_lines": [],
+    "plan_files": [],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 4448,
+        "error": "the configured ExcelEditPlan route failed; manual mode does not switch engines: ExcelEditPlan FX 页眉路由执行失败: OutputValidationFailed: backend output validation failed: candidate contains an unexpected change in ZIP part xl/worksheets/sheet8.xml",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\9-5-4-RustNativeOnly\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-4",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\10-5-4-UMYAOnly.log",
+    "engine_lines": [],
+    "plan_files": [],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 797,
+        "error": "the configured ExcelEditPlan route failed; manual mode does not switch engines: ExcelEditPlan FX 页眉路由执行失败: BackendFailed: backend failed; automatic fallback stopped: apply ReplaceHeaderText: header replacement must use the namespace-aware OOXML header backend",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-4",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09 外发用.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\11-5-4-Auto\\2026.09 外发用.xlsx",
+    "command": [
+      "fx-header",
+      "--in-place",
+      "openpyxl",
+      "--view",
+      "developer",
+      "--output-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\11-5-4-Auto\\output",
+      "--log-dir",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\11-5-4-Auto\\logs",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\11-5-4-Auto\\2026.09 外发用.xlsx"
+    ],
+    "exit": 0,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 10,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\11-5-4-Auto.log",
+    "engine_lines": [
+      "[2026-11-12 16:47:09] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 15047 ms"
+    ],
+    "plan_files": [],
+    "reported_status": "failed",
+    "reported_items": [
+      {
+        "elapsed_ms": 15190,
+        "error": "the configured ExcelEditPlan route failed; manual mode does not switch engines: validate routed FX header candidate: candidate ZIP part count differs from source",
+        "error_stage": "in_place_execution",
+        "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\11-5-4-Auto\\2026.09 外发用.xlsx",
+        "status": "failed"
+      }
+    ]
+  },
+  {
+    "menu": "5-7",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+    "command": [
+      "rural-loan-plan",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\2026.09. 专项二批次.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "--output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\candidate.xlsx",
+      "--plan-output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\plan.json",
+      "--in-place",
+      "openpyxl"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/comments/comment1.xml",
+      "xl/comments/comment2.xml",
+      "xl/comments/comment3.xml",
+      "xl/comments/comment4.xml",
+      "xl/comments/comment5.xml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/comments3.xml",
+      "xl/comments4.xml",
+      "xl/comments5.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/drawings/commentsDrawing2.vml",
+      "xl/drawings/commentsDrawing3.vml",
+      "xl/drawings/commentsDrawing4.vml",
+      "xl/drawings/commentsDrawing5.vml",
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/drawings/vmlDrawing3.vml",
+      "xl/drawings/vmlDrawing4.vml",
+      "xl/drawings/vmlDrawing5.vml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/_rels/sheet10.xml.rels",
+      "xl/worksheets/_rels/sheet11.xml.rels",
+      "xl/worksheets/_rels/sheet12.xml.rels",
+      "xl/worksheets/_rels/sheet18.xml.rels",
+      "xl/worksheets/_rels/sheet20.xml.rels",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet11.xml",
+      "xl/worksheets/sheet12.xml",
+      "xl/worksheets/sheet13.xml",
+      "xl/worksheets/sheet14.xml",
+      "xl/worksheets/sheet15.xml",
+      "xl/worksheets/sheet16.xml",
+      "xl/worksheets/sheet17.xml",
+      "xl/worksheets/sheet18.xml",
+      "xl/worksheets/sheet19.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet20.xml",
+      "xl/worksheets/sheet21.xml",
+      "xl/worksheets/sheet22.xml",
+      "xl/worksheets/sheet23.xml",
+      "xl/worksheets/sheet24.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 24,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\12-5-7-OpenpyxlOnly.log",
+    "engine_lines": [
+      "[2026-11-12 16:47:35] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09. 专项二批次.xlsx，耗时 16808 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\12-5-7-OpenpyxlOnly\\plan.json"
+    ],
+    "reported_status": null,
+    "reported_items": []
+  },
+  {
+    "menu": "5-7",
+    "mode": "RustNativeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\2026.09. 专项二批次.xlsx",
+    "command": [
+      "rural-loan-plan",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\2026.09. 专项二批次.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "--output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\candidate.xlsx",
+      "--plan-output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\plan.json",
+      "--in-place",
+      "openpyxl"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "xl/worksheets/sheet19.xml"
+    ],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 24,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\13-5-7-RustNativeOnly.log",
+    "engine_lines": [
+      "[2026-11-12 16:48:02] [INFO] ExcelEditPlan 路由：模式 RustNativeOnly，引擎 rust_native_ooxml，文件 2026.09. 专项二批次.xlsx，耗时 17140 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\13-5-7-RustNativeOnly\\plan.json"
+    ],
+    "reported_status": null,
+    "reported_items": []
+  },
+  {
+    "menu": "5-7",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\2026.09. 专项二批次.xlsx",
+    "command": [
+      "rural-loan-plan",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\2026.09. 专项二批次.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "--output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\candidate.xlsx",
+      "--plan-output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\plan.json",
+      "--in-place",
+      "openpyxl"
+    ],
+    "exit": 2,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 24,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\14-5-7-UMYAOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\14-5-7-UMYAOnly\\plan.json"
+    ],
+    "reported_status": "inspect_terminal_log"
+  },
+  {
+    "menu": "5-7",
+    "mode": "BetterOfficeOnly",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\2026.09. 专项二批次.xlsx",
+    "command": [
+      "rural-loan-plan",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\2026.09. 专项二批次.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "--output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\candidate.xlsx",
+      "--plan-output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\plan.json",
+      "--in-place",
+      "openpyxl"
+    ],
+    "exit": 2,
+    "changed": false,
+    "staged_input_unchanged": true,
+    "changed_parts": [],
+    "formula_and_cache_equal": true,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 24,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\15-5-7-BetterOfficeOnly.log",
+    "engine_lines": [],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\15-5-7-BetterOfficeOnly\\plan.json"
+    ],
+    "reported_status": "inspect_terminal_log"
+  },
+  {
+    "menu": "5-7",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.09. 专项二批次.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\2026.09. 专项二批次.xlsx",
+    "command": [
+      "rural-loan-plan",
+      "--current",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\2026.09. 专项二批次.xlsx",
+      "--previous",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-w7w2ro96\\xlsx\\2026.08. 专项二批次.xlsx",
+      "--output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\candidate.xlsx",
+      "--plan-output",
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\plan.json",
+      "--in-place",
+      "openpyxl"
+    ],
+    "exit": 0,
+    "changed": true,
+    "staged_input_unchanged": true,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "docProps/custom.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/comments/comment1.xml",
+      "xl/comments/comment2.xml",
+      "xl/comments/comment3.xml",
+      "xl/comments/comment4.xml",
+      "xl/comments/comment5.xml",
+      "xl/comments1.xml",
+      "xl/comments2.xml",
+      "xl/comments3.xml",
+      "xl/comments4.xml",
+      "xl/comments5.xml",
+      "xl/drawings/commentsDrawing1.vml",
+      "xl/drawings/commentsDrawing2.vml",
+      "xl/drawings/commentsDrawing3.vml",
+      "xl/drawings/commentsDrawing4.vml",
+      "xl/drawings/commentsDrawing5.vml",
+      "xl/drawings/vmlDrawing1.vml",
+      "xl/drawings/vmlDrawing2.vml",
+      "xl/drawings/vmlDrawing3.vml",
+      "xl/drawings/vmlDrawing4.vml",
+      "xl/drawings/vmlDrawing5.vml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/_rels/sheet10.xml.rels",
+      "xl/worksheets/_rels/sheet11.xml.rels",
+      "xl/worksheets/_rels/sheet12.xml.rels",
+      "xl/worksheets/_rels/sheet18.xml.rels",
+      "xl/worksheets/_rels/sheet20.xml.rels",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet10.xml",
+      "xl/worksheets/sheet11.xml",
+      "xl/worksheets/sheet12.xml",
+      "xl/worksheets/sheet13.xml",
+      "xl/worksheets/sheet14.xml",
+      "xl/worksheets/sheet15.xml",
+      "xl/worksheets/sheet16.xml",
+      "xl/worksheets/sheet17.xml",
+      "xl/worksheets/sheet18.xml",
+      "xl/worksheets/sheet19.xml",
+      "xl/worksheets/sheet2.xml",
+      "xl/worksheets/sheet20.xml",
+      "xl/worksheets/sheet21.xml",
+      "xl/worksheets/sheet22.xml",
+      "xl/worksheets/sheet23.xml",
+      "xl/worksheets/sheet24.xml",
+      "xl/worksheets/sheet3.xml",
+      "xl/worksheets/sheet4.xml",
+      "xl/worksheets/sheet5.xml",
+      "xl/worksheets/sheet6.xml",
+      "xl/worksheets/sheet7.xml",
+      "xl/worksheets/sheet8.xml",
+      "xl/worksheets/sheet9.xml"
+    ],
+    "formula_and_cache_equal": false,
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 24,
+      "read_only": true,
+      "saved": false
+    },
+    "terminal_log": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools-feature\\artifacts\\excel-edit-phase2\\16-5-7-Auto.log",
+    "engine_lines": [
+      "[2026-11-12 16:48:42] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 2026.09. 专项二批次.xlsx，耗时 16962 ms"
+    ],
+    "plan_files": [
+      "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\16-5-7-Auto\\plan.json"
+    ],
+    "reported_status": null,
+    "reported_items": []
+  }
+]

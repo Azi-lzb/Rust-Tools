@@ -259,23 +259,33 @@ impl OutputValidator for NativeOoxmlValidator {
                         )?;
                     }
                 }
-                EditOperation::ReplaceHeaderText {
-                    sheet,
-                    search,
-                    replacement,
-                } => {
-                    ooxml_patch::validate_header_text_patch(
-                        &plan.input,
-                        candidate_output,
-                        &[ooxml_patch::HeaderTextUpdate {
-                            sheet_name: sheet.clone(),
-                            search: search.clone(),
-                            replacement: replacement.clone(),
-                        }],
-                    )?;
-                }
                 _ => {}
             }
+        }
+        // The strict package validator must see the entire header batch.
+        // Calling it per operation incorrectly rejects other planned sheets.
+        if plan
+            .operations
+            .iter()
+            .all(|operation| matches!(operation, EditOperation::ReplaceHeaderText { .. }))
+        {
+            let updates = plan
+                .operations
+                .iter()
+                .filter_map(|operation| match operation {
+                    EditOperation::ReplaceHeaderText {
+                        sheet,
+                        search,
+                        replacement,
+                    } => Some(ooxml_patch::HeaderTextUpdate {
+                        sheet_name: sheet.clone(),
+                        search: search.clone(),
+                        replacement: replacement.clone(),
+                    }),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            ooxml_patch::validate_header_text_patch(&plan.input, candidate_output, &updates)?;
         }
         Ok(())
     }

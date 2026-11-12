@@ -1,0 +1,408 @@
+{
+  "delete_row_style_mapping": [
+    {
+      "menu": "2-2",
+      "mode": "OpenpyxlOnly",
+      "deleted_rows": 10,
+      "survivor_rows_mapped": 453,
+      "cell_style_differences": [],
+      "row_dimension_differences": [],
+      "column_dimensions_equal": true,
+      "passed": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "UMYAOnly",
+      "deleted_rows": 10,
+      "survivor_rows_mapped": 453,
+      "cell_style_differences": [],
+      "row_dimension_differences": [],
+      "column_dimensions_equal": true,
+      "passed": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "BetterOfficeOnly",
+      "deleted_rows": 10,
+      "survivor_rows_mapped": 453,
+      "cell_style_differences": [],
+      "row_dimension_differences": [],
+      "column_dimensions_equal": true,
+      "passed": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "Auto",
+      "deleted_rows": 10,
+      "survivor_rows_mapped": 453,
+      "cell_style_differences": [],
+      "row_dimension_differences": [],
+      "column_dimensions_equal": true,
+      "passed": true
+    }
+  ],
+  "village_split_inserted_row_styles": [
+    {
+      "menu": "5-1",
+      "mode": "OpenpyxlOnly",
+      "sheet": "(2)惠州市本外币存贷款分机构表",
+      "template_row": 30,
+      "inserted_rows": [
+        30,
+        31
+      ],
+      "template_styled_cells_per_row": 9,
+      "inserted_styled_cells_total": 0,
+      "inserted_cells_matching_template_style": 0,
+      "style_holes": [
+        "A30",
+        "B30",
+        "C30",
+        "D30",
+        "E30",
+        "F30",
+        "G30",
+        "H30",
+        "I30",
+        "A31",
+        "B31",
+        "C31",
+        "D31",
+        "E31",
+        "F31",
+        "G31",
+        "H31",
+        "I31"
+      ],
+      "style_gap_observed": true
+    },
+    {
+      "menu": "5-1",
+      "mode": "OpenpyxlOnly",
+      "sheet": "(1)惠州市本外币存贷款分机构表",
+      "template_row": 30,
+      "inserted_rows": [
+        30,
+        31
+      ],
+      "template_styled_cells_per_row": 9,
+      "inserted_styled_cells_total": 0,
+      "inserted_cells_matching_template_style": 0,
+      "style_holes": [
+        "A30",
+        "B30",
+        "C30",
+        "D30",
+        "E30",
+        "F30",
+        "G30",
+        "H30",
+        "I30",
+        "A31",
+        "B31",
+        "C31",
+        "D31",
+        "E31",
+        "F31",
+        "G31",
+        "H31",
+        "I31"
+      ],
+      "style_gap_observed": true
+    },
+    {
+      "menu": "5-1",
+      "mode": "Auto",
+      "sheet": "(2)惠州市本外币存贷款分机构表",
+      "template_row": 30,
+      "inserted_rows": [
+        30,
+        31
+      ],
+      "template_styled_cells_per_row": 9,
+      "inserted_styled_cells_total": 0,
+      "inserted_cells_matching_template_style": 0,
+      "style_holes": [
+        "A30",
+        "B30",
+        "C30",
+        "D30",
+        "E30",
+        "F30",
+        "G30",
+        "H30",
+        "I30",
+        "A31",
+        "B31",
+        "C31",
+        "D31",
+        "E31",
+        "F31",
+        "G31",
+        "H31",
+        "I31"
+      ],
+      "style_gap_observed": true
+    },
+    {
+      "menu": "5-1",
+      "mode": "Auto",
+      "sheet": "(1)惠州市本外币存贷款分机构表",
+      "template_row": 30,
+      "inserted_rows": [
+        30,
+        31
+      ],
+      "template_styled_cells_per_row": 9,
+      "inserted_styled_cells_total": 0,
+      "inserted_cells_matching_template_style": 0,
+      "style_holes": [
+        "A30",
+        "B30",
+        "C30",
+        "D30",
+        "E30",
+        "F30",
+        "G30",
+        "H30",
+        "I30",
+        "A31",
+        "B31",
+        "C31",
+        "D31",
+        "E31",
+        "F31",
+        "G31",
+        "H31",
+        "I31"
+      ],
+      "style_gap_observed": true
+    }
+  ],
+  "fx_header_xml_scope": [
+    {
+      "menu": "5-4",
+      "mode": "RustNativeOnly",
+      "changed_parts": [
+        "xl/worksheets/sheet7.xml",
+        "xl/worksheets/sheet8.xml",
+        "xl/worksheets/sheet9.xml"
+      ],
+      "changed_parts_exact_expected": true,
+      "sheet_header_checks": [
+        {
+          "part": "xl/worksheets/sheet7.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市全金融机构外汇信贷收支表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R244413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市全金融机构外汇信贷收支表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R244413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        },
+        {
+          "part": "xl/worksheets/sheet8.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分机构表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R224413000003\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分机构表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R224413000003\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        },
+        {
+          "part": "xl/worksheets/sheet9.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分地区表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R214413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分地区表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R214413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "menu": "5-4",
+      "mode": "Auto",
+      "changed_parts": [
+        "xl/worksheets/sheet7.xml",
+        "xl/worksheets/sheet8.xml",
+        "xl/worksheets/sheet9.xml"
+      ],
+      "changed_parts_exact_expected": true,
+      "sheet_header_checks": [
+        {
+          "part": "xl/worksheets/sheet7.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市全金融机构外汇信贷收支表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R244413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市全金融机构外汇信贷收支表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R244413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        },
+        {
+          "part": "xl/worksheets/sheet8.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分机构表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R224413000003\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分机构表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R224413000003\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        },
+        {
+          "part": "xl/worksheets/sheet9.xml",
+          "only_header_changed": true,
+          "before_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分地区表\n 2026-09-30&R\n 单位：万元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R214413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "after_header": [
+            [
+              "oddHeader",
+              {},
+              "&L\n 汇率：6.7351&C 惠州市外汇存贷款分地区表\n 2026-09-30&R\n 单位：万美元"
+            ],
+            [
+              "oddFooter",
+              {
+                "{http://www.w3.org/XML/1998/namespace}space": "preserve"
+              },
+              "&L\n 报表代码：R214413000000\n&C&P&R\n\n"
+            ]
+          ],
+          "header_structure_equal": true
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

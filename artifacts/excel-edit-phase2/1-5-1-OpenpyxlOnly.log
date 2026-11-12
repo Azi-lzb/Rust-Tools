@@ -1,0 +1,84 @@
+{
+  "changed_cells": 60,
+  "committed_files": 1,
+  "completed_files": 1,
+  "created_copies": 0,
+  "elapsed_ms": 17283,
+  "failed_files": 0,
+  "feature_id": "PT-7-1",
+  "files": 1,
+  "items": [
+    {
+      "candidate": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\2026.09 外发用_village_split_134b97be.xlsx",
+      "changed_cells": 60,
+      "elapsed_ms": 17283,
+      "execution": {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 403,
+          "operation": "replaced",
+          "sha256_after": "f359891e0c48abde9a7a41d52e2a0f5d2220d85b8e525d9caca5054a9e9fc589",
+          "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+        },
+        "engine": "openpyxl",
+        "execution": {
+          "attempts": [
+            {
+              "elapsed_ms": 5527,
+              "engine": "openpyxl_worker",
+              "message": "validated output published",
+              "outcome": "succeeded"
+            }
+          ],
+          "elapsed_ms": 5527,
+          "engine": "openpyxl_worker",
+          "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx",
+          "output": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\.pytools-inplace-33696-1794473034412031600.xlsx",
+          "route_decisions": [
+            {
+              "eligible": true,
+              "engine": "openpyxl_worker",
+              "rejected_reasons": []
+            }
+          ]
+        },
+        "mode": "in_place",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+      },
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx",
+      "matched_sheets": 0,
+      "output_copy": null,
+      "plan_file": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164343_060733300\\target-0001.plan.json",
+      "status": "committed",
+      "target_commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 403,
+        "operation": "replaced",
+        "sha256_after": "f359891e0c48abde9a7a41d52e2a0f5d2220d85b8e525d9caca5054a9e9fc589",
+        "sha256_before": "57cf0239ebf7868943c030a379c614eb06eefec9abc9a793b4be799557fa579f",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\2026.09 外发用.xlsx"
+      },
+      "warnings": []
+    }
+  ],
+  "matched_sheets": 0,
+  "mode": "in_place",
+  "plan_dir": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\output\\pytools-village-split-20261112_164343_060733300",
+  "planned_files": 1,
+  "run_id": "pytools-pt-7-1-33696-1794473023062343500",
+  "run_log_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\logs\\PT-7-1_pytools-pt-7-1-33696-1794473023062343500.run.json",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\1-5-1-OpenpyxlOnly\\logs\\run-unified\\PT-7-1_pytools-pt-7-1-33696-1794473023062343500.json",
+  "status": "succeeded"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:43:43.062438700+08:00","phase":"planning","status":"started","user_message":"开始拆分第 1/1 个工作簿中的村镇银行数据","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T16:43:54.407382800+08:00","phase":"planning","status":"completed","user_message":"已完成业务计算并生成工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":11331,"total_elapsed_ms":11345,"components":["pytools-core","excel-reader","calamine"],"actual_engine":"calamine"}
+{"sequence":3,"timestamp":"2026-11-12T16:43:54.409313900+08:00","phase":"plan_persistence","status":"completed","user_message":"已保存工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1,"total_elapsed_ms":11347,"components":["pytools-core"]}
+[2026-11-12 16:44:00] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 2026.09 外发用.xlsx，耗时 5527 ms
+{"sequence":4,"timestamp":"2026-11-12T16:44:00.345552900+08:00","phase":"engine_execution","status":"completed","user_message":"已完成工作簿候选修改与引擎验证","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":5936,"total_elapsed_ms":17283,"components":["pytools-core","excel-editor"],"actual_engine":"openpyxl"}
+{"sequence":5,"timestamp":"2026-11-12T16:44:00.345656400+08:00","phase":"safe_commit","status":"completed","user_message":"候选校验通过；已备份并安全替换所选源工作簿","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":0,"total_elapsed_ms":17283,"components":["pytools-core","file-commit"],"actual_engine":"openpyxl"}
+{"sequence":6,"timestamp":"2026-11-12T16:44:00.345877200+08:00","phase":"file_summary","status":"completed","user_message":"当前工作簿已安全提交","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":1,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":17283,"total_elapsed_ms":17283,"components":["pytools-core"]}

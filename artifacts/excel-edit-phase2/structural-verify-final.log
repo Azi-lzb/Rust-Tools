@@ -1,0 +1,10 @@
+2-2 OpenpyxlOnly styles 0 row dimensions 0 columns True passed True
+2-2 UMYAOnly styles 0 row dimensions 0 columns True passed True
+2-2 BetterOfficeOnly styles 0 row dimensions 0 columns True passed True
+2-2 Auto styles 0 row dimensions 0 columns True passed True
+5-1 OpenpyxlOnly template cells 9 inserted styled 0 style gap True
+5-1 OpenpyxlOnly template cells 9 inserted styled 0 style gap True
+5-1 Auto template cells 9 inserted styled 0 style gap True
+5-1 Auto template cells 9 inserted styled 0 style gap True
+5-4 RustNativeOnly parts exact True header only True passed True
+5-4 Auto parts exact True header only True passed True

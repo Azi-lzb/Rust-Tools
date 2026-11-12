@@ -1,0 +1,102 @@
+[
+  {
+    "menu": "4-5",
+    "mode": "LegacyDefault",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\LegacyDefault\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 19:28:13] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\LegacyDefault\\source.xlsx: 工作表改名失败（阶段：重新读取并校验）：ValueError: 工作表 'Sheet1' 非公式单元格 A21 发生变化\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "OpenpyxlOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\OpenpyxlOnly\\source.xlsx",
+    "exit": 0,
+    "renamed": true,
+    "formula_and_cache_expected": false,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet2.xml"
+    ],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "{\n  \"elapsed_ms\": 2302,\n  \"files\": [\n    {\n      \"commit\": {\n        \"backup_path\": null,\n        \"cleanup_warning\": null,\n        \"elapsed_ms\": 103,\n        \"operation\": \"replaced\",\n        \"sha256_after\": \"f393ca83a7b240f012f263b44ac7d42810ee55c29846a1613841025aa3a2ade6\",\n        \"sha256_before\": \"72a8ddd4a7ca6b6b5362fc2e2a1a7d806ac86774aad38223febb77c2c7e9a277\",\n        \"target\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\OpenpyxlOnly\\\\source.xlsx\"\n      },\n      \"commit_ms\": 103,\n      \"editing_ms\": 2133,\n      \"elapsed_ms\": 2288,\n      \"engine\": \"openpyxl\",\n      \"execution\": {\n        \"attempts\": [\n          {\n            \"elapsed_ms\": 2131,\n            \"engine\": \"openpyxl_worker\",\n            \"message\": \"validated output published\",\n            \"outcome\": \"succeeded\"\n          }\n        ],\n        \"elapsed_ms\": 2131,\n        \"engine\": \"openpyxl_worker\",\n        \"input\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\OpenpyxlOnly\\\\source.xlsx\",\n        \"output\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\OpenpyxlOnly\\\\.pytools-sheet-rename-27292-0.xlsx\",\n        \"route_decisions\": [\n          {\n            \"eligible\": true,\n            \"engine\": \"openpyxl_worker\",\n            \"rejected_reasons\": []\n          }\n        ]\n      },\n      \"input\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\OpenpyxlOnly\\\\source.xlsx\",\n      \"output\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\OpenpyxlOnly\\\\source.xlsx\",\n      \"planning_ms\": 50,\n      \"reason\": null,\n      \"renamed\": 1,\n      \"skipped\": 0,\n      \"status\": \"renamed\"\n    }\n  ],\n  \"files_scanned\": 1,\n  \"rename_ok\": 1,\n  \"run_id\": \"pytools-pt-4-5-27292-1794482897649348700-0\",\n  \"run_summary_path\": \"C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\rust-tools\\\\logs\\\\PT-4-5_pytools-pt-4-5-27292-1794482897649348700-0.run.json\",\n  \"skip\": 0,\n  \"workbooks\": 1\n}\n",
+    "stderr": "[2026-11-12 19:28:19] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 source.xlsx，耗时 2131 ms\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "UMYAOnly",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\UMYAOnly\\source.xlsx",
+    "exit": 2,
+    "renamed": false,
+    "formula_and_cache_expected": false,
+    "changed_parts": [],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "",
+    "stderr": "[2026-11-12 19:28:23] [ERROR] 命令执行失败：ExcelEditPlan 工作表改名失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\UMYAOnly\\source.xlsx: UMYAOnly refuses workbooks with comments, charts, external links, macros, or other complex objects\n",
+    "original_unchanged": true
+  },
+  {
+    "menu": "4-5",
+    "mode": "Auto",
+    "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\目标用例.xlsx",
+    "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-rename-0x9vj2k0\\Auto\\source.xlsx",
+    "exit": 0,
+    "renamed": true,
+    "formula_and_cache_expected": false,
+    "changed_parts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "xl/_rels/workbook.xml.rels",
+      "xl/calcChain.xml",
+      "xl/sharedStrings.xml",
+      "xl/styles.xml",
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "xl/worksheets/sheet2.xml"
+    ],
+    "com": {
+      "status": "opened_read_only",
+      "sheets": 2,
+      "read_only": true,
+      "saved": false
+    },
+    "stdout": "{\n  \"elapsed_ms\": 2197,\n  \"files\": [\n    {\n      \"commit\": {\n        \"backup_path\": null,\n        \"cleanup_warning\": null,\n        \"elapsed_ms\": 101,\n        \"operation\": \"replaced\",\n        \"sha256_after\": \"b8d1eb8a69d9fd02ac799cdd1fbb8ff055b3cae5394b76c3abf9a286b3a0b5d0\",\n        \"sha256_before\": \"72a8ddd4a7ca6b6b5362fc2e2a1a7d806ac86774aad38223febb77c2c7e9a277\",\n        \"target\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\Auto\\\\source.xlsx\"\n      },\n      \"commit_ms\": 101,\n      \"editing_ms\": 2032,\n      \"elapsed_ms\": 2184,\n      \"engine\": \"openpyxl\",\n      \"execution\": {\n        \"attempts\": [\n          {\n            \"elapsed_ms\": 2031,\n            \"engine\": \"openpyxl_worker\",\n            \"message\": \"validated output published\",\n            \"outcome\": \"succeeded\"\n          }\n        ],\n        \"elapsed_ms\": 2031,\n        \"engine\": \"openpyxl_worker\",\n        \"input\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\Auto\\\\source.xlsx\",\n        \"output\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\Auto\\\\.pytools-sheet-rename-9776-0.xlsx\",\n        \"route_decisions\": [\n          {\n            \"eligible\": true,\n            \"engine\": \"openpyxl_worker\",\n            \"rejected_reasons\": []\n          }\n        ]\n      },\n      \"input\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\Auto\\\\source.xlsx\",\n      \"output\": \"\\\\\\\\?\\\\C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\Temp\\\\rusttools-phase2-rename-0x9vj2k0\\\\Auto\\\\source.xlsx\",\n      \"planning_ms\": 49,\n      \"reason\": null,\n      \"renamed\": 1,\n      \"skipped\": 0,\n      \"status\": \"renamed\"\n    }\n  ],\n  \"files_scanned\": 1,\n  \"rename_ok\": 1,\n  \"run_id\": \"pytools-pt-4-5-9776-1794482907716482800-0\",\n  \"run_summary_path\": \"C:\\\\Users\\\\AZI\\\\AppData\\\\Local\\\\rust-tools\\\\logs\\\\PT-4-5_pytools-pt-4-5-9776-1794482907716482800-0.run.json\",\n  \"skip\": 0,\n  \"workbooks\": 1\n}\n",
+    "stderr": "[2026-11-12 19:28:29] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 openpyxl_worker，文件 source.xlsx，耗时 2031 ms\n",
+    "original_unchanged": true
+  }
+]

@@ -1,0 +1,154 @@
+{
+  "committed_files": 0,
+  "completed_files": 0,
+  "created_copies": 0,
+  "elapsed_ms": 799,
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "input_validation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-12T16:46:52.006963900+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始检查第 1/1 个工作簿的外汇页眉并准备生成副本"
+    },
+    {
+      "actual_engine": "inspect_xlsx_profile",
+      "components": [
+        "excel-editor",
+        "excel-reader"
+      ],
+      "phase": "profile_inspection",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "stage_elapsed_ms": 44,
+      "status": "completed",
+      "timestamp": "2026-11-12T16:46:52.064424700+08:00",
+      "total_elapsed_ms": 58,
+      "user_message": "已检查工作簿格式与对象特征"
+    },
+    {
+      "actual_engine": "read_header_inventory",
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 47,
+      "status": "completed",
+      "timestamp": "2026-11-12T16:46:52.111991600+08:00",
+      "total_elapsed_ms": 105,
+      "user_message": "已完成页眉检查并生成修改计划"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "error_type": "fx_header_stage_error",
+      "phase": "in_place_execution",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 1,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "stage_elapsed_ms": 797,
+      "status": "failed",
+      "timestamp": "2026-11-12T16:46:52.804957100+08:00",
+      "total_elapsed_ms": 798,
+      "user_message": "当前工作簿处理失败；请查看开发者运行记录中的失败阶段"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "run_summary",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 1,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 5,
+      "status": "failed",
+      "timestamp": "2026-11-12T16:46:52.805162100+08:00",
+      "total_elapsed_ms": 799,
+      "user_message": "外汇页眉处理完成：成功 0，失败 1"
+    }
+  ],
+  "failed_files": 1,
+  "feature_id": "PT-7-4",
+  "files": 1,
+  "function": "fx-header",
+  "fx_sheets": 0,
+  "history_report": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\logs\\PT-7-4_20261112T164652_19036_1794473212006742500.json",
+  "items": [
+    {
+      "elapsed_ms": 797,
+      "error": "the configured ExcelEditPlan route failed; manual mode does not switch engines: ExcelEditPlan FX 页眉路由执行失败: BackendFailed: backend failed; automatic fallback stopped: apply ReplaceHeaderText: header replacement must use the namespace-aware OOXML header backend",
+      "error_stage": "in_place_execution",
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\2026.09 外发用.xlsx",
+      "status": "failed"
+    }
+  ],
+  "mode": "in_place",
+  "modified_sheets": 0,
+  "plan_dir": null,
+  "planned_files": 0,
+  "product": "pytools",
+  "run_id": "pytools-pt-7-4-19036-1794473212006742500",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\10-5-4-UMYAOnly\\logs\\run-unified\\PT-7-4_pytools-pt-7-4-19036-1794473212006742500.json",
+  "saved_files": 0,
+  "schema_version": 1,
+  "started_at": "2026-11-12T16:46:52.006139300+08:00",
+  "status": "failed"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:46:52.006963900+08:00","phase":"input_validation","status":"started","user_message":"开始检查第 1/1 个工作簿的外汇页眉并准备生成副本","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T16:46:52.064424700+08:00","phase":"profile_inspection","status":"completed","user_message":"已检查工作簿格式与对象特征","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":44,"total_elapsed_ms":58,"components":["excel-editor","excel-reader"],"actual_engine":"inspect_xlsx_profile"}
+{"sequence":3,"timestamp":"2026-11-12T16:46:52.111991600+08:00","phase":"plan_build","status":"completed","user_message":"已完成页眉检查并生成修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":47,"total_elapsed_ms":105,"components":["pytools-core","excel-reader"],"actual_engine":"read_header_inventory"}
+{"sequence":4,"timestamp":"2026-11-12T16:46:52.804957100+08:00","phase":"in_place_execution","status":"failed","user_message":"当前工作簿处理失败；请查看开发者运行记录中的失败阶段","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":0,"failed_files":1,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":797,"total_elapsed_ms":798,"components":["pytools-core"],"error_type":"fx_header_stage_error"}
+{"sequence":5,"timestamp":"2026-11-12T16:46:52.805162100+08:00","phase":"run_summary","status":"failed","user_message":"外汇页眉处理完成：成功 0，失败 1","progress":{"total_inputs":1,"total_files":1,"current_file":null,"processed_files":1,"completed_files":0,"failed_files":1,"processed_rows":0,"total_rows":0},"total_elapsed_ms":799,"components":["pytools-core"]}

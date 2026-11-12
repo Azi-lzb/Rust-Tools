@@ -1,0 +1,33 @@
+{
+  "changed_cells": 0,
+  "committed_files": 0,
+  "completed_files": 0,
+  "created_copies": 0,
+  "elapsed_ms": 38435,
+  "failed_files": 1,
+  "feature_id": "PT-7-1",
+  "files": 1,
+  "items": [
+    {
+      "elapsed_ms": 38434,
+      "error": "OutputValidationFailed: backend output validation failed: openpyxl changed preserved column dimensions on worksheet \"(0)惠州市全金融机构（含外资）本外币信贷收支表\"",
+      "error_stage": "in_place_execution",
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\2026.09 本外币.xlsx",
+      "status": "failed"
+    }
+  ],
+  "matched_sheets": 0,
+  "mode": "in_place",
+  "plan_dir": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\output\\pytools-village-split-20261112_164404_645090000",
+  "planned_files": 0,
+  "run_id": "pytools-pt-7-1-23400-1794473044646714400",
+  "run_log_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\logs\\PT-7-1_pytools-pt-7-1-23400-1794473044646714400.run.json",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\logs\\run-unified\\PT-7-1_pytools-pt-7-1-23400-1794473044646714400.json",
+  "status": "failed"
+}
+
+[STDERR]
+{"sequence":1,"timestamp":"2026-11-12T16:44:04.646823+08:00","phase":"planning","status":"started","user_message":"开始拆分第 1/1 个工作簿中的村镇银行数据","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"total_elapsed_ms":0,"components":["pytools-core"]}
+{"sequence":2,"timestamp":"2026-11-12T16:44:16.659167900+08:00","phase":"planning","status":"completed","user_message":"已完成业务计算并生成工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":11992,"total_elapsed_ms":12012,"components":["pytools-core","excel-reader","calamine"],"actual_engine":"calamine"}
+{"sequence":3,"timestamp":"2026-11-12T16:44:16.660469100+08:00","phase":"plan_persistence","status":"completed","user_message":"已保存工作簿修改计划","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":0,"completed_files":0,"failed_files":0,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":1,"total_elapsed_ms":12013,"components":["pytools-core"]}
+{"sequence":4,"timestamp":"2026-11-12T16:44:43.081422700+08:00","phase":"in_place_execution","status":"failed","user_message":"工作簿处理失败：C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-special-runs-wc9n6ueh\\2-5-1-UMYAOnly\\2026.09 本外币.xlsx；阶段：in_place_execution；原因：OutputValidationFailed: backend output validation failed: openpyxl changed preserved column dimensions on worksheet \"(0)惠州市全金融机构（含外资）本外币信贷收支表\"","progress":{"total_inputs":1,"total_files":1,"current_file":1,"processed_files":1,"completed_files":0,"failed_files":1,"processed_rows":0,"total_rows":0},"stage_elapsed_ms":38434,"total_elapsed_ms":38434,"components":["pytools-core"],"error_type":"village_split_stage_error"}

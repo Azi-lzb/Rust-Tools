@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 16:48:16] [ERROR] 命令执行失败：BetterOffice refuses workbooks with comments, charts, macros, or other complex objects

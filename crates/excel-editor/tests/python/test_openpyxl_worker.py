@@ -295,6 +295,72 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertAlmostEqual(sheet.column_dimensions["J"].width, 22)
         saved.close()
 
+    def test_sheet_rename_rewrites_direct_formula_and_defined_name_references(self):
+        from openpyxl.workbook.defined_name import DefinedName
+
+        source = self.root / "rename-source.xlsx"
+        book = openpyxl.Workbook()
+        old = book.active
+        old.title = "Old Sheet"
+        old["A1"] = 7
+        data = book.create_sheet("Data")
+        data["A1"] = 9
+        summary = book.create_sheet("Summary")
+        summary["A1"] = "='Old Sheet'!A1"
+        summary["A2"] = "=Data!A1"
+        summary["A3"] = '="Old Sheet!A1"'
+        book.defined_names.add(
+            DefinedName("LookupRange", attr_text="'Old Sheet'!$A$1")
+        )
+        book.save(source)
+        book.close()
+        self.source = source
+        output = self.root / "rename-output.xlsx"
+        plan = self.base_plan(
+            output, [operation("rename_sheet", old_name="Old Sheet", new_name="New Sheet")]
+        )
+
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        saved = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved["Summary"]["A1"].value, "='New Sheet'!A1")
+        self.assertEqual(saved["Summary"]["A2"].value, "=Data!A1")
+        self.assertEqual(saved["Summary"]["A3"].value, '="Old Sheet!A1"')
+        self.assertEqual(
+            saved.defined_names["LookupRange"].attr_text, "'New Sheet'!$A$1"
+        )
+        saved.close()
+
+    def test_sheet_rename_rejects_dynamic_indirect_selector_before_output(self):
+        source = self.root / "dynamic-rename-source.xlsx"
+        book = openpyxl.Workbook()
+        old = book.active
+        old.title = "Old Sheet"
+        old["A1"] = 7
+        summary = book.create_sheet("Summary")
+        summary["H21"] = "Old Sheet"
+        summary["A1"] = '=INDIRECT($H$21&"!A1")'
+        book.save(source)
+        book.close()
+        self.source = source
+        source_hash = digest(source)
+        output = self.root / "dynamic-rename-output.xlsx"
+        plan = self.base_plan(
+            output, [operation("rename_sheet", old_name="Old Sheet", new_name="New Sheet")]
+        )
+
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "unsupported_before_write", response)
+        self.assertEqual(
+            response["error"]["kind"], "unsupported_dynamic_sheet_reference", response
+        )
+        self.assertFalse(output.exists())
+        self.assertEqual(digest(source), source_hash)
+
     def test_delete_and_recreate_same_sheet_validates_final_names_and_order(self):
         output = self.root / "recreated-sheet.xlsx"
         plan = self.base_plan(output, [

@@ -1,0 +1,306 @@
+{
+  "scratch": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr",
+  "original_sha256": "8a12003efc9c7390cf4fe61d9802363ffa3516318db934029361004761bc255d",
+  "original_unchanged": true,
+  "runs": [
+    {
+      "menu": "2-1",
+      "mode": "OpenpyxlOnly",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-1-OpenpyxlOnly\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "marked_rows": [
+          9,
+          127,
+          149,
+          219,
+          319,
+          321,
+          322,
+          423,
+          426,
+          435
+        ],
+        "values_unchanged": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-1-OpenpyxlOnly.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:14] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 source.xlsx，耗时 4132 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "dbd65d90906dd306f64debe6db3ae5763f67f116af1deef3ec7eccc07bf9e2e9",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true,
+      "unexpected_non_fill_cell_changes": []
+    },
+    {
+      "menu": "2-1",
+      "mode": "UMYAOnly",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-1-UMYAOnly\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "marked_rows": [
+          9,
+          127,
+          149,
+          219,
+          319,
+          321,
+          322,
+          423,
+          426,
+          435
+        ],
+        "values_unchanged": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/sharedStrings.xml",
+        "xl/styles.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-1-UMYAOnly.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:24] [INFO] ExcelEditPlan 路由：模式 UMYAOnly，引擎 umya_spreadsheet，文件 source.xlsx，耗时 2227 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "d397d8bd7cc0ad31f2011d50623848814b848efd2f6b523d0998ce1f29bdd3b6",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true,
+      "unexpected_non_fill_cell_changes": []
+    },
+    {
+      "menu": "2-1",
+      "mode": "Auto",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-1-Auto\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "marked_rows": [
+          9,
+          127,
+          149,
+          219,
+          319,
+          321,
+          322,
+          423,
+          426,
+          435
+        ],
+        "values_unchanged": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/sharedStrings.xml",
+        "xl/styles.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-1-Auto.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:30] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 umya_spreadsheet，文件 source.xlsx，耗时 2473 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "d397d8bd7cc0ad31f2011d50623848814b848efd2f6b523d0998ce1f29bdd3b6",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true,
+      "unexpected_non_fill_cell_changes": []
+    },
+    {
+      "menu": "2-2",
+      "mode": "OpenpyxlOnly",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-2-OpenpyxlOnly\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "rows_before": 463,
+        "rows_after": 453,
+        "surviving_values_match": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-2-OpenpyxlOnly.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:39] [INFO] ExcelEditPlan 路由：模式 OpenpyxlOnly，引擎 openpyxl_worker，文件 source.xlsx，耗时 5350 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "db650f38d8bab31dc666a07f9afc41ae97697e6e6c13fc3cad39630fadf486da",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "UMYAOnly",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-2-UMYAOnly\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "rows_before": 463,
+        "rows_after": 453,
+        "surviving_values_match": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/sharedStrings.xml",
+        "xl/styles.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-2-UMYAOnly.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:44] [INFO] ExcelEditPlan 路由：模式 UMYAOnly，引擎 umya_spreadsheet，文件 source.xlsx，耗时 1988 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "7f56e20772e8eef176b7da99191c1645637919108288306d0ddddab83d2fd45b",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "BetterOfficeOnly",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-2-BetterOfficeOnly\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "rows_before": 463,
+        "rows_after": 453,
+        "surviving_values_match": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "xl/_rels/workbook.xml.rels",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-2-BetterOfficeOnly.log",
+      "engine_lines": [
+        "[2026-11-12 16:29:51] [INFO] ExcelEditPlan 路由：模式 BetterOfficeOnly，引擎 betteroffice，文件 source.xlsx，耗时 4334 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "5ee6c9c372b7cefcb2fb96719b5764913d27d4fa785176d475986755d28a1d2c",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true
+    },
+    {
+      "menu": "2-2",
+      "mode": "Auto",
+      "input": "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\测试用例\\2\\检查重复去重用例.xlsx",
+      "output_copy": "C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-phase2-jgp1kzxr\\2-2-Auto\\source.xlsx",
+      "exit": 0,
+      "business_correct": true,
+      "differences": {
+        "rows_before": 463,
+        "rows_after": 453,
+        "surviving_values_match": true
+      },
+      "changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "xl/_rels/workbook.xml.rels",
+        "xl/workbook.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "formula_and_cache_equal": true,
+      "com": {
+        "status": "opened_read_only",
+        "sheets": 2,
+        "read_only": true,
+        "saved": false
+      },
+      "terminal_log": "artifacts\\excel-edit-phase2\\2-2-Auto.log",
+      "engine_lines": [
+        "[2026-11-12 16:30:01] [INFO] ExcelEditPlan 路由：模式 Auto，引擎 betteroffice，文件 source.xlsx，耗时 3947 ms"
+      ],
+      "has_error": false,
+      "output_sha256": "5ee6c9c372b7cefcb2fb96719b5764913d27d4fa785176d475986755d28a1d2c",
+      "print_settings_equal": true,
+      "merge_ranges_equal": true
+    }
+  ]
+}

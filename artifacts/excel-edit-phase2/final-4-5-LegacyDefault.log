@@ -1,0 +1,3 @@
+
+[STDERR]
+[2026-11-12 19:28:13] [ERROR] 命令执行失败：Openpyxl 工作表改名失败：C:\Users\AZI\AppData\Local\Temp\rusttools-phase2-rename-0x9vj2k0\LegacyDefault\source.xlsx: 工作表改名失败（阶段：重新读取并校验）：ValueError: 工作表 'Sheet1' 非公式单元格 A21 发生变化
