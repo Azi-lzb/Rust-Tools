@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "4e982c3aea0065578604c3fe7727938533888f66"
+  },
+  "path_in_vcs": "crates/xlsx-render"
+}

@@ -1,0 +1,29 @@
+[package]
+name = "betteroffice-xlsx-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish = ["crates-io"]
+description = "Grid layout and target-agnostic display list. Never imports canvas, DOM, or any raster backend."
+readme = "README.md"
+keywords = ["xlsx", "spreadsheet", "rendering", "layout", "ooxml"]
+categories = ["rendering", "graphics"]
+
+[lib]
+name = "xlsx_render"
+
+[dependencies]
+hashbrown = "0.17"
+ooxml-drawingml = { workspace = true, features = ["chart"] }
+serde = { version = "1", features = ["derive", "rc"] }
+unicode-segmentation = "1.12"
+xlsx-model.workspace = true
+
+[features]
+test-counters = []
+
+[dev-dependencies]
+serde_json = "1"
+xlsx-parse.workspace = true
