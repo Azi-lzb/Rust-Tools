@@ -1,0 +1,7 @@
+{
+  "comment_text": "audit comment should survive ordinary cell edit",
+  "ordinary_cell_value": "ordinary edit",
+  "custom_xml_input_sha256": "F96A9DE3C2DF2050562E496B8CC989F6A1E874C7B614C7C7E190F65849DA4A8B",
+  "custom_xml_output_sha256": "F96A9DE3C2DF2050562E496B8CC989F6A1E874C7B614C7C7E190F65849DA4A8B",
+  "custom_xml_byte_identical": true
+}

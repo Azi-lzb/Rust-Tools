@@ -1,0 +1,41 @@
+{
+  "structure": {
+    "excel_version": "16.0",
+    "charts": 1,
+    "conditional_format_count": 1,
+    "conditional_format_applies_to": "$A$1:$B$3",
+    "merged_a6_c6": true,
+    "data_range_name": "=Data!$A$1:$B$4",
+    "print_area_after_structural_edit": "$A$1:$C$6",
+    "orientation": 2.0,
+    "header_left": "Header fixture",
+    "footer_center": "Page &P",
+    "left_margin_points": 21.599999999999998,
+    "e_column_width": 20.38,
+    "row_2_height": 27.0,
+    "a1_bold": true
+  },
+  "excel_com_reference": {
+    "excel_version": "16.0",
+    "conditional_format_count": 1,
+    "conditional_format_applies_to": "$A$1:$B$4",
+    "merged_a6_c6": true,
+    "chart_count": 1,
+    "print_area": "$A$1:$C$6",
+    "data_range_name": "=Data!$A$1:$B$4"
+  },
+  "conditional_format_range_matches_excel": false,
+  "print_area_probe": {
+    "print_area_after_defined_name_attempt": null,
+    "names": [
+      "DataRange==Data!$A$1:$B$3",
+      "Data!Print_Area==Data!$A$1:$C$4"
+    ]
+  },
+  "formulas": {
+    "b1_formula": "=A1+#REF!",
+    "b1_value2": -2146826265,
+    "c1_formula": "=A1*2",
+    "c1_value2": 30.0
+  }
+}

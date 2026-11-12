@@ -1,0 +1,53 @@
+{
+  "formula": {
+    "a1_dependent_formula_after_delete_b": {
+      "cached_value": {
+        "kind": "number",
+        "value": 30.0
+      },
+      "formula": "A1*2"
+    },
+    "calc_chain_part": false,
+    "deleted_reference_formula": {
+      "cached_value": {
+        "kind": "error",
+        "value": "#REF!"
+      },
+      "formula": "A1+#REF!"
+    }
+  },
+  "print_area_probe": {
+    "defined_names": [
+      {
+        "formula": "Data!$A$1:$B$3",
+        "name": "DataRange",
+        "scope": null
+      },
+      {
+        "formula": "Data!$A$1:$C$4",
+        "name": "_xlnm.Print_Area",
+        "scope": 0
+      }
+    ]
+  },
+  "structure": {
+    "a1_has_style": true,
+    "chart_count": 1,
+    "column_width_e": 21.0,
+    "conditional_format_count": 1,
+    "custom_xml_preserved": true,
+    "defined_names": [
+      {
+        "formula": "Data!$A$1:$B$4",
+        "name": "DataRange"
+      },
+      {
+        "formula": "Data!$A$1:$C$6",
+        "name": "_xlnm.Print_Area"
+      }
+    ],
+    "merge_count": 1,
+    "row_height_2": 27.0,
+    "structural_ms": 0.8545
+  }
+}

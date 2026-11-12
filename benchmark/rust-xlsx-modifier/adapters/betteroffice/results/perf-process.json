@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "wall_ms": 67218.46,
+  "sampled_peak_working_set_mb": 1049.55,
+  "sampled_peak_private_mb": 1131.19,
+  "process_peak_working_set_mb": 0.0,
+  "cpu_ms": 66609.38,
+  "stdout": "[\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 3318.734,\n    \"operation_ms\": 1585.8124999999998,\n    \"output_bytes\": 1919528,\n    \"rep\": 1,\n    \"save_ms\": 1054.9162999999999,\n    \"scenario\": \"edit_1000\",\n    \"total_ms\": 5959.462799999999\n  },\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 4056.9097,\n    \"operation_ms\": 1840.3684999999998,\n    \"output_bytes\": 1919528,\n    \"rep\": 2,\n    \"save_ms\": 916.5074,\n    \"scenario\": \"edit_1000\",\n    \"total_ms\": 6813.785599999999\n  },\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 3528.7745,\n    \"operation_ms\": 1621.2802,\n    \"output_bytes\": 1919528,\n    \"rep\": 3,\n    \"save_ms\": 910.555,\n    \"scenario\": \"edit_1000\",\n    \"total_ms\": 6060.6097\n  },\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 3536.9498,\n    \"operation_ms\": 9468.9634,\n    \"output_bytes\": 1919380,\n    \"rep\": 1,\n    \"save_ms\": 1417.9368000000002,\n    \"scenario\": \"insert_delete_rows_cols\",\n    \"total_ms\": 14423.85\n  },\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 3577.0023,\n    \"operation_ms\": 9716.6077,\n    \"output_bytes\": 1919380,\n    \"rep\": 2,\n    \"save_ms\": 1383.1212,\n    \"scenario\": \"insert_delete_rows_cols\",\n    \"total_ms\": 14676.7312\n  },\n  {\n    \"input_bytes\": 1917270,\n    \"open_ms\": 3467.6327,\n    \"operation_ms\": 9323.0104,\n    \"output_bytes\": 1919380,\n    \"rep\": 3,\n    \"save_ms\": 1386.063,\n    \"scenario\": \"insert_delete_rows_cols\",\n    \"total_ms\": 14176.7061\n  }\n]\n",
+  "stderr": null
+}
