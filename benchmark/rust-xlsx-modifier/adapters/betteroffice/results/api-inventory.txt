@@ -1,0 +1,442 @@
+BetterOffice 0.5.1 public API inventory
+Source roots: C:\Users\AZI\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\betteroffice-xlsx-0.5.1; C:\Users\AZI\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\betteroffice-xlsx-ops-0.5.1; C:\Users\AZI\Desktop\VibeCode\Rust-Tools-test\vendor\betteroffice-xlsx-model
+
+## betteroffice-xlsx-0.5.1
+src\authority.rs:7165: shared_strings: vec!["header".into()],
+src\authority.rs:7207: value: "header".into(),
+src\authority.rs:7282: header_rows: 1,
+src\error.rs:63: InvalidScale(f32),
+src\error.rs:149: Self::InvalidScale(scale) => {
+src\error.rs:150: write!(f, "scale must be a positive number, got {scale}")
+src\error.rs:154: "requested render is {width}x{height}px, exceeds the {max}px per-side cap; narrow the range or lower scale"
+src\error.rs:162: "requested render is {width}x{height}px, exceeds the {max_pixels}-pixel allocation cap; narrow the range or lower scale"
+src\types.rs:187: pub scale: f32,
+src\types.rs:196: scale: 1.0,
+src\workbook.rs:58: use xlsx_render::scaled;
+src\workbook.rs:2659: if !(options.scale.is_finite() && options.scale > 0.0) {
+src\workbook.rs:2660: return Err(Error::InvalidScale(options.scale));
+src\workbook.rs:2670: renderable(sheet_ref, &geometry, grown, options.scale)
+src\workbook.rs:2674: viewport.width = viewport.width.min(width as f32 / options.scale);
+src\workbook.rs:2677: viewport.height = viewport.height.min(height as f32 / options.scale);
+src\workbook.rs:2680: let width = ((viewport.width * options.scale).ceil() as u32).max(1);
+src\workbook.rs:2681: let height = ((viewport.height * options.scale).ceil() as u32).max(1);
+src\workbook.rs:2694: let display_list = if options.scale == 1.0 {
+src\workbook.rs:2697: scaled(display_list, options.scale)
+src\workbook.rs:4988: fn renderable(sheet: &Sheet, geometry: &GridGeometry, viewport: &Viewport, scale: f32) -> bool {
+src\workbook.rs:4989: let width = ((viewport.width * scale).ceil() as u32).max(1);
+src\workbook.rs:4990: let height = ((viewport.height * scale).ceil() as u32).max(1);
+src\authority\snapshot_validation.rs:540: fn chart_header(&mut self, chart: &SheetChart) -> JsonResult {
+src\authority\snapshot_validation.rs:1093: window.chart_header(chart)
+src\authority\snapshot_validation.rs:2009: || left.header_rows != right.header_rows
+src\authority\snapshot.rs:10: use crate::snapshot::header::{SnapshotHeader, SnapshotMode};
+src\authority\snapshot.rs:975: header_rows,
+src\authority\snapshot.rs:2565: pub(crate) fn new(header: &SnapshotHeader) -> SnapshotResult<Self> {
+src\authority\snapshot.rs:2566: match header.mode {
+src\authority\snapshot.rs:2569: if header.client_id > MAX_SAFE_CLIENT_ID {
+src\authority\snapshot.rs:2572: decode_state_vector_v1(&header.state_vector).map_err(SnapshotError::new)?;
+src\authority\snapshot.rs:2573: let expected_base_chunks = header.chunk_count(ChunkKind::AuthorityBase);
+src\authority\snapshot.rs:2574: let expected_yrs_chunks = header.chunk_count(ChunkKind::Yrs);
+src\authority\snapshot.rs:2578: let mut vector = Reader::new(&header.state_vector);
+src\authority\snapshot.rs:2580: let final_vector_offset = header.state_vector.len() - vector.rest().len();
+src\authority\snapshot.rs:2583: header.guid.as_str().into(),
+src\authority\snapshot.rs:2584: ClientID::new(header.client_id),
+src\authority\snapshot.rs:2593: state_vector: header.state_vector.clone(),
+src\authority\snapshot.rs:2594: next_sheet_id: header.next_sheet_id,
+src\authority\snapshot.rs:3341: fn header(
+src\authority\snapshot.rs:3345: ) -> SnapshotHeader {
+src\authority\snapshot.rs:3349: chunk_counts[ChunkKind::Header as usize - 1] = 1;
+src\authority\snapshot.rs:3353: SnapshotHeader {
+src\authority\snapshot.rs:3416: let mut header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3417: header.chunk_counts[ChunkKind::AuthorityBase as usize - 1] = 2;
+src\authority\snapshot.rs:3430: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3453: header.chunk_counts[ChunkKind::AuthorityBase as usize - 1] = 1;
+src\authority\snapshot.rs:3454: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3530: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3531: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3577: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3579: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3609: let mut header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3610: header.chunk_counts[ChunkKind::Yrs as usize - 1] = 2;
+src\authority\snapshot.rs:3611: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3647: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3648: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3874: header_rows: 0,
+src\authority\snapshot.rs:3880: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3881: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3914: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3915: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3921: assert_eq!(base_count, header.chunk_count(ChunkKind::AuthorityBase));
+src\authority\snapshot.rs:3922: assert_eq!(yrs_count, header.chunk_count(ChunkKind::Yrs));
+src\authority\snapshot.rs:3941: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3942: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:3980: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:3981: assert_eq!(header.chunk_count(ChunkKind::Yrs), 1);
+src\authority\snapshot.rs:3982: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:4032: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:4033: assert_eq!(header.chunk_count(ChunkKind::Yrs), 1);
+src\authority\snapshot.rs:4034: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:4087: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:4088: assert_eq!(header.chunk_count(ChunkKind::Yrs), 1);
+src\authority\snapshot.rs:4089: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:4125: let header = header(&authority, &encoder, budget);
+src\authority\snapshot.rs:4126: assert!(header.chunk_count(ChunkKind::Yrs) > 2);
+src\authority\snapshot.rs:4127: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:4204: let expected = header(&a, &encoder, budget);
+src\authority\snapshot.rs:4220: let header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:4221: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\authority\snapshot.rs:4260: let mut header = header(&a, &encoder, budget);
+src\authority\snapshot.rs:4261: assert_eq!(header.chunk_count(ChunkKind::Yrs), 1);
+src\authority\snapshot.rs:4262: header.state_vector = StateVector::default().encode_v1();
+src\authority\snapshot.rs:4263: let mut hydrator = AuthorityHydrator::new(&header).unwrap();
+src\snapshot\acceptance_tests.rs:158: id="1" name="Items" displayName="Items" ref="A4:B6" headerRowCount="1"
+src\snapshot\acceptance_tests.rs:924: if kind == ChunkKind::Header && ordinal == 0 {
+src\snapshot\acceptance_tests.rs:926: let mut header = SnapshotHeader::decode(reader.bytes().unwrap()).unwrap();
+src\snapshot\acceptance_tests.rs:927: header.snapshot_id = 0;
+src\snapshot\acceptance_tests.rs:929: writer.bytes(&header.encode());
+src\snapshot\acceptance_tests.rs:1301: fn corrupt_header_counts(
+src\snapshot\acceptance_tests.rs:1316: let mut header = SnapshotHeader::decode(reader.bytes().unwrap()).unwrap();
+src\snapshot\acceptance_tests.rs:1334: header.chunk_counts[index(ChunkKind::Header)] =
+src\snapshot\acceptance_tests.rs:1338: writer.bytes(&header.encode());
+src\snapshot\acceptance_tests.rs:1361: chunks[0] = corrupt_header_counts(&chunks[0], Some(usize::MAX / 4), None);
+src\snapshot\acceptance_tests.rs:1381: let header = corrupt_header_counts(&chunks[0], None, Some([usize::MAX / 4, 0, 0]));
+src\snapshot\acceptance_tests.rs:1383: builder.push(&header).unwrap();
+src\snapshot\acceptance_tests.rs:1387: let state = builder.header.as_ref().unwrap();
+src\snapshot\acceptance_tests.rs:1388: assert_eq!(state.header.last_calculation.changed.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1389: assert_eq!(state.header.last_calculation.cycle_cells.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1390: assert_eq!(state.header.last_calculation.limited_cells.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1427: let state = builder.header.as_ref().unwrap();
+src\snapshot\acceptance_tests.rs:1428: assert_eq!(state.header.last_calculation.changed.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1429: assert_eq!(state.header.last_calculation.cycle_cells.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1430: assert_eq!(state.header.last_calculation.limited_cells.capacity(), 0);
+src\snapshot\acceptance_tests.rs:1436: let calculation = unframe(chunk).unwrap().0 == ChunkKind::Header;
+src\snapshot\acceptance_tests.rs:1443: let state = builder.header.as_ref().unwrap();
+src\snapshot\acceptance_tests.rs:1444: let list = &state.header.last_calculation.changed;
+src\snapshot\acceptance_tests.rs:1463: let state = builder.header.as_ref().unwrap();
+src\snapshot\acceptance_tests.rs:1467: .map_or(state.header.last_calculation.changed.len(), Vec::len);
+src\snapshot\acceptance_tests.rs:2760: if kind == ChunkKind::Header {
+src\snapshot\acceptance_tests.rs:2762: let calculation = &builder.header.as_ref().unwrap().header.last_calculation;
+src\snapshot\acceptance_tests.rs:2789: assert!(unframe(&chunks[1]).unwrap().0 == ChunkKind::Header);
+src\snapshot\acceptance_tests.rs:2861: .push(&frame(ChunkKind::Header, 0, &payload.into_bytes()))
+src\snapshot\assembly.rs:11: use crate::snapshot::header::{SnapshotHeader, SnapshotMode};
+src\snapshot\assembly.rs:195: header: Option<Vec<u8>>,
+src\snapshot\assembly.rs:207: header_ordinal: u64,
+src\snapshot\assembly.rs:259: let header_count = calculation_counts.iter().try_fold(1u64, |total, count| {
+src\snapshot\assembly.rs:262: .ok_or_else(|| error("snapshot header count overflows"))
+src\snapshot\assembly.rs:264: let mut chunk_counts = [header_count, base_count, yrs_count, 0, 0, 0, 0, 0, 1];
+src\snapshot\assembly.rs:293: let header = SnapshotHeader {
+src\snapshot\assembly.rs:313: payload.bytes(&header.encode());
+src\snapshot\assembly.rs:326: let header_chunk = frame(ChunkKind::Header, 0, &payload.into_bytes());
+src\snapshot\assembly.rs:327: if header_chunk.len() > logical_byte_limit() {
+src\snapshot\assembly.rs:328: return Err(error("snapshot header exceeds hydration limit"));
+src\snapshot\assembly.rs:335: header: Some(header_chunk),
+src\snapshot\assembly.rs:347: header_ordinal: 1,
+src\snapshot\assembly.rs:427: if let Some(header) = self.header.take() {
+src\snapshot\assembly.rs:428: return Ok(Some(header));
+src\snapshot\assembly.rs:443: ChunkKind::Header,
+src\snapshot\assembly.rs:444: self.header_ordinal,
+src\snapshot\assembly.rs:447: self.header_ordinal += 1;
+src\snapshot\assembly.rs:736: crate::snapshot::header::GUID_BYTES
+src\snapshot\assembly.rs:738: crate::snapshot::header::NONCE_BYTES
+src\snapshot\assembly.rs:744: if !crate::snapshot::header::identity_byte(value.u8()?, index, guid) {
+src\snapshot\assembly.rs:788: struct HeaderState {
+src\snapshot\assembly.rs:789: header: SnapshotHeader,
+src\snapshot\assembly.rs:801: struct HeaderAdmission {
+src\snapshot\assembly.rs:806: impl HeaderAdmission {
+src\snapshot\assembly.rs:810: return Err(error("snapshot header is invalid"));
+src\snapshot\assembly.rs:814: return Err(error("snapshot header is invalid"));
+src\snapshot\assembly.rs:830: return Err(error("snapshot header is invalid"));
+src\snapshot\assembly.rs:845: let mut header_count = 1u64;
+src\snapshot\assembly.rs:847: header_count = header_count
+src\snapshot\assembly.rs:849: .ok_or_else(|| error("snapshot header count overflows"))?;
+src\snapshot\assembly.rs:852: if header_count != chunk_counts[index(ChunkKind::Header)] {
+src\snapshot\assembly.rs:859: return Err(error("snapshot header is invalid"));
+src\snapshot\assembly.rs:965: header: Option<HeaderState>,
+src\snapshot\assembly.rs:966: admission: Option<HeaderAdmission>,
+src\snapshot\assembly.rs:1001: header: None,
+src\snapshot\assembly.rs:1086: None => index(ChunkKind::Header),
+src\snapshot\assembly.rs:1206: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1221: if kind == ChunkKind::Header && inner_ordinal == 0 {
+src\snapshot\assembly.rs:1222: self.admission = Some(HeaderAdmission::decode(payload.clone(), snapshot_id)?);
+src\snapshot\assembly.rs:1245: fn accept_header(&mut self, payload: &[u8], snapshot_id: u64) -> SnapshotResult<()> {
+src\snapshot\assembly.rs:1247: let header = SnapshotHeader::decode(reader.bytes()?)?;
+src\snapshot\assembly.rs:1248: if header.snapshot_id != snapshot_id
+src\snapshot\assembly.rs:1249: || header.edited_since_open
+src\snapshot\assembly.rs:1250: || header.moved_references_since_open
+src\snapshot\assembly.rs:1251: || header.next_sheet_id != 0
+src\snapshot\assembly.rs:1252: || header.chunk_count(ChunkKind::Header) == 0
+src\snapshot\assembly.rs:1253: || header.chunk_count(ChunkKind::End) != 1
+src\snapshot\assembly.rs:1254: || header.chunk_count(ChunkKind::Model) == 0
+src\snapshot\assembly.rs:1255: || header.chunk_count(ChunkKind::Preserved) == 0
+src\snapshot\assembly.rs:1257: return Err(error("snapshot header is invalid"));
+src\snapshot\assembly.rs:1272: let header_count = calculation_counts.iter().try_fold(1u64, |total, count| {
+src\snapshot\assembly.rs:1275: .ok_or_else(|| error("snapshot header count overflows"))
+src\snapshot\assembly.rs:1277: if header_count != header.chunk_count(ChunkKind::Header)
+src\snapshot\assembly.rs:1278: || !header.last_calculation.changed.is_empty()
+src\snapshot\assembly.rs:1279: || !header.last_calculation.cycle_cells.is_empty()
+src\snapshot\assembly.rs:1280: || !header.last_calculation.limited_cells.is_empty()
+src\snapshot\assembly.rs:1284: if package_present != (header.chunk_count(ChunkKind::Facts) != 0)
+src\snapshot\assembly.rs:1285: || source_length.is_some() != (header.chunk_count(ChunkKind::Source) != 0)
+src\snapshot\assembly.rs:1294: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1296: self.received.iter().zip(header.chunk_counts).enumerate()
+src\snapshot\assembly.rs:1302: if self.ended && self.received != header.chunk_counts {
+src\snapshot\assembly.rs:1305: self.authority = Some(AuthorityHydrator::new(&header)?);
+src\snapshot\assembly.rs:1309: self.header = Some(HeaderState {
+src\snapshot\assembly.rs:1310: header,
+src\snapshot\assembly.rs:1326: .header
+src\snapshot\assembly.rs:1328: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1348: } = &mut state.header.last_calculation;
+src\snapshot\assembly.rs:1361: .header
+src\snapshot\assembly.rs:1363: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1375: } = &mut state.header.last_calculation;
+src\snapshot\assembly.rs:1470: self.header.is_some(),
+src\snapshot\assembly.rs:1500: let calculation = self.header.is_some()
+src\snapshot\assembly.rs:1504: .map(|chunk| unframe(chunk).map(|(kind, _, _)| kind == ChunkKind::Header))
+src\snapshot\assembly.rs:1576: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1589: .ok_or_else(|| error("snapshot header is missing"))?
+src\snapshot\assembly.rs:1594: .ok_or_else(|| error("snapshot header is missing"))?
+src\snapshot\assembly.rs:1598: let header = &self
+src\snapshot\assembly.rs:1599: .header
+src\snapshot\assembly.rs:1601: .ok_or_else(|| error("snapshot header is missing"))?
+src\snapshot\assembly.rs:1602: .header;
+src\snapshot\assembly.rs:1607: if next == header.chunk_count(ChunkKind::Preserved) {
+src\snapshot\assembly.rs:1611: == header
+src\snapshot\assembly.rs:1613: .checked_add(header.chunk_count(ChunkKind::Cells))
+src\snapshot\assembly.rs:1628: .header
+src\snapshot\assembly.rs:1654: ChunkKind::Header => {
+src\snapshot\assembly.rs:1655: if self.header.is_none() {
+src\snapshot\assembly.rs:1659: self.accept_header(payload, snapshot_id)?;
+src\snapshot\assembly.rs:1669: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1708: .ok_or_else(|| error("snapshot header is missing"))?;
+src\snapshot\assembly.rs:1836: let HeaderState {
+src\snapshot\assembly.rs:1837: header,
+src\snapshot\assembly.rs:1848: .header
+src\snapshot\assembly.rs:1850: .ok_or_else(|| error("validated snapshot header is missing"))?;
+src\snapshot\assembly.rs:1851: if self.received != header.chunk_counts {
+src\snapshot\assembly.rs:1855: header.last_calculation.changed.len(),
+src\snapshot\assembly.rs:1856: header.last_calculation.cycle_cells.len(),
+src\snapshot\assembly.rs:1857: header.last_calculation.limited_cells.len(),
+src\snapshot\assembly.rs:1874: || model.sheets.get(header.active_sheet.0 as usize).is_none()
+src\snapshot\assembly.rs:1876: return Err(error("snapshot model header differs"));
+src\snapshot\assembly.rs:1915: let SnapshotHeader {
+src\snapshot\assembly.rs:1933: } = header;
+src\snapshot\cells.rs:57: let mut header = Writer::new();
+src\snapshot\cells.rs:58: header.var_usize(self.sheet);
+src\snapshot\cells.rs:59: header.var_u32(base.0);
+src\snapshot\cells.rs:60: header.var_u32(base.1);
+src\snapshot\cells.rs:61: header.var_usize(count + 1);
+src\snapshot\cells.rs:62: lengths.push(record.len() + if count == 0 { header.len() } else { 0 });
+src\snapshot\cells.rs:64: + header.len()
+src\snapshot\header.rs:29: pub(crate) struct SnapshotHeader {
+src\snapshot\header.rs:49: impl SnapshotHeader {
+src\snapshot\header.rs:201: ChunkKind::Header => 0,
+src\snapshot\header.rs:219: fn header_preserves_nested_options_and_float_bits() {
+src\snapshot\header.rs:220: let mut header = SnapshotHeader {
+src\snapshot\header.rs:266: header.calculation_context = context;
+src\snapshot\header.rs:268: header.rand_seed = seed;
+src\snapshot\header.rs:269: let bytes = header.encode();
+src\snapshot\header.rs:270: let decoded = SnapshotHeader::decode(&bytes).unwrap();
+src\snapshot\header.rs:272: assert_eq!(decoded.last_calculation, header.last_calculation);
+src\snapshot\header.rs:283: let mut bytes = header.encode();
+src\snapshot\header.rs:288: assert!(SnapshotHeader::decode(&bytes).is_err());
+src\snapshot\invariant_tests.rs:18: fn change_header(
+src\snapshot\invariant_tests.rs:20: change: impl FnOnce(&mut SnapshotHeader),
+src\snapshot\invariant_tests.rs:23: let mut header = SnapshotHeader::decode(reader.bytes().unwrap()).unwrap();
+src\snapshot\invariant_tests.rs:24: change(&mut header);
+src\snapshot\invariant_tests.rs:26: writer.bytes(&header.encode());
+src\snapshot\invariant_tests.rs:40: change_header(&mut records, |header| {
+src\snapshot\invariant_tests.rs:41: header.snapshot_id = 17;
+src\snapshot\invariant_tests.rs:42: header.chunk_counts = counts;
+src\snapshot\invariant_tests.rs:111: change_header(&mut records, |header| header.state_vector = vector);
+src\snapshot\invariant_tests.rs:483: change_header(&mut snapshot, |header| {
+src\snapshot\invariant_tests.rs:484: header.state_vector = worker.encode_state_vector_v1();
+src\snapshot\invariant_tests.rs:1077: fn snapshot_identity_fields_are_bounded_at_header_admission() {
+src\snapshot\invariant_tests.rs:1082: change_header(&mut records, |header| match field {
+src\snapshot\invariant_tests.rs:1083: 0 => header.version_nonce = "a".repeat(2 * 1024 * 1024),
+src\snapshot\invariant_tests.rs:1084: 1 => header.version_nonce = "z".repeat(32),
+src\snapshot\invariant_tests.rs:1085: 2 => header.guid = "a".repeat(2 * 1024 * 1024),
+src\snapshot\invariant_tests.rs:1086: _ => header.guid = "z".repeat(36),
+src\snapshot\invariant_tests.rs:1096: assert!(builder.header.is_none());
+src\snapshot\invariant_tests.rs:1149: let mut header = Writer::new();
+src\snapshot\invariant_tests.rs:1150: header.var_u64(0);
+src\snapshot\invariant_tests.rs:1151: header.var_u64(1);
+src\snapshot\invariant_tests.rs:1152: header.bool(false);
+src\snapshot\invariant_tests.rs:1154: header.var_usize(if kind == tag { 9 } else { 0 });
+src\snapshot\invariant_tests.rs:1157: framed.bytes(&header.into_bytes());
+src\snapshot\measurement_tests.rs:419: let header = reader.bytes().unwrap().to_vec();
+src\snapshot\measurement_tests.rs:432: writer.bytes(&header);
+src\snapshot\measurement_tests.rs:458: assert_eq!(failure.to_string(), "snapshot model header differs");
+src\snapshot\mod.rs:3: pub(crate) mod header;
+src\snapshot\model.rs:20: const HEADER: u8 = 0;
+src\snapshot\model.rs:48: const CONDITIONAL_HEADER: u8 = 29;
+src\snapshot\model.rs:50: const AUTO_FILTER_HEADER: u8 = 31;
+src\snapshot\model.rs:65: CONDITIONAL_HEADER | AUTO_FILTER_HEADER => HEADER,
+src\snapshot\model.rs:110: write_header(&mut payload, model)?;
+src\snapshot\model.rs:115: "snapshot model header exceeds byte budget",
+src\snapshot\model.rs:238: fn write_header(w: &mut Writer, model: &Workbook) -> SnapshotResult<()> {
+src\snapshot\model.rs:271: AUTO_FILTER_HEADER
+src\snapshot\model.rs:273: CONDITIONAL_HEADER
+src\snapshot\model.rs:275: HEADER
+src\snapshot\model.rs:717: if tag != HEADER {
+src\snapshot\model.rs:718: return Err(SnapshotError::new("snapshot model header is missing"));
+src\snapshot\model.rs:720: self.read_header(
+src\snapshot\model.rs:722: matches!(raw, CONDITIONAL_HEADER | AUTO_FILTER_HEADER),
+src\snapshot\model.rs:723: raw == AUTO_FILTER_HEADER,
+src\snapshot\model.rs:905: let ((name, (sheet, (range, (header_rows, (totals_rows, columns))))), end) =
+src\snapshot\model.rs:914: header_rows,
+src\snapshot\model.rs:1082: if run_tag(tag) != HEADER {
+src\snapshot\model.rs:1083: return Err(SnapshotError::new("snapshot model header is missing"));
+src\snapshot\model.rs:1085: self.read_header(
+src\snapshot\model.rs:1087: matches!(tag, CONDITIONAL_HEADER | AUTO_FILTER_HEADER),
+src\snapshot\model.rs:1088: tag == AUTO_FILTER_HEADER,
+src\snapshot\model.rs:1112: fn read_header(
+src\snapshot\model.rs:1467: let mut header = Reader::new(r.clone().rest());
+src\snapshot\model.rs:1468: header.var_usize()?;
+src\snapshot\model.rs:1469: header.var_u32()?;
+src\snapshot\model.rs:1470: header.var_u32()?;
+src\snapshot\model.rs:1471: let count = header.var_usize()?;
+src\snapshot\model.rs:1620: header_rows,
+src\snapshot\model.rs:1628: w.var_u32(*header_rows);
+src\snapshot\model.rs:1638: header_rows: r.var_u32()?,
+src\snapshot\model.rs:2381: let mut chunks = vec![declared_header(13 + fills.len() + borders.len(), counts)];
+src\snapshot\model.rs:2825: let mut header = Writer::new();
+src\snapshot\model.rs:2826: header.u8(0);
+src\snapshot\model.rs:2827: header.u8(0);
+src\snapshot\model.rs:2828: header.var_usize(records.len() + 1);
+src\snapshot\model.rs:2829: header.var_usize(2);
+src\snapshot\model.rs:2831: header.var_usize(count);
+src\snapshot\model.rs:2833: let mut chunks = vec![frame(ChunkKind::Model, 0, &header.into_bytes())];
+src\snapshot\model.rs:2938: fn declared_header(records: usize, counts: [usize; 10]) -> Vec<u8> {
+src\snapshot\model.rs:2940: w.u8(HEADER);
+src\snapshot\model.rs:2959: .advance_bounded(&declared_header(50_000_013, counts), budget)
+src\snapshot\model.rs:2973: .advance_bounded(&declared_header(13, counts), budget)
+src\snapshot\model.rs:2988: &declared_header(if tag == CHART { 15 } else { 14 }, counts),
+src\snapshot\model.rs:3394: header_rows: 0,
+src\snapshot\model.rs:3402: header_rows: u32::MAX,
+src\snapshot\preserved.rs:13: const HEADER: u8 = 0;
+src\snapshot\preserved.rs:49: write_header(&mut payload, state)?;
+src\snapshot\preserved.rs:54: "snapshot preservation header exceeds byte budget",
+src\snapshot\preserved.rs:102: fn write_header(w: &mut Writer, state: &PreservedSheetState) -> SnapshotResult<()> {
+src\snapshot\preserved.rs:124: w.u8(HEADER);
+src\snapshot\preserved.rs:354: if tag != HEADER {
+src\snapshot\preserved.rs:356: "snapshot preservation header is missing",
+src\snapshot\preserved.rs:359: self.read_header(&mut r)?;
+src\snapshot\preserved.rs:400: if tag != HEADER {
+src\snapshot\preserved.rs:402: "snapshot preservation header is missing",
+src\snapshot\preserved.rs:405: self.read_header(&mut r)?;
+src\snapshot\preserved.rs:417: fn read_header(&mut self, r: &mut Reader<'_>) -> SnapshotResult<()> {
+src\snapshot\preserved.rs:558: w.u8(HEADER);
+src\snapshot\preserved.rs:585: w.u8(HEADER);
+src\snapshot\preserved.rs:730: let header = encoder
+src\snapshot\preserved.rs:750: builder.push(&header).unwrap();
+src\snapshot\validation.rs:248: let header = SheetChart {
+src\snapshot\validation.rs:256: check(validate_charts(std::slice::from_ref(&header)))?;
+src\snapshot\validation.rs:506: fn chart_headers_references_and_index_retirement_are_bounded() {
+src\snapshot\validation.rs:523: let mut headers = 0;
+src\snapshot\validation.rs:532: let header = phase == 7 && validation.other == 0 && validation.index < 16;
+src\snapshot\validation.rs:536: headers += usize::from(header);
+src\snapshot\validation.rs:552: assert!(headers >= 15);
+src\snapshot\wire.rs:9: Header = 1,
+src\snapshot\wire.rs:23: 1 => Self::Header,
+src\structured\markdown.rs:271: "- {} Table {} at {a1}{clipped}: {} header rows, {} totals rows; columns {columns}\n",
+src\structured\markdown.rs:274: table.header_rows,
+src\structured\markdown.rs:508: let mut header = String::from("|  |");
+src\structured\markdown.rs:511: header.push_str(&format!(" {} |", col_to_letters(col)));
+src\structured\markdown.rs:514: if !writer.marked(anchor, &format!("{header}\n{rule}\n")) {
+src\structured\markdown.rs:545: let mut header = String::from("<table>\n<thead><tr><th></th>");
+src\structured\markdown.rs:547: header.push_str(&format!("<th>{}</th>", col_to_letters(col)));
+src\structured\markdown.rs:549: header.push_str("</tr></thead>\n<tbody>\n");
+src\structured\markdown.rs:550: if !writer.marked(anchor, &header) {
+src\structured\mod.rs:356: pub header_rows: u32,
+src\structured\walk.rs:828: header_rows: table.header_rows,
+src\workbook\edit_tests.rs:719: header_rows: 1,
+src\workbook\recovery.rs:51: header: RecoveryHeader,
+src\workbook\recovery.rs:288: struct RecoveryHeader {
+src\workbook\recovery.rs:746: let header = RecoveryHeader {
+src\workbook\recovery.rs:770: header,
+src\workbook\recovery.rs:870: let header = checkpoint.header;
+src\workbook\recovery.rs:873: header.client_id,
+src\workbook\recovery.rs:874: header.next_sheet_id,
+src\workbook\recovery.rs:946: workbook.edited_since_open = header.edited_since_open;
+src\workbook\recovery.rs:947: workbook.recalculated_since_open = header.recalculated_since_open;
+src\workbook\recovery.rs:948: workbook.moved_references_since_open = header.moved_references_since_open;
+src\workbook\recovery.rs:949: workbook.set_active_sheet(header.active_sheet)?;
+src\workbook\recovery.rs:950: workbook.rand_seed = header.rand_seed;
+src\workbook\recovery.rs:951: workbook.version_nonce = header.version_nonce;
+src\workbook\recovery.rs:952: workbook.committed_changes = header.committed_changes;
+src\workbook\recovery.rs:955: cycle_cells: header.last_calculation.cycle_cells,
+src\workbook\recovery.rs:956: limited_cells: header.last_calculation.limited_cells,
+src\workbook\recovery.rs:957: budget_exhausted: header.last_calculation.budget_exhausted,
+src\workbook\recovery.rs:995: header.calculation_context,
+src\workbook\recovery.rs:1246: metadata["header"]["last_calculation"]
+src\workbook\recovery.rs:1741: assert!(metadata["header"].get("state_vector").is_none());
+src\workbook\recovery.rs:1742: assert!(metadata["header"].get("guid").is_none());
+
+## betteroffice-xlsx-ops-0.5.1
+src\apply.rs:28: pub enum OpError {
+src\apply.rs:893: "_XLNM.PRINT_AREA" | "_XLNM.PRINT_TITLES" | "_XLNM._FILTERDATABASE"
+src\op.rs:58: pub enum Op {
+src\remap.rs:3171: fn row_insertion_shifts_every_branch_of_a_print_area_union() {
+src\remap.rs:3174: defined("_xlnm.Print_Area", "Data!$A$1:$D$20,Data!$F$1:$G$20"),
+src\remap.rs:3191: fn whole_axis_print_titles_follow_only_their_own_axis() {
+src\remap.rs:3194: defined("_xlnm.Print_Titles", "Data!$1:$2,Data!$A:$B"),
+src\remap.rs:3241: ..defined("_xlnm.Print_Titles", "$1:$1")
+src\remap.rs:3245: ..defined("_xlnm.Print_Titles", "$1:$1")
+
+## betteroffice-xlsx-model
+src\numfmt.rs:743: let (grouping, scale) = scan_commas(int_toks);
+src\numfmt.rs:751: for _ in 0..scale {
+src\numfmt.rs:914: let scaled = (value * denominator as f64).round();
+src\numfmt.rs:915: if scaled >= u64::MAX as f64 {
+src\numfmt.rs:918: (scaled as u64, denominator)
+src\numfmt.rs:982: /// grouping; trailing ones scale the value down by 1000 each.
+src\numfmt.rs:991: let mut scale = 0u32;
+src\numfmt.rs:1001: scale += 1;
+src\numfmt.rs:1004: (grouping, scale)
+src\numfmt.rs:1020: let scaled = (mag * factor).round();
+src\numfmt.rs:1021: let mut s = format!("{scaled:.0}");
+src\workbook.rs:103: /// resolves against, with the header and totals bands split out.
+src\workbook.rs:109: pub header_rows: u32,
+src\workbook.rs:117: let top = self.range.start.row.checked_add(self.header_rows)?;
+src\workbook.rs:122: /// Inclusive header band, `None` when the table has no header row.
+src\workbook.rs:123: pub fn header_range(&self) -> Option<(RowId, RowId)> {
+src\workbook.rs:124: if self.header_rows == 0 {
+src\workbook.rs:127: let bottom = self.range.start.row.checked_add(self.header_rows - 1)?;
+
+## Public Op variants
+SetCell
+InsertRows
+DeleteRows
+InsertCols
+DeleteCols
+SetColWidth
+SetColVisibility
+RestoreColDimension
+SetRowHeight
+SetRowVisibility
+RestoreRowDimension
+SetFreezePane
+SetHyperlinks
+SetHyperlink
+RemoveHyperlink
+SetAutoFilter
+RestoreAutoFilter
+AddConditionalFormat
+RemoveConditionalFormat
+SetConditionalFormats
+RestoreColStyles
+RestoreRowStyles
+SetCharts
+SetChartAnchor
+MergeCells
+UnmergeCells
+PatchRangeStyle
+SetRangeNumberFormat
+ApplyRangeFormat
+AddSheet
+RemoveSheet
+MoveSheet
+RenameSheet
+SetDefinedName
+DeleteDefinedName
+SetDefinedNames
+RestoreSheet

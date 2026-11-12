@@ -1,0 +1,9 @@
+{
+  "excel_version": "16.0",
+  "conditional_format_count": 1,
+  "conditional_format_applies_to": "$A$1:$B$4",
+  "merged_a6_c6": true,
+  "chart_count": 1,
+  "print_area": "$A$1:$C$6",
+  "data_range_name": "=Data!$A$1:$B$4"
+}

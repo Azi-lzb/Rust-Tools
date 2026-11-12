@@ -1,0 +1,26 @@
+{
+  "structure": {
+    "charts": 1,
+    "conditional_formats": 1,
+    "merge_a6_c6": true,
+    "print_area": "$A$1:$C$6",
+    "orientation": 2.0,
+    "left_header": "Header fixture",
+    "center_footer": "Page &P",
+    "left_margin_pt": 21.599999999999998,
+    "width_e": 20.38,
+    "row2_height": 27.0,
+    "a1_bold": true,
+    "names": [
+      "DataRange==Data!$A$1:$B$4",
+      "Data!Print_Area==Data!$A$1:$C$6"
+    ]
+  },
+  "print_area_probe": {
+    "print_area": null,
+    "names": [
+      "DataRange==Data!$A$1:$B$3",
+      "Data!Print_Area==Data!$A$1:$C$4"
+    ]
+  }
+}
