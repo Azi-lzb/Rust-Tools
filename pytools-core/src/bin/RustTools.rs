@@ -356,7 +356,6 @@ fn run() -> Result<()> {
         "remove-foreign-bank-plan" => run_remove_foreign_bank_plan(arguments),
         "remove-foreign-bank" => run_remove_foreign_bank_batch(arguments, false),
         "rural-loan-plan" => run_rural_loan_plan(arguments),
-        "quarterly-rural-loan-plan" => run_quarterly_rural_loan_plan(arguments),
         "institution-normalize-plan" => run_institution_normalize_plan(arguments),
         "institution-normalize" => run_institution_normalize_batch(arguments, false),
         "fx-header" => run_fx_header_batch(arguments, false),
@@ -6071,10 +6070,6 @@ where
             "  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】"
         )?;
         writeln!(output, "  7  涉农贷款比上月修正（直接修改本期源工作簿）")?;
-        writeln!(
-            output,
-            "  8  季度涉农贷款修正及分地区核对（直接修改本期源工作簿）"
-        )?;
         writeln!(output, "  0  返回")?;
         writeln!(output, "----------------------------")?;
         let Some(choice) = read_menu_choice(input, output, "子菜单选择> ")? else {
@@ -6088,17 +6083,16 @@ where
             "5" => "PT-7-5",
             "6" => "PT-7-6",
             "7" => "PT-7-7",
-            "8" => "PT-7-8",
             "0" => return Ok(()),
             _ => {
-                writeln!(output, "仅接受 1、2、3、4、5、6、7、8 或 0")?;
+                writeln!(output, "仅接受 1、2、3、4、5、6、7 或 0")?;
                 continue;
             }
         };
         // 专用报表菜单的既有工作簿修改统一使用项目内置 openpyxl worker，不路由到 umya。
         let engine: Option<SpecialReportEngine> = if matches!(
             feature_id,
-            "PT-7-1" | "PT-7-2" | "PT-7-3" | "PT-7-4" | "PT-7-7" | "PT-7-8"
+            "PT-7-1" | "PT-7-2" | "PT-7-3" | "PT-7-4" | "PT-7-7"
         ) {
             Some(SpecialReportEngine::Openpyxl)
         } else {
@@ -6625,23 +6619,10 @@ where
                 run_extract_sheets(arguments, true)?;
                 return Ok(());
             }
-            "PT-7-7" | "PT-7-8" => {
-                let quarterly = feature_id == "PT-7-8";
-                let operation = if quarterly {
-                    "季度涉农贷款比上月修正及分地区核对"
-                } else {
-                    "涉农贷款比上月修正"
-                };
-                let current_title = if quarterly {
-                    "选择本期季度涉农贷款工作簿"
-                } else {
-                    "选择本期涉农贷款工作簿"
-                };
-                let previous_title = if quarterly {
-                    "选择上期季度涉农贷款工作簿"
-                } else {
-                    "选择上期涉农贷款工作簿"
-                };
+            "PT-7-7" => {
+                let operation = "涉农贷款比上月修正";
+                let current_title = "选择本期涉农贷款工作簿";
+                let previous_title = "选择上期涉农贷款工作簿";
                 let Some(current) = choose_single_rural_loan_workbook(
                     current_title,
                     feature_id,
@@ -6669,7 +6650,7 @@ where
                     "[就地模式] {operation}：.xls 使用 Excel/WPS COM 修改隔离候选，校验快照后备份并替换源文件；.xlsx 使用 Openpyxl 候选路径。"
                 )?;
                 run_rural_loan_menu(
-                    &current, &previous, global, log_view, None, None, quarterly, engine,
+                    &current, &previous, global, log_view, None, None, false, engine,
                 )?;
                 return Ok(());
             }
@@ -6797,7 +6778,7 @@ where
     if selected.len() != 1 {
         writeln!(
             output,
-            "[提示] {feature_id} 此步骤需要且只需要一个工作簿。5-7 接受 .xls/.xlsx；5-8 接受 .xlsx。"
+            "[提示] {feature_id} 此步骤需要且只需要一个工作簿。5-7 接受 .xls/.xlsx。"
         )?;
         return Ok(None);
     }
@@ -6815,7 +6796,7 @@ where
     if !supported {
         writeln!(
             output,
-            "[跳过] {}：{feature_id} 当前格式不受支持；5-7 接受 .xls/.xlsx，5-8 暂只接受 .xlsx。",
+            "[跳过] {}：{feature_id} 当前格式不受支持；5-7 接受 .xls/.xlsx。",
             display_path_for_user(&path)
         )?;
         return Ok(None);
@@ -11397,23 +11378,6 @@ fn run_rural_loan_plan(arguments: Vec<String>) -> Result<()> {
     let previous = required_path(&options, "previous")?;
     let output = required_path(&options, "output")?;
     let (report, summary) = build_rural_loan_plan(&current, &previous, &output)?;
-    write_optional_plan(&options, &report.plan)?;
-    let execution = execute_optional_plan(&options, report.plan.as_ref())?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(
-            &serde_json::json!({"edit":report,"summary":summary,"execution":execution})
-        )?
-    );
-    Ok(())
-}
-
-fn run_quarterly_rural_loan_plan(arguments: Vec<String>) -> Result<()> {
-    let options = parse_cli_arguments(arguments)?;
-    let current = required_path(&options, "current")?;
-    let previous = required_path(&options, "previous")?;
-    let output = required_path(&options, "output")?;
-    let (report, summary) = build_quarterly_rural_loan_plan(&current, &previous, &output)?;
     write_optional_plan(&options, &report.plan)?;
     let execution = execute_optional_plan(&options, report.plan.as_ref())?;
     println!(
@@ -23103,7 +23067,6 @@ fn print_usage() {
          remove-foreign-bank-plan --config <config.xlsx> --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          remove-foreign-bank --config <config.xlsx> [--plan-dir <dir>] [--view user|developer|off] [--log-dir <dir>] [--report-output <json>] [--capabilities <json> --platform <id>] <source.xlsx>...\n\
          rural-loan-plan --current <xlsx> --previous <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
-         quarterly-rural-loan-plan --current <xlsx> --previous <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          institution-normalize-plan --config <config.xlsx> --input <xlsx> --output <candidate.xlsx> [--plan-output <json>] [--capabilities <json> --platform <id>]\n\
          institution-normalize --config <config.xlsx> --plan-dir <dir> [--view user|developer|off] [--report-output <json>] <workbook.xlsx>...\n\
          institution-normalize --config <config.xlsx> --apply [--capabilities <json> --platform <id>] [--view user|developer|off] [--report-output <json>] <workbook.xlsx>... (creates verified copies beside sources)\n\

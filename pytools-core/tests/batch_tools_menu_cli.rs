@@ -1209,7 +1209,8 @@ fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user
     Ok(())
 }
 
-#[test]
+// Historical 5-8 acceptance path; removed from the product on 2026-11-12.
+#[allow(dead_code)]
 fn interactive_quarterly_rural_loan_menu_records_region_errors_in_developer_view() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
@@ -1363,7 +1364,8 @@ fn interactive_rural_loan_menu_uses_openpyxl_without_capability() -> Result<()> 
     Ok(())
 }
 
-#[test]
+// Historical 5-8 acceptance path; removed from the product on 2026-11-12.
+#[allow(dead_code)]
 fn interactive_quarterly_rural_loan_menu_uses_openpyxl_without_capability() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
