@@ -1,0 +1,265 @@
+{
+  "business_issues": [],
+  "business_metrics": {},
+  "completed_files": 0,
+  "diagnostic_log_path": "run-events\\PT-6-2_pytools-pt-6-2-named-10208-1794503477443781200.jsonl",
+  "elapsed_ms": 68,
+  "ended_at": "2026-11-13T01:11:17.458466100+08:00",
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "run",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-13T01:11:17.444968500+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始按模板命名区域汇总：1 个输入"
+    },
+    {
+      "actual_engine": "calamine + namespace-aware OOXML supplement",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine",
+        "namespace-aware OOXML supplement"
+      ],
+      "file_name": "template.xlsx",
+      "phase": "template_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "status": "started",
+      "timestamp": "2026-11-13T01:11:17.446363800+08:00",
+      "total_elapsed_ms": 1,
+      "user_message": "工作簿「template.xlsx」：正在读取命名区域模板和定义名称"
+    },
+    {
+      "actual_engine": "calamine + namespace-aware OOXML supplement",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine",
+        "namespace-aware OOXML supplement"
+      ],
+      "file_name": "template.xlsx",
+      "phase": "template_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 5,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:11:17.452307900+08:00",
+      "total_elapsed_ms": 7,
+      "user_message": "工作簿「template.xlsx」：命名区域模板读取完成：1 个汇总工作表、3 个定义名称"
+    },
+    {
+      "actual_engine": "calamine + namespace-aware OOXML supplement",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine",
+        "namespace-aware OOXML supplement"
+      ],
+      "file_name": "all-missing-worksheet.xlsx",
+      "phase": "source_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "status": "started",
+      "timestamp": "2026-11-13T01:11:17.452833800+08:00",
+      "total_elapsed_ms": 7,
+      "user_message": "工作簿「all-missing-worksheet.xlsx」：正在读取源工作簿 [1/1]"
+    },
+    {
+      "actual_engine": "calamine + namespace-aware OOXML supplement",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine",
+        "namespace-aware OOXML supplement"
+      ],
+      "file_name": "all-missing-worksheet.xlsx",
+      "phase": "source_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 5,
+      "stage_elapsed_ms": 3,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:11:17.456847+08:00",
+      "total_elapsed_ms": 12,
+      "user_message": "工作簿「all-missing-worksheet.xlsx」：源工作簿读取完成"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "error_type": "named_template_route_missing",
+      "file_name": "all-missing-worksheet.xlsx",
+      "phase": "sheet_routing",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "其他",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_skipped": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 6,
+      "stage_elapsed_ms": 0,
+      "status": "skipped",
+      "timestamp": "2026-11-13T01:11:17.457367700+08:00",
+      "total_elapsed_ms": 12,
+      "user_message": "工作簿「all-missing-worksheet.xlsx」：未汇总源工作表「其他」：未找到同名模板工作表，也未配置可用兜底模板"
+    },
+    {
+      "actual_engine": "calamine",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine"
+      ],
+      "error_type": "source_structure_mismatch",
+      "file_name": "all-missing-worksheet.xlsx",
+      "phase": "source_structure",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_skipped": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 7,
+      "stage_elapsed_ms": 0,
+      "status": "skipped",
+      "timestamp": "2026-11-13T01:11:17.457908900+08:00",
+      "total_elapsed_ms": 13,
+      "user_message": "源工作簿 all-missing-worksheet.xlsx 没有工作表匹配模板或兜底路由；跳过该工作簿：其他：未找到同名模板工作表，也未配置可用兜底模板"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "error_type": "no_summarizable_source",
+      "file_name": "all-missing-worksheet.xlsx",
+      "phase": "summary",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_skipped": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 8,
+      "status": "failed",
+      "timestamp": "2026-11-13T01:11:17.512165900+08:00",
+      "total_elapsed_ms": 68,
+      "user_message": "按模板命名区域汇总失败：没有可汇总的源工作簿；请检查输入文件、工作表名称路由和表结构区域配置"
+    }
+  ],
+  "failed_files": 0,
+  "failure": {
+    "error_type": "no_summarizable_source",
+    "message": "没有可汇总的源工作簿；请检查输入文件、工作表名称路由和表结构区域配置",
+    "stage": "summary"
+  },
+  "feature_id": "PT-6-2",
+  "feature_name": "按模板命名区域汇总",
+  "function": "summary-named-ranges",
+  "input_stats": {
+    "attempted": 1,
+    "cancelled": 0,
+    "failed": 0,
+    "pending": 0,
+    "selected": 1,
+    "skipped": 1,
+    "succeeded": 0
+  },
+  "inputs": [
+    {
+      "attempted": true,
+      "file_name": "all-missing-worksheet.xlsx",
+      "index": 1,
+      "status": "skipped"
+    }
+  ],
+  "output_paths": [],
+  "output_stats": {
+    "saved": false,
+    "workbooks_saved": 0
+  },
+  "overall_status": "FAILED",
+  "product": "pytools",
+  "run_id": "pytools-pt-6-2-named-10208-1794503477443781200",
+  "schema_version": 1,
+  "started_at": "2026-11-13T01:11:17.443767200+08:00",
+  "status": "failed",
+  "summary": null,
+  "total_inputs": 1
+}

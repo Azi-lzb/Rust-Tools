@@ -1,0 +1,334 @@
+{
+  "business_issues": [],
+  "business_metrics": {},
+  "diagnostic_log_path": "run-events\\PT-6-3_pytools-pt-6-3-validation-28348-1794502086012472200.jsonl",
+  "elapsed_ms": 5646,
+  "ended_at": "2026-11-13T00:48:11.651329300+08:00",
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "run",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.014045500+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始按模板校验区域提取校验：1 个输入"
+    },
+    {
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "file_name": "template.xlsx",
+      "phase": "template_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.015678200+08:00",
+      "total_elapsed_ms": 1,
+      "user_message": "工作簿「template.xlsx」：正在读取校验区域模板「template.xlsx」"
+    },
+    {
+      "actual_engine": "calamine + namespace-aware OOXML supplement",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "namespace-aware OOXML supplement"
+      ],
+      "file_name": "template.xlsx",
+      "phase": "template_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 6,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T00:48:06.022442500+08:00",
+      "total_elapsed_ms": 8,
+      "user_message": "工作簿「template.xlsx」：校验区域模板读取完成：配置校验区域 1 个；计算将在临时副本上进行"
+    },
+    {
+      "actual_engine": "calamine + OOXML",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "source_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.023112100+08:00",
+      "total_elapsed_ms": 9,
+      "user_message": "工作簿「formula-source.xlsx」：正在读取源工作簿 [1/1]"
+    },
+    {
+      "actual_engine": "calamine + OOXML",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "source_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 5,
+      "stage_elapsed_ms": 5,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T00:48:06.028782100+08:00",
+      "total_elapsed_ms": 14,
+      "user_message": "工作簿「formula-source.xlsx」：源工作簿读取完成"
+    },
+    {
+      "actual_engine": "calamine",
+      "components": [
+        "pytools-core",
+        "calamine"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_route",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 6,
+      "stage_elapsed_ms": 0,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T00:48:06.029375+08:00",
+      "total_elapsed_ms": 15,
+      "user_message": "工作簿「formula-source.xlsx」：源工作表「Data」已通过路由和表结构校验，匹配校验区域 1 个"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_copy",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 7,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.029959400+08:00",
+      "total_elapsed_ms": 16,
+      "user_message": "工作簿「formula-source.xlsx」，工作表「Data」：正在为「formula-source.xlsx」创建校验副本（保留在「副本」文件夹）；计算引擎仅处理副本，原文件不变"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_copy",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 8,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T00:48:06.033182900+08:00",
+      "total_elapsed_ms": 19,
+      "user_message": "工作簿「formula-source.xlsx」，工作表「Data」：校验副本已生成并保留：「C:\\Users\\AZI\\AppData\\Local\\Temp\\rusttools-log-formula-failure-re9ydzic\\output\\副本\\formula-source.xlsx」；原件未修改"
+    },
+    {
+      "actual_engine": "Excel/WPS COM",
+      "components": [
+        "pytools-core"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_calculation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 9,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.033766400+08:00",
+      "total_elapsed_ms": 19,
+      "user_message": "工作簿「formula-source.xlsx」，工作表「Data」：正在通过 Excel/WPS COM 路由重算「formula-source.xlsx」的校验区域（1 个区域）；最终引擎见完成事件"
+    },
+    {
+      "actual_engine": "Excel/WPS COM",
+      "components": [
+        "pytools-core"
+      ],
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_calculation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 10,
+      "status": "started",
+      "timestamp": "2026-11-13T00:48:06.086576500+08:00",
+      "total_elapsed_ms": 72,
+      "user_message": "工作簿「formula-source.xlsx」：正在通过 Excel/WPS COM 路由重算「formula-source.xlsx」的校验区域（1 个区域）；最终引擎见完成事件"
+    },
+    {
+      "actual_engine": "Excel/WPS COM",
+      "components": [
+        "pytools-core",
+        "pywin32",
+        "Excel/WPS COM"
+      ],
+      "error_type": "named_validation_calculation_error",
+      "file_name": "formula-source.xlsx",
+      "phase": "validation_calculation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 1,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "processed_sheets": 1,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 11,
+      "stage_elapsed_ms": 162,
+      "status": "failed",
+      "timestamp": "2026-11-13T00:48:06.192702700+08:00",
+      "total_elapsed_ms": 178,
+      "user_message": "工作簿「formula-source.xlsx」：公式重算校验区域失败：「formula-source.xlsx」/「Data」；原因：校验区域 COM 重算失败（阶段：calculate）：HRESULT 0x800A03EC; Traceback synthetic recalculation failure"
+    }
+  ],
+  "failure": "校验区域 COM 重算失败（阶段：calculate）：HRESULT 0x800A03EC; Traceback synthetic recalculation failure",
+  "feature_id": "PT-6-3",
+  "feature_name": "按模板校验区域提取校验",
+  "function": "named-validation-extract",
+  "input_stats": {
+    "attempted": 1,
+    "cancelled": 0,
+    "failed": 1,
+    "pending": 0,
+    "selected": 1,
+    "skipped": 0,
+    "succeeded": 0
+  },
+  "output_paths": [],
+  "output_stats": {
+    "saved": false,
+    "sheets_saved": 0,
+    "workbooks_saved": 0
+  },
+  "overall_status": "FAILED",
+  "product": "pytools",
+  "run_id": "pytools-pt-6-3-validation-28348-1794502086012472200",
+  "schema_version": 1,
+  "started_at": "2026-11-13T00:48:06.012446600+08:00",
+  "status": "failed",
+  "summary": null
+}
