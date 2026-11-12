@@ -1249,8 +1249,8 @@ fn interactive_menu_supports_user_and_off_log_views() {
             && user_stderr.contains("输出工作簿数：1"),
         "{user_stderr}"
     );
-    assert!(user_stderr.contains("正在读取源工作簿"));
-    assert!(user_stderr.contains("工作表提取运行记录已保存"));
+    assert!(!user_stderr.contains("正在读取源工作簿"));
+    assert!(!user_stderr.contains("工作表提取运行记录已保存"));
     assert!(user_root.join("app/logs").is_dir());
     fs::remove_dir_all(user_root).unwrap();
 

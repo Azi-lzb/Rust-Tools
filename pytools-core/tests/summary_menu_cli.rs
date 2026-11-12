@@ -1,3 +1,6 @@
+#[path = "common/logging_evidence.rs"]
+mod logging_evidence;
+
 use anyhow::{Context, Result};
 use excel_reader::read_workbook;
 use serde_json::Value;
@@ -38,6 +41,195 @@ impl Drop for TestDirectory {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn user_corrupt_input_logging_keeps_file_identity_without_internal_errors() -> Result<()> {
+    for mixed in [false, true] {
+        let root = TestDirectory::new()?;
+        let config = create_app_config(root.path())?;
+        let corrupt = root.path().join("damaged-source.xlsx");
+        fs::write(&corrupt, b"not a zip workbook")?;
+        let good = root.path().join("good-source.xlsx");
+        create_used_range_source(&good, "synthetic", 1.0)?;
+        let paths = if mixed {
+            format!("{};{}", good.display(), corrupt.display())
+        } else {
+            corrupt.display().to_string()
+        };
+        let output = run_menu_view(&config, &format!("1\n2\n{paths}\n0\n"), "user")?;
+        assert!(!output.status.success());
+        let terminal = String::from_utf8_lossy(&output.stderr);
+        assert!(terminal.contains("damaged-source.xlsx"), "{terminal}");
+        for internal in [
+            "Zip error",
+            "XML parse",
+            "Traceback",
+            "HRESULT",
+            "extent_scan",
+        ] {
+            assert!(!terminal.contains(internal), "{terminal}");
+        }
+        let (_, history, _) = read_single_history(&root.path().join("app/logs"), "PT-6-1_")?;
+        assert_eq!(history["overall_status"], "FAILED");
+        assert!(history["input_stats"]["failed"].as_u64().unwrap_or(0) >= 1);
+        assert_ne!(history["output_stats"]["saved"], true);
+    }
+    Ok(())
+}
+
+#[test]
+fn user_named_summary_skip_keeps_business_reason_and_source_unchanged() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_app_config(root.path())?;
+    let template = root.path().join("template.xlsx");
+    let valid = root.path().join("valid-source.xlsx");
+    let skipped = root.path().join("structure-mismatch.xlsx");
+    create_named_range_template(&template)?;
+    create_named_range_source(&valid, "结构A", true)?;
+    create_named_range_source(&skipped, "结构B", true)?;
+    let before = fs::read(&skipped)?;
+    let input = format!(
+        "1\n3\n{}\n1\n{};{}\n0\n0\n",
+        template.display(),
+        valid.display(),
+        skipped.display()
+    );
+    let output = run_menu_view(&config, &input, "user")?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let terminal = String::from_utf8_lossy(&output.stderr);
+    assert!(terminal.contains("structure-mismatch.xlsx"), "{terminal}");
+    assert!(!terminal.contains("valid-source.xlsx"), "{terminal}");
+    assert!(!terminal.contains("calamine"), "{terminal}");
+    let (_, history, _) = read_single_history(&root.path().join("app/logs"), "PT-6-2_")?;
+    assert_eq!(history["input_stats"]["succeeded"], 1);
+    assert_eq!(history["input_stats"]["skipped"], 1);
+    assert_eq!(history["input_stats"]["failed"], 0);
+    assert_eq!(history["overall_status"], "SUCCESS");
+    assert_eq!(before, fs::read(&skipped)?);
+    Ok(())
+}
+
+#[test]
+fn user_batch_logging_matches_saved_output_at_four_batch_sizes() -> Result<()> {
+    for count in [1usize, 10, 50, 100] {
+        let root = TestDirectory::new()?;
+        let config = create_app_config(root.path())?;
+        let mut sources = Vec::new();
+        for index in 0..count {
+            let path = root.path().join(format!("private-source-{index:03}.xlsx"));
+            create_used_range_source(&path, "synthetic", index as f64)?;
+            sources.push(path);
+        }
+        let before = sources
+            .iter()
+            .map(fs::read)
+            .collect::<std::io::Result<Vec<_>>>()?;
+        let paths = sources
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(";");
+        let output = run_menu_view(&config, &format!("1\n2\n{paths}\n0\n"), "user")?;
+        let terminal = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{terminal}");
+        assert!(!terminal.contains("private-source-"), "{terminal}");
+        for internal in [
+            "calamine",
+            "rust_xlsxwriter",
+            "openpyxl",
+            "正在读取",
+            "正在解析",
+            "候选",
+            "run_started",
+        ] {
+            assert!(!terminal.contains(internal), "{internal}: {terminal}");
+        }
+        let logs = root.path().join("app/logs");
+        let (_, history, _) = read_single_history(&logs, "PT-6-1_")?;
+        assert_eq!(history["input_stats"]["succeeded"], count);
+        assert_eq!(history["input_stats"]["failed"], 0);
+        assert_eq!(history["summary"]["rows"], count * 2);
+        let saved = PathBuf::from(
+            history["summary"]["path"]
+                .as_str()
+                .context("missing saved result")?,
+        );
+        let book = read_workbook(&saved)?;
+        let sheet = book
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == "汇总")
+            .context("missing summary sheet")?;
+        let actual = sheet
+            .values
+            .values()
+            .filter(|cell| cell["value"] == "synthetic")
+            .count();
+        assert_eq!(actual, count, "saved workbook differs from counted inputs");
+        let actual_written_rows = sheet
+            .values
+            .values()
+            .filter(|cell| {
+                cell["value"]
+                    .as_str()
+                    .is_some_and(|value| value.starts_with("private-source-"))
+            })
+            .count();
+        assert_eq!(
+            actual_written_rows,
+            count * 2,
+            "used-range rows include each source header"
+        );
+
+        let after = sources
+            .iter()
+            .map(fs::read)
+            .collect::<std::io::Result<Vec<_>>>()?;
+        assert_eq!(before, after, "summary must leave source bytes unchanged");
+        if let Some(directory) = std::env::var_os("RUSTTOOLS_LOGGING_EVIDENCE_DIR") {
+            let directory = PathBuf::from(directory).join(format!("batch-{count}"));
+            fs::create_dir_all(&directory)?;
+            fs::write(directory.join("stdout.txt"), &output.stdout)?;
+            fs::write(directory.join("stderr.txt"), &output.stderr)?;
+            fs::write(
+                directory.join("statistics.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "inputs": count, "succeeded": history["input_stats"]["succeeded"],
+                    "reported_rows": history["summary"]["rows"], "actual_data_rows": actual, "actual_written_rows_including_source_headers": actual_written_rows,
+                    "source_unchanged": before == after
+                }))?,
+            )?;
+            fs::write(
+                directory.join("history.json"),
+                serde_json::to_vec_pretty(&history)?,
+            )?;
+            fs::copy(&saved, directory.join("result.xlsx"))?;
+            let diagnostic_path = logs.join(
+                history["diagnostic_log_path"]
+                    .as_str()
+                    .context("missing diagnostic path")?,
+            );
+            let diagnostic = fs::read_to_string(&diagnostic_path)?;
+            let records = diagnostic
+                .lines()
+                .map(serde_json::from_str::<Value>)
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            assert!(records
+                .iter()
+                .all(|event| event["run_id"] == history["run_id"]));
+            assert!(records.iter().any(|event| event["engine"] == "calamine"));
+            assert!(records
+                .iter()
+                .any(|event| event["engine"] == "rust_xlsxwriter"));
+            fs::write(directory.join("developer.jsonl"), diagnostic)?;
+        }
+    }
+    Ok(())
 }
 
 #[test]
@@ -1456,6 +1648,10 @@ fn create_arbitrary_row_source(path: &Path) -> Result<usize> {
 }
 
 fn run_menu(config: &Path, input: &str) -> Result<Output> {
+    run_menu_view(config, input, "developer")
+}
+
+fn run_menu_view(config: &Path, input: &str, view: &str) -> Result<Output> {
     let log_dir = config
         .parent()
         .and_then(Path::parent)
@@ -1468,7 +1664,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
         .arg("--log-dir")
         .arg(log_dir)
         .arg("--log-view")
-        .arg("developer")
+        .arg(view)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1480,9 +1676,11 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
         .context("interactive stdin missing")?
         .write_all(input.as_bytes())
         .context("send interactive menu selections")?;
-    child
+    let output = child
         .wait_with_output()
-        .context("wait for interactive menu")
+        .context("wait for interactive menu")?;
+    logging_evidence::capture(view, &output)?;
+    Ok(output)
 }
 
 fn read_single_history(log_dir: &Path, prefix: &str) -> Result<(PathBuf, Value, String)> {

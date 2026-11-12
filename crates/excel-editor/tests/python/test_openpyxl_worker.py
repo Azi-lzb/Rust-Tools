@@ -818,6 +818,46 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertEqual(response["error"]["kind"], "operation_failed")
         self.assertFalse(output.exists())
 
+    def test_error_diagnostics_preserve_outer_and_deep_stack_frames(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("worker_full_trace_test", WORKER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        errors = [
+            (RuntimeError("synthetic internal failure"), 1, "failed"),
+            (module.WorkerError("operation_failed", "synthetic operation failure"), 1, "failed"),
+            (module.WorkerError("unsupported_input", "synthetic rejection", unsupported=True), 0, "unsupported_before_write"),
+        ]
+        for index, (error, exit_code, status) in enumerate(errors):
+            with self.subTest(status=status, kind=type(error).__name__):
+                namespace = {"diagnostic_error": error}
+                functions = ["def diagnostic_level_0(request): return diagnostic_level_1()"]
+                functions += [
+                    f"def diagnostic_level_{depth}(): return diagnostic_level_{depth + 1}()"
+                    for depth in range(1, 20)
+                ]
+                functions.append("def diagnostic_level_20(): raise diagnostic_error")
+                exec("\n".join(functions), namespace)
+                module._apply = namespace["diagnostic_level_0"]
+                request = self.root / f"trace-{index}.request.json"
+                response = self.root / f"trace-{index}.response.json"
+                request.write_text('{"request_id": "trace-check"}', encoding="utf-8")
+                self.assertEqual(module._run(request, response), exit_code)
+                result = json.loads(response.read_text(encoding="utf-8"))
+                self.assertEqual(result["status"], status)
+                self.assertEqual(result["request_id"], "trace-check")
+                evidence_dir = os.environ.get("RUSTTOOLS_LOGGING_EVIDENCE_DIR")
+                if evidence_dir:
+                    evidence = Path(evidence_dir) / "worker-trace"
+                    evidence.mkdir(parents=True, exist_ok=True)
+                    (evidence / f"response-{index}.json").write_text(
+                        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                trace = result["diagnostics"]["traceback"]
+                self.assertIn("diagnostic_level_0", trace)
+                self.assertIn("diagnostic_level_20", trace)
+
+
 
 class StyleTableIntegrityTest(unittest.TestCase):
     """Direct coverage for the saved-output style-table integrity assertion."""

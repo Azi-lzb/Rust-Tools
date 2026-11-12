@@ -1,0 +1,7 @@
+[2026-11-13 01:43:33] [ERROR] 失败：formula-source.xlsx，Excel/WPS 未能完成操作，请检查文件占用和 Office 状态
+[2026-11-13 01:43:33] [ERROR] 按模板校验区域提取校验：执行失败
+[2026-11-13 01:43:33] [ERROR] 文件：1 个失败
+
+[2026-11-13 01:43:33] [WARN] 需要关注：
+[2026-11-13 01:43:33] [ERROR] 失败：formula-source.xlsx，Excel/WPS 未能完成操作，请检查文件占用和 Office 状态
+[2026-11-13 01:43:33] [ERROR] 详细日志：run-events\PT-6-3_pytools-pt-6-3-validation-15476-1794505412825777200.jsonl

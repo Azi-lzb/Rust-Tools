@@ -1,0 +1,31 @@
+{
+  "baseline_head": "af7059e100d5a0311f361b5a7ea1ec2bb3991f81",
+  "sha256": {
+    "crates/excel-editor/python/openpyxl_worker.py": "8a7dd2a295fae5aae29f471bf111afcaa3870af2dac7240cbdd3493ca662a074",
+    "crates/excel-editor/src/openpyxl_backend.rs": "c12eda03cfb917c3b20153d7cc7a582ef024ec8632abaa4ba8a4cad952554905",
+    "crates/excel-editor/tests/openpyxl_worker.rs": "d664736196e443b1fa7ddb8da503a4ad700b4b3d53ecc49064cd51650a8a2e4d",
+    "crates/excel-editor/tests/python/test_openpyxl_worker.py": "5f0427d9f6b3abad1a4d8eb276fdfd4b165c91f617db90041cf82150cf67933f",
+    "pytools-core/src/bin/RustTools.rs": "bb70d9001fd02f73d2058905edf06cb95748af9e7b0c5bb8f9473906fb85c0e7",
+    "pytools-core/src/engine_diag.rs": "aa1953f0f74ea7d478429f5afb70bbb380610b34f2722e1c505c8fb1656d9aa6",
+    "pytools-core/src/print_ops.rs": "7d73e65e65f9ac9a6c1d7a51e39c6f46ab46eba15eca8383c3a365e4f0f1c6d0",
+    "pytools-core/src/run_logging.rs": "84258f2e2adacc3f2449d5083c31a5132f6b3c3a4fa7a5d4e9a11c1d4429cce3",
+    "pytools-core/src/static_print_engines.rs": "f30c0456b045294e9da082f58e05128b4a4d9c029e93b69693acd46c6c68f8ea",
+    "pytools-core/tests/archive_menu_cli.rs": "11ff5bf7584119b30d5f3d0dc0e59c5d427c05efde325e686ec148ad0b49c09d",
+    "pytools-core/tests/batch_tools_menu_cli.rs": "c8c8c2e68f5bf372e84fc01ffc1d12eef3c66717897fc50862e23e476e9797e8",
+    "pytools-core/tests/common/logging_evidence.rs": "a17195f24579d9e3c5c7c6139c9dfc9434e3f2a2b69b33b87634bd41da908375",
+    "pytools-core/tests/config_menu_cli.rs": "a87d83bc62cfa862d39e0e0b25ff3a559b6b7ec8f0528d5453c2796dd281e581",
+    "pytools-core/tests/conversion_menu_cli.rs": "b4473cdcd58f85e905453b0f8b5dd1ba0fa29deebc4f7b25ee235a1dd3c1f948",
+    "pytools-core/tests/dedup_menu_cli.rs": "94dcec655cd63b136ef7f735997cf9081e21a919516e3fa56995ac447b3db7bf",
+    "pytools-core/tests/fx_header_menu_cli.rs": "3e9df0b32434eaa155dd0fe45f2561ff620273bf0698f8785ea7e9225ff79c34",
+    "pytools-core/tests/institution_normalize_batch_cli.rs": "2e5b60313d4c222c404e1d06cc8a5a934638b619322af2be99bc6f1d545186a2",
+    "pytools-core/tests/print_config_new_target.rs": "3207015c7ee66aaf3f82e9126750f025133b0f319ed55dc2ef4336fa7dc548c8",
+    "pytools-core/tests/print_menu_cli.rs": "8ae8bb6e62f35ee9df6b4174d4389ca2f47e3ea33113a573b8bc82757a2bdc3d",
+    "pytools-core/tests/python/test_logging_formula_failure_cli.py": "7bedfb98e9bc735fea7f98fdd2be4ac2602487c5c0d6a3003fc69cf19cc1474a",
+    "pytools-core/tests/region_sum_parity.rs": "cc8e6ee90c45b8d495e765f72e2ddc16aca1788e638a39e04b3144c3d52dde22",
+    "pytools-core/tests/sheet_extract_area_operation_parity.rs": "4ca2c0a98d8e6ca3b6e1d231381627cf36769acb77f1720c911a6135b9dd40cb",
+    "pytools-core/tests/submission_check_parity.rs": "4bf8930a7af8b79517d8d9d244945a2a56a8360846e36c08f0eaed219decf04b",
+    "pytools-core/tests/summary_comments_cli.rs": "7b3e4a8732719dd647a26594cf09cc80139eab70d75e9c69a95974f5189373e5",
+    "pytools-core/tests/summary_menu_cli.rs": "c1e2ac7a9de1d437dcecac0d5ba7c5e34ab0c0cf70955eb2b2f6f25a992f758b",
+    "pytools-core/tests/timeline_menu_cli.rs": "d9bcf8fb28c31fd6a92b74e78a548606f6e3620ddd41208b65a22ddad2806c48"
+  }
+}

@@ -549,7 +549,7 @@ fn submission_check_menu_logs_user_developer_and_off_views() -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         match log_view {
             "user" => {
-                assert!(stderr.contains("正在读取提交检查配置"));
+                assert!(!stderr.contains("正在读取提交检查配置"));
                 assert!(stderr.contains("耗时"), "{stderr}");
                 assert!(stderr.contains("总用时"));
                 assert!(!stderr.contains(&sources.to_string_lossy().to_string()));

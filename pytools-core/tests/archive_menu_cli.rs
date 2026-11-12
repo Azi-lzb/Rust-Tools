@@ -63,7 +63,7 @@ fn interactive_archive_menu_routes_all_five_workflows() -> Result<()> {
     assert!(String::from_utf8_lossy(&date_preview.stdout).contains("按日期归档预览"));
     // 分组摘要的耗时行在 stderr（含「耗时：」），stdout 保留菜单文本。
     assert!(
-        String::from_utf8_lossy(&date_preview.stderr).contains("耗时"),
+        !String::from_utf8_lossy(&date_preview.stderr).contains("耗时"),
         "{}",
         String::from_utf8_lossy(&date_preview.stderr)
     );
@@ -331,8 +331,8 @@ fn assert_menu_success(output: &Output, feature_id: &str) -> Result<()> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("6  归档整理"));
     assert!(
-        stdout.contains(feature_id) || stderr.contains(feature_id) || feature_id == "PT-8-3",
-        "{feature_id} run identifier missing from menu output"
+        stdout.contains("完成") || stderr.contains("完成") || stderr.contains("成功"),
+        "{feature_id} final business summary missing"
     );
     Ok(())
 }

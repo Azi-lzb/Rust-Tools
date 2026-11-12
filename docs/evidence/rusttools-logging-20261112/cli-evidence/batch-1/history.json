@@ -1,0 +1,455 @@
+{
+  "completed_files": 1,
+  "diagnostic_log_path": "run-events\\PT-6-1_pytools-pt-6-1-22676-1794505298656258600.jsonl",
+  "elapsed_ms": 36,
+  "ended_at": "2026-11-13T01:41:38.691696300+08:00",
+  "error_summary": null,
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "event_name": "run",
+      "level": "INFO",
+      "phase": "run",
+      "progress": {
+        "completed_files": 0,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.657741800+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始按使用区域汇总：1 个输入，1 个可用工作簿"
+    },
+    {
+      "actual_engine": "excel-reader::read_xlsx_worksheet_extents",
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "event_name": "extent_scan",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "extent_scan",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.660675500+08:00",
+      "total_elapsed_ms": 3,
+      "user_message": "工作簿「private-source-000.xlsx」：正在扫描工作簿范围 [1/1]：private-source-000.xlsx"
+    },
+    {
+      "actual_engine": "excel-reader::read_xlsx_worksheet_extents",
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "event_name": "extent_scan",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "extent_scan",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "sheets_discovered": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 3,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.664370100+08:00",
+      "total_elapsed_ms": 6,
+      "user_message": "工作簿「private-source-000.xlsx」：范围扫描完成 [1/1]：private-source-000.xlsx"
+    },
+    {
+      "actual_engine": "rust_xlsxwriter",
+      "components": [
+        "pytools-core",
+        "excel-writer"
+      ],
+      "event_name": "output_workbook",
+      "level": "INFO",
+      "phase": "output_workbook",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_discovered": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 4,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.665627300+08:00",
+      "total_elapsed_ms": 8,
+      "user_message": "正在创建汇总工作簿"
+    },
+    {
+      "actual_engine": "calamine",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine"
+      ],
+      "event_name": "value_read",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "value_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_discovered": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 5,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.666415+08:00",
+      "total_elapsed_ms": 8,
+      "user_message": "工作簿「private-source-000.xlsx」：正在读取工作簿数据 [1/1]：private-source-000.xlsx"
+    },
+    {
+      "actual_engine": "calamine",
+      "components": [
+        "pytools-core",
+        "excel-reader",
+        "calamine"
+      ],
+      "event_name": "value_read",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "value_read",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_discovered": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 6,
+      "stage_elapsed_ms": 6,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.672813700+08:00",
+      "total_elapsed_ms": 15,
+      "user_message": "工作簿「private-source-000.xlsx」：工作簿读取完成 [1/1]：private-source-000.xlsx"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "event_name": "sheet_process",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "sheet_process",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 7,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.673555100+08:00",
+      "total_elapsed_ms": 15,
+      "user_message": "工作簿「private-source-000.xlsx」：正在汇总工作表 Data 的使用区域"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "event_name": "sheet_process",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "sheet_process",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "current_input_index": 1,
+        "current_sheet": "Data",
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 8,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.674212600+08:00",
+      "total_elapsed_ms": 16,
+      "user_message": "工作簿「private-source-000.xlsx」：工作表 Data 的使用区域已汇总"
+    },
+    {
+      "actual_engine": "rust_xlsxwriter",
+      "components": [
+        "pytools-core",
+        "rust_xlsxwriter"
+      ],
+      "event_name": "row_write",
+      "file_name": "private-source-000.xlsx",
+      "level": "INFO",
+      "phase": "row_write",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 9,
+      "stage_elapsed_ms": 1,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.674843200+08:00",
+      "total_elapsed_ms": 17,
+      "user_message": "工作簿「private-source-000.xlsx」：工作簿汇总完成 [1/1]：private-source-000.xlsx"
+    },
+    {
+      "actual_engine": "rust_xlsxwriter",
+      "components": [
+        "rust_xlsxwriter"
+      ],
+      "event_name": "output_save",
+      "level": "INFO",
+      "phase": "output_save",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 10,
+      "status": "started",
+      "timestamp": "2026-11-13T01:41:38.675502600+08:00",
+      "total_elapsed_ms": 17,
+      "user_message": "正在保存汇总工作簿"
+    },
+    {
+      "actual_engine": "rust_xlsxwriter",
+      "components": [
+        "rust_xlsxwriter"
+      ],
+      "event_name": "output_save",
+      "level": "INFO",
+      "phase": "output_save",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 11,
+      "stage_elapsed_ms": 14,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.689726600+08:00",
+      "total_elapsed_ms": 32,
+      "user_message": "汇总工作簿已保存"
+    },
+    {
+      "actual_engine": "rust_xlsxwriter",
+      "components": [
+        "pytools-core",
+        "excel-writer"
+      ],
+      "event_name": "output_workbook",
+      "level": "INFO",
+      "phase": "output_workbook",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 12,
+      "stage_elapsed_ms": 18,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.690407200+08:00",
+      "total_elapsed_ms": 32,
+      "user_message": "汇总工作簿生成完成"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "event_name": "run",
+      "level": "INFO",
+      "phase": "run",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "current_input_index": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 2,
+        "sheets_attempted": 1,
+        "sheets_discovered": 1,
+        "sheets_succeeded": 1,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 2
+      },
+      "sequence": 13,
+      "stage_elapsed_ms": 33,
+      "status": "succeeded",
+      "timestamp": "2026-11-13T01:41:38.691054200+08:00",
+      "total_elapsed_ms": 33,
+      "user_message": "按使用区域汇总完成：1 个工作簿，2 行"
+    }
+  ],
+  "failed_files": 0,
+  "failure": null,
+  "feature_id": "PT-6-1",
+  "feature_name": "按使用区域快速汇总",
+  "function": "summary-used-range",
+  "input_stats": {
+    "attempted": 1,
+    "cancelled": 0,
+    "failed": 0,
+    "pending": 0,
+    "selected": 1,
+    "skipped": 0,
+    "succeeded": 1
+  },
+  "inputs": [
+    {
+      "attempted": true,
+      "file_name": "private-source-000.xlsx",
+      "index": 1,
+      "status": "succeeded"
+    }
+  ],
+  "output_paths": [
+    "20261113_014138_按使用区域汇总（全量）.xlsx"
+  ],
+  "output_stats": {
+    "saved": true,
+    "sheets_saved": 1,
+    "workbooks_saved": 1
+  },
+  "overall_status": "SUCCESS",
+  "performance_stats": {
+    "read_elapsed_ms": 7,
+    "write_elapsed_ms": 18
+  },
+  "product": "pytools",
+  "record_stats": {
+    "rows_processed": 2,
+    "rows_written": 2
+  },
+  "run_id": "pytools-pt-6-1-22676-1794505298656258600",
+  "schema_version": 1,
+  "sheet_stats": {
+    "attempted": 1,
+    "discovered": 1,
+    "failed": 0,
+    "skipped": 0,
+    "succeeded": 1
+  },
+  "sheets": [
+    {
+      "attempted": true,
+      "file_index": 1,
+      "file_name": "private-source-000.xlsx",
+      "sheet_index": 1,
+      "sheet_name": "Data",
+      "stage": "sheet_process",
+      "status": "succeeded"
+    }
+  ],
+  "started_at": "2026-11-13T01:41:38.656242500+08:00",
+  "status": "succeeded",
+  "summary": {
+    "execution": {
+      "ooxml_error_cells_patched": 0,
+      "read_elapsed_ms": 7,
+      "reader_engine": "calamine",
+      "total_elapsed_ms": 33,
+      "write_elapsed_ms": 18,
+      "writer_engine": "rust_xlsxwriter"
+    },
+    "files": 1,
+    "path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-summary-menu-12588-1794505298540376600-21\\app\\output\\20261113_014138_按使用区域汇总（全量）.xlsx",
+    "rows": 2,
+    "saved": true
+  },
+  "total_elapsed_ms": 35,
+  "total_inputs": 1
+}

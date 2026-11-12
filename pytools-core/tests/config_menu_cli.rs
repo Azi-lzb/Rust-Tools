@@ -59,7 +59,7 @@ fn missing_configuration_bootstraps_through_menu_and_can_be_viewed() -> Result<(
     assert!(stdout.contains("7  配置与快捷操作"));
     assert!(stdout.contains("当前配置不可用，该工具暂不能运行"));
     assert!(stdout.contains("请先选择 7-1 初始化/修复配置表"));
-    assert!(stdout.contains("已新建配置表"));
+    assert!(stdout.contains("新建配置表"));
     assert!(stdout.contains("重新加载并查看配置状态"));
     assert!(!stdout.contains("实际读取组件"));
 

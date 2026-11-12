@@ -1,0 +1,8 @@
+[2026-11-12 23:27:27] [ERROR] 工作簿「damaged-source.xlsx」：工作簿范围扫描失败 [2/2]：damaged-source.xlsx
+[2026-11-12 23:27:27] [ERROR] 按使用区域快速汇总：执行失败
+[2026-11-12 23:27:27] [ERROR] 文件：1 个失败，1 个未完成
+
+[2026-11-12 23:27:27] [WARN] 需要关注：
+[2026-11-12 23:27:27] [ERROR] 失败：damaged-source.xlsx，工作簿「damaged-source.xlsx」：工作簿范围扫描失败 [2/2]：damaged-source.xlsx
+[2026-11-12 23:27:27] [ERROR] 详细日志：run-events\PT-6-1_pytools-pt-6-1-3084-1794497247856149500.jsonl
+[2026-11-12 23:27:27] [ERROR] 命令执行失败：工作簿内容损坏或格式无法识别

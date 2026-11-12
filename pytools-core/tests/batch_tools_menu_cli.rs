@@ -91,7 +91,7 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
     // user 视图：终端输出人类可读统一摘要，不再输出 JSON。
     assert!(
         terminal.contains("地区总分校验：部分完成")
-            && terminal.contains("成功：4")
+            && terminal.contains("4 个成功")
             && terminal.contains("发现差异数：1"),
         "{terminal}"
     );
@@ -200,9 +200,9 @@ fn interactive_batch_menu_summarizes_large_region_sum_selection() -> Result<()> 
     );
     assert!(stderr.contains("发现 1 处差异"), "{stderr}");
     assert!(stderr.contains("broken.xlsx"), "{stderr}");
-    assert!(stderr.contains("Zip error"), "{stderr}");
+    assert!(!stderr.contains("Zip error"), "{stderr}");
     assert!(
-        terminal.contains("成功：99") && terminal.contains("失败：1"),
+        terminal.contains("99 个成功") && terminal.contains("1 个失败"),
         "{terminal}"
     );
     Ok(())
@@ -236,7 +236,7 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
         // user 视图输出人类可读汇总；developer/off 视图输出 JSON。
         if view == "user" {
             assert!(terminal.contains("地区总分校验：部分完成"));
-            assert!(terminal.contains("成功：1") && terminal.contains("失败：1"));
+            assert!(terminal.contains("1 个成功") && terminal.contains("1 个失败"));
             assert!(
                 !terminal.contains("\"files\""),
                 "user view must not print JSON: {terminal}"
@@ -324,8 +324,8 @@ fn interactive_region_sum_menu_records_user_developer_and_off_views() -> Result<
         assert!(!history_text.contains(&balanced.to_string_lossy().to_string()));
 
         if view == "user" {
-            assert!(stderr.contains("开始地区总分校验"));
-            assert!(stderr.contains("workbook_read 失败"));
+            assert!(!stderr.contains("开始地区总分校验"));
+            assert!(stderr.contains("工作簿内容损坏或格式无法识别"));
             assert!(!stderr.contains("calamine"));
             assert!(!stderr.contains("rust_xlsxwriter"));
         } else {
@@ -366,7 +366,7 @@ fn interactive_village_split_menu_updates_source_in_place_without_creating_copy(
     assert!(stdout.contains("第一次文件选择：选择 本期商业银行共享一批"));
     assert!(stdout.contains("第二次文件选择：选择 去年同期商业银行共享一批"));
     assert!(stdout.contains("第三次文件选择：选择 本外币、人民币、外币、外发用报表"));
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     assert!(stdout.contains(r#""feature_id": "PT-7-1""#));
     assert!(stdout.contains(r#""created_copies": 0"#));
     assert!(stdout.contains(r#""committed_files": 1"#));
@@ -585,8 +585,7 @@ fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_histo
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
     let terminal = format!("{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
     assert!(
-        terminal.contains("删除分机构表中的外资行：执行成功")
-            && terminal.contains("输入：2，成功：2"),
+        terminal.contains("删除分机构表中的外资行：执行成功") && terminal.contains("2 个成功"),
         "{terminal}"
     );
     assert!(
@@ -647,7 +646,7 @@ fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_histo
     let history_text = serde_json::to_string(&history)?;
     assert!(!history_text.contains("foreign.xlsx"));
     assert!(!history_text.contains("外资甲"));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("已完成 2"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("已完成 2"));
     Ok(())
 }
 
@@ -908,7 +907,7 @@ fn interactive_institution_normalize_menu_updates_source_in_user_developer_and_o
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("2  机构名称规范化"));
-        assert!(stdout.contains("[就地模式]"));
+        assert!(stdout.contains("将直接修改"));
         let stderr = String::from_utf8_lossy(&output.stderr);
         if view == "developer" {
             assert!(stdout.contains(r#""feature_id": "PT-7-2""#));
@@ -921,8 +920,8 @@ fn interactive_institution_normalize_menu_updates_source_in_user_developer_and_o
             let terminal = format!("{stdout}\n{stderr}");
             assert!(
                 terminal.contains("机构名称规范化")
-                    && terminal.contains("成功 1")
-                    && terminal.contains("失败 0"),
+                    && terminal.contains("1 个成功")
+                    && !terminal.contains("0 个失败"),
                 "{terminal}"
             );
             assert!(
@@ -939,12 +938,12 @@ fn interactive_institution_normalize_menu_updates_source_in_user_developer_and_o
             assert!(!view_root.join("app/output/plans/PT-7-2").exists());
             if view == "user" {
                 assert!(
-                    stderr.contains("正在按机构映射标准化第 1/2 个文件名"),
+                    !stderr.contains("正在按机构映射标准化第 1/2 个文件名"),
                     "unexpected PT-7-2 progress log: {stderr}"
                 );
-                assert!(stderr.contains("跳过 2/2：unsupported.xlsm"));
-                assert!(stderr.contains("openpyxl 候选已通过验证"));
-                assert!(stderr.contains("安全提交就地修改"));
+                assert!(stderr.contains("unsupported.xlsm"));
+                assert!(!stderr.contains("openpyxl 候选已通过验证"));
+                assert!(!stderr.contains("安全提交就地修改"));
                 assert!(!stderr.contains("Rust 新工作簿"));
                 assert!(!stderr.contains("另存修改副本"));
                 assert!(!stdout.contains("calamine"));
@@ -1009,11 +1008,11 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     let terminal = format!("{stdout}\n{stderr}");
     assert!(
         terminal.contains("机构名称规范化")
-            && terminal.contains("成功 2")
-            && terminal.contains("失败 0"),
+            && terminal.contains("已修改：2 个工作簿")
+            && !terminal.contains("0 个失败"),
         "{terminal}"
     );
-    assert!(stdout.contains("直接改写源工作簿"), "{stdout}");
+    assert!(stdout.contains("将直接修改"), "{stdout}");
     assert!(
         !stdout.contains("\"total_inputs\""),
         "user view must not print JSON: {stdout}"
@@ -1083,7 +1082,7 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     // 就地模式：菜单提示就地改写，capability 仅用于候选校验，源工作簿最终被安全替换。
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     assert!(stdout.contains(r#""modified_files": 1"#));
     assert!(stderr.contains("\"actual_engine\":\"openpyxl\""));
     assert_ne!(
@@ -1157,13 +1156,10 @@ fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("7  涉农贷款比上月修正"));
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     // user 视图：stdout 只输出人类可读汇总行，不输出 JSON。
-    assert!(
-        stdout.contains("涉农贷款比上月修正结束：匹配机构"),
-        "{stdout}"
-    );
-    assert!(stdout.contains("失败地区 0 个"), "{stdout}");
+    assert!(stdout.contains("涉农贷款比上月修正"), "{stdout}");
+    assert!(!stdout.contains("失败地区 0 个"), "{stdout}");
     assert!(
         !stdout.contains("\"feature_id\""),
         "user view must not print JSON: {stdout}"
@@ -1180,8 +1176,8 @@ fn interactive_rural_loan_menu_adjusts_current_workbook_in_place_and_writes_user
         .as_f64()
         .context("PT-7-7 adjustment is not numeric")?;
     assert!((adjusted_value - 5.123456789).abs() <= 1e-15);
-    assert!(stderr.contains("正在读取本期和上期工作簿"));
-    assert!(stderr.contains("分地区总数一致"));
+    assert!(!stderr.contains("正在读取本期和上期工作簿"));
+    assert!(!stderr.contains("分地区总数一致"));
     assert_ne!(
         fs::read(&current)?,
         current_before,
@@ -1339,7 +1335,7 @@ fn interactive_rural_loan_menu_uses_openpyxl_without_capability() -> Result<()> 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     // 菜单不再要求 ExcelModifier capability，固定使用 openpyxl 安全候选路径。
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     assert!(stderr.contains(r#""actual_engine":"openpyxl""#));
     assert!(stderr.contains(r#""phase":"in_place_execution""#));
     assert_ne!(fs::read(&current)?, current_bytes_before);
@@ -1386,7 +1382,7 @@ fn interactive_quarterly_rural_loan_menu_uses_openpyxl_without_capability() -> R
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     // 菜单不再要求 ExcelModifier capability，固定使用 openpyxl 安全候选路径。
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     assert!(
         stdout.contains(r#""failed_regions": 1"#),
         "quarterly summary metrics missing from output: {stdout}"

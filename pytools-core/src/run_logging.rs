@@ -213,6 +213,62 @@ pub enum FileStatus {
     Cancelled,
 }
 
+/// Current menu reference for known public features. Legacy CLI-only commands
+/// intentionally have no inferred menu number.
+pub fn menu_reference(feature: &str, name: &str) -> Option<&'static str> {
+    if let Some(menu) = [
+        "1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "2-1", "2-2", "2-3", "2-4", "3-1", "3-2",
+        "3-3", "4-1", "4-2", "4-3", "4-4", "4-5", "4-6", "4-7", "5-1", "5-2", "5-3", "5-4", "5-5",
+        "5-6", "5-7", "6-1", "6-2", "6-3", "6-4", "6-5", "7-1", "7-2", "7-3", "7-4", "7-5",
+    ]
+    .into_iter()
+    .find(|menu| *menu == feature)
+    {
+        return Some(menu);
+    }
+    match feature {
+        "1-1" => Some("1-1"),
+        "PT-6-1" => Some("1-2"),
+        "PT-6-2" if name.contains("命名区域") => Some("1-3"),
+        "PT-6-2" if name.contains("批注") => Some("1-4"),
+        "PT-6-3" => Some("1-5"),
+        "PT-1-1" => Some("1-6"),
+        "PT-1-5" => Some("1-7"),
+        "PT-2-6" => Some("2-4"),
+        "2-1" => Some("2-1"),
+        "2-2" => Some("2-2"),
+        "2-3" => Some("2-3"),
+        "3-1" => Some("3-1"),
+        "3-1-Rust" => Some("3-2"),
+        "PT-3-4" => Some("3-3"),
+        "PT-4-1" => Some("4-1"),
+        "PT-4-9" | "PT-4-10" => Some("4-2"),
+        "PT-4-6" | "PT-4-7" => Some("4-3"),
+        "PT-4-2" | "PT-4-3" => Some("4-4"),
+        "PT-4-5" => Some("4-5"),
+        "PT-4-8" if name.contains("提交") => Some("4-6"),
+        "PT-4-11" => Some("4-7"),
+        "PT-7-1" => Some("5-1"),
+        "PT-7-2" => Some("5-2"),
+        "PT-7-3" => Some("5-3"),
+        "PT-7-4" => Some("5-4"),
+        "PT-7-5" => Some("5-5"),
+        "PT-7-6" => Some("5-6"),
+        "PT-7-7" => Some("5-7"),
+        "PT-8-1" => Some("6-1"),
+        "PT-8-2" => Some("6-2"),
+        "PT-8-3" => Some("6-3"),
+        "PT-8-4" => Some("6-4"),
+        "PT-8-5" => Some("6-5"),
+        "PT-5-1" => Some("7-1"),
+        "PT-5-2" => Some("7-2"),
+        "QUICK-OPEN-CONFIG" => Some("7-3"),
+        "QUICK-OPEN-LATEST" => Some("7-4"),
+        "QUICK-OPEN-OUTPUT" => Some("7-5"),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct LogEvent {
     pub schema_version: u8,
@@ -221,6 +277,10 @@ pub struct LogEvent {
     pub event_name: String,
     pub run_id: String,
     pub feature_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub menu_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_paths: Option<Vec<String>>,
     pub stage: String,
     pub status: String,
     pub message: String,
@@ -387,6 +447,8 @@ pub struct InputResult {
     pub file_name: String,
     pub status: FileStatus,
     pub attempted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -394,6 +456,8 @@ pub struct RunSummary {
     pub schema_version: u8,
     pub run_id: String,
     pub feature_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub menu_id: Option<String>,
     pub feature_name: String,
     pub started_at: String,
     pub ended_at: String,
@@ -532,51 +596,68 @@ pub fn format_terminal_summary(summary: &RunSummary, issue_limit: usize) -> Vec<
 /// entirely instead of printing zeroes.
 pub fn format_terminal_summary_with_outputs(
     summary: &RunSummary,
-    issue_limit: usize,
+    _issue_limit: usize,
     output_paths: &[String],
 ) -> Vec<String> {
     let stats = &summary.input_stats;
+    let modified_books = summary
+        .business_metrics
+        .get("已修改工作簿数")
+        .and_then(serde_json::Value::as_u64)
+        .map(|count| count as usize)
+        .or_else(|| {
+            matches!(
+                summary.feature_id.as_str(),
+                "2-1" | "2-2" | "PT-4-5" | "PT-7-7"
+            )
+            .then(|| {
+                summary
+                    .output_stats
+                    .as_ref()
+                    .filter(|output| output.saved == Some(true))
+                    .and_then(|output| output.workbooks_saved)
+            })
+            .flatten()
+        })
+        .unwrap_or(0);
+    let all_modified = modified_books > 0
+        && stats.succeeded == modified_books
+        && stats.skipped == 0
+        && stats.failed == 0
+        && stats.pending == 0
+        && stats.cancelled == 0;
     let status = match summary.overall_status {
         TaskStatus::Success if !summary.business_issues.is_empty() => "执行完成，发现业务异常",
         TaskStatus::Success => "执行成功",
         TaskStatus::PartialSuccess => "部分完成",
         TaskStatus::Failed => "执行失败",
         TaskStatus::Cancelled => "已取消",
+        TaskStatus::NoOp
+            if matches!(
+                summary.feature_id.as_str(),
+                "PT-6-1" | "PT-6-2" | "PT-6-3" | "1-1"
+            ) =>
+        {
+            "未生成结果"
+        }
         TaskStatus::NoOp => "无需修改",
     };
-    let mut lines = vec![
-        SUMMARY_RULE.to_owned(),
-        format!("{}：{status}", summary.feature_name),
-        SUMMARY_RULE.to_owned(),
-    ];
-
-    // 1) Input scale. Only counters that apply are shown; a lone "skipped 0"
-    //    tells the user nothing and pushes the useful numbers further away.
+    let mut lines = vec![format!("{}：{status}", summary.feature_name)];
     if summary.input_stats_available {
-        let mut input_lines = Vec::new();
-        if stats.selected > 0 {
-            input_lines.push(format!("输入：{}", stats.selected));
+        let mut counts = Vec::new();
+        for (label, value) in [
+            ("成功", stats.succeeded),
+            ("跳过", stats.skipped),
+            ("失败", stats.failed),
+            ("取消", stats.cancelled),
+            ("未完成", stats.pending),
+        ] {
+            if value > 0 {
+                counts.push(format!("{value} 个{label}"));
+            }
         }
-        if stats.attempted > 0 && stats.attempted != stats.selected {
-            input_lines.push(format!("尝试：{}", stats.attempted));
-        }
-        if stats.succeeded > 0 {
-            input_lines.push(format!("成功：{}", stats.succeeded));
-        }
-        if stats.failed > 0 {
-            input_lines.push(format!("失败：{}", stats.failed));
-        }
-        if stats.skipped > 0 {
-            input_lines.push(format!("跳过：{}", stats.skipped));
-        }
-        if stats.cancelled > 0 {
-            input_lines.push(format!("取消：{}", stats.cancelled));
-        }
-        if stats.pending > 0 {
-            input_lines.push(format!("未完成：{}", stats.pending));
-        }
-        if !input_lines.is_empty() {
-            lines.push(input_lines.join("，"));
+        if !counts.is_empty() && !all_modified {
+            lines.push(format!("文件：{}", counts.join("，")));
         }
     } else if stats.selected > 0 {
         lines.push(format!("输入：{}（统计不可用）", stats.selected));
@@ -585,46 +666,66 @@ pub fn format_terminal_summary_with_outputs(
     // 2) Feature-specific business metrics. These are the numbers the user
     //    actually judges the run by, so they get their own line.
     let mut business = Vec::new();
-    if let Some(sheets) = &summary.sheet_stats {
-        let mut values = Vec::new();
-        if sheets.succeeded > 0 {
-            values.push(format!("成功 {}", sheets.succeeded));
-        }
-        if sheets.failed > 0 {
-            values.push(format!("失败 {}", sheets.failed));
-        }
-        if sheets.skipped > 0 {
-            values.push(format!("跳过 {}", sheets.skipped));
-        }
-        if !values.is_empty() {
-            business.push(format!("已核对工作表：{}", values.join("，")));
-        }
+    if modified_books > 0 {
+        business.push(format!("已修改：{modified_books} 个工作簿"));
     }
     if let Some(records) = &summary.record_stats {
         let mut values = Vec::new();
-        if let Some(value) = records.rows_processed {
-            values.push(format!("处理 {value} 行"));
+        if let Some(value) = records.rows_processed.filter(|value| *value > 0) {
+            let label = match summary.feature_id.as_str() {
+                "PT-6-1" | "PT-6-2" | "PT-6-3" => "提取",
+                _ => "处理",
+            };
+            values.push(format!("{label} {value} 行"));
         }
-        if let Some(value) = records.rows_written {
-            values.push(format!("输出 {value} 行"));
+        if let Some(value) = records.rows_written.filter(|value| *value > 0) {
+            values.push(format!("写入 {value} 行"));
         }
         if !values.is_empty() {
             business.push(format!("记录：{}", values.join("，")));
         }
     }
-    if let Some(output) = &summary.output_stats {
+    if let Some(output) = summary
+        .output_stats
+        .as_ref()
+        .filter(|_| modified_books == 0)
+    {
         let mut values = Vec::new();
-        if let Some(value) = output.workbooks_saved {
-            values.push(format!("保存工作簿 {value} 个"));
+        if let Some(value) = output.workbooks_saved.filter(|value| *value > 0) {
+            values.push(format!("工作簿 {value} 个"));
         }
-        if let Some(value) = output.sheets_saved {
-            values.push(format!("保存工作表 {value} 个"));
+        if let Some(value) = output.sheets_saved.filter(|value| *value > 0) {
+            values.push(format!("工作表 {value} 个"));
         }
         if !values.is_empty() {
-            business.push(format!("输出：{}", values.join("，")));
+            business.push(format!("生成：{}", values.join("，")));
         }
     }
     for (name, value) in &summary.business_metrics {
+        if name.contains("计划操作")
+            || name.contains("计划文件")
+            || name.contains("公式缓存")
+            || name.contains("引擎")
+            || name.contains("耗时")
+            || name == "已修改工作簿数"
+            || name == "启用配置项数"
+            || name == "映射规则数"
+            || name == "成功读取工作簿数"
+            || (modified_books > 0 && name == "修改文件数")
+            || (summary.input_stats_available && name == "成功处理源工作簿数")
+            || name == "跳过源文件或工作表项"
+            || (summary.record_stats.is_some() && name == "提取行数")
+            || (modified_books > 0
+                && matches!(
+                    name.as_str(),
+                    "已写入文件数" | "保存文件数" | "保存工作簿数" | "匹配工作表数" | "修改文件数"
+                ))
+            || (summary.feature_id == "PT-7-4"
+                && matches!(name.as_str(), "命中目标工作表数" | "修改工作表数"))
+        {
+            continue;
+        }
+
         // Zero counters repeat what the status line already implies and push
         // the useful numbers down; a metric that matters is non-zero.
         let is_zero = matches!(value, serde_json::Value::Number(number)
@@ -642,6 +743,21 @@ pub fn format_terminal_summary_with_outputs(
         lines.extend(business);
     }
 
+    for input in &summary.inputs {
+        let label = match input.status {
+            FileStatus::Failed => "失败",
+            FileStatus::Skipped => "跳过",
+            _ => continue,
+        };
+        if let Some(reason) = &input.message {
+            lines.push(format!(
+                "{label}：{}，{}",
+                input.file_name,
+                summarize_error_message(reason)
+            ));
+        }
+    }
+
     // 3) Items needing attention, grouped by category so the user sees what
     //    kind of problem they have before the individual files.
     if !summary.business_issues.is_empty() || summary.error_summary.is_some() {
@@ -656,41 +772,29 @@ pub fn format_terminal_summary_with_outputs(
             "  [业务异常] {issue_count} 项（明细 {} 条）",
             summary.business_issues.len()
         ));
-        lines.extend(
-            summary
-                .business_issues
-                .iter()
-                .take(issue_limit)
-                .map(|issue| {
-                    let location = [
-                        issue.file_name.as_deref(),
-                        issue.sheet_name.as_deref(),
-                        issue.location.as_deref(),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" / ");
-                    let count = issue
-                        .count
-                        .map(|value| format!("（{value} 项）"))
-                        .unwrap_or_default();
-                    if location.is_empty() {
-                        format!("    [{}] {}{count}", issue.category, issue.message)
-                    } else {
-                        format!(
-                            "    [{}] {}（{location}）{count}",
-                            issue.category, issue.message
-                        )
-                    }
-                }),
-        );
-        if summary.business_issues.len() > issue_limit {
-            lines.push(format!(
-                "    另有 {} 条异常明细，详见运行记录",
-                summary.business_issues.len() - issue_limit
-            ));
-        }
+        lines.extend(summary.business_issues.iter().map(|issue| {
+            let location = [
+                issue.file_name.as_deref(),
+                issue.sheet_name.as_deref(),
+                issue.location.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" / ");
+            let count = issue
+                .count
+                .map(|value| format!("（{value} 项）"))
+                .unwrap_or_default();
+            if location.is_empty() {
+                format!("    [{}] {}{count}", issue.category, issue.message)
+            } else {
+                format!(
+                    "    [{}] {}（{location}）{count}",
+                    issue.category, issue.message
+                )
+            }
+        }));
     }
     if let Some(error) = &summary.error_summary {
         let location = [error.file_name.as_deref(), error.sheet_name.as_deref()]
@@ -699,10 +803,8 @@ pub fn format_terminal_summary_with_outputs(
             .collect::<Vec<_>>()
             .join(" / ");
         lines.push(format!(
-            "  [{}] {}（阶段 {}）：{}",
-            error.code,
+            "失败：{}，{}",
             location_lead(&location),
-            error.stage,
             summarize_error_message(&error.message)
         ));
     }
@@ -713,19 +815,28 @@ pub fn format_terminal_summary_with_outputs(
     } else {
         output_paths
     };
-    if !paths.is_empty() {
-        lines.push(String::new());
-        lines.push("输出结果：".to_owned());
-        lines.extend(paths.iter().map(|path| format!("  {path}")));
+    if !paths.is_empty() && !(modified_books > 0 && paths.len() == modified_books) {
+        if paths.len() == 1 {
+            lines.push(format!("输出：{}", paths[0]));
+        } else {
+            let directories = paths
+                .iter()
+                .filter_map(|path| Path::new(path).parent())
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect::<std::collections::BTreeSet<_>>();
+            lines.push(format!("输出：{} 个结果", paths.len()));
+            for directory in directories {
+                if !directory.is_empty() {
+                    lines.push(format!("输出目录：{directory}"));
+                }
+            }
+        }
     }
-    if let Some(path) = &summary.diagnostic_log_path {
-        lines.push(format!("详细日志：{path}"));
+    if summary.error_summary.is_some() || !summary.business_issues.is_empty() {
+        if let Some(path) = &summary.diagnostic_log_path {
+            lines.push(format!("详细日志：{path}"));
+        }
     }
-    lines.push(format!(
-        "耗时：{:.3} 秒",
-        summary.total_elapsed_ms as f64 / 1000.0
-    ));
-    lines.push(SUMMARY_RULE.to_owned());
     lines
 }
 
@@ -746,22 +857,57 @@ fn location_lead(location: &str) -> String {
 /// find EOCD: Zip error: …"), which users cannot read. The full chain stays in
 /// the structured event log. This is a display-layer truncation, not an
 /// attempt to infer a different cause.
-fn summarize_error_message(message: &str) -> String {
+pub fn summarize_error_message(message: &str) -> String {
+    let lower = message.to_ascii_lowercase();
+    let reason = if lower.contains("formula cached value") {
+        Some("公式尚无计算结果，请在 Excel/WPS 中计算并保存后重试")
+    } else if lower.contains("permission denied")
+        || lower.contains("access is denied")
+        || message.contains("拒绝访问")
+        || message.contains("另一个程序")
+    {
+        Some("文件被占用或没有访问权限，请关闭相关文件并检查权限")
+    } else if lower.contains("zip")
+        || lower.contains("xml parse")
+        || lower.contains("invalid xml")
+        || lower.contains("eocd")
+    {
+        Some("工作簿内容损坏或格式无法识别")
+    } else if lower.contains("no such file")
+        || lower.contains("not found") && !lower.contains("sheet")
+        || message.contains("系统找不到指定")
+    {
+        Some("文件或所需组件不存在，请检查路径和安装情况")
+    } else if lower.contains("hresult")
+        || lower.contains("com exception")
+        || lower.contains("pywintypes")
+    {
+        Some("Excel/WPS 未能完成操作，请检查文件占用和 Office 状态")
+    } else if lower.contains("traceback") || lower.contains("python") && lower.contains("error") {
+        Some("工作簿处理未完成，请查看详细日志")
+    } else if message.contains("工作簿范围扫描失败") {
+        Some("文件无法读取，请检查工作簿是否损坏")
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        return reason.to_owned();
+    }
+    // Preserve business reasons; discard duplicate context and multiline stacks.
+    let first = message.lines().next().unwrap_or(message).trim();
     let mut parts = Vec::new();
-    for part in message.split(": ") {
-        let part = part.trim();
-        if part.is_empty() || parts.iter().any(|existing: &String| existing == part) {
-            continue;
+    for part in first.split(": ") {
+        if !part.is_empty() && !parts.contains(&part) {
+            parts.push(part);
         }
-        parts.push(part.to_owned());
     }
     let joined = parts.join(": ");
-    const LIMIT: usize = 160;
-    if joined.chars().count() <= LIMIT {
-        return joined;
+    let truncated = joined.chars().take(160).collect::<String>();
+    if joined.chars().count() > 160 {
+        format!("{truncated}…")
+    } else {
+        truncated
     }
-    let truncated = joined.chars().take(LIMIT).collect::<String>();
-    format!("{truncated}…")
 }
 
 /// Whether a grouped-summary line is decorative framing (`====` rules and
@@ -783,7 +929,9 @@ pub fn summary_line_level(line: &str, overall: TaskStatus) -> Level {
     }
     // The recorded execution failure (`[CODE] …（阶段 stage）：…`) is the one
     // line that is an actual program error.
-    if line.trim_start().starts_with('[') && line.contains("（阶段 ") {
+    if line.starts_with("失败：")
+        || (line.trim_start().starts_with('[') && line.contains("（阶段 "))
+    {
         return Level::Error;
     }
     let attention = line.contains("需要关注：")
@@ -807,10 +955,27 @@ pub struct RunTracker {
     pub started_at: String,
     started: Instant,
     inputs: Vec<InputResult>,
+    input_paths: Vec<String>,
     discovered: Option<usize>,
     sheets: Vec<SheetResult>,
     business_issues: Vec<BusinessIssue>,
     business_metrics: BTreeMap<String, serde_json::Value>,
+}
+
+fn diagnostic_input_paths(files: &[PathBuf]) -> Vec<String> {
+    let cwd = env::current_dir().unwrap_or_default();
+    files
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                cwd.join(path)
+            }
+            .to_string_lossy()
+            .into_owned()
+        })
+        .collect()
 }
 
 impl RunTracker {
@@ -835,6 +1000,7 @@ impl RunTracker {
         files: &[PathBuf],
         run_id: String,
     ) -> Self {
+        let labels = disambiguated_file_names(files);
         Self {
             run_id,
             feature_id: feature_id.to_owned(),
@@ -845,14 +1011,16 @@ impl RunTracker {
             sheets: Vec::new(),
             business_issues: Vec::new(),
             business_metrics: BTreeMap::new(),
+            input_paths: diagnostic_input_paths(files),
             inputs: files
                 .iter()
                 .enumerate()
-                .map(|(index, path)| InputResult {
+                .map(|(index, _path)| InputResult {
                     index: index + 1,
-                    file_name: portable_file_name(path),
+                    file_name: labels[index].clone(),
                     status: FileStatus::Pending,
                     attempted: false,
+                    message: None,
                 })
                 .collect(),
         }
@@ -886,14 +1054,17 @@ impl RunTracker {
         if !self.inputs.is_empty() {
             return Err("inputs already initialized");
         }
+        self.input_paths = diagnostic_input_paths(files);
+        let labels = disambiguated_file_names(files);
         self.inputs = files
             .iter()
             .enumerate()
-            .map(|(index, path)| InputResult {
+            .map(|(index, _path)| InputResult {
                 index: index + 1,
-                file_name: portable_file_name(path),
+                file_name: labels[index].clone(),
                 status: FileStatus::Pending,
                 attempted: false,
+                message: None,
             })
             .collect();
         Ok(())
@@ -904,6 +1075,16 @@ impl RunTracker {
             .checked_sub(1)
             .and_then(|n| self.inputs.get(n))
             .map(|item| item.status)
+    }
+
+    /// Attach the final business reason without changing the status ledger.
+    pub fn set_input_message(&mut self, index: usize, message: &str) -> Result<(), &'static str> {
+        let item = index
+            .checked_sub(1)
+            .and_then(|i| self.inputs.get_mut(i))
+            .ok_or("invalid input index")?;
+        item.message = Some(message.to_owned());
+        Ok(())
     }
 
     pub fn input_result(&self, index: usize) -> Option<&InputResult> {
@@ -1068,6 +1249,10 @@ impl RunTracker {
             event_name: name.to_owned(),
             run_id: self.run_id.clone(),
             feature_id: self.feature_id.clone(),
+            menu_id: menu_reference(&self.feature_id, &self.feature_name).map(str::to_owned),
+            input_paths: matches!(name, "run_started" | "run_finished")
+                .then(|| self.input_paths.clone())
+                .filter(|paths| !paths.is_empty()),
             stage: stage.to_owned(),
             status: status.to_owned(),
             message: message.into(),
@@ -1107,18 +1292,56 @@ impl RunTracker {
         } else {
             TaskStatus::Success
         };
+        // Runtime states remain available on the tracker. The final ledger
+        // assigns every input exactly one business outcome.
+        let mut inputs = self.inputs.clone();
+        let mut final_stats = InputStats {
+            selected: inputs.len(),
+            discovered: self.discovered,
+            ..InputStats::default()
+        };
+        for input in &mut inputs {
+            match input.status {
+                FileStatus::Pending | FileStatus::Cancelled => {
+                    input.status = FileStatus::Skipped;
+                    input.message.get_or_insert_with(|| {
+                        if cancelled {
+                            "任务已取消，文件未处理"
+                        } else {
+                            "任务已中止，文件未处理"
+                        }
+                        .to_owned()
+                    });
+                }
+                FileStatus::InProgress => {
+                    input.status = FileStatus::Failed;
+                    input
+                        .message
+                        .get_or_insert_with(|| "文件处理未完成，未确认业务结果".to_owned());
+                }
+                _ => {}
+            }
+            final_stats.attempted += usize::from(input.attempted);
+            match input.status {
+                FileStatus::Succeeded => final_stats.succeeded += 1,
+                FileStatus::Skipped => final_stats.skipped += 1,
+                FileStatus::Failed => final_stats.failed += 1,
+                _ => unreachable!("final input status must be terminal"),
+            }
+        }
         RunSummary {
             schema_version: 1,
             run_id: self.run_id.clone(),
             feature_id: self.feature_id.clone(),
+            menu_id: menu_reference(&self.feature_id, &self.feature_name).map(str::to_owned),
             feature_name: self.feature_name.clone(),
             started_at: self.started_at.clone(),
             ended_at: Local::now().to_rfc3339(),
             total_elapsed_ms: self.started.elapsed().as_millis(),
             overall_status,
-            input_stats,
+            input_stats: final_stats,
             input_stats_available: true,
-            inputs: self.inputs.clone(),
+            inputs,
             sheet_stats: (!self.sheets.is_empty()).then(|| self.sheet_stats()),
             sheets: self.sheets.clone(),
             record_stats: None,
@@ -1171,7 +1394,17 @@ impl EventWriter {
 }
 
 fn write_event_line(writer: &mut impl Write, event: &LogEvent) -> io::Result<()> {
-    serde_json::to_writer(&mut *writer, event).map_err(io::Error::other)?;
+    if event.level == Level::Error {
+        let mut diagnostic = serde_json::to_value(event).map_err(io::Error::other)?;
+        // Capture the reporting call stack without changing terminal output.
+        // It is distinct from an originating Python/COM traceback in details.
+        diagnostic["diagnostic_backtrace"] =
+            serde_json::json!(std::backtrace::Backtrace::force_capture().to_string());
+        diagnostic["backtrace_origin"] = serde_json::json!("diagnostic_capture");
+        serde_json::to_writer(&mut *writer, &diagnostic).map_err(io::Error::other)?;
+    } else {
+        serde_json::to_writer(&mut *writer, event).map_err(io::Error::other)?;
+    }
     writer.write_all(b"\n")
 }
 
@@ -1292,6 +1525,169 @@ mod tests {
     }
 
     #[test]
+    fn inplace_header_summary_reports_committed_workbooks_without_internal_counters() {
+        let mut run = RunTracker::new("PT-7-4", "修改外汇页眉", &[PathBuf::from("source.xlsx")]);
+        run.transition(1, FileStatus::InProgress).unwrap();
+        run.transition(1, FileStatus::Succeeded).unwrap();
+        run.set_business_metric("已修改工作簿数", serde_json::json!(1));
+        run.set_business_metric("命中目标工作表数", serde_json::json!(2));
+        run.set_business_metric("保存文件数", serde_json::json!(1));
+        let summary = run.finish(false, false, false, vec!["source.xlsx".to_owned()], None);
+        let lines = format_terminal_summary(&summary, 8);
+        assert_eq!(lines, vec!["修改外汇页眉：执行成功", "已修改：1 个工作簿"]);
+        assert_eq!(summary.business_metrics["命中目标工作表数"], 2);
+        assert_eq!(summary.output_paths, vec!["source.xlsx"]);
+    }
+
+    #[test]
+    fn aborted_run_finalizes_each_file_once_without_counting_unfinished_success() {
+        let mut run = RunTracker::with_id(
+            "PT-6-1",
+            "汇总",
+            &[PathBuf::from("unread.xlsx"), PathBuf::from("failed.xlsx")],
+            "aborted".to_owned(),
+        );
+        run.transition(2, FileStatus::Failed).unwrap();
+        let summary = run.finish(true, false, false, vec![], None);
+        assert_eq!(summary.input_stats.succeeded, 0);
+        assert_eq!(summary.input_stats.skipped, 1);
+        assert_eq!(summary.input_stats.failed, 1);
+        assert_eq!(summary.input_stats.pending, 0);
+        assert!(summary.inputs.iter().all(|input| matches!(
+            input.status,
+            FileStatus::Succeeded | FileStatus::Skipped | FileStatus::Failed
+        )));
+        assert!(summary.inputs[0]
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("未处理"));
+        assert_eq!(
+            run.input_stats().pending,
+            1,
+            "runtime ledger remains available for diagnostics"
+        );
+    }
+
+    #[test]
+    fn diagnostic_run_metadata_keeps_full_input_paths_for_late_discovery() {
+        let base = std::env::temp_dir().join("rusttools-diagnostic-paths");
+        let paths = vec![base.join("north/book.xlsx"), base.join("south/book.xlsx")];
+        let mut run = RunTracker::new("PT-6-1", "汇总", &[]);
+        run.set_inputs(&paths).unwrap();
+        let event = run.event(Level::Info, "run_finished", "run", "failed", "结束");
+        let expected = paths
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(event.input_paths.as_ref().unwrap(), &expected);
+        assert_ne!(
+            run.input_result(1).unwrap().file_name,
+            run.input_result(2).unwrap().file_name
+        );
+        assert!(!run
+            .input_result(1)
+            .unwrap()
+            .file_name
+            .contains(&base.to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn diagnostic_menu_reference_preserves_legacy_feature_ids() {
+        let run = RunTracker::new("PT-7-4", "修改外汇页眉", &[]);
+        let event = run.event(Level::Info, "run_started", "run", "started", "开始");
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["feature_id"], "PT-7-4");
+        assert_eq!(json["menu_id"], "5-4");
+        assert_eq!(
+            run.finish(false, false, false, vec![], None)
+                .menu_id
+                .as_deref(),
+            Some("5-4")
+        );
+        assert_eq!(menu_reference("PT-4-8", "按配置映射文件名"), None);
+        assert_eq!(menu_reference("PT-4-8", "机构提交完整性检查"), Some("4-6"));
+        assert_eq!(menu_reference("PT-7-8", "已移除功能"), None);
+        assert_eq!(menu_reference("PT-6-2", "按批注汇总"), Some("1-4"));
+        assert_eq!(
+            menu_reference("PT-6-3", "按模板校验区域提取校验"),
+            Some("1-5")
+        );
+        assert_eq!(menu_reference("PT-1-3", "历史命令"), None);
+        for menu in ["7-1", "7-2", "7-3", "7-4", "7-5", "2-4", "3-3"] {
+            assert_eq!(menu_reference(menu, "当前菜单"), Some(menu));
+        }
+        assert_eq!(
+            menu_reference("PT-2-6", "按配置预校验去重任务"),
+            Some("2-4")
+        );
+    }
+
+    #[test]
+    fn final_exception_reasons_keep_duplicate_names_distinguishable() {
+        let paths = [
+            PathBuf::from("north/report.xlsx"),
+            PathBuf::from("south/report.xlsx"),
+        ];
+        let mut run = RunTracker::new("PT-TEST", "检查", &paths);
+        run.transition(1, FileStatus::Failed).unwrap();
+        run.transition(2, FileStatus::Skipped).unwrap();
+        run.set_input_message(1, "XML parse error: invalid zip archive")
+            .unwrap();
+        run.set_input_message(2, "缺少目标工作表").unwrap();
+        let summary = run.finish(false, false, false, vec![], None);
+        let text = format_terminal_summary(&summary, 8).join("\n");
+        assert!(text.contains("north"));
+        assert!(text.contains("south"));
+        assert!(text.contains("工作簿内容损坏或格式无法识别"));
+        assert!(text.contains("缺少目标工作表"));
+        assert!(!text.contains("XML parse"));
+        assert_eq!(summary.input_stats.failed, 1);
+        assert_eq!(summary.input_stats.skipped, 1);
+    }
+
+    #[test]
+    fn successful_batch_summary_is_constant_size_and_hides_input_names() {
+        for count in [1, 10, 50, 100] {
+            let paths = (0..count)
+                .map(|index| PathBuf::from(format!("private-input-{index}.xlsx")))
+                .collect::<Vec<_>>();
+            let mut run = RunTracker::new("PT-TEST", "提取", &paths);
+            for index in 1..=count {
+                run.transition(index, FileStatus::InProgress).unwrap();
+                run.transition(index, FileStatus::Succeeded).unwrap();
+            }
+            let summary = run.finish(false, false, false, vec![], None);
+            assert_eq!(summary.input_stats.succeeded, count);
+            let lines = format_terminal_summary(&summary, 8);
+            assert_eq!(lines.len(), 2);
+            let text = lines.join("\n");
+            assert!(text.contains(&format!("{count} 个成功")));
+            assert!(!text.contains("private-input"));
+            assert!(!text.contains("耗时"));
+            assert!(!text.contains("尝试"));
+        }
+    }
+
+    #[test]
+    fn exception_summary_does_not_drop_file_locations_at_display_limit() {
+        let mut run = RunTracker::new("PT-TEST", "检查", &[]);
+        for index in 0..25 {
+            run.record_business_issue(BusinessIssue::new("缺少工作表", "缺少目标工作表").at(
+                Some(&format!("exception-{index}.xlsx")),
+                None,
+                None,
+            ));
+        }
+        let summary = run.finish(false, false, false, vec![], None);
+        let text = format_terminal_summary(&summary, 8).join("\n");
+        for index in 0..25 {
+            assert!(text.contains(&format!("exception-{index}.xlsx")));
+        }
+        assert_eq!(summary.overall_status, TaskStatus::Success);
+    }
+
+    #[test]
     fn batch_log_policy_throttles_redirected_routine_events_only() {
         let policy = BatchLogPolicy::new(100);
         assert_eq!(policy.checkpoint_interval(), 10);
@@ -1338,7 +1734,7 @@ mod tests {
         assert!(lines.contains("执行完成，发现业务异常"));
         assert!(lines.contains("提取行数：42"));
         assert!(lines.contains("[结构异常] 模板表头不匹配（机构甲.xlsx / 资产 / B4）（2 项）"));
-        assert!(lines.contains("输出结果：") && lines.contains("result.xlsx"));
+        assert!(lines.contains("输出：") && lines.contains("result.xlsx"));
     }
 
     #[test]
@@ -1389,9 +1785,7 @@ mod tests {
         });
 
         let lines = format_terminal_summary(&summary, 8).join("\n");
-        assert!(lines.contains(
-            "[EXCEL_READ_FAILED] 机构甲.xlsx / 资产（阶段 workbook_read）：工作簿无法打开"
-        ));
+        assert!(lines.contains("失败：机构甲.xlsx / 资产，工作簿无法打开"));
     }
 
     #[test]
@@ -1603,6 +1997,8 @@ mod tests {
             "reader failed: invalid workbook"
         );
         assert!(decoded.get("file_path").is_none());
+        assert_eq!(decoded["backtrace_origin"], "diagnostic_capture");
+        assert!(!decoded["diagnostic_backtrace"].as_str().unwrap().is_empty());
         fs::remove_file(path)?;
         fs::remove_dir(root)?;
         Ok(())

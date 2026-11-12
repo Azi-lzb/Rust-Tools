@@ -1,0 +1,7 @@
+{
+  "scenario": "controlled COM Worker recalculation failure",
+  "fault_injection": true,
+  "history": "logs\\PT-6-3_pytools-pt-6-3-validation-15476-1794505412825777200.json",
+  "run_id": "pytools-pt-6-3-validation-15476-1794505412825777200",
+  "source_protection": "byte hashes asserted by passing formula-cli-final test"
+}

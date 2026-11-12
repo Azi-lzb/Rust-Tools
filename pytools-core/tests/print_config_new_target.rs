@@ -237,10 +237,7 @@ fn pt_3_3_rejects_formula_without_cached_value_before_output() -> Result<()> {
         .output()?;
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("formula cached value is blank or unavailable"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("公式尚无计算结果"), "{stderr}");
     assert!(!target.exists(), "uncached formula must not create output");
     assert!(
         !output_dir.exists(),

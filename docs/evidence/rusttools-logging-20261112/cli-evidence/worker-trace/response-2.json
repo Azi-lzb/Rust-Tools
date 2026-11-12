@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "request_id": "trace-check",
+  "status": "unsupported_before_write",
+  "error": {
+    "kind": "unsupported_input",
+    "message": "synthetic rejection"
+  },
+  "diagnostics": {
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\crates\\excel-editor\\python\\openpyxl_worker.py\", line 3193, in _run\n    result = _apply(request)\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 1, in diagnostic_level_0\n  File \"<string>\", line 2, in diagnostic_level_1\n  File \"<string>\", line 3, in diagnostic_level_2\n  File \"<string>\", line 4, in diagnostic_level_3\n  File \"<string>\", line 5, in diagnostic_level_4\n  File \"<string>\", line 6, in diagnostic_level_5\n  File \"<string>\", line 7, in diagnostic_level_6\n  File \"<string>\", line 8, in diagnostic_level_7\n  File \"<string>\", line 9, in diagnostic_level_8\n  File \"<string>\", line 10, in diagnostic_level_9\n  File \"<string>\", line 11, in diagnostic_level_10\n  File \"<string>\", line 12, in diagnostic_level_11\n  File \"<string>\", line 13, in diagnostic_level_12\n  File \"<string>\", line 14, in diagnostic_level_13\n  File \"<string>\", line 15, in diagnostic_level_14\n  File \"<string>\", line 16, in diagnostic_level_15\n  File \"<string>\", line 17, in diagnostic_level_16\n  File \"<string>\", line 18, in diagnostic_level_17\n  File \"<string>\", line 19, in diagnostic_level_18\n  File \"<string>\", line 20, in diagnostic_level_19\n  File \"<string>\", line 21, in diagnostic_level_20\nworker_full_trace_test.WorkerError: synthetic rejection\n"
+  }
+}

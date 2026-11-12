@@ -601,12 +601,12 @@ fn region_sum_cli_throttles_large_batches_and_keeps_failures_and_names_visible()
             captured_lines <= 60,
             "batch {total} emitted {captured_lines} lines"
         );
-        assert!(stderr.contains("north/重复机构.xlsx"), "{stderr}");
+        assert!(!stderr.contains("north/重复机构.xlsx"), "{stderr}");
         assert!(stderr.contains("south/重复机构.xlsx"), "{stderr}");
         assert!(stderr.contains("坏工作簿.xlsx"), "{stderr}");
         assert!(
-            stderr.contains("Zip error"),
-            "read failure must expose the root cause: {stderr}"
+            !stderr.contains("Zip error") && stderr.contains("工作簿内容损坏或格式无法识别"),
+            "user failure must show a short cause: {stderr}"
         );
         assert!(
             stderr.contains("发现 1 处差异"),

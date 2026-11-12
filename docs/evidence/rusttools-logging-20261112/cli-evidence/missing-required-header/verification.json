@@ -1,0 +1,19 @@
+{
+  "scenario": "missing-required-header",
+  "run_id": "pytools-pt-6-2-named-30632-1794505412316152200",
+  "input_stats": {
+    "attempted": 2,
+    "cancelled": 0,
+    "failed": 0,
+    "pending": 0,
+    "selected": 2,
+    "skipped": 1,
+    "succeeded": 1
+  },
+  "actual_data_rows": 1,
+  "record_stats": {
+    "rows_processed": 1,
+    "rows_written": 1
+  },
+  "source_hashes_unchanged": true
+}

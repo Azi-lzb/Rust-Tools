@@ -35,8 +35,8 @@ fn summary_comments_cli_logs_actual_stages_and_preserves_output_across_views() -
     assert!(user_report["execution"]["write_elapsed_ms"].is_number());
     assert!(user_report["execution"]["total_elapsed_ms"].is_number());
     let user_stderr = String::from_utf8_lossy(&user.stderr);
-    assert!(user_stderr.contains("正在读取批注汇总模板"));
-    assert!(user_stderr.contains("批注汇总工作簿已保存"));
+    assert!(!user_stderr.contains("正在读取批注汇总模板"));
+    assert!(!user_stderr.contains("批注汇总工作簿已保存"));
     assert!(!user_stderr.contains("calamine"));
     assert!(!user_stderr.contains("rust_xlsxwriter"));
     let user_history = read_history(&user_report)?;

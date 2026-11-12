@@ -1,3 +1,6 @@
+#[path = "common/logging_evidence.rs"]
+mod logging_evidence;
+
 use anyhow::{Context, Result};
 use excel_editor::{
     BackendCapability, CapabilityEvidence, CapabilityStatus, EditOperation, EngineId,
@@ -620,17 +623,10 @@ fn conversion_menu_and_cli_emit_redacted_dual_view_progress() -> Result<()> {
     );
     assert!(user_output_dir.join("user-private-report.xlsx").is_file());
     let user_stderr = stderr(&user);
-    assert!(user_stderr.contains("已发现 1 个待处理文件"));
-    // 用户视图必须能辨认当前转换的是哪个文件，但不得暴露绝对路径。
-    assert!(
-        user_stderr.contains("正在检查第 1/1 个待转换文件「user-private-report.csv」"),
-        "user view must name the file being converted: {user_stderr}"
-    );
-    assert!(
-        user_stderr.contains("个文件「user-private-report.csv」已转换为 .xlsx"),
-        "completion line must name the converted file: {user_stderr}"
-    );
-    assert!(user_stderr.contains("转换结束：成功 1，失败 0"));
+    assert!(!user_stderr.contains("已发现 1 个待处理文件"));
+    assert!(!user_stderr.contains("正在检查"));
+    assert!(!user_stderr.contains("已转换为"));
+    assert!(!user_stderr.contains("user-private-report.csv"));
     assert!(
         !user_stderr.contains(&sources.display().to_string()),
         "user view must not expose the absolute source path: {user_stderr}"
@@ -788,10 +784,10 @@ fn sheet_rename_menu_executes_openpyxl_after_confirmation() -> Result<()> {
         stderr(&result)
     );
     assert!(String::from_utf8_lossy(&result.stdout).contains("将直接修改所选源工作簿"));
-    assert!(String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
+    assert!(!String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(
-        stdout.contains("成功改名 1 个工作表"),
+        stderr(&result).contains("已改名工作表数：1"),
         "expected a successful sheet-rename summary, got:\n{stdout}"
     );
 
@@ -881,8 +877,8 @@ fn sheet_rename_openpyxl_does_not_require_excel_com() -> Result<()> {
     let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
     assert!(result.status.success());
     let stdout = String::from_utf8_lossy(&result.stdout);
-    assert!(stdout.contains("使用 openpyxl"));
-    assert!(stdout.contains("成功改名 1 个工作表"), "{stdout}");
+    assert!(!stdout.contains("使用 openpyxl"));
+    assert!(stderr(&result).contains("已改名工作表数：1"), "{stdout}");
     let workbook = read_workbook(&input)?;
     assert!(workbook.sheets.iter().any(|sheet| sheet.name == "NewSheet"));
     assert!(!root.path().join("PyTools_Sheet改名结果").exists());
@@ -907,10 +903,10 @@ fn sheet_rename_legacy_capability_does_not_route_to_umya() -> Result<()> {
     let original = fs::read(&input)?;
     let result = run_sheet_rename_menu(&config, &capability, &input, "y")?;
     assert!(result.status.success(), "{}", stderr(&result));
-    assert!(String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
+    assert!(!String::from_utf8_lossy(&result.stdout).contains("使用 openpyxl"));
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(
-        stdout.contains("成功改名 1 个工作表"),
+        stderr(&result).contains("已改名工作表数：1"),
         "expected a successful sheet-rename summary, got:\n{stdout}"
     );
     assert_ne!(fs::read(&input)?, original);
@@ -1044,9 +1040,9 @@ fn file_sort_menu_supports_user_developer_and_off_progress_views() -> Result<()>
     assert!(user.status.success(), "user view failed: {}", stderr(&user));
     assert!(sources.join("1_sort-user-payload.txt").is_file());
     let user_stderr = stderr(&user);
-    assert!(user_stderr.contains("正在读取文件排序配置"));
-    assert!(user_stderr.contains("已处理 1/1 个文件"));
-    assert!(user_stderr.contains("耗时"), "{user_stderr}");
+    assert!(!user_stderr.contains("正在读取文件排序配置"));
+    assert!(!user_stderr.contains("已处理 1/1 个文件"));
+    assert!(!user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("sort-user-payload"));
     assert!(user_stderr.contains("实际改名数：1"), "{user_stderr}");
@@ -1146,9 +1142,9 @@ fn workbook_content_naming_menu_logs_user_developer_and_off_views() -> Result<()
         "user view must not reference a run history path: {user_stdout}"
     );
     let user_stderr = stderr(&user);
-    assert!(user_stderr.contains("正在读取内容前缀配置"));
-    assert!(user_stderr.contains("已处理 1/1 个文件"));
-    assert!(user_stderr.contains("耗时"), "{user_stderr}");
+    assert!(!user_stderr.contains("正在读取内容前缀配置"));
+    assert!(!user_stderr.contains("已处理 1/1 个文件"));
+    assert!(!user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("content-user.xlsx"));
     // user 视图同样保存统一运行记录（1 个 .run.json）。
@@ -1258,9 +1254,9 @@ fn batch_rename_menu_supports_user_developer_and_off_progress_views() -> Result<
         .join("2026-10-24 B01 Example Bank Monthly.txt")
         .is_file());
     let user_stderr = stderr(&user);
-    assert!(user_stderr.contains("正在读取批量重命名配置"));
-    assert!(user_stderr.contains("已处理 1/1 个文件或目录"));
-    assert!(user_stderr.contains("耗时"), "{user_stderr}");
+    assert!(!user_stderr.contains("正在读取批量重命名配置"));
+    assert!(!user_stderr.contains("已处理 1/1 个文件或目录"));
+    assert!(!user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&user_source.display().to_string()));
     assert!(!user_stderr.contains("Bank-user-report"));
     let user_history_name = user_stderr
@@ -1688,9 +1684,11 @@ fn finish_menu(mut child: Command, input: &str) -> Result<Output> {
         .context("interactive stdin missing")?
         .write_all(input.as_bytes())
         .context("send interactive menu selections")?;
-    child
+    let output = child
         .wait_with_output()
-        .context("wait for interactive menu")
+        .context("wait for interactive menu")?;
+    logging_evidence::capture("menu", &output)?;
+    Ok(output)
 }
 
 fn output_json(output: &Output) -> Result<Value> {
@@ -1752,6 +1750,7 @@ fn conversion_writes_recalculated_formula_cache_for_calamine() -> Result<()> {
         .arg(&output)
         .args(["--to", "xlsx"])
         .output()?;
+    logging_evidence::capture("formula-recalc-success", &converted)?;
     assert!(
         converted.status.success(),
         "xls → xlsx conversion failed: {}",

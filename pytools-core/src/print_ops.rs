@@ -1,6 +1,7 @@
 //! Print preparation plans for the non-PDF print tools.
 
 use crate::config::PrintTask;
+use crate::engine_diag::{DiagEvent, DiagOutcome, DiagStage};
 use anyhow::{Context, Result};
 use excel_editor::{
     inspect_xlsx_profile, EditOperation, ExcelEditPlan, PageOrientation, PageSettings,
@@ -32,6 +33,8 @@ pub struct PrintPlanReport {
     pub matching_sheets: usize,
     pub marked_ranges: usize,
     pub plan: Option<ExcelEditPlan>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<DiagEvent>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -42,6 +45,9 @@ pub struct StaticPrintExecution {
     pub imported_ranges: usize,
     pub formulas_materialized: usize,
     pub comments_dropped: bool,
+    pub stage_timings: serde_json::Value,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<DiagEvent>,
 }
 
 #[derive(Clone, Debug)]
@@ -419,6 +425,7 @@ pub fn build_comment_print_plan(
         matching_sheets: marked.len(),
         marked_ranges: output_sheets.len(),
         plan,
+        diagnostics: Vec::new(),
     })
 }
 
@@ -449,6 +456,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
     }
     let mut reports = Vec::new();
     for (target, target_tasks) in grouped {
+        let mut diagnostics = Vec::new();
         anyhow::ensure!(
             is_xlsx(&target),
             "print target must be .xlsx: {}",
@@ -561,7 +569,19 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                             std::sync::Arc::new(
                                 crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
                                     .unwrap_or_else(|error| {
-                                        eprintln!("[3-1] 空区域样式边界读取失败：{error}");
+                                        diagnostics.push(
+                                            DiagEvent::new(
+                                                "ooxml",
+                                                DiagStage::ReadSource,
+                                                DiagOutcome::Skipped,
+                                            )
+                                            .with_file(
+                                                source_workbook.to_string_lossy().into_owned(),
+                                            )
+                                            .with_message(format!(
+                                                "样式边界读取失败，输出使用默认格式：{error:#}"
+                                            )),
+                                        );
                                         crate::ooxml_cell_styles::SourceStyles::default()
                                     }),
                             )
@@ -771,6 +791,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             matching_sheets: matching_sheets.len(),
             marked_ranges: range_count,
             plan: Some(plan),
+            diagnostics,
         });
     }
     Ok(reports)
@@ -804,7 +825,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut source_styles =
         HashMap::<PathBuf, std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>>::new();
     // 阶段计时（PYTOOLS_PRINT_STAGE_TIMING=1 时输出到 stderr，供性能分析用）。
-    let stage_timing_enabled = std::env::var_os("PYTOOLS_PRINT_STAGE_TIMING").is_some();
+    let mut diagnostics = Vec::new();
     let stage_started = std::time::Instant::now();
     let styles_load_ms = std::cell::Cell::new(0u128);
     let ooxml_parse_ms = std::cell::Cell::new(0u128);
@@ -910,8 +931,17 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         let styles_started = std::time::Instant::now();
                         let loaded = crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
                             .unwrap_or_else(|error| {
-                                eprintln!(
-                                    "[3-1][Rust] 源样式读取失败（输出将使用默认格式）：{error}"
+                                diagnostics.push(
+                                    DiagEvent::new(
+                                        "ooxml",
+                                        DiagStage::ReadSource,
+                                        DiagOutcome::Skipped,
+                                    )
+                                    .with_file(source_workbook.to_string_lossy().into_owned())
+                                    .with_sheet(source_sheet.clone())
+                                    .with_message(format!(
+                                        "源样式读取失败，输出使用默认格式：{error:#}"
+                                    )),
                                 );
                                 crate::ooxml_cell_styles::SourceStyles::default()
                             });
@@ -938,8 +968,11 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                                 source_style_map
                                     .sheet_layout(source_workbook, source_sheet)
                                     .unwrap_or_else(|error| {
-                                        eprintln!(
-                                            "[3-1][Rust] 源行高列宽读取失败（输出使用默认行高列宽）：{error}"
+                                        diagnostics.push(
+                                            DiagEvent::new("ooxml", DiagStage::ReadSource, DiagOutcome::Skipped)
+                                                .with_file(source_workbook.to_string_lossy().into_owned())
+                                                .with_sheet(source_sheet.clone())
+                                                .with_message(format!("源行高列宽读取失败，输出使用默认行高列宽：{error:#}"))
                                         );
                                         crate::ooxml_cell_styles::SheetLayout::default()
                                     }),
@@ -1404,26 +1437,21 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         )
     })?;
     save_new_workbook_without_overwrite(&mut workbook, &plan.output)?;
-    if stage_timing_enabled {
-        eprintln!(
-            "[3-1][stage-timing] {}",
-            serde_json::json!({
-                "output": plan.output.file_name().map(|name| name.to_string_lossy().into_owned()),
-                // 目标 §14.4 的 12 项阶段细分（按 Rust 实现的可测边界映射）。
-                "source_read_ms": u64::try_from(source_read_ms.as_millis()).unwrap_or(u64::MAX),
-                "ooxml_parse_ms": u64::try_from(ooxml_parse_ms.get()).unwrap_or(u64::MAX),
-                "styles_load_ms": u64::try_from(styles_load_ms.get()).unwrap_or(u64::MAX),
-                "style_map_ms": u64::try_from(style_map_ms.get()).unwrap_or(u64::MAX),
-                "region_extract_ms": u64::try_from(region_extract_ms.get()).unwrap_or(u64::MAX),
-                "region_reorg_ms": u64::try_from(region_reorg_ms.get()).unwrap_or(u64::MAX),                "extract_reorg_ms": u64::try_from(extract_reorg_ms.as_millis()).unwrap_or(u64::MAX),
-                "target_create_ms": u64::try_from(target_create_ms.as_millis()).unwrap_or(u64::MAX),
-                "target_write_ms": u64::try_from(target_write_ms.as_millis()).unwrap_or(u64::MAX),
-                "page_settings_ms": u64::try_from(page_settings_ms.as_millis()).unwrap_or(u64::MAX),
-                "save_ms": u64::try_from(save_started.elapsed().as_millis()).unwrap_or(u64::MAX),
-                "total_ms": u64::try_from(stage_started.elapsed().as_millis()).unwrap_or(u64::MAX),
-            })
-        );
-    }
+    let stage_timings = serde_json::json!({
+        "output": plan.output.file_name().map(|name| name.to_string_lossy().into_owned()),
+        // 目标 §14.4 的 12 项阶段细分（按 Rust 实现的可测边界映射）。
+        "source_read_ms": u64::try_from(source_read_ms.as_millis()).unwrap_or(u64::MAX),
+        "ooxml_parse_ms": u64::try_from(ooxml_parse_ms.get()).unwrap_or(u64::MAX),
+        "styles_load_ms": u64::try_from(styles_load_ms.get()).unwrap_or(u64::MAX),
+        "style_map_ms": u64::try_from(style_map_ms.get()).unwrap_or(u64::MAX),
+        "region_extract_ms": u64::try_from(region_extract_ms.get()).unwrap_or(u64::MAX),
+        "region_reorg_ms": u64::try_from(region_reorg_ms.get()).unwrap_or(u64::MAX),                "extract_reorg_ms": u64::try_from(extract_reorg_ms.as_millis()).unwrap_or(u64::MAX),
+        "target_create_ms": u64::try_from(target_create_ms.as_millis()).unwrap_or(u64::MAX),
+        "target_write_ms": u64::try_from(target_write_ms.as_millis()).unwrap_or(u64::MAX),
+        "page_settings_ms": u64::try_from(page_settings_ms.as_millis()).unwrap_or(u64::MAX),
+        "save_ms": u64::try_from(save_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        "total_ms": u64::try_from(stage_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+    });
     Ok(StaticPrintExecution {
         engine: "rust_xlsxwriter",
         output: plan.output.clone(),
@@ -1431,6 +1459,8 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         imported_ranges,
         formulas_materialized,
         comments_dropped: true,
+        stage_timings,
+        diagnostics,
     })
 }
 

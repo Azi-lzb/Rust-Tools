@@ -1,0 +1,12 @@
+{
+  "source": "batch-100/developer.jsonl",
+  "events": 707,
+  "run_ids": [
+    "pytools-pt-6-1-27876-1794505301220509400"
+  ],
+  "menu_ids": [
+    "1-2"
+  ],
+  "last_event": "run_finished",
+  "last_status": "Success"
+}

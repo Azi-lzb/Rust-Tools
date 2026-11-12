@@ -3195,11 +3195,11 @@ def _run(request_path: Path, response_path: Path) -> int:
         return 0
     except WorkerError as error:
         status = "unsupported_before_write" if error.unsupported else "failed"
-        result = _response(request_id, status, error.kind, str(error), {"traceback": traceback.format_exc(limit=8)})
+        result = _response(request_id, status, error.kind, str(error), {"traceback": traceback.format_exc()})
         response_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         return 0 if error.unsupported else 1
     except Exception as error:
-        result = _response(request_id, "failed", "internal_error", str(error), {"traceback": traceback.format_exc(limit=12)})
+        result = _response(request_id, "failed", "internal_error", str(error), {"traceback": traceback.format_exc()})
         response_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         return 1
 

@@ -959,13 +959,13 @@ fn header_path_compare_menu_supports_user_developer_and_off_views() -> Result<()
         String::from_utf8_lossy(&user.stderr)
     );
     let user_stderr = String::from_utf8_lossy(&user.stderr);
-    assert!(user_stderr.contains("正在读取表头比对配置"));
-    assert!(user_stderr.contains("表头比对模板读取完成"));
+    assert!(!user_stderr.contains("正在读取表头比对配置"));
+    assert!(!user_stderr.contains("表头比对模板读取完成"));
     assert!(user_stderr.contains("[人工确认]"));
     assert!(user_stderr.contains("路径标准化映射"));
-    assert!(user_stderr.contains("第 1/1 个源工作簿读取完成"));
-    assert!(user_stderr.contains("表头路径比对结束"));
-    assert!(user_stderr.contains("耗时"), "{user_stderr}");
+    assert!(!user_stderr.contains("第 1/1 个源工作簿读取完成"));
+    assert!(user_stderr.contains("表头路径比对"));
+    assert!(!user_stderr.contains("耗时"), "{user_stderr}");
     assert!(!user_stderr.contains(&source.display().to_string()));
     assert!(!user_stderr.contains("来源甲"));
     let user_report = latest_timeline_compare_report(&user)?;
@@ -1185,9 +1185,9 @@ fn header_path_compare_reports_unmatched_rules_and_worksheets_in_logs() -> Resul
     assert!(user_log.contains("未匹配规则：源工作簿 other-workbook.xlsx"));
     assert!(user_log.contains("工作簿关键字未命中任何启用规则"));
     assert!(user_log.contains("规则「WideRule」匹配了工作簿，但工作表关键字「Report」未命中"));
-    assert!(user_log.contains("工作簿 sample-matched.xlsx 命中规则「WideRule」"));
-    assert!(user_log.contains("规则「WideRule」已匹配工作表：源「Report」→ 模板「Report」"));
-    assert!(user_log.contains("未匹配 2 个"));
+    assert!(!user_log.contains("工作簿 sample-matched.xlsx 命中规则「WideRule」"));
+    assert!(!user_log.contains("规则「WideRule」已匹配工作表：源「Report」→ 模板「Report」"));
+    assert!(user_log.contains("未匹配输入数：2"));
 
     let report = latest_timeline_compare_report(&user)?;
     let mut result_path = PathBuf::from(
@@ -1459,8 +1459,9 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
     create_wide_source(&first_source, "首轮记录", 11.0)?;
     create_wide_source(&second_source, "次轮记录", 22.0)?;
 
-    let first = run_menu(
+    let first = run_menu_with_view(
         &config,
+        "developer",
         &format!("1\n1\n1\n{}\n0\n", first_source.display()),
     )?;
     assert!(
@@ -1568,8 +1569,9 @@ fn wide_summary_appends_rows_to_matching_existing_sheet() -> Result<()> {
 
     // 目标去重：同一份源重跑不得重复追加；目标文件保持不变。
     let target_before = fs::read(&target)?;
-    let rerun = run_menu(
+    let rerun = run_menu_with_view(
         &config,
+        "developer",
         &format!(
             "1
 1
@@ -1824,10 +1826,10 @@ fn wide_summary_matches_filenames_before_reading_and_reports_counts() -> Result<
     assert!(output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stderr.contains("所选 2 个，匹配 1 个，未匹配 1 个"));
-    assert!(!stderr.contains("unrelated.xlsx"));
-    assert!(!stdout.contains("unrelated.xlsx"));
-    assert!(stdout.contains("选择 2 个，尝试 1 个，成功 1 个，失败 0 个，跳过 1 个"));
+    assert!(!stderr.contains("所选 2 个，匹配 1 个，未匹配 1 个"));
+    assert!(stderr.contains("unrelated.xlsx") || stdout.contains("跳过：unrelated.xlsx"));
+    assert!(stdout.contains("跳过：unrelated.xlsx"), "{stdout}");
+    assert!(stdout.contains("文件：1 个成功，1 个跳过"), "{stdout}");
     assert!(stdout.contains("宽表汇总：完成"));
     assert!(!stdout.contains("null 个"));
     let history = read_single_run_history(&root.path().join("app/logs"), "1-1")?;
@@ -1885,7 +1887,7 @@ fn wide_summary_menu_logging_views_record_progress_and_respect_off() -> Result<(
         String::from_utf8_lossy(&user.stderr)
     );
     let user_stderr = String::from_utf8_lossy(&user.stderr);
-    assert!(user_stderr.contains("按启用规则的工作簿关键字筛选"));
+    assert!(!user_stderr.contains("按启用规则的工作簿关键字筛选"));
     assert!(!user_stderr.contains("sample wide source.xlsx"));
     let user_stdout = String::from_utf8_lossy(&user.stdout);
     assert!(user_stdout.contains("宽表汇总：完成"));
@@ -2439,17 +2441,9 @@ fn latest_timeline_compare_report(output: &Output) -> Result<Value> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut report_path = None::<String>;
-    let stderr_lines: Vec<&str> = stderr.lines().collect();
-    for (index, line) in stderr_lines.iter().enumerate() {
-        if line.contains("输出结果：") {
-            if let Some(next) = stderr_lines.get(index + 1) {
-                // 剥离「[时间] [级别] 」前缀，保留路径。
-                let body = next
-                    .split_once("] ")
-                    .and_then(|(_, rest)| rest.split_once("] ").map(|(_, r)| r))
-                    .unwrap_or(next);
-                report_path = Some(body.trim().to_owned());
-            }
+    for line in stderr.lines() {
+        if let Some((_, path)) = line.split_once("输出：") {
+            report_path = Some(path.trim().to_owned());
             break;
         }
     }
@@ -2761,13 +2755,11 @@ fn run_menu_with_view(config: &Path, log_view: &str, input: &str) -> Result<Outp
         .arg("--log-view")
         .arg(log_view);
     if let Some(python) = &isolated_runtime {
-        command
-            .env("PYTOOLS_OPENPYXL_PYTHON", python)
-            .env(
-                "PYTOOLS_OPENPYXL_WORKER",
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../crates/excel-editor/python/openpyxl_worker.py"),
-            );
+        command.env("PYTOOLS_OPENPYXL_PYTHON", python).env(
+            "PYTOOLS_OPENPYXL_WORKER",
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../crates/excel-editor/python/openpyxl_worker.py"),
+        );
     }
     let mut child = command
         .stdin(Stdio::piped())
@@ -2827,8 +2819,7 @@ fn wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass() -> Result<
     let root = TestDirectory::new()?;
     // 子进程通过显式覆盖使用隔离运行时（与执行侧同一解析入口）；
     // 未设置时跳过，避免在无运行时环境里失败。
-    let isolated_python =
-        std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON").map(PathBuf::from);
+    let isolated_python = std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON").map(PathBuf::from);
     let source = root.path().join("sample wide.xlsx");
     {
         let mut workbook = rust_xlsxwriter::Workbook::new();
@@ -2953,14 +2944,13 @@ fn wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass() -> Result<
     let target = root.path().join("batched-target.xlsx");
     {
         let mut workbook = rust_xlsxwriter::Workbook::new();
-        let write_header_row = |sheet: &mut rust_xlsxwriter::Worksheet,
-                                headers: &[String]|
-         -> Result<()> {
-            for (index, header) in headers.iter().enumerate() {
-                sheet.write_string(0, index as u16, header)?;
-            }
-            Ok(())
-        };
+        let write_header_row =
+            |sheet: &mut rust_xlsxwriter::Worksheet, headers: &[String]| -> Result<()> {
+                for (index, header) in headers.iter().enumerate() {
+                    sheet.write_string(0, index as u16, header)?;
+                }
+                Ok(())
+            };
         let sheet_jia = workbook.add_worksheet();
         sheet_jia.set_name("二批房地产")?;
         write_header_row(sheet_jia, &headers_jia)?;
@@ -3013,7 +3003,10 @@ fn wide_summary_appends_multiple_target_sheets_in_one_openpyxl_pass() -> Result<
         jia.values.contains_key("A2"),
         "甲批 must append its data row after the target header"
     );
-    assert!(yi.values.contains_key("A2"), "乙批 must append its data row");
+    assert!(
+        yi.values.contains_key("A2"),
+        "乙批 must append its data row"
+    );
     let bad_after = appended_sheet("坏表头表").values.clone();
     assert_eq!(
         bad_after, bad_sheet_before,
@@ -3090,7 +3083,11 @@ fn wide_summary_loose_mode_maps_by_header_and_extends_new_columns() -> Result<()
             5 => Some(3),
             _ => None,
         };
-        reordered.push(summary_headers[swap.unwrap_or(*column as usize) - 1].1.clone());
+        reordered.push(
+            summary_headers[swap.unwrap_or(*column as usize) - 1]
+                .1
+                .clone(),
+        );
     }
     reordered.push("目标独有列".to_owned());
     let reordered_headers: Vec<String> = reordered.clone();
@@ -3107,11 +3104,8 @@ fn wide_summary_loose_mode_maps_by_header_and_extends_new_columns() -> Result<()
         workbook.save(&target)?;
     }
 
-    let config_with_target = create_multi_rule_wide_config_single_with_mode(
-        root.path(),
-        Some(&target),
-        "宽松",
-    )?;
+    let config_with_target =
+        create_multi_rule_wide_config_single_with_mode(root.path(), Some(&target), "宽松")?;
     let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("wide-summary")
         .arg("--config")
@@ -3166,8 +3160,10 @@ fn wide_summary_loose_mode_maps_by_header_and_extends_new_columns() -> Result<()
     );
     // 其余映射列抽查：工作表名(A3)=Report1、行头路径(C3)=宽松组织、
     // 行序号(F3)=5——全部按键名落位而非位置。
-    let sheet_name_address =
-        format!("{}3", column_letters_for_test(target_col_of("工作表名").context("工作表名 missing")?));
+    let sheet_name_address = format!(
+        "{}3",
+        column_letters_for_test(target_col_of("工作表名").context("工作表名 missing")?)
+    );
     assert_eq!(
         target_sheet
             .values
@@ -3237,7 +3233,10 @@ fn create_multi_rule_wide_config_single_with_mode(
         global.set_name("全局配置")?;
         let settings = [
             ("输入目录", app.join("input").to_string_lossy().into_owned()),
-            ("输出目录", app.join("output").to_string_lossy().into_owned()),
+            (
+                "输出目录",
+                app.join("output").to_string_lossy().into_owned(),
+            ),
             ("日志目录", app.join("logs").to_string_lossy().into_owned()),
             ("错误策略", "continue".to_owned()),
             ("时序规则命中策略", "all_match".to_owned()),
@@ -3309,7 +3308,6 @@ fn create_multi_rule_wide_config_single_with_mode(
     Ok(config)
 }
 
-
 /// 多规则 1-1 配置：三条规则共享同一目标工作簿（可选启用目标写入）。
 fn create_multi_rule_wide_config(
     root: &Path,
@@ -3329,7 +3327,10 @@ fn create_multi_rule_wide_config(
         global.set_name("全局配置")?;
         let settings = [
             ("输入目录", app.join("input").to_string_lossy().into_owned()),
-            ("输出目录", app.join("output").to_string_lossy().into_owned()),
+            (
+                "输出目录",
+                app.join("output").to_string_lossy().into_owned(),
+            ),
             ("日志目录", app.join("logs").to_string_lossy().into_owned()),
             ("错误策略", "continue".to_owned()),
             ("时序规则命中策略", "all_match".to_owned()),

@@ -1,3 +1,6 @@
+#[path = "common/logging_evidence.rs"]
+mod logging_evidence;
+
 use anyhow::{Context, Result};
 use excel_reader::{read_header_inventory, read_workbook, HeaderVariant};
 use rust_xlsxwriter::Workbook;
@@ -39,6 +42,55 @@ impl Drop for TestDirectory {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn user_fx_header_batch_reports_committed_workbooks_without_success_names() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fx_header/source.xlsx");
+    let baseline: Value = serde_json::from_slice(&fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("probe/reports/fx_header_python_baseline.json"),
+    )?)?;
+    let mut sources = Vec::new();
+    for index in 0..18 {
+        let path = root.path().join(format!("private-fx-{index:02}.xlsx"));
+        fs::copy(&fixture, &path)?;
+        sources.push(path);
+    }
+    let selected = sources
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(";");
+    let output = run_menu(
+        &config,
+        &format!("5\n4\n{selected}\n0\n"),
+        &["--log-view".into(), "user".into()],
+    )?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let terminal = String::from_utf8_lossy(&output.stderr);
+    assert!(terminal.contains("已修改：18 个工作簿"), "{terminal}");
+    for internal in [
+        "private-fx-",
+        "[处理中]",
+        "OOXML",
+        "Openpyxl",
+        "openpyxl",
+        "engine_execution",
+        "候选",
+    ] {
+        assert!(!terminal.contains(internal), "{terminal}");
+    }
+    for path in sources {
+        assert_headers_match_baseline(&path, &baseline)?;
+    }
+    Ok(())
 }
 
 #[test]
@@ -117,7 +169,7 @@ fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() ->
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("4  修改外汇工作表页眉单位"));
     assert!(stdout.contains("PT-7-4 当前仅验收 .xlsx"));
-    assert!(stdout.contains("[就地模式]"));
+    assert!(stdout.contains("将直接修改"));
     assert_ne!(fs::read(&target)?, original);
     assert_eq!(fs::read(&unsupported)?, unsupported_original);
 
@@ -175,7 +227,17 @@ fn fx_header_menu_matches_python_baseline_without_external_capability() -> Resul
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("[就地模式]"));
+    for text in [
+        "[处理中]",
+        "保存文件数",
+        "已写入文件数",
+        "命中目标工作表数",
+        "输出：18 个结果",
+    ] {
+        assert!(!stderr.contains(text), "{stderr}");
+    }
+
+    assert!(stdout.contains("将直接修改"));
     assert!(
         stderr.contains("\"phase\":\"safe_commit\""),
         "expected a safe-commit event; stderr={stderr}\nstdout={stdout}"
@@ -362,7 +424,9 @@ fn run_menu(config: &Path, input: &str, extra: &[String]) -> Result<Output> {
         .take()
         .context("menu stdin missing")?
         .write_all(input.as_bytes())?;
-    Ok(child.wait_with_output()?)
+    let output = child.wait_with_output()?;
+    logging_evidence::capture("fx-header", &output)?;
+    Ok(output)
 }
 
 fn parse_result(output: &str, feature_id: &str) -> Result<Value> {

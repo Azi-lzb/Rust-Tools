@@ -1,0 +1,16 @@
+{
+  "scenario": "all-missing-worksheet",
+  "run_id": "pytools-pt-6-2-named-7876-1794505412169408800",
+  "input_stats": {
+    "attempted": 1,
+    "cancelled": 0,
+    "failed": 0,
+    "pending": 0,
+    "selected": 1,
+    "skipped": 1,
+    "succeeded": 0
+  },
+  "actual_data_rows": 0,
+  "record_stats": null,
+  "source_hashes_unchanged": true
+}

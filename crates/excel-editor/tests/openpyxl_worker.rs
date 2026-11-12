@@ -578,3 +578,85 @@ fn xlsm_input_is_rejected_before_write() -> Result<()> {
     assert!(!output.exists(), "no output may be written for .xlsm input");
     Ok(())
 }
+
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn worker_error_chain_keeps_complete_originating_traceback() -> Result<()> {
+    let python = required_python_path();
+    let dir = TestDir::new("full-trace");
+    let input = dir.path("source.xlsx");
+    let import_source = dir.path("import-source.xlsx");
+    let output = dir.path("result.xlsx");
+    let failing_worker = dir.path("trace.py");
+    make_source(&input)?;
+    make_import_source(&import_source)?;
+    let source_before = fs::read(&input)?;
+    fs::write(
+        &failing_worker,
+        r#"import json, sys, traceback
+from pathlib import Path
+if '--version' in sys.argv:
+    print('pytools-openpyxl-worker protocol=1')
+    print('openpyxl=3.1.5')
+    sys.exit(0)
+request_path = Path(sys.argv[sys.argv.index('--request') + 1])
+response_path = Path(sys.argv[sys.argv.index('--response') + 1])
+request = json.loads(request_path.read_text(encoding='utf-8'))
+namespace = {}
+code = ['def worker_level_0(): return worker_level_1()']
+code += [f'def worker_level_{i}(): return worker_level_{i+1}()' for i in range(1, 20)]
+code += ['def worker_level_20(): raise RuntimeError("synthetic diagnostic failure")']
+exec('\n'.join(code), namespace)
+try:
+    namespace['worker_level_0']()
+except RuntimeError as error:
+    response_path.write_text(json.dumps({
+        'schema_version': 1, 'request_id': request['request_id'], 'status': 'failed',
+        'error': {'kind': 'operation_failed', 'message': str(error)},
+        'diagnostics': {'traceback': traceback.format_exc()}
+    }), encoding='utf-8')
+    sys.exit(1)
+"#,
+    )?;
+    let edit_plan = plan(
+        &input,
+        &output,
+        &import_source,
+        inspect_xlsx_profile(&input)?,
+    );
+    let backend = OpenpyxlXlsxBackend::new(
+        capability(&edit_plan, "test"),
+        OpenpyxlWorkerConfig::new(python, failing_worker)?,
+    )?;
+    let modifier = ExcelModifier::new(
+        "wsl2-x86_64-test",
+        vec![std::sync::Arc::new(backend)],
+        std::sync::Arc::new(OpenpyxlXlsxValidator),
+    )?;
+    let error = modifier
+        .execute(&edit_plan)
+        .expect_err("worker failure must propagate");
+    assert_eq!(
+        error.kind,
+        excel_editor::ExcelModifierErrorKind::BackendFailed
+    );
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains("worker_level_0"), "{diagnostic}");
+    assert!(diagnostic.contains("worker_level_20"), "{diagnostic}");
+    assert_eq!(fs::read(&input)?, source_before);
+    assert!(!output.exists());
+    if let Some(root) = std::env::var_os("RUSTTOOLS_LOGGING_EVIDENCE_DIR") {
+        let root = PathBuf::from(root);
+        fs::create_dir_all(&root)?;
+        fs::write(
+            root.join("worker-rust-error.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "scenario": "synthetic_worker_error",
+                "error_chain": diagnostic,
+                "source_unchanged": true,
+                "output_created": false
+            }))?,
+        )?;
+    }
+    Ok(())
+}

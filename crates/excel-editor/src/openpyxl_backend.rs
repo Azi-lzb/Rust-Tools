@@ -875,13 +875,16 @@ impl EditBackend for OpenpyxlXlsxBackend {
                 .error
                 .map(|error| worker_failure_message(&error.kind, &error.message))
                 .unwrap_or_else(|| "worker 在写入前拒绝了本次修改计划".to_owned());
-            return Err(BackendFailure::unsupported_before_write(error));
+            return Err(BackendFailure::unsupported_before_write(
+                worker_failure_with_diagnostics(error, &response.diagnostics),
+            ));
         }
         if response.status != "applied" || !status.success() {
             let error = response
                 .error
                 .map(|error| worker_failure_message(&error.kind, &error.message))
                 .unwrap_or_else(|| format!("worker 异常退出（退出码 {:?}）", status.code()));
+            let error = worker_failure_with_diagnostics(error, &response.diagnostics);
             let diagnostic = read_diagnostic_bounded(stderr_file.path(), DIAGNOSTIC_KEEP_BYTES);
             return Err(BackendFailure::failed(format!(
                 "{error}；stderr 摘要：{diagnostic}。{}",
@@ -4866,6 +4869,8 @@ struct WorkerResponse {
     input_sha256_after: Option<String>,
     output_sha256: Option<String>,
     error: Option<WorkerResponseError>,
+    #[serde(default)]
+    diagnostics: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -5031,6 +5036,20 @@ fn worker_failure_message(kind: &str, message: &str) -> String {
         "openpyxl worker 失败（类别={category}）：{}；建议：{suggestion}",
         truncate_text(message, 1024)
     )
+}
+
+// Preserve the worker's complete originating traceback for the existing
+// error chain/route diagnostics. Terminal adapters map this to a short reason.
+fn worker_failure_with_diagnostics(message: String, diagnostics: &serde_json::Value) -> String {
+    match diagnostics
+        .get("traceback")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some(traceback) if !traceback.is_empty() => {
+            format!("{message}\nWorker traceback:\n{traceback}")
+        }
+        _ => message,
+    }
 }
 
 #[cfg(test)]

@@ -73,7 +73,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
         "{config_check_stdout}"
     );
     assert!(
-        config_check_stdout.contains("保存工作簿数：1"),
+        config_check_stdout.contains("已修改：1 个工作簿"),
         "{config_check_stdout}"
     );
     assert!(
@@ -112,7 +112,10 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
     assert!(delete_stdout.contains("执行成功"), "{delete_stdout}");
     assert!(delete_stdout.contains("删除重复行数：1"), "{delete_stdout}");
-    assert!(delete_stdout.contains("保存工作簿数：1"), "{delete_stdout}");
+    assert!(
+        delete_stdout.contains("已修改：1 个工作簿"),
+        "{delete_stdout}"
+    );
     assert!(
         !delete_stdout.contains("\"execution\""),
         "menu must not print JSON"
@@ -1214,16 +1217,21 @@ fn run_menu_with_capability(
 }
 
 fn output_json(output: &Output) -> Result<Value> {
-    let start = output
-        .stdout
-        .iter()
-        .enumerate()
-        .filter(|(_, byte)| matches!(byte, b'{' | b'['))
-        .map(|(index, _)| index)
-        .min()
-        .context("CLI JSON output missing")?;
-    let mut deserializer = serde_json::Deserializer::from_slice(&output.stdout[start..]);
-    Value::deserialize(&mut deserializer).context("decode CLI JSON output")
+    for (start, byte) in output.stdout.iter().enumerate() {
+        if !matches!(byte, b'{' | b'[') {
+            continue;
+        }
+        let mut decoder = serde_json::Deserializer::from_slice(&output.stdout[start..]);
+        if let Ok(value) = Value::deserialize(&mut decoder) {
+            if value.is_array() || value.is_object() {
+                return Ok(value);
+            }
+        }
+    }
+    anyhow::bail!(
+        "CLI JSON output missing: {}",
+        String::from_utf8_lossy(&output.stdout)
+    )
 }
 
 /// 菜单不再打印 JSON：追加计划通过 CLI 子命令获取（仍输出数组 JSON）。

@@ -215,6 +215,7 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     match build_config_print_plans(&enabled) {
         Ok(reports) => {
             for report in reports {
+                run.events.extend(report.diagnostics);
                 match report.plan {
                     Some(plan) => plans.push(plan),
                     None => {
@@ -254,6 +255,17 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
         let write_started = Instant::now();
         let executions = write_static_print_plans(&plans)?;
         for execution in executions {
+            run.events.extend(execution.diagnostics);
+            run.events.push(
+                DiagEvent::new(
+                    "rust_xlsxwriter",
+                    DiagStage::ModifyWorkbook,
+                    DiagOutcome::Ok,
+                )
+                .with_file(execution.output.to_string_lossy().into_owned())
+                .with_details(execution.stage_timings)
+                .with_message("静态打印阶段耗时"),
+            );
             run.task_ok += 1;
             run.events.push(
                 DiagEvent::new("rust_xlsxwriter", DiagStage::SaveOutput, DiagOutcome::Ok)
@@ -1118,7 +1130,7 @@ pub fn run_configured_static_print_with_python(
     python_override: Option<&Path>,
 ) -> Result<StaticPrintRun> {
     // 阶段计时（PYTOOLS_PRINT_STAGE_TIMING=1 时输出到 stderr，供性能分析用）。
-    let stage_timing_enabled = std::env::var_os("PYTOOLS_PRINT_STAGE_TIMING").is_some();
+
     let config_read_started = std::time::Instant::now();
     let mut tasks = crate::config::load_print_tasks(config_path).with_context(|| {
         format!(
@@ -1126,16 +1138,8 @@ pub fn run_configured_static_print_with_python(
             config_path.display()
         )
     })?;
-    if stage_timing_enabled {
-        eprintln!(
-            "[3-1][stage-timing] {}",
-            serde_json::json!({
-                "config": config_path.file_name().map(|name| name.to_string_lossy().into_owned()),
-                "engine": engine.label(),
-                "config_read_ms": u64::try_from(config_read_started.elapsed().as_millis()).unwrap_or(u64::MAX),
-            })
-        );
-    }
+    let config_read_ms = config_read_started.elapsed().as_millis();
+
     // Rust 入口的输出隔离：在目标校验前把目标重映射为 `_Rust` 后缀路径，
     // 使「目标已存在」校验和后续写入都针对独立输出，绝不覆盖 Openpyxl 输出。
     if engine == StaticPrintEngine::RustWriter {
@@ -1222,6 +1226,7 @@ pub fn run_configured_static_print_with_python(
     let mut events = vec![
         DiagEvent::new("calamine", DiagStage::ReadConfig, DiagOutcome::Ok)
             .with_file(config_path.to_string_lossy().into_owned())
+            .with_elapsed_ms(config_read_ms)
             .with_message(format!("启用 {enabled} 项打印任务")),
     ];
     events.append(&mut run.events);

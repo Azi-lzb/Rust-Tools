@@ -1,0 +1,261 @@
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 23:26
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 专用报表处理 ------
+  1  拆分村镇银行数据（直接修改所选源工作簿）
+  2  机构名称规范化（直接修改所选源工作簿）  【机构映射表：原始机构名称/映射后机构名称】
+  3  删除分机构表中的外资行（生成“金融局”副本，原文件不变）  【机构映射表：是否为外资行】
+  4  修改外汇工作表页眉单位（直接修改原工作簿）
+  5  地区总分校验（读取并生成核对结果）
+  6  工作表数据提取（普通无批注版）  【工作表提取：关键字/提取区域/输出设置】
+  7  涉农贷款比上月修正（直接修改本期源工作簿）
+  0  返回
+----------------------------
+子菜单选择> → 正在打开文件选择窗口：选择要修改外汇页眉的 Excel 文件（可多选）
+→ 可手动输入路径（分号分隔），或输入 0 取消：
+文件路径> → 已选择文件 2 个：
+  1. target.xlsx
+  2. legacy.xls
+[跳过] C:\Users\AZI\AppData\Local\Temp\pytools-fx-header-menu-26008-1794498102976449800-2\legacy.xls：PT-7-4 当前仅验收 .xlsx；.xls 请先显式转换，含 VBA 的 .xlsm 暂不修改。
+所选源工作簿的外汇页眉将直接修改，并保留备份。
+{
+  "committed_files": 1,
+  "completed_files": 1,
+  "created_copies": 0,
+  "elapsed_ms": 770,
+  "events": [
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "input_validation",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 1,
+      "status": "started",
+      "timestamp": "2026-11-12T23:41:43.983893+08:00",
+      "total_elapsed_ms": 0,
+      "user_message": "开始检查第 1/1 个工作簿的外汇页眉并准备生成副本"
+    },
+    {
+      "actual_engine": "inspect_xlsx_profile",
+      "components": [
+        "excel-editor",
+        "excel-reader"
+      ],
+      "phase": "profile_inspection",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 2,
+      "stage_elapsed_ms": 28,
+      "status": "completed",
+      "timestamp": "2026-11-12T23:41:44.046710900+08:00",
+      "total_elapsed_ms": 62,
+      "user_message": "已检查工作簿格式与对象特征"
+    },
+    {
+      "actual_engine": "read_header_inventory",
+      "components": [
+        "pytools-core",
+        "excel-reader"
+      ],
+      "phase": "plan_build",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 3,
+      "stage_elapsed_ms": 168,
+      "status": "completed",
+      "timestamp": "2026-11-12T23:41:44.215487900+08:00",
+      "total_elapsed_ms": 231,
+      "user_message": "已完成页眉检查并生成修改计划"
+    },
+    {
+      "actual_engine": "ooxml_patch",
+      "components": [
+        "pytools-core",
+        "ooxml-patch"
+      ],
+      "phase": "engine_execution",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 4,
+      "stage_elapsed_ms": 499,
+      "status": "completed",
+      "timestamp": "2026-11-12T23:41:44.714635100+08:00",
+      "total_elapsed_ms": 730,
+      "user_message": "已通过 OOXML 页眉定点补丁校验候选"
+    },
+    {
+      "actual_engine": "ooxml_patch",
+      "components": [
+        "pytools-core",
+        "file-commit"
+      ],
+      "phase": "safe_commit",
+      "progress": {
+        "completed_files": 0,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 0,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 5,
+      "stage_elapsed_ms": 704,
+      "status": "completed",
+      "timestamp": "2026-11-12T23:41:44.714758300+08:00",
+      "total_elapsed_ms": 731,
+      "user_message": "页眉修改候选已校验并安全替换原工作簿"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "file_summary",
+      "progress": {
+        "completed_files": 1,
+        "current_file": 1,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 6,
+      "stage_elapsed_ms": 744,
+      "status": "completed",
+      "timestamp": "2026-11-12T23:41:44.753951200+08:00",
+      "total_elapsed_ms": 770,
+      "user_message": "当前工作簿的页眉修改已安全提交"
+    },
+    {
+      "components": [
+        "pytools-core"
+      ],
+      "phase": "run_summary",
+      "progress": {
+        "completed_files": 1,
+        "current_file": null,
+        "failed_files": 0,
+        "processed_files": 1,
+        "processed_rows": 0,
+        "total_files": 1,
+        "total_inputs": 1,
+        "total_rows": 0
+      },
+      "sequence": 7,
+      "status": "succeeded",
+      "timestamp": "2026-11-12T23:41:44.754117100+08:00",
+      "total_elapsed_ms": 770,
+      "user_message": "外汇页眉处理完成：成功 1，失败 0"
+    }
+  ],
+  "failed_files": 0,
+  "feature_id": "PT-7-4",
+  "files": 1,
+  "function": "fx-header",
+  "fx_sheets": 2,
+  "history_report": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-fx-header-menu-26008-1794498102976449800-2\\app\\logs\\PT-7-4_20261112T234143_23332_1794498103983773700.json",
+  "items": [
+    {
+      "candidate": null,
+      "elapsed_ms": 705,
+      "execution": {
+        "commit": {
+          "backup_path": null,
+          "cleanup_warning": null,
+          "elapsed_ms": 155,
+          "operation": "replaced",
+          "sha256_after": "81b70bdf7157bf49d20c7be8c0b7c80d1ab516bed22b9bab752261d1b44a91a1",
+          "sha256_before": "977b7d29aa582efc8f9021a733b543146716b4a6c9303921079acbe4491e6ce8",
+          "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-fx-header-menu-26008-1794498102976449800-2\\target.xlsx"
+        },
+        "engine": "ooxml_patch",
+        "execution": "validated_ooxml_patch_and_safe_replace",
+        "modified_sheets": 1,
+        "replacements": 4
+      },
+      "fx_sheets": 2,
+      "input": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-fx-header-menu-26008-1794498102976449800-2\\target.xlsx",
+      "modified_sheets": 1,
+      "output_copy": null,
+      "plan_file": null,
+      "status": "committed",
+      "target_commit": {
+        "backup_path": null,
+        "cleanup_warning": null,
+        "elapsed_ms": 155,
+        "operation": "replaced",
+        "sha256_after": "81b70bdf7157bf49d20c7be8c0b7c80d1ab516bed22b9bab752261d1b44a91a1",
+        "sha256_before": "977b7d29aa582efc8f9021a733b543146716b4a6c9303921079acbe4491e6ce8",
+        "target": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-fx-header-menu-26008-1794498102976449800-2\\target.xlsx"
+      }
+    }
+  ],
+  "mode": "in_place",
+  "modified_sheets": 1,
+  "plan_dir": null,
+  "planned_files": 0,
+  "product": "pytools",
+  "run_id": "pytools-pt-7-4-23332-1794498103983773700",
+  "run_summary_path": "C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-fx-header-menu-26008-1794498102976449800-2\\app\\logs\\run-unified\\PT-7-4_pytools-pt-7-4-23332-1794498103983773700.json",
+  "saved_files": 1,
+  "schema_version": 1,
+  "started_at": "2026-11-12T23:41:43.983750500+08:00",
+  "status": "succeeded"
+}
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 23:26
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。

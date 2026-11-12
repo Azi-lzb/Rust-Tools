@@ -3,6 +3,9 @@
 //! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口；
 //! 旧 3-1（umya）与 3-2（openpyxl）已合并为同一个 openpyxl 生成入口。
 
+#[path = "common/logging_evidence.rs"]
+mod logging_evidence;
+
 use anyhow::{Context, Result};
 use excel_reader::read_workbook;
 use serde::Deserialize;
@@ -99,24 +102,23 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     assert!(!print_stdout.contains("输入 y/yes/是"), "{print_stdout}");
     assert!(
         print_stdout.contains("按配置生成静态打印文件：执行成功")
-            && print_stdout.contains("保存工作簿 1 个"),
+            && print_stdout.contains("生成：工作簿 1 个"),
         "{print_stdout}"
     );
-    // 统一日志要求：开始与完成行都带本机时间戳。
-    let start_line = print_stdout
-        .lines()
-        .find(|line| line.contains("开始按打印配置生成静态打印文件"))
-        .context("start line missing")?;
-    assert!(starts_with_timestamp(start_line), "{start_line}");
-    assert!(start_line.contains("（Openpyxl）"), "{start_line}");
+    assert!(!print_stdout.contains("开始按打印配置生成静态打印文件"));
     let done_line = print_stdout
         .lines()
         .find(|line| line.contains("按配置生成静态打印文件：执行成功"))
         .context("done line missing")?;
     assert!(starts_with_timestamp(done_line), "{done_line}");
-    let history_path = print_stdout
-        .lines()
-        .find_map(|line| line.split_once("运行记录：").map(|(_, path)| path.trim()))
+    let history_path = fs::read_dir(root.path().join("logs"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name().is_some_and(|name| {
+                let name = name.to_string_lossy();
+                name.starts_with("3-1_") && name.ends_with(".run.json")
+            })
+        })
         .context("print run summary missing")?;
     let history: Value = serde_json::from_slice(&fs::read(history_path)?)?;
     assert_eq!(history["overall_status"], "SUCCESS");
@@ -215,12 +217,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
         String::from_utf8_lossy(&execution.stderr)
     );
     let stdout = String::from_utf8_lossy(&execution.stdout);
-    let start_line = stdout
-        .lines()
-        .find(|line| line.contains("开始按打印配置生成静态打印文件"))
-        .context("start line missing")?;
-    assert!(start_line.contains("（Openpyxl）"), "{start_line}");
-    assert!(starts_with_timestamp(start_line), "{start_line}");
+    assert!(!stdout.contains("开始按打印配置生成静态打印文件"));
     assert!(
         !stdout.contains("输入 y/yes/是"),
         "no confirmation expected"
@@ -332,7 +329,7 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
     let user = run_menu_with_view(&config, "3\n3\n0\n0\n", "user")?;
     assert!(user.status.success());
     let user_stdout = String::from_utf8_lossy(&user.stdout);
-    assert!(user_stdout.contains("开始：按配置预校验打印任务"));
+    assert!(!user_stdout.contains("开始：按配置预校验打印任务"));
     assert!(user_stdout.contains("通过配置数：1"), "{user_stdout}");
     let history_count_before_off = fs::read_dir(&log_dir)?.count();
 
@@ -369,6 +366,31 @@ fn rust_print_entry_writes_isolated_styled_output() -> Result<()> {
     );
     let stdout = String::from_utf8_lossy(&execution.stdout);
     assert!(stdout.contains("（Rust"), "{stdout}");
+    let stderr = String::from_utf8_lossy(&execution.stderr);
+    for text in ["stage-timing", "source_read_ms", "静态打印阶段耗时"] {
+        assert!(
+            !stdout.contains(text) && !stderr.contains(text),
+            "{stdout}\n{stderr}"
+        );
+    }
+    let history_path = fs::read_dir(root.path().join("logs"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name().is_some_and(|name| {
+                let name = name.to_string_lossy();
+                name.starts_with("3-1-Rust_") && name.ends_with(".run.json")
+            })
+        })
+        .context("Rust print run summary missing")?;
+    let history: Value = serde_json::from_slice(&fs::read(&history_path)?)?;
+    let diagnostics_path = root.path().join("logs").join(
+        history["diagnostic_log_path"]
+            .as_str()
+            .context("Rust print diagnostic path missing")?,
+    );
+    let diagnostics = fs::read_to_string(diagnostics_path)?;
+    assert!(diagnostics.contains("source_read_ms"), "{diagnostics}");
+    assert!(diagnostics.contains("rust_xlsxwriter"), "{diagnostics}");
     // 源文件与 Openpyxl 目标路径都不得被写入。
     assert!(
         !target.exists(),
@@ -560,6 +582,7 @@ fn run_menu(config: &Path, input: &str) -> Result<Output> {
 
 fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Output> {
     let mut command = Command::new(env!("CARGO_BIN_EXE_RustTools"));
+    command.env("PYTOOLS_PRINT_STAGE_TIMING", "1");
     // 3-1 打印只认随包 openpyxl 运行时（不做 PATH 回退）。测试二进制旁边
     // 没有 python/，因此显式指向发行包的 dist/python 与仓库内的 worker。
     if let Some((python, worker)) = bundled_openpyxl_runtime() {
@@ -584,9 +607,11 @@ fn run_menu_with_view(config: &Path, input: &str, log_view: &str) -> Result<Outp
         .context("interactive stdin missing")?
         .write_all(input.as_bytes())
         .context("send interactive menu selections")?;
-    child
+    let output = child
         .wait_with_output()
-        .context("wait for interactive menu")
+        .context("wait for interactive menu")?;
+    logging_evidence::capture(log_view, &output)?;
+    Ok(output)
 }
 
 /// 发行包随附的 openpyxl 运行时：(解释器, worker)。

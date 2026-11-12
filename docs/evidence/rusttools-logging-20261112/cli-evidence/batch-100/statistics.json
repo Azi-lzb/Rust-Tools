@@ -1,0 +1,8 @@
+{
+  "actual_data_rows": 100,
+  "actual_written_rows_including_source_headers": 200,
+  "inputs": 100,
+  "reported_rows": 200,
+  "source_unchanged": true,
+  "succeeded": 100
+}

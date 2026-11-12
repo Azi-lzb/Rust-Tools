@@ -1,0 +1,506 @@
+    Blocking waiting for file lock on build directory
+   Compiling serde_core v1.0.229
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.2
+   Compiling syn v3.0.9
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling zip v9.0.5
+   Compiling serde_json v1.0.154
+   Compiling zip v6.0.0
+   Compiling calamine v0.37.0
+   Compiling quick-xml v0.41.0
+   Compiling zip v8.6.0
+   Compiling umya-spreadsheet v3.1.1
+   Compiling excel-reader v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools\crates\excel-reader)
+   Compiling ooxml-patch v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools\crates\ooxml-patch)
+warning: unused import: `clear_empty_formula_cache`
+    --> crates\ooxml-patch\src\lib.rs:4446:17
+     |
+4446 |     use super::{clear_empty_formula_cache, MAIN_NS};
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `roxmltree::Document`
+    --> crates\ooxml-patch\src\lib.rs:4448:9
+     |
+4448 |     use roxmltree::Document;
+     |         ^^^^^^^^^^^^^^^^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+    --> crates\ooxml-patch\src\lib.rs:4451:14
+     |
+4451 |         fs::{self, File},
+     |              ^^^^
+     |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+    --> crates\ooxml-patch\src\lib.rs:4445:1
+     |
+4445 | mod formula_cache_tests {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `local_sheet_names`
+   --> crates\ooxml-patch\src\excel_open_repair.rs:691:5
+    |
+691 |     local_sheet_names: &[String],
+    |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_local_sheet_names`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `temp_path` is never used
+    --> crates\ooxml-patch\src\lib.rs:4457:8
+     |
+4457 |     fn temp_path(label: &str) -> PathBuf {
+     |        ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `write_fixture` is never used
+    --> crates\ooxml-patch\src\lib.rs:4470:8
+     |
+4470 |     fn write_fixture(path: &PathBuf, cached_value: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+     |        ^^^^^^^^^^^^^
+
+warning: function `read_entries` is never used
+    --> crates\ooxml-patch\src\lib.rs:4520:8
+     |
+4520 |     fn read_entries(path: &PathBuf) -> Result<BTreeMap<String, Vec<u8>>> {
+     |        ^^^^^^^^^^^^
+
+warning: `ooxml-patch` (lib) generated 7 warnings (run `cargo fix --lib -p ooxml-patch` to apply 4 suggestions)
+   Compiling windows-sys v0.61.2
+   Compiling excel-editor v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools\crates\excel-editor)
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:2782:22
+     |
+2782 |                     .get_cell(cell.as_str())
+     |                      ^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:2800:22
+     |
+2800 |                     .get_cell(cell.as_str())
+     |                      ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\openpyxl_backend.rs:3950:10
+     |
+3950 |         .get_cell(address)
+     |          ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:722:14
+    |
+722 |             .get_cell(inserted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:774:14
+    |
+774 |             .get_cell(shifted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+   --> crates\excel-editor\src\umya_backend.rs:981:14
+    |
+981 |             .get_cell(adjusted_address.as_str())
+    |              ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1736:18
+     |
+1736 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Cell::get_style_mut`: Use style_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1760:26
+     |
+1760 |                         .get_style_mut()
+     |                          ^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Style::get_number_format_mut`: Use number_format_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1761:26
+     |
+1761 |                         .get_number_format_mut()
+     |                          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1781:18
+     |
+1781 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1793:18
+     |
+1793 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1816:18
+     |
+1816 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1831:18
+     |
+1831 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1860:22
+     |
+1860 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1862:40
+     |
+1862 |                     .all(|sheet| sheet.get_name() != new_name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1866:18
+     |
+1866 |                 .get_sheet_by_name_mut(old_name)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1877:18
+     |
+1877 |                 .get_sheet_by_name_mut(new_name)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1900:22
+     |
+1900 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1902:40
+     |
+1902 |                     .all(|sheet| sheet.get_name() != name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1918:22
+     |
+1918 |                     .get_sheet_collection()
+     |                      ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1920:40
+     |
+1920 |                     .all(|sheet| sheet.get_name() != name),
+     |                                        ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1927:39
+     |
+1927 |             let collection = workbook.get_sheet_collection_mut();
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:1942:18
+     |
+1942 |                 .get_sheet_collection()
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:1944:49
+     |
+1944 |                 .position(|candidate| candidate.get_name() == sheet.as_str())
+     |                                                 ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1947:39
+     |
+1947 |             let collection = workbook.get_sheet_collection_mut();
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1973:18
+     |
+1973 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_style_mut`: Use style_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1978:18
+     |
+1978 |                 .get_style_mut(cell.as_str())
+     |                  ^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Style::get_fill_mut`: Use fill_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1979:18
+     |
+1979 |                 .get_fill_mut()
+     |                  ^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Fill::get_pattern_fill_mut`: Use pattern_fill_mut()
+    --> crates\excel-editor\src\umya_backend.rs:1980:18
+     |
+1980 |                 .get_pattern_fill_mut();
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_page_setup_mut`: Use page_setup_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2060:31
+     |
+2060 |             let page = target.get_page_setup_mut();
+     |                               ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2084:22
+     |
+2084 |                     .get_print_options_mut()
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_print_options_mut`: Use print_options_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2088:24
+     |
+2088 |                 target.get_print_options_mut().set_vertical_centered(value);
+     |                        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_header_footer_mut`: Use header_footer_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2097:22
+     |
+2097 |                     .get_header_footer_mut()
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::HeaderFooter::get_odd_footer_mut`: Use odd_footer_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2098:22
+     |
+2098 |                     .get_odd_footer_mut()
+     |                      ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2107:18
+     |
+2107 |                 .get_sheet_by_name_mut(sheet)
+     |                  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2123:22
+     |
+2123 |                     .get_sheet_by_name_mut(sheet)
+     |                      ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2208:14
+     |
+2208 |             .get_sheet_by_name(source_sheet)
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\umya_backend.rs:2214:41
+     |
+2214 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2247:10
+     |
+2247 |         .get_sheet_by_name_mut(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2317:10
+     |
+2317 |         .get_sheet_by_name(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name`: Use sheet_by_name()
+    --> crates\excel-editor\src\umya_backend.rs:2325:14
+     |
+2325 |             .get_sheet_by_name(source_sheet)
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_cell`: Use cell()
+    --> crates\excel-editor\src\umya_backend.rs:2331:41
+     |
+2331 |                 let Some(cell) = source.get_cell(address.as_str()) else {
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2402:63
+     |
+2402 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+     |                                                         ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Row::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2418:67
+     |
+2418 | ...                   copy_row_hidden.then(|| dimension.get_hidden()),
+     |                                                         ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2436:66
+     |
+2436 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+     |                                                            ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Column::get_hidden`: Use hidden()
+    --> crates\excel-editor\src\umya_backend.rs:2447:70
+     |
+2447 | ...                   copy_column_hidden.then(|| dimension.get_hidden()),
+     |                                                            ^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_by_name_mut`: Use sheet_by_name_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2459:10
+     |
+2459 |         .get_sheet_by_name_mut(target_sheet)
+     |          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2575:10
+     |
+2575 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2577:28
+     |
+2577 |         .map(|sheet| sheet.get_name().to_owned())
+     |                            ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2588:31
+     |
+2588 |     let collection = workbook.get_sheet_collection_mut();
+     |                               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2600:18
+     |
+2600 |                 .get_sheet_collection()
+     |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2602:41
+     |
+2602 |                 .position(|sheet| sheet.get_name() == name)
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2659:10
+     |
+2659 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2661:39
+     |
+2661 |         .filter(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                       ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection`: Use sheet_collection()
+    --> crates\excel-editor\src\umya_backend.rs:2676:10
+     |
+2676 |         .get_sheet_collection()
+     |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2678:41
+     |
+2678 |         .position(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                         ^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2681:32
+     |
+2681 |     let target = &mut workbook.get_sheet_collection_mut()[sheet_index];
+     |                                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Workbook::get_sheet_collection_mut`: Use sheet_collection_mut()
+    --> crates\excel-editor\src\umya_backend.rs:2702:10
+     |
+2702 |         .get_sheet_collection_mut()
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated method `umya_spreadsheet::Worksheet::get_name`: Use name()
+    --> crates\excel-editor\src\umya_backend.rs:2704:37
+     |
+2704 |         .find(|sheet_obj| sheet_obj.get_name() == sheet)
+     |                                     ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates\excel-editor\src\openpyxl_backend.rs:781:13
+    |
+781 |         let mut timed_out = false;
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `actual`
+    --> crates\excel-editor\src\openpyxl_backend.rs:4001:15
+     |
+4001 |         (Some(actual), Some(expected)) => {}
+     |               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_actual`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `expected`
+    --> crates\excel-editor\src\openpyxl_backend.rs:4001:29
+     |
+4001 |         (Some(actual), Some(expected)) => {}
+     |                             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_expected`
+
+warning: variable does not need to be mutable
+    --> crates\excel-editor\src\openpyxl_backend.rs:4922:9
+     |
+4922 |     let mut bytes = if !truncated {
+     |         ----^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: function `equal_defaulted` is never used
+    --> crates\excel-editor\src\openpyxl_backend.rs:4031:8
+     |
+4031 |     fn equal_defaulted<T>(actual: Option<&T>, expected: Option<&T>) -> bool
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `id` is never used
+   --> crates\excel-editor\src\worker_process.rs:105:19
+    |
+ 45 | impl WorkerProcess {
+    | ------------------ method in this implementation
+...
+105 |     pub(crate) fn id(&self) -> u32 {
+    |                   ^^
+
+warning: `excel-editor` (lib) generated 65 warnings (run `cargo fix --lib -p excel-editor` to apply 4 suggestions)
+   Compiling rust_xlsxwriter v0.101.0
+    Finished `test` profile [unoptimized] target(s) in 20m 26s
+     Running tests\openpyxl_worker.rs (F:\RustBuild\pytools\debug\deps\openpyxl_worker-6b5d120ffcc24eaf.exe)
+
+running 8 tests
+test abnormal_worker_exit_is_not_mistaken_for_unsupported_input ... ok
+test macro_workbook_profiles_are_rejected_before_write ... ok
+test missing_bundled_worker_is_not_routable ... ok
+test reports_end_to_end_worker_latency_for_a_fixed_xlsx_sample ... ok
+test rust_modifier_invokes_one_batch_worker_and_preserves_source ... ok
+test worker_error_chain_keeps_complete_originating_traceback ... ok
+test worker_timeout_is_terminal_and_does_not_publish_output ... ok
+test xlsm_input_is_rejected_before_write ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 79.63s
+

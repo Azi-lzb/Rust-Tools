@@ -102,6 +102,8 @@ pub struct DiagEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elapsed_ms: Option<u128>,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 
 impl DiagEvent {
@@ -118,7 +120,32 @@ impl DiagEvent {
             sheet: None,
             elapsed_ms: None,
             message: String::new(),
+            details: None,
         }
+    }
+
+    /// Existing adapters persist this independently of terminal verbosity.
+    #[must_use]
+    pub fn diagnostic_details(&self) -> serde_json::Value {
+        let mut details = self
+            .details
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        if !self.message.is_empty() {
+            details.insert(
+                "diagnostic".to_owned(),
+                serde_json::Value::String(self.message.clone()),
+            );
+        }
+        serde_json::Value::Object(details)
+    }
+
+    #[must_use]
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     #[must_use]
@@ -232,8 +259,14 @@ impl DiagEvent {
             DiagOutcome::Ok | DiagOutcome::Started => "INFO",
         };
         let mut line = format!(
-            "{} [{}] [{}] {}",
-            self.timestamp, level, self.engine, self.stage
+            "{} [{}] {}",
+            self.timestamp,
+            level,
+            match self.outcome {
+                DiagOutcome::Failed => "失败",
+                DiagOutcome::Skipped => "跳过",
+                _ => "处理完成",
+            }
         );
         if let Some(row) = self.row_no {
             line.push_str(&format!("；配置第 {row} 行"));
@@ -247,7 +280,9 @@ impl DiagEvent {
         }
         if matches!(self.outcome, DiagOutcome::Failed | DiagOutcome::Skipped) {
             let text = self.message.to_lowercase();
-            let reason = if text.contains("工作表")
+            let reason = if text.contains("默认格式") || text.contains("默认行高") {
+                "源格式未能完整读取，输出使用默认格式，请检查打印结果".to_owned()
+            } else if text.contains("工作表")
                 && (text.contains("缺失") || text.contains("不存在") || text.contains("missing"))
             {
                 "工作表不存在，请检查名称".to_owned()
@@ -331,6 +366,29 @@ mod tests {
         assert!(line.contains("源工作簿 src.xlsx"), "{line}");
         assert!(line.contains("具体错误：zip 错误：文件头缺失"), "{line}");
         assert!(line.starts_with('['), "{line}");
+    }
+
+    #[test]
+    fn detailed_diagnostics_do_not_expand_user_line() {
+        let event = DiagEvent::new(
+            "rust_xlsxwriter",
+            DiagStage::ModifyWorkbook,
+            DiagOutcome::Skipped,
+        )
+        .with_file("source.xlsx")
+        .with_message("XML parse error: source style unavailable; 输出使用默认格式")
+        .with_details(serde_json::json!({"stage_timings": {"source_read_ms": 12}}));
+        let user = event.user_line();
+        assert!(user.contains("默认格式"));
+        assert!(user.contains("source.xlsx"));
+        assert!(!user.contains("XML"));
+        assert!(!user.contains("rust_xlsxwriter"));
+        let details = event.diagnostic_details();
+        assert_eq!(details["stage_timings"]["source_read_ms"], 12);
+        assert!(details["diagnostic"]
+            .as_str()
+            .unwrap()
+            .contains("XML parse error"));
     }
 
     #[test]

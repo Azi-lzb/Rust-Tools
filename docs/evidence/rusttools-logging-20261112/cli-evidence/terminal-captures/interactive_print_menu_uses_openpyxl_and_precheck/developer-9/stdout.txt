@@ -1,0 +1,45 @@
+======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 23:26
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> ------ 报表打印 ------
+  1  按打印配置生成（Openpyxl）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】
+  2  按打印配置生成（Rust）  【同一份打印配置；输出文件名追加 _Rust；暂不支持 XLSM】
+  3  打印配置预校验  【打印配置】
+  0  返回
+----------------------
+子菜单选择> PT-3 开始：PT-3-4 config_precheck
+PT-3 完成：PT-3-4，通过 0 项、警告 0 项、失败 1 项，实际引擎：calamine，实际组件：pytools_core::config::load_print_tasks, pytools_core::print_ops::precheck_print_tasks, excel_reader::Calamine，ExcelModifier 未调用，Excel writer 未调用，耗时 0.025 秒；运行记录：C:\Users\AZI\AppData\Local\Temp\pytools-print-menu-21172-1794498108382805500-1\logs\pytools-print-config_precheck-20261112_234150_944601100.json
+{
+  "failed": 1,
+  "issues": [
+    "row 2: target workbook already exists; PT-3-3 only writes to a new file: C:\\Users\\AZI\\AppData\\Local\\Temp\\pytools-print-menu-21172-1794498108382805500-1\\printed.xlsx"
+  ],
+  "ok": 0,
+  "warnings": 0
+}
+------ 报表打印 ------
+  1  按打印配置生成（Openpyxl）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】
+  2  按打印配置生成（Rust）  【同一份打印配置；输出文件名追加 _Rust；暂不支持 XLSM】
+  3  打印配置预校验  【打印配置】
+  0  返回
+----------------------
+子菜单选择> ======== rustTools 菜单 ========
+  v0.1.0  构建 2026-11-12 23:26
+  1  数据提取与汇总
+  2  数据去重与追加
+  3  报表打印
+  4  文件处理
+  5  专用报表处理
+  6  归档整理
+  7  配置与快捷操作
+  0  退出
+==============================
+主菜单选择> 再见。
