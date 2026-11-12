@@ -39,3 +39,8 @@ changes zero cache cells in the 10k observed run. The first stale-cache pass
 changes 4,286 cells at 10k and 23,743 cells at 70k, and only the Calc worksheet
 part is modified. Cache update counts are fixture-specific, not a general
 incremental speed claim.
+
+For an explicit two-pass comparison with `INDIRECT` plus downstream formulas,
+see [07_TWO_PASS_RECALCULATION.md](07_TWO_PASS_RECALCULATION.md). In that
+10k fixture the first Formualizer incremental pass already matched Excel; the
+second pass reported zero changed cells.

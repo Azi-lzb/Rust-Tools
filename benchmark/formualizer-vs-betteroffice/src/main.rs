@@ -53,6 +53,23 @@ struct EngineRun {
     diagnostics: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct FormualizerTwoPassRun {
+    load_ms: f64,
+    first_full_calculate_ms: f64,
+    second_full_calculate_ms: f64,
+    save_after_second_pass_ms: f64,
+    first_full_results: BTreeMap<String, String>,
+    second_full_results: BTreeMap<String, String>,
+    first_incremental_calculate_ms: Option<f64>,
+    second_incremental_calculate_ms: Option<f64>,
+    first_incremental_results: BTreeMap<String, String>,
+    second_incremental_results: BTreeMap<String, String>,
+    first_incremental_changed_cells: Option<usize>,
+    second_incremental_changed_cells: Option<usize>,
+    output_path: String,
+}
+
 fn ms(start: Instant) -> f64 {
     start.elapsed().as_secs_f64() * 1000.0
 }
@@ -264,6 +281,138 @@ fn run_formualizer(input: &Path, output: &Path, spec: &FixtureSpec) -> Result<En
     })
 }
 
+fn run_formualizer_two_pass(
+    input: &Path,
+    output: &Path,
+    spec: &FixtureSpec,
+) -> Result<FormualizerTwoPassRun> {
+    let load = Instant::now();
+    let adapter = UmyaAdapter::open_path(input).context("Formualizer UmyaAdapter open_path")?;
+    let mut wb = FormualizerWorkbook::from_reader(
+        adapter,
+        LoadStrategy::EagerAll,
+        WorkbookConfig::interactive(),
+    )?;
+    let load_ms = ms(load);
+
+    let calc = Instant::now();
+    wb.evaluate_all()?;
+    let first_full_calculate_ms = ms(calc);
+    let first_full_results = form_results(&wb, spec);
+
+    let calc = Instant::now();
+    wb.evaluate_all()?;
+    let second_full_calculate_ms = ms(calc);
+    let second_full_results = form_results(&wb, spec);
+
+    let save = Instant::now();
+    fs::write(output, wb.to_xlsx_bytes()?)?;
+    let save_after_second_pass_ms = ms(save);
+
+    let mut first_incremental_calculate_ms = None;
+    let mut second_incremental_calculate_ms = None;
+    let mut first_incremental_results = BTreeMap::new();
+    let mut second_incremental_results = BTreeMap::new();
+    let mut first_incremental_changed_cells = None;
+    let mut second_incremental_changed_cells = None;
+    if let Some(mutation) = spec.mutations.first() {
+        wb.set_value(
+            &mutation.sheet,
+            mutation.row + 1,
+            mutation.col + 1,
+            formualizer_workbook::LiteralValue::Number(mutation.value),
+        )?;
+        let calc = Instant::now();
+        let (_evaluation, delta) = wb.evaluate_all_with_delta()?;
+        first_incremental_calculate_ms = Some(ms(calc));
+        first_incremental_changed_cells = Some(delta.changed_cells.len());
+        first_incremental_results = form_results(&wb, spec);
+
+        let calc = Instant::now();
+        let (_evaluation, delta) = wb.evaluate_all_with_delta()?;
+        second_incremental_calculate_ms = Some(ms(calc));
+        second_incremental_changed_cells = Some(delta.changed_cells.len());
+        second_incremental_results = form_results(&wb, spec);
+    }
+
+    Ok(FormualizerTwoPassRun {
+        load_ms,
+        first_full_calculate_ms,
+        second_full_calculate_ms,
+        save_after_second_pass_ms,
+        first_full_results,
+        second_full_results,
+        first_incremental_calculate_ms,
+        second_incremental_calculate_ms,
+        first_incremental_results,
+        second_incremental_results,
+        first_incremental_changed_cells,
+        second_incremental_changed_cells,
+        output_path: output.display().to_string(),
+    })
+}
+
+fn run_two_pass_command(args: &[String]) -> Result<()> {
+    if args.len() < 7 {
+        bail!(
+            "usage: formualizer-vs-betteroffice run-two-pass <input.xlsx> <output-dir> <cases.json> <excel-input25.json> <excel-input35.json>"
+        );
+    }
+    let input = PathBuf::from(&args[2]);
+    let out_dir = PathBuf::from(&args[3]);
+    let spec_path = PathBuf::from(&args[4]);
+    let oracle25_path = PathBuf::from(&args[5]);
+    let oracle35_path = PathBuf::from(&args[6]);
+    fs::create_dir_all(&out_dir)?;
+    let spec = read_spec(&spec_path)?;
+    let oracle25: BTreeMap<String, String> = serde_json::from_slice(&fs::read(oracle25_path)?)?;
+    let oracle35: BTreeMap<String, String> = serde_json::from_slice(&fs::read(oracle35_path)?)?;
+
+    // This path uses BetterOffice's production-equivalent two full passes and
+    // then its dirty-dependency edit path for the input mutation.
+    let better = run_better(&input, &out_dir.join("betteroffice.xlsx"), &spec)?;
+    let formualizer =
+        run_formualizer_two_pass(&input, &out_dir.join("formualizer-two-pass.xlsx"), &spec)?;
+
+    // A second source-aware cache run takes the first run's saved file as its
+    // input. This deliberately tests whether pass two changes any values or
+    // package members after pass one has replaced stale caches.
+    let cache_pass1_path = out_dir.join("formualizer-cache-pass1.xlsx");
+    let cache_pass2_path = out_dir.join("formualizer-cache-pass2.xlsx");
+    let cache_pass1 = run_cache(&input, &cache_pass1_path, true)?;
+    let cache_pass2 = if cache_pass1["status"] == "EXECUTED" {
+        run_cache(&cache_pass1_path, &cache_pass2_path, true)?
+    } else {
+        serde_json::json!({
+            "status": "SKIPPED",
+            "reason": "first strict cache pass did not produce an output"
+        })
+    };
+
+    let correctness = serde_json::json!({
+        "reference": "Excel COM 16.0 CalculateFullRebuild",
+        "betteroffice_two_full_passes": compare_results(&better.formula_results, &oracle25),
+        "formualizer_first_full_pass": compare_results(&formualizer.first_full_results, &oracle25),
+        "formualizer_second_full_pass": compare_results(&formualizer.second_full_results, &oracle25),
+        "betteroffice_after_input_change": compare_results(&better.incremental_results, &oracle35),
+        "formualizer_after_first_incremental_pass": compare_results(&formualizer.first_incremental_results, &oracle35),
+        "formualizer_after_second_incremental_pass": compare_results(&formualizer.second_incremental_results, &oracle35),
+    });
+    let result = serde_json::json!({
+        "input": input,
+        "formula_targets": spec.targets.len(),
+        "betteroffice": better,
+        "formualizer": formualizer,
+        "formualizer_source_cache_pass1": cache_pass1,
+        "formualizer_source_cache_pass2": cache_pass2,
+        "correctness": correctness,
+    });
+    let report = out_dir.join("two-pass-runs.json");
+    fs::write(&report, serde_json::to_vec_pretty(&result)?)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
 fn run_cache(input: &Path, output: &Path, require_complete: bool) -> Result<serde_json::Value> {
     let start = Instant::now();
     let mut options = XlsxRecalculateOptions::workbook();
@@ -373,6 +522,9 @@ fn compare_results(
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
+    if args.get(1).map(String::as_str) == Some("run-two-pass") {
+        return run_two_pass_command(&args);
+    }
     if args.len() < 4 {
         bail!("usage: formualizer-vs-betteroffice run <input.xlsx> <output-dir> [cases.json]");
     }

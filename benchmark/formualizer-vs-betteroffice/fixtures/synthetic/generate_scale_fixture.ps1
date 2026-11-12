@@ -1,6 +1,7 @@
 param(
     [ValidateRange(100, 100000)][int]$FormulaRows = 10000,
-    [string]$Tag = "$FormulaRows"
+    [string]$Tag = "$FormulaRows",
+    [switch]$IncludeIndirect
 )
 $ErrorActionPreference = 'Stop'
 $fixtureDir = $PSScriptRoot
@@ -53,6 +54,7 @@ try {
         '=INDEX(Data!R2C2:R101C2,MATCH("North",Data!R2C1:R101C1,0))+ROW()',
         '=ROUND(SUM(Data!R2C2:R101C2)/ROW(),3)'
     )
+    if ($IncludeIndirect) { $groups += '=INDIRECT("Data!B2")+ROW()' }
     $targets = [Collections.Generic.List[object]]::new()
     $cursor = 0
     $groupIndex = 0

@@ -17,6 +17,9 @@ Key completed result groups:
   performance.
 - `linux228-stale/` and `linux228-offline/`: Rocky Linux 8.9/glibc 2.28
   execution evidence.
+- `perf-two-pass-10k-indirect/` and `linux228-offline-two-pass-10k/`: repeated
+  10,000-formula two-pass timings, Excel-oracle comparisons, and offline
+  glibc 2.28 execution/package-cache evidence for the INDIRECT fixture.
 
 Each timed scale run begins from the same stale-cache input copy. Keep the
 fixture, oracle, and matching spec together when reproducing a result.
