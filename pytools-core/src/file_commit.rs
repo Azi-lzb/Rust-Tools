@@ -14,6 +14,56 @@ use std::{
 
 static SIBLING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+/// Probe an existing target before spending time generating a candidate.
+/// Publication still verifies the snapshot and handles races independently.
+pub fn ensure_target_writable(path: &Path) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(0);
+    }
+    let _probe = options.open(path).with_context(|| {
+        format!(
+            "目标工作簿被占用或没有写入权限：{}；请关闭 Excel/WPS 中的目标文件并检查写入权限后重试",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod target_access_tests {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn occupied_target_is_rejected_before_candidate_generation() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "rusttools-target-probe-{}-{nonce}.xlsx",
+            std::process::id()
+        ));
+        fs::write(&path, b"probe fixture").unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let error = ensure_target_writable(&path).unwrap_err();
+        assert!(error.to_string().contains("被占用"));
+        drop(held);
+        ensure_target_writable(&path).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"probe fixture");
+        fs::remove_file(&path).unwrap();
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct TargetCommitReport {
     pub operation: String,

@@ -77,6 +77,34 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         imported.save(self.import_source)
         self._add_formula_cache(self.import_source, "xl/worksheets/sheet1.xml", "C1", "2")
 
+    def test_import_operations_reuse_source_views_within_request(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location("worker_import_cache_test", WORKER)
+        worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(worker)
+        target = openpyxl.Workbook()
+        target.active.title = "Target"
+        sources = {}
+        try:
+            with patch.object(openpyxl, "load_workbook", wraps=openpyxl.load_workbook) as load:
+                for row in (1, 2):
+                    worker._apply_operation(target, None, operation(
+                        "import_range", source_workbook=str(self.import_source),
+                        source_sheet="Source", source_range="A1:B1",
+                        target_sheet="Target", target_start=f"A{row}",
+                        copy_values=True, copy_formulas=False, style_mode="none",
+                    ), import_sources=sources)
+                self.assertEqual(load.call_count, 2)
+                self.assertEqual(len(sources), 1)
+                self.assertEqual(target["Target"]["A1"].value, "imported")
+                self.assertEqual(target["Target"]["B2"].value, 9)
+        finally:
+            target.close()
+            for views in sources.values():
+                for book in views:
+                    book.close()
+
     @staticmethod
     def _add_formula_cache(path, part_name, address, value):
         replacement = path.with_name(path.stem + ".cached.xlsx")

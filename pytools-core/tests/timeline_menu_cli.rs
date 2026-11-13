@@ -2727,7 +2727,7 @@ fn timeline_precheck_menu_prints_readable_success_and_returns_to_main() -> Resul
 }
 
 #[test]
-fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()> {
+fn timeline_precheck_menu_allows_missing_optional_input_directory() -> Result<()> {
     let directory = TestDirectory::new()?;
     let config = create_timeline_config(directory.path())?;
     let input_directory = directory.path().join("app").join("input");
@@ -2740,9 +2740,9 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[错误] 全局配置/输入目录: 输入目录不存在:"));
-    assert!(stdout.contains("预校验完成：错误 1 项，警告 0 项"));
-    assert!(stdout.contains("发现 1 项错误，请按上方位置修正后重试。"));
+    assert!(!stdout.contains("输入目录不存在:"));
+    assert!(stdout.contains("预校验完成：错误 0 项，警告 0 项"));
+    assert!(stdout.contains("时序配置预校验通过。"));
     assert!(stdout.contains("======== rustTools 菜单 ========"));
     assert!(stdout.contains("再见。"));
     assert!(!stdout.contains("\"errors\""));

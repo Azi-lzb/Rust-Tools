@@ -465,7 +465,7 @@ pub fn run_timeline_precheck(config_path: impl AsRef<Path>) -> Result<PrecheckRe
                 })
                 .filter(|value| !value.is_empty())
                 .collect::<BTreeSet<_>>();
-            for key in ["输入目录", "输出目录", "日志目录"] {
+            for key in ["输出目录", "日志目录"] {
                 if !keys.contains(key) {
                     add!("error", "全局配置".to_owned(), format!("缺少键: {key}"));
                 }
@@ -475,13 +475,8 @@ pub fn run_timeline_precheck(config_path: impl AsRef<Path>) -> Result<PrecheckRe
     if report.errors == 0 {
         match load_global(config_path) {
             Ok(global) => {
-                if !global.input_dir.exists() {
-                    add!(
-                        "error",
-                        "全局配置/输入目录".to_owned(),
-                        format!("输入目录不存在: {}", global.input_dir.display()),
-                    );
-                }
+                // Input directory is only the optional CLI discovery default.
+                // Interactive callers select sources explicitly.
                 if let Err(error) = fs::create_dir_all(&global.output_dir) {
                     add!(
                         "error",

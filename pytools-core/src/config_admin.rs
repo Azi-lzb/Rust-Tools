@@ -186,7 +186,7 @@ const SHEET_SPECS: &[(&str, &[&str])] = &[
 /// 全局配置的键、默认值与 C 列备注。备注必须让用户不看文档就知道怎么填；
 /// 修改时三处消费点（init、repair 补行、repair 整表重建）会同步带出备注。
 const GLOBAL_DEFAULTS: &[(&str, &str, &str)] = &[
-    ("输入目录", "input", "待处理的源文件目录；相对路径基于本配置文件所在目录"),
+    ("输入目录", "input", "可选：命令行未指定源文件时的默认扫描目录；交互选择文件时不使用；相对路径基于本配置文件所在目录"),
     ("输出目录", "output", "结果输出目录；相对路径基于本配置文件所在目录"),
     // Blank selects run_logging::default_log_dir() at runtime; an explicit
     // user value remains relative to the configuration workbook as before.

@@ -705,7 +705,7 @@ where
         )?;
         writeln!(
             output,
-            "  5  按模板校验区域提取校验  【临时复制源文件并调用 Excel/WPS COM 重算；原文件不修改】"
+            "  5  按模板校验区域提取校验  【临时副本按配置重算，默认 BetterOffice；原文件不修改】"
         )?;
         writeln!(
             output,
@@ -16398,6 +16398,7 @@ fn commit_wide_summary_existing_target_openpyxl(
     use excel_editor::{
         EditOperation, ExcelEditPlan, PreservationRequirement, RangeStyleMode, WorkbookFormat,
     };
+    pytools_core::file_commit::ensure_target_writable(target)?;
 
     anyhow::ensure!(!appends.is_empty(), "目标追加计划没有任何工作表");
     let summary_max_col = appends
@@ -16771,7 +16772,8 @@ fn execute_wide_summary_target_writes(
         }
         let existed = target.is_file();
         let original_hash = if existed {
-            match sha256_file(target) {
+            match pytools_core::file_commit::ensure_target_writable(target)
+                .and_then(|_| sha256_file(target)) {
                 Ok(hash) => Some(hash),
                 Err(error) => {
                     any_failed = true;
@@ -16782,7 +16784,7 @@ fn execute_wide_summary_target_writes(
                         total_inputs,
                         "target_write",
                         "failed",
-                        "读取目标工作簿快照失败；未执行写入".to_owned(),
+                        format!("目标工作簿不可写；未执行写入：{error:#}"),
                         Some(stage_started.elapsed().as_millis()),
                         0,
                         &["pytools-core", "sha2"],
@@ -17688,7 +17690,7 @@ fn emit_wide_summary_event(
             }
         },
         "user" => {
-            if event.status == "failed"
+            if matches!(event.status.as_str(), "failed" | "skipped")
                 || matches!(
                     event.phase.as_str(),
                     "source_match" | "summary_write" | "target_write" | "source_discovery"

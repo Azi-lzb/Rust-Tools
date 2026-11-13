@@ -632,9 +632,9 @@ fn summarize_used_ranges_inner(
     sheet.write_string_with_format(0, 0, "工作簿", &header_format)?;
     sheet.write_string_with_format(0, 1, "工作表", &header_format)?;
     sheet.write_string_with_format(0, 2, "行号", &header_format)?;
-    for col in 1..=max_col {
-        sheet.write_string_with_format(0, (col + 2) as u16, &format!("列{col}"), &header_format)?;
-    }
+    // Stored worksheet extents can include far-right style-only cells.
+    // Generate labels after reading values, up to the last non-empty column.
+    let mut last_data_column = 0usize;
     sheet.set_freeze_panes(1, 0)?;
     sheet.set_margins(0.75, 0.75, 1.0, 1.0, 0.5, 0.5);
     let mut out_row = 1u32;
@@ -829,6 +829,11 @@ fn summarize_used_ranges_inner(
                             if is_merged_non_anchor(&merged_ranges, row, col) {
                                 continue;
                             }
+                            if value.get("value").is_some_and(|value| {
+                                !value.is_null() && value.as_str() != Some("")
+                            }) {
+                                last_data_column = last_data_column.max(col);
+                            }
                             if value.get("type").and_then(serde_json::Value::as_str)
                                 == Some("error")
                             {
@@ -902,6 +907,9 @@ fn summarize_used_ranges_inner(
             Some("rust_xlsxwriter"),
             None,
         );
+    }
+    for col in 1..=last_data_column {
+        sheet.write_string_with_format(0, (col + 2) as u16, &format!("列{col}"), &header_format)?;
     }
     if error_cells.is_empty() {
         let save_started = Instant::now();
