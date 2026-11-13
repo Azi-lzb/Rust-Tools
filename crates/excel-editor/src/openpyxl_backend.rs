@@ -1514,6 +1514,10 @@ fn validate_preserved_ooxml_metadata(
         .preserve
         .contains(&PreservationRequirement::Relationships)
     {
+        let (_, deleted) = planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
+        let parts = worksheet_parts_by_name(input_path)?;
+        let expected_relationships =
+            relationships_for_surviving_sheets(&source.relationships, &parts, &deleted);
         let calc_chain_may_be_invalidated = plan.operations.iter().any(|operation| {
             !matches!(
                 operation,
@@ -1530,12 +1534,12 @@ fn validate_preserved_ooxml_metadata(
         });
         anyhow::ensure!(
             relationships_preserved(
-                &source.relationships,
+                &expected_relationships,
                 &output.relationships,
                 calc_chain_may_be_invalidated,
             ),
             "openpyxl changed OOXML relationships: {}",
-            relationship_change_summary(&source.relationships, &output.relationships)
+            relationship_change_summary(&expected_relationships, &output.relationships)
         );
     }
     if plan
@@ -1621,9 +1625,16 @@ fn per_sheet_entries_match_for_plan<T: PartialEq>(
     source_order: &[String],
     plan: &ExcelEditPlan,
 ) -> Result<bool> {
-    let (names, _) = planned_sheet_provenance(source_order, &plan.operations)?;
+    let (names, deleted) = planned_sheet_provenance(source_order, &plan.operations)?;
     Ok(source.iter().all(|(source_name, expected)| {
-        let output_name = names.get(source_name).unwrap_or(source_name);
+        // Explicitly deleted identities have no output metadata to preserve.
+        // Surviving identities must still exist and retain their attributes.
+        if deleted.contains_key(source_name) {
+            return true;
+        }
+        let Some(output_name) = names.get(source_name) else {
+            return false;
+        };
         output
             .iter()
             .find(|(name, _)| name == output_name)
@@ -1638,6 +1649,28 @@ fn per_sheet_entries_match<T: PartialEq>(source: &[(String, T)], output: &[(Stri
             .find(|(output_name, _)| output_name == name)
             .is_some_and(|(_, actual)| actual == expected)
     })
+}
+
+// Only the .rels part owned by a deliberately deleted worksheet is exempt.
+// Workbook/package and every surviving sheet relationship remain protected.
+fn relationships_for_surviving_sheets(
+    source: &[(String, Vec<CanonicalXmlElement>)],
+    parts: &BTreeMap<String, String>,
+    deleted: &BTreeMap<String, String>,
+) -> Vec<(String, Vec<CanonicalXmlElement>)> {
+    let removed = deleted
+        .keys()
+        .filter_map(|name| parts.get(name))
+        .filter_map(|part| {
+            let (parent, file) = part.rsplit_once('/')?;
+            Some(format!("{parent}/_rels/{file}.rels"))
+        })
+        .collect::<BTreeSet<_>>();
+    source
+        .iter()
+        .filter(|(part, _)| !removed.contains(part))
+        .cloned()
+        .collect()
 }
 
 fn relationships_preserved(
@@ -2675,6 +2708,7 @@ fn validate_requested_operations(
                 *copy_values,
                 *copy_formulas,
                 *copy_comments,
+                false,
                 &operations[..operation_index],
             )?,
             EditOperation::ImportRange {
@@ -2686,6 +2720,7 @@ fn validate_requested_operations(
                 copy_values,
                 copy_formulas,
                 copy_comments,
+                hide_zero,
                 ..
             } => {
                 let imported = read_workbook(source_workbook).with_context(|| {
@@ -2704,6 +2739,7 @@ fn validate_requested_operations(
                     *copy_values,
                     *copy_formulas,
                     *copy_comments,
+                    *hide_zero,
                     &[],
                 )?;
             }
@@ -2964,20 +3000,27 @@ fn validate_unmodified_styles(
     source: &umya_spreadsheet::Workbook,
     output: &umya_spreadsheet::Workbook,
 ) -> Result<()> {
-    let deleted_sheets: BTreeSet<&str> = plan
-        .operations
-        .iter()
-        .filter_map(|operation| match operation {
-            EditOperation::DeleteSheet { name } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
     for source_sheet in source.sheet_collection() {
         let source_name = source_sheet.name();
-        if deleted_sheets.contains(source_name) {
+        let mut output_name = source_name.to_owned();
+        let mut deleted = false;
+        // Deletion targets the sheet's name at that point in the plan, which
+        // may be a temporary seed name assigned by an earlier RenameSheet.
+        for operation in &plan.operations {
+            match operation {
+                EditOperation::RenameSheet { old_name, new_name } if old_name == &output_name => {
+                    output_name = new_name.clone()
+                }
+                EditOperation::DeleteSheet { name } if name == &output_name => {
+                    deleted = true;
+                    break;
+                }
+                _ => {}
+            }
+        }
+        if deleted {
             continue;
         }
-        let output_name = final_sheet_name(plan, source_name);
         let output_sheet = output
             .sheet_by_name(&output_name)
             .with_context(|| format!("style-preservation output sheet {output_name:?} missing"))?;
@@ -4191,6 +4234,7 @@ fn validate_range_copy(
     copy_values: bool,
     copy_formulas: bool,
     copy_comments: bool,
+    hide_zero: bool,
     preceding_operations: &[EditOperation],
 ) -> Result<()> {
     let source = source_sheets
@@ -4254,7 +4298,25 @@ fn validate_range_copy(
                 );
             } else if copy_values {
                 let actual = target.values.get(&target_address);
-                if let Some(expected) = planned_value {
+                let hidden_zero = hide_zero
+                    && match planned_value.as_ref() {
+                        Some(crate::CellValue::Decimal(number)) => {
+                            number.parse::<f64>().is_ok_and(|n| n == 0.0)
+                        }
+                        Some(_) => false,
+                        None => source.values.get(&source_address).is_some_and(|value| {
+                            matches!(
+                                value.get("type").and_then(serde_json::Value::as_str),
+                                Some("number" | "integer")
+                            ) && value.get("value").and_then(serde_json::Value::as_f64) == Some(0.0)
+                        }),
+                    };
+                if hidden_zero {
+                    anyhow::ensure!(
+                        actual.is_none() && !target.formulas.contains_key(&target_address),
+                        "hidden numeric zero must be blank at {target_sheet_name}!{target_address}"
+                    );
+                } else if let Some(expected) = planned_value {
                     validate_planned_copy_value(&expected, actual).with_context(|| {
                         format!("copied cell value/type mismatch at {target_sheet_name}!{target_address}")
                     })?;
@@ -5295,6 +5357,104 @@ fn worker_failure_with_diagnostics(message: String, diagnostics: &serde_json::Va
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn deleted_sheet_relationship_exemption_keeps_package_and_survivor_checks() {
+        let source = vec![
+            ("xl/worksheets/_rels/sheet1.xml.rels".into(), Vec::new()),
+            ("xl/worksheets/_rels/sheet2.xml.rels".into(), Vec::new()),
+            ("xl/_rels/workbook.xml.rels".into(), Vec::new()),
+        ];
+        let parts = BTreeMap::from([
+            ("Old".into(), "xl/worksheets/sheet1.xml".into()),
+            ("Keep".into(), "xl/worksheets/sheet2.xml".into()),
+        ]);
+        let deleted = BTreeMap::from([("Old".into(), "__seed".into())]);
+        let expected = relationships_for_surviving_sheets(&source, &parts, &deleted);
+        assert_eq!(expected.len(), 2);
+        assert!(relationships_preserved(&expected, &source[1..], false));
+        assert!(!relationships_preserved(&expected, &source[2..], false));
+        assert!(!relationships_preserved(&expected, &source[1..2], false));
+    }
+    #[test]
+    fn style_validation_tracks_renamed_deleted_seed_but_requires_surviving_sheets() -> Result<()> {
+        let mut source = umya_spreadsheet::new_file();
+        source.new_sheet("Keep")?;
+        let mut output = umya_spreadsheet::new_file();
+        output.sheet_by_name_mut("Sheet1").unwrap().set_name("Keep");
+        let plan = dimension_plan(
+            vec![
+                EditOperation::RenameSheet {
+                    old_name: "Sheet1".into(),
+                    new_name: "__seed".into(),
+                },
+                EditOperation::DeleteSheet {
+                    name: "__seed".into(),
+                },
+            ],
+            BTreeMap::new(),
+        );
+        validate_unmodified_styles(&plan, &source, &output)?;
+        let missing = umya_spreadsheet::new_file();
+        assert!(validate_unmodified_styles(&plan, &source, &missing).is_err());
+        Ok(())
+    }
+    #[test]
+    fn range_copy_hide_zero_validates_blanks_without_losing_text_or_nonzero() {
+        let mut source = sheet_dump("Source", &[]);
+        source.values.insert(
+            "A1".to_owned(),
+            serde_json::json!({"type":"number","value":0.0}),
+        );
+        source.values.insert(
+            "B1".to_owned(),
+            serde_json::json!({"type":"string","value":"0"}),
+        );
+        source.values.insert(
+            "C1".to_owned(),
+            serde_json::json!({"type":"number","value":12.5}),
+        );
+        source.formulas.insert("A1".to_owned(), "1-1".to_owned());
+        let mut target = sheet_dump("Target", &[]);
+        target
+            .values
+            .insert("B1".to_owned(), source.values["B1"].clone());
+        target
+            .values
+            .insert("C1".to_owned(), source.values["C1"].clone());
+        let check = |target: &SheetDump, hide| {
+            validate_range_copy(
+                std::slice::from_ref(&source),
+                std::slice::from_ref(target),
+                "Source",
+                "A1:C1",
+                "Target",
+                "A1",
+                true,
+                false,
+                false,
+                hide,
+                &[],
+            )
+        };
+        assert!(check(&target, true).is_ok());
+        assert!(check(&target, false).is_err());
+        // A formula without a cached value is not a truly blank destination.
+        target.formulas.insert("A1".to_owned(), "1-1".to_owned());
+        assert!(check(&target, true).is_err());
+        target.formulas.remove("A1");
+        assert!(check(&target, true).is_ok());
+        let saved = target.values.remove("B1").unwrap();
+        assert!(check(&target, true).is_err());
+        target.values.insert("B1".to_owned(), saved);
+        let saved = target.values.remove("C1").unwrap();
+        assert!(check(&target, true).is_err());
+        target.values.insert("C1".to_owned(), saved);
+        target
+            .values
+            .insert("A1".to_owned(), source.values["A1"].clone());
+        assert!(check(&target, true).is_err());
+    }
+
     use super::*;
 
     /// 运行时解析 / 握手 / 有界输出的测试工具与用例。
@@ -7474,7 +7634,7 @@ mod phase2_metadata_identity_tests {
     use super::*;
     #[test]
     fn metadata_follows_planned_sheet_identity_but_still_rejects_attribute_changes() -> Result<()> {
-        let plan = ExcelEditPlan {
+        let mut plan = ExcelEditPlan {
             request_id: "rename-metadata".into(),
             input: "source.xlsx".into(),
             output: "out.xlsx".into(),
@@ -7508,6 +7668,28 @@ mod phase2_metadata_identity_tests {
         assert!(!per_sheet_entries_match_for_plan(
             &source,
             &[("Old".into(), "landscape")],
+            &order,
+            &plan
+        )?);
+        plan.operations
+            .push(EditOperation::DeleteSheet { name: "New".into() });
+        let source = vec![("Old".into(), "landscape"), ("Keep".into(), "portrait")];
+        let order = vec!["Old".into(), "Keep".into()];
+        assert!(per_sheet_entries_match_for_plan(
+            &source,
+            &[("Keep".into(), "portrait")],
+            &order,
+            &plan
+        )?);
+        assert!(!per_sheet_entries_match_for_plan(
+            &source,
+            &[("Keep".into(), "landscape")],
+            &order,
+            &plan
+        )?);
+        assert!(!per_sheet_entries_match_for_plan(
+            &source,
+            &[],
             &order,
             &plan
         )?);

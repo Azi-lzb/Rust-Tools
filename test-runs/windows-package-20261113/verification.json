@@ -1,0 +1,187 @@
+{
+  "base_head": "fa4ba947a64300bbcac1134529848e34565b5925",
+  "branch": "main",
+  "package_kind": "manual-acceptance-test",
+  "release_build": {
+    "command": "cargo build --release --offline -p pytools-core --bin RustTools",
+    "CARGO_TARGET_DIR": "F:/RustBuild/pytools",
+    "exit": 0,
+    "profile": "release optimized",
+    "elapsed": "12m 55s",
+    "result": "PASS with compiler warnings"
+  },
+  "checks": {
+    "audit-safety": 0,
+    "changed-rustfmt": 0,
+    "runtime-verify": 0,
+    "release-cli": 0,
+    "release-xls-refusal": 0,
+    "package-create": 0,
+    "package-integrity": 0,
+    "zip-smoke": 0
+  },
+  "this_run_test_results": {
+    "release_cli_com_fixture_skipped": 1,
+    "extracted_config_discovery": "PASS",
+    "zip_smoke": "ALL PASS",
+    "audit_safety_passed": 5,
+    "release_cli_passed": 7,
+    "synthetic_biff_refusal_passed": 1
+  },
+  "source_unchanged_during_build": [
+    {
+      "path": "crates/excel-editor/src/openpyxl_backend.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/packaging/build_deb.sh",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/python/pywin32_excel_conversion_worker.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/archive_ops.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/bin/RustTools.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/file_sort_prefix.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/print_ops.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/static_print_engines.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/print_config_new_target.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/packaging/isolated_install_smoke.sh",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/general_boundary_p0_p1.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_audit_safety.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_general_boundaries.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_platform_office.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_platform_xls_refusal.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_wps_readonly.py",
+      "matches": true
+    }
+  ],
+  "prior_validation_source_match": [
+    {
+      "path": "crates/excel-editor/src/openpyxl_backend.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/packaging/build_deb.sh",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/python/pywin32_excel_conversion_worker.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/archive_ops.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/bin/RustTools.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/file_sort_prefix.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/print_ops.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/src/static_print_engines.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/print_config_new_target.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/general_boundary_p0_p1.rs",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_audit_safety.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_general_boundaries.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_platform_office.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_platform_xls_refusal.py",
+      "matches": true
+    },
+    {
+      "path": "pytools-core/tests/python/test_wps_readonly.py",
+      "matches": true
+    }
+  ],
+  "local_configs": [
+    {
+      "path": "config.xlsx",
+      "unchanged": true
+    },
+    {
+      "path": "dist/config/config.xlsx",
+      "unchanged": true
+    }
+  ],
+  "exe": {
+    "bytes": 31186944,
+    "sha256": "236192967c5f2b92a799be1acc5fd7b54a301d9295909b235a654827ce0ddb95",
+    "path": "dist/RustTools.exe"
+  },
+  "archive": {
+    "bytes": 32968480,
+    "sha256": "ada353e68f8c0ed1bdc87c6c9dfd66be49044b232c87bc61e1f86d79e5d437c3",
+    "path": "dist/RustTools-windows-x64-TEST-main-20261113-173519.zip"
+  },
+  "workspace_fmt_exit": 1,
+  "known_limits": [
+    "WPS strict BIFF byte invariance previously failed; not rerun here",
+    "FAT/exFAT, SMB disconnect, Kylin V10, real business acceptance NOT_TESTED",
+    "Existing XLS append remains refused; Spire not integrated; Linux routing unchanged",
+    "No full suite or new Linux package/install",
+    "Initial Python append of PowerShell ZIP broke header separators; failed archive retained, final ZIP rewritten and verified"
+  ]
+}

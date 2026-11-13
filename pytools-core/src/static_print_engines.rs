@@ -953,8 +953,13 @@ for t in plan['tasks']:
         name = (t['target_ws'].strip() or t['source_ws'])[:31]
         if name in tgt_wb.sheetnames:
             ws = tgt_wb[name]
-            if ws.max_row > 1 or ws.cell(1, 1).value not in (None, ''):
-                ws.delete_rows(1, ws.max_row)
+            # Each task replaces this sheet's content, never overlays it.
+            # delete_rows does not reset merges or dimension overrides.
+            for merged in list(ws.merged_cells.ranges):
+                ws.unmerge_cells(str(merged))
+            ws.delete_rows(1, ws.max_row)
+            ws.row_dimensions.clear()
+            ws.column_dimensions.clear()
         else:
             ws = tgt_wb.create_sheet(title=name)
         out_row = 1

@@ -748,7 +748,15 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             !matching_sheets.is_empty(),
             "print target has no enabled, valid tasks"
         );
+        let mut seed_drop_allowed = BTreeMap::new();
         for seed in seed_renames {
+            // Static print materializes a new workbook, then removes these
+            // renamed source seeds. Permit dimension loss only for those seeds;
+            // output dimensions are still checked through the import operations.
+            seed_drop_allowed.insert(
+                seed.clone(),
+                BTreeSet::from([PreservationRequirement::RowAndColumnDimensions]),
+            );
             operations.push(EditOperation::DeleteSheet { name: seed });
         }
         let total = target_order.len();
@@ -782,7 +790,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             workbook: profile,
             operations,
             preserve,
-            drop_allowed: Default::default(),
+            drop_allowed: seed_drop_allowed,
         };
         plan.validate().context("validate grouped print plan")?;
         reports.push(PrintPlanReport {

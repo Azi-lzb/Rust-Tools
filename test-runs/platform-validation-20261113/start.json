@@ -1,0 +1,19 @@
+{
+  "head": "fa4ba947a64300bbcac1134529848e34565b5925",
+  "files": {
+    "crates/excel-editor/src/openpyxl_backend.rs": "0743206c0778296a04fd4153169ffb95c91bb15361c840e7159de4e5bc719937",
+    "pytools-core/packaging/build_deb.sh": "233f36ac83b6b483cd12c009ef087d0fae686b5d3e3878034b8bbccfc2cf5666",
+    "pytools-core/python/pywin32_excel_conversion_worker.py": "26a13c301f8a0ae762970634d75b5b90f254b4f509d258d3844ecb0f224b5a90",
+    "pytools-core/src/archive_ops.rs": "d9947c42e00291243616c9f3036ecaf404e62e735200d06bd90a215b62dd8787",
+    "pytools-core/src/bin/RustTools.rs": "d24ec91d48b2d644b470bff0189b9f2160875c6ff4da0b1218133ed4f4bd33dd",
+    "pytools-core/src/file_sort_prefix.rs": "87f3ecc8e8c5201d6a273dad4496000de78a7d708eed3dc11664afd61576f405",
+    "pytools-core/src/print_ops.rs": "8e2a360ece355061fcf8aea61a1f12376197265dfb9045d6c876182ba88ca29c",
+    "pytools-core/src/static_print_engines.rs": "1170c5b87fc2161c3b1428e7a19cbb985e79e776192bb8f3fb5ebd7cd4fe3e4c",
+    "pytools-core/tests/print_config_new_target.rs": "61314ffdc714cb931f9a593bb2d0ff9ca3b7d5edabdd57e2769426982725fdd9",
+    "pytools-core/tests/general_boundary_p0_p1.rs": "6c6ae392482d90e2082125eacb9045f3683d23d23211b30244842e11f20011aa",
+    "pytools-core/tests/python/test_audit_safety.py": "38a40c282cdb8cfbbf6cf1760f19c8b83d702d9d21f89fdf8fe6e2e43de25c7f",
+    "pytools-core/tests/python/test_general_boundaries.py": "6628ef9ab3f4741f3ad5455c7bdc449f92af29c8b7df23e7c5b1089ad40ef62c",
+    "dist/RustTools.exe": "fa831cbf56ef9dde160dba2f6f8f38def14222dbeb6286f0dc2c1705e5209f34",
+    "config.xlsx": "b8211c33ffbc35f12b762d6eb9a10c9e3c95377129c4c7a1177eb8c510be256f"
+  }
+}

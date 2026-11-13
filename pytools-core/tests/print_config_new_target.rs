@@ -283,6 +283,18 @@ fn pt_3_3_new_target_creates_a_plan_without_touching_source_or_target() -> Resul
     );
     let plan: ExcelEditPlan = serde_json::from_slice(&fs::read(plan_path)?)?;
 
+    for operation in &plan.operations {
+        if let EditOperation::DeleteSheet { name } = operation {
+            let allowed = plan
+                .drop_allowed
+                .get(name)
+                .expect("deleted print seed requires explicit dimension allowance");
+            assert_eq!(allowed.len(), 1);
+            assert!(
+                allowed.contains(&excel_editor::PreservationRequirement::RowAndColumnDimensions)
+            );
+        }
+    }
     assert_eq!(plan.input, source);
     assert_eq!(plan.output, report_output);
     assert_eq!(plan.output, target);

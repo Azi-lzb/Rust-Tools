@@ -1,0 +1,5 @@
+{
+  "crates/excel-editor/src/openpyxl_backend.rs": true,
+  "pytools-core/tests/python/test_audit_safety.py": true,
+  "pytools-core/tests/python/test_general_boundaries.py": true
+}

@@ -453,6 +453,11 @@ where
         "开始读取工作簿内容并按匹配规则添加文件名前缀。",
     );
 
+    let sort_prefixes = load_file_sort_rules(config_path)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|rule| rule.prefix)
+        .collect::<Vec<_>>();
     for (index, source) in files.iter().enumerate() {
         let input_index = index + 1;
         emit_file_sort_event(
@@ -472,7 +477,7 @@ where
                 files.len()
             ),
         );
-        let (row, used_reader) = content_prefix_rename_row(source, &specs);
+        let (row, used_reader) = content_prefix_rename_row(source, &specs, &sort_prefixes);
         if row.new_name.is_empty() {
             skip += 1;
         } else {
@@ -789,6 +794,7 @@ where
 fn content_prefix_rename_row(
     source: &Path,
     specs: &[(String, String)],
+    sort_prefixes: &[String],
 ) -> (ContentPrefixRenameRow, bool) {
     let mut row = ContentPrefixRenameRow {
         source_path: source.to_string_lossy().into_owned(),
@@ -826,11 +832,16 @@ fn content_prefix_rename_row(
         .map(|value| sanitize_name_part(value))
         .filter(|value| !value.is_empty())
         .collect::<Vec<_>>();
-    if already_renamed_by_content(&row.original_name, &prefix_items) {
+    if content_prefix_restore_candidates(&row.original_name, &prefix_items, sort_prefixes).len() > 1
+    {
+        row.status = "跳过：前缀位置有歧义，原文件未改名".to_owned();
+        return (row, true);
+    }
+    if already_renamed_by_content_at_position(&row.original_name, &prefix_items, sort_prefixes) {
         row.status = "跳过：内容已在文件名中".to_owned();
         return (row, true);
     }
-    let prefix = prefix_items.join("_").chars().take(180).collect::<String>();
+    let prefix = canonical_content_prefix(&prefix_items);
     let new_name = if prefix.is_empty() {
         row.original_name.clone()
     } else {
@@ -838,6 +849,11 @@ fn content_prefix_rename_row(
     };
     if new_name == row.original_name {
         row.status = "跳过：文件名未变".to_owned();
+        return (row, true);
+    }
+    // Leave room for conflict suffixes; never truncate the original filename.
+    if new_name.len() > 240 || new_name.encode_utf16().count() > 240 {
+        row.status = "跳过：完整文件名过长，原文件未改名".to_owned();
         return (row, true);
     }
     match move_to_available_path(source, &source.with_file_name(&new_name)) {
@@ -894,12 +910,22 @@ fn content_prefix_unrename_row(
         .map(|value| sanitize_name_part(value))
         .filter(|value| !value.is_empty())
         .collect::<Vec<_>>();
+    if content_prefix_restore_candidates(&row.original_name, &prefix_items, sort_prefixes).len() > 1
+    {
+        row.status = "跳过：前缀位置有歧义，原文件未改名".to_owned();
+        return (row, true);
+    }
     let Some(new_name) =
         remove_content_prefix_keep_sort_prefix(&row.original_name, &prefix_items, sort_prefixes)
     else {
         row.status = "跳过：前缀不匹配".to_owned();
         return (row, true);
     };
+    // Leave room for conflict suffixes; never truncate the original filename.
+    if new_name.len() > 240 || new_name.encode_utf16().count() > 240 {
+        row.status = "跳过：完整文件名过长，原文件未改名".to_owned();
+        return (row, true);
+    }
     match move_to_available_path(source, &source.with_file_name(&new_name)) {
         Ok(actual_target) => {
             row.new_name = actual_target
@@ -1504,50 +1530,70 @@ fn sanitize_name_part(value: &str) -> String {
     trimmed.to_owned()
 }
 
-fn remove_content_prefix(file_name: &str, prefix_items: &[String]) -> Option<String> {
-    if prefix_items.is_empty() {
-        return None;
-    }
-    let prefix = format!("{}_", prefix_items.join("_"));
-    let path = Path::new(file_name);
-    let mut stem = path.file_stem()?.to_string_lossy().into_owned();
-    let suffix = path
-        .extension()
-        .map(|extension| format!(".{}", extension.to_string_lossy()))
-        .unwrap_or_default();
-    let mut changed = false;
-    while stem.starts_with(&prefix) {
-        stem.drain(..prefix.len());
-        changed = true;
-    }
-    let prefix_set = prefix_items
-        .iter()
-        .map(String::as_str)
-        .collect::<std::collections::BTreeSet<_>>();
-    while let Some(separator) = stem.find('_') {
-        if !prefix_set.contains(&&stem[..separator]) {
+fn canonical_content_prefix(items: &[String]) -> String {
+    let mut out = String::new();
+    for ch in items.join("_").chars().take(180) {
+        if out.len() + ch.len_utf8() > 180 {
             break;
         }
-        stem.drain(..=separator);
-        changed = true;
+        out.push(ch);
     }
-    if !changed || stem.is_empty() {
-        return None;
-    }
-    Some(format!("{stem}{suffix}"))
+    out
 }
 
-fn already_renamed_by_content(file_name: &str, prefix_items: &[String]) -> bool {
+// Exactly one complete prefix; never guess by deleting individual/repeated tokens.
+fn leading_content_prefix_candidates(
+    file_name: &str,
+    prefix_items: &[String],
+) -> std::collections::BTreeSet<String> {
     if prefix_items.is_empty() {
-        return false;
+        return Default::default();
     }
-    let Some(stem) = Path::new(file_name)
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-    else {
-        return false;
+    let path = Path::new(file_name);
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return Default::default();
     };
-    prefix_items.iter().all(|item| stem.contains(item))
+    let suffix = path
+        .extension()
+        .map(|x| format!(".{}", x.to_string_lossy()))
+        .unwrap_or_default();
+    let mut results = std::collections::BTreeSet::new();
+    for prefix in [
+        canonical_content_prefix(prefix_items),
+        prefix_items.join("_").chars().take(180).collect(),
+    ] {
+        if prefix.is_empty() {
+            continue;
+        }
+        if let Some(rest) = stem.strip_prefix(&format!("{prefix}_")) {
+            if !rest.is_empty() {
+                results.insert(format!("{rest}{suffix}"));
+            }
+        }
+    }
+    results
+}
+
+fn remove_content_prefix(file_name: &str, prefix_items: &[String]) -> Option<String> {
+    let results = leading_content_prefix_candidates(file_name, prefix_items);
+    if results.len() == 1 {
+        results.into_iter().next()
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+fn already_renamed_by_content(file_name: &str, prefix_items: &[String]) -> bool {
+    already_renamed_by_content_at_position(file_name, prefix_items, &[])
+}
+
+fn already_renamed_by_content_at_position(
+    file_name: &str,
+    prefix_items: &[String],
+    sort_prefixes: &[String],
+) -> bool {
+    remove_content_prefix_keep_sort_prefix(file_name, prefix_items, sort_prefixes).is_some()
 }
 
 fn remove_content_prefix_keep_sort_prefix(
@@ -1555,15 +1601,30 @@ fn remove_content_prefix_keep_sort_prefix(
     prefix_items: &[String],
     sort_prefixes: &[String],
 ) -> Option<String> {
-    for sort_prefix in sort_prefixes {
-        let leading = format!("{sort_prefix}_");
-        let Some(remainder) = file_name.strip_prefix(&leading) else {
-            continue;
-        };
-        let restored = remove_content_prefix(remainder, prefix_items)?;
-        return Some(format!("{leading}{restored}"));
+    let results = content_prefix_restore_candidates(file_name, prefix_items, sort_prefixes);
+    if results.len() == 1 {
+        results.into_iter().next()
+    } else {
+        None
     }
-    remove_content_prefix(file_name, prefix_items)
+}
+
+fn content_prefix_restore_candidates(
+    file_name: &str,
+    prefix_items: &[String],
+    sort_prefixes: &[String],
+) -> std::collections::BTreeSet<String> {
+    let mut results = std::collections::BTreeSet::new();
+    results.extend(leading_content_prefix_candidates(file_name, prefix_items));
+    for sort_prefix in sort_prefixes.iter().filter(|p| !p.is_empty()) {
+        let leading = format!("{sort_prefix}_");
+        if let Some(remainder) = file_name.strip_prefix(&leading) {
+            for restored in leading_content_prefix_candidates(remainder, prefix_items) {
+                results.insert(format!("{leading}{restored}"));
+            }
+        }
+    }
+    results
 }
 
 #[cfg(test)]
@@ -2098,18 +2159,69 @@ pub(crate) fn move_to_available_path(source: &Path, desired: &Path) -> io::Resul
     }
 }
 
+#[cfg(windows)]
 fn move_file_no_replace(source: &Path, target: &Path) -> io::Result<()> {
-    fs::hard_link(source, target)?;
-    if let Err(remove_error) = fs::remove_file(source) {
-        return match fs::remove_file(target) {
-            Ok(()) => Err(remove_error),
-            Err(cleanup_error) => Err(io::Error::new(
-                cleanup_error.kind(),
-                format!("{remove_error}; could not remove reserved destination: {cleanup_error}"),
-            )),
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+    fn extended(path: &Path) -> io::Result<Vec<u16>> {
+        let absolute = std::path::absolute(path)?;
+        let raw: Vec<u16> = absolute.as_os_str().encode_wide().collect();
+        let mut result = if raw.starts_with(&[92, 92, 63, 92]) {
+            raw
+        } else if raw.starts_with(&[92, 92]) {
+            let mut prefix: Vec<u16> = r"\\?\UNC\".encode_utf16().collect();
+            prefix.extend_from_slice(&raw[2..]);
+            prefix
+        } else {
+            let mut prefix: Vec<u16> = r"\\?\".encode_utf16().collect();
+            prefix.extend_from_slice(&raw);
+            prefix
         };
+        result.push(0);
+        Ok(result)
     }
-    Ok(())
+    let source = extended(source)?;
+    let target = extended(target)?;
+    // No REPLACE_EXISTING flag: FAT/exFAT/SMB need no hard-link support.
+    if unsafe { MoveFileExW(source.as_ptr(), target.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn move_file_no_replace(source: &Path, target: &Path) -> io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    unsafe extern "C" {
+        fn renameat2(
+            olddirfd: i32,
+            oldpath: *const std::ffi::c_char,
+            newdirfd: i32,
+            newpath: *const std::ffi::c_char,
+            flags: u32,
+        ) -> i32;
+    }
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let target = CString::new(target.as_os_str().as_bytes())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    // AT_FDCWD, RENAME_NOREPLACE. Unsupported filesystems fail safely;
+    // never fall back to an overwriting rename or remove the source first.
+    if unsafe { renameat2(-100, source.as_ptr(), -100, target.as_ptr(), 1) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn move_file_no_replace(_source: &Path, _target: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "No verified no-replace rename primitive on this platform; source preserved",
+    ))
 }
 
 fn rollback_moves(moved: &[(PathBuf, PathBuf)]) -> Vec<String> {
@@ -2355,7 +2467,7 @@ mod tests {
         assert_eq!(sanitize_name_part("  <机构A>  / 报表.  "), "_机构A_ _ 报表");
         assert_eq!(
             remove_content_prefix("A_B_A_file.xlsx", &["A".to_owned(), "B".to_owned()]),
-            Some("file.xlsx".to_owned())
+            Some("A_file.xlsx".to_owned())
         );
         assert_eq!(remove_content_prefix("file.xlsx", &["A".to_owned()]), None);
     }
@@ -2662,4 +2774,279 @@ pub fn run_remove_file_sort_prefix_410(
     output_dir: impl AsRef<Path>,
 ) -> Result<FileSortPrefixRemovalRunReport> {
     run_remove_file_sort_prefix(config_path, files, output_dir)
+}
+
+#[cfg(test)]
+mod audit_prefix_regression {
+    use super::*;
+    #[test]
+    fn long_prefix_files_round_trip_without_overwriting_conflicts() {
+        let root = std::env::temp_dir().join(format!(
+            "audit-prefix-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let source = root.join("original.xlsx");
+        fs::write(&source, b"synthetic-source").unwrap();
+        let items = vec!["long".repeat(100)];
+        let name = format!("{}_original.xlsx", canonical_content_prefix(&items));
+        let renamed = move_to_available_path(&source, &root.join(&name)).unwrap();
+        assert!(already_renamed_by_content(&name, &items));
+        let restored = remove_content_prefix(&name, &items).unwrap();
+        fs::write(root.join(&restored), b"conflict").unwrap();
+        let actual = move_to_available_path(&renamed, &root.join(&restored)).unwrap();
+        assert_ne!(actual, root.join(&restored));
+        assert_eq!(fs::read(actual).unwrap(), b"synthetic-source");
+        assert_eq!(fs::read(root.join(restored)).unwrap(), b"conflict");
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn long_prefix_round_trip_and_duplicate_detection() {
+        let items = vec!["中文长内容".repeat(100)];
+        let prefix = canonical_content_prefix(&items);
+        assert!(prefix.len() <= 180);
+        let name = format!("{prefix}_original.xlsx");
+        let legacy = format!(
+            "{}_original.xlsx",
+            items.join("_").chars().take(180).collect::<String>()
+        );
+        assert!(already_renamed_by_content(&legacy, &items));
+        assert_eq!(
+            remove_content_prefix(&legacy, &items).as_deref(),
+            Some("original.xlsx")
+        );
+        assert!(already_renamed_by_content(&name, &items));
+        assert_eq!(
+            remove_content_prefix(&name, &items).as_deref(),
+            Some("original.xlsx")
+        );
+    }
+}
+
+#[cfg(test)]
+mod prefix_position_regression {
+    use super::*;
+    #[test]
+    fn middle_text_survives_and_repeat_removal_does_not_peel_original() {
+        let items = vec!["A".to_owned()];
+        assert!(!already_renamed_by_content_at_position(
+            "memo_A_file.xlsx",
+            &items,
+            &[]
+        ));
+        assert_eq!(
+            remove_content_prefix_keep_sort_prefix("memo_A_file.xlsx", &items, &[]),
+            None
+        );
+        assert_eq!(
+            remove_content_prefix("A_memo_A_file.xlsx", &items).as_deref(),
+            Some("memo_A_file.xlsx")
+        );
+        assert_eq!(
+            remove_content_prefix("A_A_file.xlsx", &items).as_deref(),
+            Some("A_file.xlsx")
+        );
+        assert_eq!(
+            remove_content_prefix("A_file.xlsx", &["A".to_owned(), "B".to_owned()]),
+            None
+        );
+    }
+    #[test]
+    fn real_workbook_middle_text_repeat_undo_conflict_and_failed_move() {
+        let root = std::env::temp_dir().join(format!(
+            "prefix-position-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let original = root.join("memo_A_file.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        book.add_worksheet()
+            .set_name("Data")
+            .unwrap()
+            .write_string(0, 0, "A")
+            .unwrap();
+        book.save(&original).unwrap();
+        let before = fs::read(&original).unwrap();
+        let specs = vec![("Data".to_owned(), "A1".to_owned())];
+        let (added, _) = content_prefix_rename_row(&original, &specs, &[]);
+        assert_eq!(added.new_name, "A_memo_A_file.xlsx");
+        let renamed = root.join(&added.new_name);
+        let (repeated, _) = content_prefix_rename_row(&renamed, &specs, &[]);
+        assert!(repeated.new_name.is_empty());
+        fs::write(&original, b"conflict").unwrap();
+        let (removed, _) = content_prefix_unrename_row(&renamed, &specs, &[]);
+        assert_eq!(removed.new_name, "memo_A_file_1.xlsx");
+        let restored = root.join(&removed.new_name);
+        assert_eq!(fs::read(&restored).unwrap(), before);
+        assert_eq!(fs::read(&original).unwrap(), b"conflict");
+        assert!(move_file_no_replace(&restored, &root.join("absent/target.xlsx")).is_err());
+        assert_eq!(fs::read(&restored).unwrap(), before);
+        let ambiguous = root.join("A_B_A_file.xlsx");
+        fs::copy(&restored, &ambiguous).unwrap();
+        let sorts = vec!["A_B".to_owned()];
+        let (skipped, _) = content_prefix_rename_row(&ambiguous, &specs, &sorts);
+        assert!(skipped.new_name.is_empty());
+        assert!(skipped.status.contains("歧义"));
+        let (skipped, _) = content_prefix_unrename_row(&ambiguous, &specs, &sorts);
+        assert!(skipped.new_name.is_empty());
+        assert_eq!(fs::read(&ambiguous).unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn ambiguous_sort_and_content_positions_are_not_removed() {
+        let items = vec!["A".to_owned()];
+        let sorts = vec!["A_B".to_owned()];
+        assert_eq!(
+            remove_content_prefix_keep_sort_prefix("A_B_A_file.xlsx", &items, &sorts),
+            None
+        );
+    }
+    #[test]
+    fn configured_sort_and_long_legacy_positions_share_detection() {
+        for items in [vec!["A".to_owned()], vec!["中文".repeat(200)]] {
+            for prefix in [
+                canonical_content_prefix(&items),
+                items.join("_").chars().take(180).collect(),
+            ] {
+                let name = format!("001_{prefix}_original.xlsx");
+                let sorts = vec!["001".to_owned()];
+                assert!(already_renamed_by_content_at_position(
+                    &name, &items, &sorts
+                ));
+                assert!(!already_renamed_by_content_at_position(&name, &items, &[]));
+                assert_eq!(
+                    remove_content_prefix_keep_sort_prefix(&name, &items, &sorts).as_deref(),
+                    Some("001_original.xlsx")
+                );
+                assert!(already_renamed_by_content(
+                    &format!("{prefix}_original.xlsx"),
+                    &items
+                ));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod prefix_ambiguity_pipeline_regression {
+    use super::*;
+    fn setup() -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "prefix-config-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let config = root.join("config.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("重命名配置").unwrap();
+        sheet.write_string(1, 14, "Y").unwrap();
+        sheet.write_string(1, 15, "Data@A1").unwrap();
+        let sheet = book.add_worksheet();
+        sheet.set_name("文件排序配置").unwrap();
+        for (i, h) in ["是否启用", "排序前缀", "匹配关键词", "备注"]
+            .iter()
+            .enumerate()
+        {
+            sheet.write_string(0, i as u16, *h).unwrap();
+        }
+        for (i, v) in ["Y", "001", "original", "synthetic"].iter().enumerate() {
+            sheet.write_string(1, i as u16, *v).unwrap();
+        }
+        for (i, v) in ["N", "memo", "original", "disabled"].iter().enumerate() {
+            sheet.write_string(2, i as u16, *v).unwrap();
+        }
+        book.save(&config).unwrap();
+        (root, config)
+    }
+    fn make_book(path: &Path, value: &str) -> Vec<u8> {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        book.add_worksheet()
+            .set_name("Data")
+            .unwrap()
+            .write_string(0, 0, value)
+            .unwrap();
+        book.save(path).unwrap();
+        fs::read(path).unwrap()
+    }
+    #[test]
+    fn loaded_sort_configuration_drives_add_repeat_remove_and_disabled_rule() {
+        let (root, config) = setup();
+        let original = root.join("001_A_original.xlsx");
+        let before = make_book(&original, "A");
+        let config_before = fs::read(&config).unwrap();
+        let report =
+            run_content_prefix_rename_xlsx_candidate(&config, &[original.clone()]).unwrap();
+        assert_eq!((report.ok, report.skip), (0, 1));
+        assert!(original.exists());
+        let report = run_content_prefix_unrename_xlsx_candidate(&config, &[original]).unwrap();
+        assert_eq!(report.ok, 1);
+        assert_eq!(report.rows[0].new_name, "001_original.xlsx");
+        let original = root.join("001_original.xlsx");
+        let report = run_content_prefix_rename_xlsx_candidate(&config, &[original]).unwrap();
+        assert_eq!(report.ok, 1);
+        let renamed = root.join(&report.rows[0].new_name);
+        let report = run_content_prefix_rename_xlsx_candidate(&config, &[renamed.clone()]).unwrap();
+        assert_eq!((report.ok, report.skip), (0, 1));
+        let report = run_content_prefix_unrename_xlsx_candidate(&config, &[renamed]).unwrap();
+        assert_eq!(report.rows[0].new_name, "001_original.xlsx");
+        assert_eq!(fs::read(root.join("001_original.xlsx")).unwrap(), before);
+        let middle = root.join("memo_A_file.xlsx");
+        fs::write(&middle, &before).unwrap();
+        let report = run_content_prefix_rename_xlsx_candidate(&config, &[middle]).unwrap();
+        assert_eq!(report.rows[0].new_name, "A_memo_A_file.xlsx");
+        let report =
+            run_content_prefix_unrename_xlsx_candidate(&config, &[root.join("A_memo_A_file.xlsx")])
+                .unwrap();
+        assert_eq!(report.rows[0].new_name, "memo_A_file.xlsx");
+        assert_eq!(fs::read(root.join("memo_A_file.xlsx")).unwrap(), before);
+        assert_eq!(fs::read(&config).unwrap(), config_before);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn legacy_and_canonical_ambiguity_survives_all_layers_and_preserves_files() {
+        let value = format!("中{}_{}", "a".repeat(177), "B".repeat(20));
+        let items = vec![value.clone()];
+        let legacy: String = value.chars().take(180).collect();
+        let name = format!("{legacy}_original.xlsx");
+        assert_eq!(leading_content_prefix_candidates(&name, &items).len(), 2);
+        assert_eq!(
+            content_prefix_restore_candidates(&name, &items, &[]).len(),
+            2
+        );
+        assert_eq!(
+            content_prefix_restore_candidates(&format!("001_{name}"), &items, &["001".to_owned()])
+                .len(),
+            2
+        );
+        let (root, config) = setup();
+        let config_before = fs::read(&config).unwrap();
+        for name in [name.clone(), format!("001_{name}")] {
+            let path = root.join(&name);
+            let before = make_book(&path, &value);
+            let added = run_content_prefix_rename_xlsx_candidate(&config, &[path.clone()]).unwrap();
+            assert_eq!((added.ok, added.skip), (0, 1));
+            assert!(added.rows[0].status.contains("歧义"));
+            let removed =
+                run_content_prefix_unrename_xlsx_candidate(&config, &[path.clone()]).unwrap();
+            assert_eq!((removed.ok, removed.skip), (0, 1));
+            assert!(removed.rows[0].status.contains("歧义"));
+            assert_eq!(fs::read(&path).unwrap(), before);
+        }
+        assert_eq!(fs::read(&config).unwrap(), config_before);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 3);
+        fs::remove_dir_all(root).unwrap();
+    }
 }

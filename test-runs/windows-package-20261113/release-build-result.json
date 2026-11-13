@@ -1,0 +1,8 @@
+{
+  "command": "cargo build --release --offline -p pytools-core --bin RustTools",
+  "CARGO_TARGET_DIR": "F:/RustBuild/pytools",
+  "exit": 0,
+  "profile": "release optimized",
+  "elapsed": "12m 55s",
+  "result": "PASS with compiler warnings"
+}

@@ -25,11 +25,27 @@ WORKSPACE="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CRATE="pytools-core"
 VERSION="0.1.0-$(date +%Y%m%d)"
 TARGET="x86_64-unknown-linux-gnu.2.28"
-STAGING="$(mktemp -d /tmp/rusttools-deb-XXXXXX)"
-CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/mnt/f/RustBuild/pytools}"
-OUT_DIR="$CARGO_TARGET_DIR/deb"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-}"
 
 cd "$WORKSPACE"
+branch="$(git branch --show-current)"
+case "${PACKAGE_KIND:-test}" in
+  release)
+    [[ "$branch" == main && "${RELEASE_ACCEPTED:-}" == yes ]] || {
+      echo "Release requires main and RELEASE_ACCEPTED=yes after acceptance" >&2; exit 1;
+    } ;;
+  test) VERSION="$VERSION-test-${branch//\//-}" ;;
+  *) echo "PACKAGE_KIND must be test or release" >&2; exit 1 ;;
+esac
+case "$branch" in
+  feature/business-development) default_target=/mnt/f/RustBuild/pytools-feature ;;
+  test/business-coverage) default_target=/mnt/f/RustBuild/pytools-test ;;
+  main) default_target=/mnt/f/RustBuild/pytools ;;
+  *) [[ -n "$CARGO_TARGET_DIR" ]] || { echo "Set a separate CARGO_TARGET_DIR for this branch" >&2; exit 1; } ;;
+esac
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$default_target}"
+OUT_DIR="$CARGO_TARGET_DIR/deb"
+STAGING="$(mktemp -d /tmp/rusttools-deb-XXXXXX)"
 export CARGO_TARGET_DIR
 export PATH="/root/.cargo/bin:/root/.local/bin:$PATH"
 
@@ -47,11 +63,14 @@ echo "== binary: $binary =="
 
 echo "== checking GLIBC symbol ceiling =="
 max_glibc="$(objdump -T "$binary" \
-    | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' \
+    | { grep -o 'GLIBC_[0-9.]*' || true; } | sed 's/GLIBC_//' \
     | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
 echo "max GLIBC symbol: $max_glibc"
-if [[ "$max_glibc" != "2.28" ]]; then
-    echo "FAIL: max GLIBC symbol $max_glibc exceeds the 2.28 delivery ceiling" >&2
+comparable="$max_glibc"
+[[ "$comparable" =~ ^[0-9]+\.[0-9]+$ ]] && comparable="$comparable.0"
+if [[ ! "$max_glibc" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
+   [[ "$(printf '%s\n' "$comparable" 2.28.0 | sort -V | tail -1)" != "2.28.0" ]]; then
+    echo "FAIL: max GLIBC symbol $max_glibc is unknown or exceeds the 2.28 delivery ceiling" >&2
     exit 1
 fi
 
@@ -226,59 +245,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "== install test: dpkg -i + config parity + upgrade protection =="
-if dpkg -i "$deb" >/dev/null 2>&1; then
-    # 模拟菜单/快捷方式启动：任意 cwd、不传 --config，config 必须命中 /opt。
-    config_probe="$(cd /tmp && printf '7\n2\n0\n0\n' | /usr/bin/RustTools menu 2>&1 | grep -c '输出目录: /opt/rusttools' || true)"
-    if [[ "$config_probe" -ge 1 ]]; then
-        echo "config parity via symlink from unrelated cwd: PASS"
-    else
-        echo "FAIL: config did not resolve to /opt/rusttools" >&2
-        dpkg -P rusttools >/dev/null 2>&1 || true
-        exit 1
-    fi
-    # 用户改动 config（写入标记单元格），模拟真实使用后再升级。
-    RUNTIME_PY_INSTALLED="/opt/rusttools/python/runtime/bin/python3"
-    "$RUNTIME_PY_INSTALLED" -I - <<'PYEOF'
-import openpyxl
-book = openpyxl.load_workbook("/opt/rusttools/config/config.xlsx")
-book.active["Z99"] = "user-edit-marker"
-book.save("/opt/rusttools/config/config.xlsx")
-PYEOF
-    if dpkg -i "$deb" >/dev/null 2>&1; then
-        marker=$("$RUNTIME_PY_INSTALLED" -I - <<'PYEOF'
-import openpyxl
-book = openpyxl.load_workbook("/opt/rusttools/config/config.xlsx")
-print(book.active["Z99"].value)
-PYEOF
-)
-        if [[ "$marker" == *"user-edit-marker"* ]]; then
-            echo "upgrade preserves user-edited config: PASS"
-        else
-            echo "FAIL: upgrade overwrote the user-edited config (marker=$marker)" >&2
-            dpkg -P rusttools >/dev/null 2>&1 || true
-            exit 1
-        fi
-        if compgen -G "/opt/rusttools/config/config.xlsx.dpkg-dist" >/dev/null; then
-            echo "new default shipped as .dpkg-dist: PASS"
-        fi
-    else
-        echo "WARN: upgrade install failed; preservation unverified" >&2
-    fi
-
-    # 从安装路径（经符号链接）执行完整业务路径冒烟。
-    rm -f "$smoke_plan_dir/result.xlsx"
-    if (cd /tmp && /usr/bin/RustTools apply-edit-plan \
-        --plan "$smoke_plan_dir/plan.json" \
-        --capabilities "$smoke_plan_dir/capabilities.json" \
-        --platform linux-x86_64 >/dev/null 2>&1); then
-        echo "installed-path openpyxl edit: PASS"
-    else
-        echo "WARN: installed-path edit failed (see logs)" >&2
-    fi
-    dpkg -P rusttools >/dev/null 2>&1 || true
-else
-    echo "WARN: dpkg -i failed in this WSL environment; extracted-tree smoke passed" >&2
-fi
+# Installation/upgrade testing is explicitly separate: isolated_install_smoke.sh.
 rm -rf "$smoke_plan_dir" "$smoke_dir" "$STAGING"
 echo "== done: $deb =="

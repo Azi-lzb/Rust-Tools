@@ -1,0 +1,260 @@
+{
+  "head": "fa4ba947a64300bbcac1134529848e34565b5925",
+  "branch": "main",
+  "staging_empty": true,
+  "rust": {
+    "windows": {
+      "passed": 75,
+      "details": {
+        "windows-regression": {
+          "exit": 0,
+          "passed": 48,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-prefix": {
+          "exit": 0,
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-archive-unit": {
+          "exit": 0,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-zero": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-style": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-metadata": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-relationships": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        "windows-dimensions": {
+          "exit": 0,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    },
+    "wsl": {
+      "passed": 64,
+      "details": {
+        "wsl-regression-final": {
+          "exit": 0,
+          "passed": 45,
+          "failed": 0,
+          "ignored": 1
+        },
+        "wsl-prefix": {
+          "exit": 0,
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        "wsl-archive-unit": {
+          "exit": 0,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        "wsl-zero": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    },
+    "docker": {
+      "passed": 22,
+      "details": {
+        "docker-rust-final": {
+          "exit": 0,
+          "passed": 21,
+          "failed": 0,
+          "ignored": 1
+        },
+        "docker-zero-final": {
+          "exit": 0,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    }
+  },
+  "python": {
+    "windows-cli-final": {
+      "exit": 0,
+      "passed": 8,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "windows-audit": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "excel-com-gated": {
+      "exit": 0,
+      "passed": 3,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "wsl-audit-final": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "wsl-cli-isolated": {
+      "exit": 0,
+      "passed": 6,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "wsl-xls-isolated": {
+      "exit": 0,
+      "passed": 1,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "docker-cli-final": {
+      "exit": 0,
+      "passed": 6,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "docker-xls-replay": {
+      "exit": 0,
+      "passed": 1,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "docker-rocky-audit": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "docker-audit-final": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "docker-platform-gates": {
+      "exit": 0,
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "wps-readonly-final": {
+      "exit": 1,
+      "passed": 2,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "wsl-cli-final": {
+      "exit": 1,
+      "passed": 5,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 2
+    }
+  },
+  "preserved_start_files": {
+    "pytools-core/packaging/build_deb.sh": true,
+    "pytools-core/python/pywin32_excel_conversion_worker.py": true,
+    "pytools-core/src/archive_ops.rs": true,
+    "pytools-core/src/bin/RustTools.rs": true,
+    "pytools-core/src/file_sort_prefix.rs": true,
+    "pytools-core/src/print_ops.rs": true,
+    "pytools-core/src/static_print_engines.rs": true,
+    "pytools-core/tests/print_config_new_target.rs": true,
+    "pytools-core/tests/general_boundary_p0_p1.rs": true,
+    "dist/RustTools.exe": true,
+    "config.xlsx": true
+  },
+  "mixed_files_reverse_patch_matches_start": {
+    "crates/excel-editor/src/openpyxl_backend.rs": true,
+    "pytools-core/tests/python/test_audit_safety.py": true,
+    "pytools-core/tests/python/test_general_boundaries.py": true
+  },
+  "source_sha256": {
+    "crates/excel-editor/src/openpyxl_backend.rs": "52c5d63f29b7a133c6aebd7c1b9caa792184d3ab185e7cfbf547f1bb98453164",
+    "pytools-core/packaging/build_deb.sh": "233f36ac83b6b483cd12c009ef087d0fae686b5d3e3878034b8bbccfc2cf5666",
+    "pytools-core/python/pywin32_excel_conversion_worker.py": "26a13c301f8a0ae762970634d75b5b90f254b4f509d258d3844ecb0f224b5a90",
+    "pytools-core/src/archive_ops.rs": "d9947c42e00291243616c9f3036ecaf404e62e735200d06bd90a215b62dd8787",
+    "pytools-core/src/bin/RustTools.rs": "d24ec91d48b2d644b470bff0189b9f2160875c6ff4da0b1218133ed4f4bd33dd",
+    "pytools-core/src/file_sort_prefix.rs": "87f3ecc8e8c5201d6a273dad4496000de78a7d708eed3dc11664afd61576f405",
+    "pytools-core/src/print_ops.rs": "8e2a360ece355061fcf8aea61a1f12376197265dfb9045d6c876182ba88ca29c",
+    "pytools-core/src/static_print_engines.rs": "1170c5b87fc2161c3b1428e7a19cbb985e79e776192bb8f3fb5ebd7cd4fe3e4c",
+    "pytools-core/tests/print_config_new_target.rs": "61314ffdc714cb931f9a593bb2d0ff9ca3b7d5edabdd57e2769426982725fdd9",
+    "pytools-core/tests/general_boundary_p0_p1.rs": "6c6ae392482d90e2082125eacb9045f3683d23d23211b30244842e11f20011aa",
+    "pytools-core/tests/python/test_audit_safety.py": "f7a8d5ef753d585c45a720a3111dbfdc0c0f31f5c393d5cc065d54816df2515b",
+    "pytools-core/tests/python/test_general_boundaries.py": "49e09b124c7c92fd99cf07b64a8ea896cd94440e543b15371943071d6de0e715",
+    "dist/RustTools.exe": "fa831cbf56ef9dde160dba2f6f8f38def14222dbeb6286f0dc2c1705e5209f34",
+    "config.xlsx": "b8211c33ffbc35f12b762d6eb9a10c9e3c95377129c4c7a1177eb8c510be256f",
+    "pytools-core/tests/python/test_platform_office.py": "b08d099f88d28a8f98346555ef0d56b1b615ea0aae58970e038a3205aebead41",
+    "pytools-core/tests/python/test_platform_xls_refusal.py": "0c9364d4798795453ae69d1caff43d093afbfb4a5191dd124c9b01ad0f93db5b",
+    "pytools-core/tests/python/test_wps_readonly.py": "f86343aaed653ac05535348bf0b8c1f1f35bb136ccf0dcfe6be75839227eda18"
+  },
+  "test_binary_sha256": {
+    "F:/RustBuild/pytools/debug/RustTools.exe": "2367d1d587fb7cbe4cffcfb0ea2c8b0abac9968312a7438fe11938d125179141",
+    "test-runs/platform-validation-20261113/windows-bin/RustTools.exe": "2367d1d587fb7cbe4cffcfb0ea2c8b0abac9968312a7438fe11938d125179141",
+    "F:/RustBuild/pytools/x86_64-unknown-linux-gnu/debug/RustTools": "08449bafe65bf769931b4706144522adb9ceea403bd47b47248e180ec6094d91",
+    "F:/RustBuild/pytools/docker-platform-validation/debug/RustTools": "4d686cd5aa2c8cd272104d8e0eed75a5e54083bc3d40e68d7f7276920cb138fb"
+  },
+  "docker_snapshot": {
+    "runtime_entries": 3052,
+    "runtime_matches": true,
+    "cli_matches": true,
+    "cli_sha256": "4d686cd5aa2c8cd272104d8e0eed75a5e54083bc3d40e68d7f7276920cb138fb"
+  },
+  "format": {
+    "rustfmt-final": 0,
+    "diff-check-final": 0,
+    "python-syntax-final": 0,
+    "workspace-fmt": 1
+  },
+  "notes": [
+    "Rust totals exclude nested Python tests and repeated diagnostic runs.",
+    "WPS BIFF strict byte-invariance remains FAILED.",
+    "WSL mounted-runtime CLI failed once; byte-identical native-filesystem snapshot passed.",
+    "No full suite, release, package/install/uninstall, commit, push or dist EXE update."
+  ]
+}

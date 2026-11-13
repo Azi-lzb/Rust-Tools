@@ -13,6 +13,7 @@ use std::{
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ArchiveRow {
+    pub source_sha256: Option<String>,
     pub source_path: String,
     pub file_name: String,
     pub mode: String,
@@ -131,6 +132,10 @@ pub fn execute_archive_plan(plan_path: &Path, output_dir: &Path) -> Result<Archi
         let target = get_cell_text(sheet, row, target_col);
         let status = get_cell_text(sheet, row, status_col);
         rows.push(ArchiveRow {
+            source_sha256: header
+                .get("源文件SHA256")
+                .map(|column| get_cell_text(sheet, row, *column))
+                .filter(|value| !value.is_empty()),
             source_path: source.clone(),
             file_name: Path::new(&source)
                 .file_name()
@@ -176,11 +181,16 @@ fn archive(
             .transpose()?
             .unwrap_or_default()
     };
-    let (files, invalid) = collect_files(paths)?;
+    let excluded = [
+        archive_path_identity(target_root)?,
+        archive_path_identity(output_dir)?,
+    ];
+    let (files, invalid) = collect_files(paths, &excluded)?;
     let mut planned = HashSet::new();
     let mut rows = Vec::new();
     for path in invalid {
         rows.push(ArchiveRow {
+            source_sha256: None,
             source_path: path.display().to_string(),
             file_name: path
                 .file_name()
@@ -209,6 +219,7 @@ fn archive(
         };
         if !status.is_empty() {
             rows.push(ArchiveRow {
+                source_sha256: None,
                 source_path: path.display().to_string(),
                 file_name: path
                     .file_name()
@@ -257,6 +268,7 @@ fn archive(
             String::new()
         };
         rows.push(ArchiveRow {
+            source_sha256: Some(crate::file_commit::sha256_file(path)?),
             source_path: path.display().to_string(),
             file_name: path
                 .file_name()
@@ -304,12 +316,40 @@ fn execute_rows(mut rows: Vec<ArchiveRow>, output_dir: &Path) -> Result<ArchiveR
             skipped += 1;
             continue;
         }
+        if archive_path_identity(source)? == archive_path_identity(raw)? {
+            row.status = "失败：源文件与目标路径相同，未复制".into();
+            failed += 1;
+            continue;
+        }
+        let Some(expected) = row
+            .source_sha256
+            .as_deref()
+            .filter(|hash| hash.len() == 64 && hash.bytes().all(|c| c.is_ascii_hexdigit()))
+        else {
+            row.status = "失败：归档计划缺少有效源文件快照，请重新生成预览".into();
+            failed += 1;
+            continue;
+        };
+        match crate::file_commit::sha256_file(source) {
+            Ok(actual) if actual == expected => {}
+            Ok(_) => {
+                row.status = "失败：源文件在规划后已改变，请重新生成预览".into();
+                failed += 1;
+                continue;
+            }
+            Err(error) => {
+                row.status = "失败：无法校验源文件快照，未复制".into();
+                row.note = format!("{error:#}");
+                failed += 1;
+                continue;
+            }
+        }
         row.note.clear();
         let target = next_target(raw, &mut planned);
         if row.planned_target_path.is_empty() {
             row.planned_target_path = row.target_path.clone();
         }
-        match copy_with_metadata(source, &target) {
+        match copy_with_metadata(source, &target, expected) {
             Ok(actual) => {
                 if actual != raw {
                     row.note = "目标同名：已自动后缀".into();
@@ -365,6 +405,7 @@ fn write_archive_report(
             "目标文件路径",
             "状态",
             "备注",
+            "源文件SHA256",
         ]
     } else {
         vec![
@@ -389,6 +430,7 @@ fn write_archive_report(
                 row.target_path.clone(),
                 row.status.clone(),
                 row.note.clone(),
+                row.source_sha256.clone().unwrap_or_default(),
             ]
         } else {
             vec![
@@ -466,11 +508,17 @@ fn load_type_config(path: &Path) -> Result<TypeConfig> {
     out.exclude = exclude;
     Ok(out)
 }
-fn collect_files(paths: &[PathBuf]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+fn collect_files(paths: &[PathBuf], excluded: &[PathBuf]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     let mut files = Vec::new();
     let mut invalid = Vec::new();
     let mut seen = HashSet::new();
     for path in paths {
+        if excluded
+            .iter()
+            .any(|root| archive_path_identity(path).is_ok_and(|p| p.starts_with(root)))
+        {
+            continue;
+        }
         let metadata = match fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -484,7 +532,7 @@ fn collect_files(paths: &[PathBuf]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
         };
         if metadata.is_dir() {
             let mut children = Vec::new();
-            walk_files(path, &mut children, &mut HashSet::new())?;
+            walk_files(path, &mut children, &mut HashSet::new(), excluded)?;
             #[cfg(windows)]
             children.sort_by_cached_key(|child| child.to_string_lossy().to_lowercase());
             #[cfg(not(windows))]
@@ -520,7 +568,14 @@ fn walk_files(
     root: &Path,
     out: &mut Vec<PathBuf>,
     active_directories: &mut HashSet<PathBuf>,
+    excluded: &[PathBuf],
 ) -> Result<()> {
+    if excluded
+        .iter()
+        .any(|exclude| archive_path_identity(root).is_ok_and(|p| p.starts_with(exclude)))
+    {
+        return Ok(());
+    }
     let root_identity = root
         .canonicalize()
         .with_context(|| format!("resolve archive directory {}", root.display()))?;
@@ -536,10 +591,16 @@ fn walk_files(
                 format!("read an entry in archive directory {}", root.display())
             })?;
             let path = entry.path();
+            if excluded
+                .iter()
+                .any(|exclude| archive_path_identity(&path).is_ok_and(|p| p.starts_with(exclude)))
+            {
+                continue;
+            }
             let metadata = fs::metadata(&path)
                 .with_context(|| format!("inspect archive input {}", path.display()))?;
             if metadata.is_dir() {
-                walk_files(&path, out, active_directories)?;
+                walk_files(&path, out, active_directories, excluded)?;
             } else if metadata.is_file()
                 && !path
                     .file_name()
@@ -724,7 +785,7 @@ fn planned_path_key(path: &Path) -> PathBuf {
         path.to_path_buf()
     }
 }
-fn copy_with_metadata(source: &Path, target: &Path) -> Result<PathBuf> {
+fn copy_with_metadata(source: &Path, target: &Path, expected: &str) -> Result<PathBuf> {
     use std::io::Write;
     let parent = target.parent().context("archive target has no parent")?;
     fs::create_dir_all(parent)?;
@@ -741,14 +802,24 @@ fn copy_with_metadata(source: &Path, target: &Path) -> Result<PathBuf> {
                     let mut input = fs::File::open(source)?;
                     std::io::copy(&mut input, &mut destination)?;
                     destination.flush()?;
+                    destination.sync_all()?;
+                    anyhow::ensure!(
+                        crate::file_commit::sha256_file(source)? == expected,
+                        "source changed during archive copy"
+                    );
+                    anyhow::ensure!(
+                        crate::file_commit::sha256_file(&candidate)? == expected,
+                        "archive copy does not match planned source"
+                    );
                     let metadata = fs::metadata(source)?;
-                    fs::set_permissions(&candidate, metadata.permissions())?;
                     if let Ok(modified) = metadata.modified() {
                         destination.set_times(std::fs::FileTimes::new().set_modified(modified))?;
                     }
+                    fs::set_permissions(&candidate, metadata.permissions())?;
                     Ok(())
                 })();
                 if let Err(error) = result {
+                    drop(destination);
                     let _ = fs::remove_file(&candidate);
                     return Err(error);
                 }
@@ -874,13 +945,49 @@ mod tests {
     }
 
     #[test]
+    fn archive_snapshot_mismatch_cleans_new_copy_and_preserves_source() {
+        let root = TestDirectory::new();
+        let source = root.0.join("source.txt");
+        let target = root.0.join("target/result.txt");
+        fs::write(&source, b"actual bytes").unwrap();
+        let error = copy_with_metadata(&source, &target, &"0".repeat(64)).unwrap_err();
+        assert!(format!("{error:#}").contains("source changed"));
+        assert_eq!(fs::read(&source).unwrap(), b"actual bytes");
+        assert!(!target.exists());
+        assert_eq!(fs::read_dir(target.parent().unwrap()).unwrap().count(), 0);
+    }
+    #[test]
+    fn archive_missing_snapshot_fails_closed_without_output() {
+        let root = TestDirectory::new();
+        let source = root.0.join("source.txt");
+        let target = root.0.join("result.txt");
+        fs::write(&source, b"unchanged").unwrap();
+        let rows = vec![ArchiveRow {
+            source_sha256: None,
+            source_path: source.display().to_string(),
+            file_name: "source.txt".into(),
+            mode: "计划".into(),
+            category: String::new(),
+            target_dir: root.0.display().to_string(),
+            planned_target_path: target.display().to_string(),
+            target_path: target.display().to_string(),
+            status: "待归档".into(),
+            note: String::new(),
+        }];
+        let result = execute_rows(rows, &root.0.join("reports")).unwrap();
+        assert_eq!((result.copied, result.failed), (0, 1));
+        assert!(result.rows[0].status.contains("重新生成预览"));
+        assert_eq!(fs::read(source).unwrap(), b"unchanged");
+        assert!(!target.exists());
+    }
+    #[test]
     fn archive_directory_scan_errors_are_propagated() {
         let root = TestDirectory::new();
         let file = root.0.join("not-a-directory.xlsx");
         fs::write(&file, b"source").expect("write test file");
         let mut files = Vec::new();
 
-        let error = walk_files(&file, &mut files, &mut HashSet::new())
+        let error = walk_files(&file, &mut files, &mut HashSet::new(), &[])
             .expect_err("read_dir on a file must fail rather than look like an empty folder");
 
         assert!(format!("{error:#}").contains("scan archive directory"));
@@ -910,10 +1017,46 @@ mod tests {
         let mut active_directories = HashSet::from([identity.clone()]);
         let mut files = Vec::new();
 
-        walk_files(&root.0, &mut files, &mut active_directories)
+        walk_files(&root.0, &mut files, &mut active_directories, &[])
             .expect("an ancestor cycle should be skipped safely");
 
         assert!(files.is_empty());
         assert!(active_directories.contains(&identity));
     }
+}
+
+// Resolve existing ancestors (including symlinks) and lexical aliases even when
+// the final destination does not yet exist. Windows paths compare case-insensitively.
+fn archive_path_identity(path: &Path) -> Result<PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    let mut ancestor = normalized.as_path();
+    let mut tail = Vec::new();
+    while !ancestor.exists() {
+        tail.push(
+            ancestor
+                .file_name()
+                .context("archive path has no existing ancestor")?
+                .to_os_string(),
+        );
+        ancestor = ancestor.parent().context("archive path has no parent")?;
+    }
+    let mut resolved = fs::canonicalize(ancestor)?;
+    for part in tail.iter().rev() {
+        resolved.push(part);
+    }
+    #[cfg(windows)]
+    {
+        resolved = PathBuf::from(resolved.to_string_lossy().to_lowercase());
+    }
+    Ok(resolved)
 }

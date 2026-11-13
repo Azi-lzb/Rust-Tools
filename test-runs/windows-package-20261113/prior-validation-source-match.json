@@ -1,0 +1,62 @@
+[
+  {
+    "path": "crates/excel-editor/src/openpyxl_backend.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/packaging/build_deb.sh",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/python/pywin32_excel_conversion_worker.py",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/src/archive_ops.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/src/bin/RustTools.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/src/file_sort_prefix.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/src/print_ops.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/src/static_print_engines.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/print_config_new_target.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/general_boundary_p0_p1.rs",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/python/test_audit_safety.py",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/python/test_general_boundaries.py",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/python/test_platform_office.py",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/python/test_platform_xls_refusal.py",
+    "matches": true
+  },
+  {
+    "path": "pytools-core/tests/python/test_wps_readonly.py",
+    "matches": true
+  }
+]

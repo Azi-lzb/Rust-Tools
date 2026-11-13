@@ -1,0 +1,66 @@
+[
+  {
+    "path": "crates/excel-editor/src/openpyxl_backend.rs",
+    "sha256": "52C5D63F29B7A133C6AEBD7C1B9CAA792184D3AB185E7CFBF547F1BB98453164"
+  },
+  {
+    "path": "pytools-core/packaging/build_deb.sh",
+    "sha256": "233F36AC83B6B483CD12C009EF087D0FAE686B5D3E3878034B8BBCCFC2CF5666"
+  },
+  {
+    "path": "pytools-core/python/pywin32_excel_conversion_worker.py",
+    "sha256": "26A13C301F8A0AE762970634D75B5B90F254B4F509D258D3844ECB0F224B5A90"
+  },
+  {
+    "path": "pytools-core/src/archive_ops.rs",
+    "sha256": "D9947C42E00291243616C9F3036ECAF404E62E735200D06BD90A215B62DD8787"
+  },
+  {
+    "path": "pytools-core/src/bin/RustTools.rs",
+    "sha256": "D24EC91D48B2D644B470BFF0189B9F2160875C6FF4DA0B1218133ED4F4BD33DD"
+  },
+  {
+    "path": "pytools-core/src/file_sort_prefix.rs",
+    "sha256": "87F3ECC8E8C5201D6A273DAD4496000DE78A7D708EED3DC11664AFD61576F405"
+  },
+  {
+    "path": "pytools-core/src/print_ops.rs",
+    "sha256": "8E2A360ECE355061FCF8AEA61A1F12376197265DFB9045D6C876182BA88CA29C"
+  },
+  {
+    "path": "pytools-core/src/static_print_engines.rs",
+    "sha256": "1170C5B87FC2161C3B1428E7A19CBB985E79E776192BB8F3FB5EBD7CD4FE3E4C"
+  },
+  {
+    "path": "pytools-core/tests/print_config_new_target.rs",
+    "sha256": "61314FFDC714CB931F9A593BB2D0FF9CA3B7D5EDABDD57E2769426982725FDD9"
+  },
+  {
+    "path": "pytools-core/packaging/isolated_install_smoke.sh",
+    "sha256": "71469A854E2DF71E4D333E394A9D50AA2A2FE66B43D94A1B9DC909C56832A845"
+  },
+  {
+    "path": "pytools-core/tests/general_boundary_p0_p1.rs",
+    "sha256": "6C6AE392482D90E2082125EACB9045F3683D23D23211B30244842E11F20011AA"
+  },
+  {
+    "path": "pytools-core/tests/python/test_audit_safety.py",
+    "sha256": "F7A8D5EF753D585C45A720A3111DBFDC0C0F31F5C393D5CC065D54816DF2515B"
+  },
+  {
+    "path": "pytools-core/tests/python/test_general_boundaries.py",
+    "sha256": "49E09B124C7C92FD99CF07B64A8EA896CD94440E543B15371943071D6DE0E715"
+  },
+  {
+    "path": "pytools-core/tests/python/test_platform_office.py",
+    "sha256": "B08D099F88D28A8F98346555EF0D56B1B615EA0AAE58970E038A3205AEBEAD41"
+  },
+  {
+    "path": "pytools-core/tests/python/test_platform_xls_refusal.py",
+    "sha256": "0C9364D4798795453AE69D1CAFF43D093AFBFB4A5191DD124C9B01AD0F93DB5B"
+  },
+  {
+    "path": "pytools-core/tests/python/test_wps_readonly.py",
+    "sha256": "F86343AAED653AC05535348BF0B8C1F1F35BB136CCF0DCFE6BE75839227EDA18"
+  }
+]
