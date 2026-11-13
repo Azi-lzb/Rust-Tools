@@ -1,0 +1,22 @@
+ExcelEditPlan Phase 2 sample restoration
+Date: 2026-11-13
+Authorization: user approved restoring the two sample workbooks and pushing the feature branch.
+
+Preflight
+- Current workbook hashes matched the values previously recorded in the acceptance report.
+- Backup hashes matched the original inventory hashes.
+- Both current versions were copied to the snapshot directory before either original was overwritten.
+
+Restored workbook 1
+Path: C:\Users\AZI\Desktop\VibeCode\Rust-Tools\测试用例\1（1-1，1-2，1-3，1-4）\2026.09 4010 交通银行 仲恺区存贷统计月报.xlsx
+Restored SHA-256: 464f06693993569a5275e75d869e0bc991647cbdcac236e52bb217723ee9bac6
+Snapshot: C:\Users\AZI\Desktop\VibeCode\Rust-Tools\test-backups\phase2-restore-before-push-20261113\2026.09 4010 交通银行 仲恺区存贷统计月报.xlsx
+Snapshot SHA-256: c76a655f72e76c5a4dc28fd8d6ebdb3fefd30b3d3fa6bef1d463d827451142ec
+
+Restored workbook 2
+Path: C:\Users\AZI\Desktop\VibeCode\Rust-Tools\测试用例\1（1-1，1-2，1-3，1-4）\2026.09 4020 中信银行 仲恺区存贷统计月报.xlsx
+Restored SHA-256: 67fb93071b821578aabfb8fccf4c2963449bd646ba330a722864822f78d3ad72
+Snapshot: C:\Users\AZI\Desktop\VibeCode\Rust-Tools\test-backups\phase2-restore-before-push-20261113\2026.09 4020 中信银行 仲恺区存贷统计月报.xlsx
+Snapshot SHA-256: 80bfb4cd69b8c1c69482bfc92a050b8729098ee0818f24bc2864ef8f49eaabfb
+
+Restored hashes were computed from the destination files after copying and match the verified backup hashes. The snapshots were also re-hashed after restoration and still match the pre-restore versions.

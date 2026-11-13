@@ -33,7 +33,7 @@
 
 ### 原件完整性
 
-- 最终扫描 `sample-inventory.json` 中 149 个用户样本：147 个哈希与初始盘点一致；2 个 `.xlsx` 不一致：`1（1-1，1-2，1-3，1-4）\2026.09 4010 交通银行 仲恺区存贷统计月报.xlsx`（初始 SHA-256 `464f06693993569a5275e75d869e0bc991647cbdcac236e52bb217723ee9bac6`，当前 `c76a655f72e76c5a4dc28fd8d6ebdb3fefd30b3d3fa6bef1d463d827451142ec`，mtime 2026-11-12 23:47:54）和 `1（1-1，1-2，1-3，1-4）\2026.09 4020 中信银行 仲恺区存贷统计月报.xlsx`（初始 `67fb93071b821578aabfb8fccf4c2963449bd646ba330a722864822f78d3ad72`，当前 `80bfb4cd69b8c1c69482bfc92a050b8729098ee0818f24bc2864ef8f49eaabfb`，mtime 2026-11-12 23:45:41）。可用备份的 SHA-256 与两份初始哈希一致；本轮没有覆盖或恢复它们。验收路由脚本均写隔离副本，仓库中也未找到全量测试直接引用这两个文件的路径，但修改发生在全量测试运行的时间段，无法排除外部进程或测试之外的操作，因此不能归因，也不能声称全部原件完整性通过。
+- `sample-inventory.json` 的最终扫描记录了 149 个用户样本中 147 个哈希与初始盘点一致；另有上述两份 `.xlsx` 当时哈希不一致，原因无法归因。用户随后明确授权恢复。恢复前将当时版本复制到 `C:\Users\AZI\Desktop\VibeCode\Rust-Tools\test-backups\phase2-restore-before-push-20261113\` 并核对快照哈希；之后从已核验的备份恢复原件。恢复后 4010 交通银行文件 SHA-256 为 `464f06693993569a5275e75d869e0bc991647cbdcac236e52bb217723ee9bac6`（备份/初始值），4020 中信银行文件为 `67fb93071b821578aabfb8fccf4c2963449bd646ba330a722864822f78d3ad72`（备份/初始值）。被替换的版本快照哈希分别为 `c76a655f72e76c5a4dc28fd8d6ebdb3fefd30b3d3fa6bef1d463d827451142ec` 和 `80bfb4cd69b8c1c69482bfc92a050b8729098ee0818f24bc2864ef8f49eaabfb`；完整命令结果见 `artifacts/excel-edit-phase2/sample-restore-20261113.log`。路由验收脚本均写隔离副本；仓库中未找到全量测试直接引用这两个文件的路径，但不能确定此前哈希变化的原因。
 - `special-staging.json` 中 7 个原始 `.xls` SHA256 变化数 0；7 个派生 `.xlsx` 输入哈希也保持不变。手动路由输出都写入 `AppData\Local\Temp` 隔离副本，没有把实验输出复制回样本目录。
 - Feature 根目录 `config.xlsx` 与用户主工作树 `Rust-Tools\config.xlsx` 均只记录哈希，未被本轮脚本修改。
 
