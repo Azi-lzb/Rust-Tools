@@ -1702,6 +1702,24 @@ mod tests {
     #[test]
     fn duplicate_file_names_gain_only_the_directory_context_needed() {
         let paths = vec![
+            PathBuf::from("reports").join("east").join("sample.xlsx"),
+            PathBuf::from("reports").join("west").join("sample.xlsx"),
+            PathBuf::from("reports").join("other.xlsx"),
+        ];
+        assert_eq!(
+            disambiguated_file_names(&paths),
+            vec!["east/sample.xlsx", "west/sample.xlsx", "other.xlsx"]
+        );
+        assert_eq!(
+            disambiguated_file_names(&[paths[2].clone(), paths[2].clone()]),
+            vec!["other.xlsx [1]", "other.xlsx [2]"]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn duplicate_windows_drive_paths_keep_the_original_directory_context_assertion() {
+        let paths = vec![
             PathBuf::from(r"C:\reports\east\sample.xlsx"),
             PathBuf::from(r"C:\reports\west\sample.xlsx"),
             PathBuf::from(r"C:\reports\other.xlsx"),

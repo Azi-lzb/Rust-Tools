@@ -80,7 +80,7 @@ pub fn inspect_xlsx_profile(path: impl AsRef<Path>) -> Result<WorkbookProfile> {
             let document = Document::parse(&xml).context("parse workbook.xml")?;
             if document.descendants().any(|node| {
                 node.is_element()
-                    && node.tag_name().name() == "definedNames"
+                    && node.tag_name().name() == "definedName"
                     && node.tag_name().namespace() == Some(MAIN_NS)
             }) {
                 features.insert(WorkbookFeature::DefinedNames);
@@ -198,6 +198,45 @@ mod tests {
     use crate::WorkbookFeature;
     use std::{fs, io};
     use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
+
+    #[test]
+    fn defined_name_inventory_distinguishes_empty_container_from_real_names() -> anyhow::Result<()>
+    {
+        use std::io::Write;
+        let root = std::env::temp_dir().join(format!(
+            "profile-defined-names-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir(&root)?;
+        for (index, body, expected) in [
+            (0, "<definedNames/>", false),
+            (1, "<definedNames></definedNames>", false),
+            (
+                2,
+                "<definedNames><definedName name=\"Keep\">Data!$A$1</definedName></definedNames>",
+                true,
+            ),
+        ] {
+            let path = root.join(format!("{index}.xlsx"));
+            let mut zip = ZipWriter::new(fs::File::create(&path)?);
+            zip.start_file("xl/workbook.xml", SimpleFileOptions::default())?;
+            write!(zip, "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">{body}</workbook>")?;
+            zip.finish()?;
+            let profile = inspect_xlsx_profile(&path)?;
+            assert!(profile.inventory_complete);
+            assert_eq!(
+                profile
+                    .features_present
+                    .contains(&WorkbookFeature::DefinedNames),
+                expected
+            );
+        }
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
 
     #[test]
     fn recognizes_openpyxl_legacy_comment_vml_part_name() {

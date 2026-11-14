@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use excel_editor::{
     inspect_xlsx_profile, BackendCapability, CapabilityEvidence, CapabilityStatus, EditBackend,
     EditOperation, EditOperationKind, EngineId, ExcelEditPlan, ExcelModifier, OpenpyxlWorkerConfig,
-    OpenpyxlXlsxBackend, OpenpyxlXlsxValidator, PreservationRequirement, WorkbookFeature,
-    WorkbookFormat,
+    OpenpyxlXlsxBackend, OpenpyxlXlsxValidator, OutputValidator, PreservationRequirement,
+    WorkbookFeature, WorkbookFormat,
 };
 use rust_xlsxwriter::{Format, Workbook};
 use std::{
@@ -270,6 +270,88 @@ fn capability(plan: &ExcelEditPlan, python_version: &str) -> BackendCapability {
             platform: "wsl2-x86_64-test".to_owned(),
         }),
     }
+}
+
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn print_area_row_edits_keep_layout_and_reject_tampering() -> Result<()> {
+    let dir = TestDir::new("print-area-row-edits");
+    let input = dir.path("source.xlsx");
+    let output = dir.path("candidate.xlsx");
+    let mut workbook = Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("Report")?;
+    sheet.set_print_area(0, 0, 49, 1)?;
+    sheet.set_landscape();
+    sheet.set_header("&Cpreserved header");
+    sheet.set_footer("&RPage &P");
+    for row in 0..50 {
+        sheet.write_number(row, 0, f64::from(row))?;
+    }
+    workbook.save(&input)?;
+    let original = fs::read(&input)?;
+    let plan = ExcelEditPlan {
+        request_id: "print-area-row-edits".into(),
+        input: input.clone(),
+        output: output.clone(),
+        format: WorkbookFormat::Xlsx,
+        workbook: inspect_xlsx_profile(&input)?,
+        operations: vec![
+            EditOperation::DeleteRows {
+                sheet: "Report".into(),
+                first_row: 30,
+                count: 1,
+            },
+            EditOperation::InsertRows {
+                sheet: "Report".into(),
+                first_row: 30,
+                count: 2,
+            },
+        ],
+        preserve: [
+            PreservationRequirement::DefinedNames,
+            PreservationRequirement::PageSettings,
+            PreservationRequirement::HeaderFooterText,
+            PreservationRequirement::CellValuesAndTypes,
+        ]
+        .into(),
+        drop_allowed: Default::default(),
+    };
+    let mut cap = capability(&plan, "isolated openpyxl regression");
+    cap.operations.insert(EditOperationKind::DeleteRows);
+    let backend = OpenpyxlXlsxBackend::new(
+        cap,
+        OpenpyxlWorkerConfig::new(required_python_path(), worker_path())?,
+    )?;
+    let modifier = ExcelModifier::new(
+        "wsl2-x86_64-test",
+        vec![std::sync::Arc::new(backend)],
+        std::sync::Arc::new(OpenpyxlXlsxValidator),
+    )?;
+    modifier.execute(&plan).map_err(anyhow::Error::from)?;
+    assert_eq!(fs::read(&input)?, original);
+    OpenpyxlXlsxValidator.validate(&plan, &output)?;
+    // Corrupt only the candidate. The validator must still reject a different
+    // print area, and rejection must never replace the source workbook.
+    use std::io::{Read, Write};
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(fs::read(&output)?))?;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes)?;
+        if entry.name() == "xl/workbook.xml" {
+            let xml = String::from_utf8(bytes)?;
+            assert!(xml.contains("$A$1:$B$50"));
+            bytes = xml.replace("$A$1:$B$50", "$A$1:$B$49").into_bytes();
+        }
+        writer.start_file(entry.name(), zip::write::SimpleFileOptions::default())?;
+        writer.write_all(&bytes)?;
+    }
+    fs::write(&output, writer.finish()?.into_inner())?;
+    assert!(OpenpyxlXlsxValidator.validate(&plan, &output).is_err());
+    assert_eq!(fs::read(&input)?, original);
+    Ok(())
 }
 
 #[test]

@@ -186,10 +186,9 @@ pub fn precheck_print_tasks(tasks: &[PrintTask]) -> PrintPrecheck {
     report
 }
 
-/// Build the comment-marked 3-1/3-2 page-setup plan. The candidate keeps the
-/// source cell addresses and constrains the print area to the marked ranges;
-/// this avoids copying cells into a new style table before that operation is
-/// separately parity-qualified.
+/// Build the explicit legacy comment-print plan. Marked source ranges are
+/// imported into new output sheets; renamed source seeds are then removed.
+/// Current interactive print menus use `static_print_engines` instead.
 pub fn build_comment_print_plan(
     input: &Path,
     output: &Path,
@@ -229,6 +228,7 @@ pub fn build_comment_print_plan(
     }
     let profile = inspect_xlsx_profile(input)?;
     let mut operations = Vec::new();
+    let mut seed_drop_allowed = BTreeMap::new();
     let mut output_sheets = Vec::<(
         String,
         String,
@@ -263,6 +263,14 @@ pub fn build_comment_print_plan(
         }
     }
     if !output_sheets.is_empty() {
+        let source_styles = if drop_comments {
+            None
+        } else {
+            Some(
+                crate::ooxml_cell_styles::SourceStyles::load(input)
+                    .context("read explicit source column widths for comment print plan")?,
+            )
+        };
         used_names.extend(output_sheets.iter().map(|(_, name, _, _)| name.clone()));
         for (index, old_name) in dump
             .sheets
@@ -299,15 +307,22 @@ pub fn build_comment_print_plan(
                 name: target_sheet.clone(),
             });
             if !drop_comments {
-                // The legacy openpyxl printer reads `column_dimensions[key].width`
-                // for every column in a copied block. Accessing a missing
-                // dimension materializes openpyxl's default width (13.0), so
-                // seed that width before ImportRange overwrites explicit widths.
+                let layout = source_styles
+                    .as_ref()
+                    .context("print source styles missing")?
+                    .sheet_layout(input, source_sheet)?;
+                // Seed the final intended width, not an intermediate 13.0
+                // that ImportRange then overwrites. Explicit source widths
+                // remain exact; only missing dimensions use Openpyxl's default.
                 for offset in 0..(c2 - c1 + 1) {
                     operations.push(EditOperation::SetColumnWidth {
                         sheet: target_sheet.clone(),
                         column_index: (offset + 1) as u32,
-                        width: 13.0,
+                        width: layout
+                            .column_widths
+                            .get(&((c1 + offset) as u32))
+                            .copied()
+                            .unwrap_or(crate::ooxml_cell_styles::DEFAULT_COLUMN_WIDTH),
                     });
                 }
             }
@@ -381,6 +396,12 @@ pub fn build_comment_print_plan(
                     _ => None,
                 })
                 .unwrap_or(temp);
+            // Only renamed source seeds are deliberately removed after the
+            // selected ranges have been materialized into new output sheets.
+            seed_drop_allowed.insert(
+                temp_name.clone(),
+                BTreeSet::from([PreservationRequirement::RowAndColumnDimensions]),
+            );
             operations.push(EditOperation::DeleteSheet { name: temp_name });
         }
     }
@@ -414,7 +435,7 @@ pub fn build_comment_print_plan(
             workbook: profile,
             operations,
             preserve,
-            drop_allowed: Default::default(),
+            drop_allowed: seed_drop_allowed,
         };
         plan.validate()?;
         Some(plan)

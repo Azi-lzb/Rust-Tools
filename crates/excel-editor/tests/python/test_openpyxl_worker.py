@@ -333,6 +333,64 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         )
         saved.close()
 
+    def test_sheet_rename_chain_rewrites_quoted_and_case_variant_references_once(self):
+        from openpyxl.workbook.defined_name import DefinedName
+
+        source = self.root / "chain-source.xlsx"
+        book = openpyxl.Workbook()
+        book.active.title = "A"
+        book.active["A1"] = 7
+        book.create_sheet("B")["A1"] = 9
+        summary = book.create_sheet("Summary")
+        summary["A1"] = "='B'!A1"
+        summary["A2"] = "=a!A1"
+        summary["A3"] = '="B!A1"'
+        book.defined_names.add(DefinedName("LookupRange", attr_text="'b'!$A$1"))
+        book.save(source)
+        book.close()
+        self.source = source
+        source_hash = digest(source)
+        output = self.root / "chain-output.xlsx"
+        plan = self.base_plan(output, [
+            operation("rename_sheet", old_name="A", new_name="RenamedA"),
+            operation("rename_sheet", old_name="B", new_name="A"),
+        ])
+        process, response = run_worker(plan, output)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        saved = openpyxl.load_workbook(output, data_only=False)
+        self.assertEqual(saved.sheetnames, ["RenamedA", "A", "Summary"])
+        self.assertEqual(saved["Summary"]["A1"].value, "=A!A1")
+        self.assertEqual(saved["Summary"]["A2"].value, "=RenamedA!A1")
+        self.assertEqual(saved["Summary"]["A3"].value, '="B!A1"')
+        self.assertEqual(saved.defined_names["LookupRange"].attr_text, "A!$A$1")
+        saved.close()
+        self.assertEqual(digest(source), source_hash)
+
+    def test_sheet_rename_rejects_case_variant_indirect_selector_before_output(self):
+        for formula in ['=INDIRECT($H$21&"!A1")', '=INDIRECT(\'summary\'!$H$21&"!A1")', '=INDIRECT("\'old sheet\'!A1")']:
+            with self.subTest(formula=formula):
+                source = self.root / "case-indirect.xlsx"
+                book = openpyxl.Workbook()
+                book.active.title = "Old Sheet"
+                summary = book.create_sheet("Summary")
+                summary["H21"] = "old sheet"
+                summary["A1"] = formula
+                book.save(source)
+                book.close()
+                self.source = source
+                before = digest(source)
+                output = self.root / "case-indirect-output.xlsx"
+                plan = self.base_plan(output, [
+                    operation("rename_sheet", old_name="Old Sheet", new_name="New Sheet")
+                ])
+                process, response = run_worker(plan, output)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                self.assertEqual(response["status"], "unsupported_before_write", response)
+                self.assertEqual(response["error"]["kind"], "unsupported_dynamic_sheet_reference")
+                self.assertFalse(output.exists())
+                self.assertEqual(digest(source), before)
+
     def test_sheet_rename_rejects_dynamic_indirect_selector_before_output(self):
         source = self.root / "dynamic-rename-source.xlsx"
         book = openpyxl.Workbook()

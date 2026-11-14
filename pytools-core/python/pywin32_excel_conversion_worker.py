@@ -2102,8 +2102,7 @@ def _needs_quote(name: str) -> bool:
     return bool(re.search(r"[\s:\/?*\[\]]", name)) or name[:1].isdigit()
 
 
-_QUOTED_SHEET_REF = re.compile(r"'((?:[^']|'')*)'!")
-_BARE_SHEET_REF = re.compile(r"([^\W\d][\w.]*)!")
+_SHEET_REF = re.compile(r"'((?:[^']|'')*)'!|(?<![\w.\]])([^\W\d][\w.]*)!")
 
 
 def _split_string_literals(text: str):
@@ -2136,27 +2135,21 @@ def _split_string_literals(text: str):
 
 
 def _apply_sheet_rename(text: str, renames: dict) -> str:
-    def quoted(match):
-        name = match.group(1).replace("''", "'")
-        new = renames.get(name)
+    folded_renames = {name.lower(): new for name, new in renames.items()}
+
+    def reference(match):
+        quoted = match.group(1)
+        name = quoted.replace("''", "'") if quoted is not None else match.group(2)
+        if "[" in name or "]" in name:
+            return match.group(0)
+        new = folded_renames.get(name.lower())
         if new is None:
             return match.group(0)
         rendered = ("'" + new.replace("'", "''") + "'") if _needs_quote(new) else new
         return rendered + "!"
 
-    def bare(match):
-        # [1]Sheet! 是外部工作簿引用，不属于当前工作簿改名范围。
-        if match.start() > 0 and text[match.start() - 1] == "]":
-            return match.group(0)
-        name = match.group(1)
-        new = renames.get(name)
-        if new is None:
-            return match.group(0)
-        rendered = ("'" + new.replace("'", "''") + "'") if _needs_quote(new) else new
-        return rendered + "!"
-
-    text = _QUOTED_SHEET_REF.sub(quoted, text)
-    return _BARE_SHEET_REF.sub(bare, text)
+    # 单遍替换，B→A 的结果不能再次作为 A→C 的输入。
+    return _SHEET_REF.sub(reference, text)
 
 
 def _rewrite_sheet_refs(text: str, renames: dict) -> str:

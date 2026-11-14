@@ -415,7 +415,7 @@ fn conversion_cli_normalizes_biff_xls_content_with_xlsx_suffix_via_com_save_as()
 
 #[test]
 #[ignore = "requires Windows Office/WPS COM; run explicitly for PT-4-4 source-format regression"]
-fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> {
+fn conversion_cli_converts_verified_biff_with_et_suffix_without_claiming_native_et() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let sources = root.path().join("sources");
@@ -443,19 +443,96 @@ fn conversion_cli_does_not_publish_xls_payload_mislabeled_as_et() -> Result<()> 
         .output()?;
 
     let report = output_json(&output)?;
-    assert_eq!(report["converted"], 0);
-    assert_eq!(report["failed"], 1);
-    let detail = report["items"][0]["detail"].as_str().unwrap_or_default();
-    assert!(
-        detail.contains("native ET")
-            || detail.contains("原生 ET")
-            || detail.contains("FileFormat")
-            || detail.contains("65521"),
-        "failure must identify the unverified/mismatched ET source format: {detail}"
+    // d6cc47b8 deliberately accepts BIFF carried in an .et suffix. Keep the
+    // old rejection in the historical test capture; require explicit BIFF
+    // evidence here and never present it as a verified native WPS workbook.
+    assert_eq!(report["converted"], 1, "{report}");
+    assert_eq!(report["failed"], 0, "{report}");
+    let detail: Value = serde_json::from_str(
+        report["items"][0]["detail"]
+            .as_str()
+            .context("conversion evidence missing")?,
+    )?;
+    assert_eq!(detail["validation"]["verified"], true);
+    assert_eq!(detail["validation"]["source_content_kind"], "biff");
+    assert_eq!(detail["validation"]["source_format_verified"], false);
+    assert_eq!(detail["validation"]["source_extension"], "et");
+    assert!(matches!(
+        detail["validation"]["source_file_format"].as_i64(),
+        Some(56 | 8 | 16)
+    ));
+    let converted = output_dir.join("mislabeled.xlsx");
+    assert!(fs::read(&converted)?.starts_with(b"PK\x03\x04"));
+    assert_eq!(
+        read_workbook(&converted)?.sheets.len(),
+        read_workbook(&xls_fixture)?.sheets.len()
     );
-    assert!(!output_dir.join("mislabeled.xlsx").exists());
     assert_eq!(fs::read(&mislabeled_et)?, source_before);
+    assert_eq!(fs::read_dir(&output_dir)?.count(), 1);
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires bundled Python; fake worker tests candidate rejection without starting Office"]
+fn conversion_cli_does_not_publish_biff_with_et_suffix_without_content_evidence() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = create_config(root.path())?;
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/timeline/wide_summary_elapsed_duration.xls");
+    let source = root.path().join("unverified.et");
+    fs::copy(&fixture, &source)?;
+    let original = fs::read(&source)?;
+    let candidate = root.path().join("worker-candidate.xlsx");
+    create_source_workbook(&candidate, "Other")?;
+    let worker = root.path().join("unverified-worker.py");
+    fs::write(
+        &worker,
+        r#"
+import json, os, shutil, sys
+if '--version' in sys.argv:
+    print('protocol=3 pywin32=synthetic')
+    raise SystemExit(0)
+print(json.dumps({'ready': True, 'protocol': 3}), flush=True)
+for line in sys.stdin:
+    request = json.loads(line)
+    if request.get('op') in ('shutdown', 'close'):
+        print(json.dumps({'ok': True}), flush=True)
+        break
+    assert request.get('op') == 'convert', request
+    shutil.copyfile(os.environ['TEST_ET_CANDIDATE'], request['output'])
+    # Deliberately omit source_content_kind. A generic success flag and BIFF
+    # FileFormat alone must never authorize publication as native ET/BIFF.
+    print(json.dumps({'ok': True, 'application': 'synthetic-no-Office', 'validation': {
+        'verified': True, 'level': 'excel_com_sheet_order_and_formula_count',
+        'source_file_format': 56, 'source_extension': 'et', 'source_format_verified': False
+    }}), flush=True)
+"#,
+    )?;
+    let python = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .context("repository root missing")?
+        .join("dist/python/python.exe");
+    anyhow::ensure!(python.is_file(), "bundled test Python missing");
+    let output_dir = root.path().join("output");
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["convert-excel", "--config"])
+        .arg(&config)
+        .args(["--engine", "com", "--output-dir"])
+        .arg(&output_dir)
+        .args(["--log-view", "off"])
+        .arg(&source)
+        .env("PYTOOLS_COM_PYTHON", python)
+        .env("PYTOOLS_COM_WORKER", worker)
+        .env("TEST_ET_CANDIDATE", candidate)
+        .output()?;
+    let report = output_json(&output)?;
+    assert_eq!(report["converted"], 0, "{report}");
+    assert_eq!(report["failed"], 1, "{report}");
+    assert_eq!(report["items"][0]["status"], "failed");
+    assert!(!output_dir.join("unverified.xlsx").exists());
     assert_eq!(fs::read_dir(&output_dir)?.count(), 0);
+    assert_eq!(fs::read(&source)?, original);
     Ok(())
 }
 

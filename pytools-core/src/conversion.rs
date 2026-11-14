@@ -1768,6 +1768,36 @@ mod tests {
     }
 
     #[test]
+    fn wps_biff_sidecar_requires_explicit_content_kind_and_preserves_native_distinction() {
+        for extension in ["et", "ett"] {
+            for format in [56, 8, 16] {
+                let verified = serde_json::json!({
+                    "status": "converted", "engine": "pywin32", "validation": {
+                        "verified": true, "source_extension": extension,
+                        "source_format_verified": false, "source_content_kind": "biff",
+                        "source_file_format": format
+                    }
+                });
+                ensure_wps_source_format_verified(&verified.to_string(), extension).unwrap();
+                for (field, invalid) in [
+                    ("source_content_kind", serde_json::Value::Null),
+                    ("source_content_kind", serde_json::json!("wps_native")),
+                    ("source_file_format", serde_json::json!(51)),
+                    ("source_extension", serde_json::json!("xls")),
+                ] {
+                    let mut unverified = verified.clone();
+                    unverified["validation"][field] = invalid;
+                    assert!(
+                        ensure_wps_source_format_verified(&unverified.to_string(), extension)
+                            .is_err(),
+                        "{unverified}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn wps_native_sidecar_must_explicitly_verify_native_source_format() {
         let verified = r#"{"status":"converted","engine":"pywin32","validation":{"level":"excel_com_sheet_order_and_formula_count","source_extension":"et","source_format_verified":true,"source_file_format":65521,"verified":true}}"#;
         ensure_wps_source_format_verified(verified, "et")

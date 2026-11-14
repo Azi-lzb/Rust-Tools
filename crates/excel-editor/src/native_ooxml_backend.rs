@@ -207,6 +207,38 @@ impl OutputValidator for NativeOoxmlValidator {
         crate::UmyaXlsxValidator.validate(plan, candidate_output)?;
         let mut archive = ZipArchive::new(fs::File::open(candidate_output)?)?;
         let (workbook_part, sheets) = resolve_worksheet_parts(&mut archive)?;
+        let edited_sheets: BTreeSet<_> = plan
+            .operations
+            .iter()
+            .filter_map(|operation| {
+                if let EditOperation::SetCellValue { sheet, .. } = operation {
+                    Some(sheet)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for sheet_name in edited_sheets {
+            let sheet = sheets
+                .iter()
+                .find(|sheet| sheet.name == *sheet_name)
+                .context("edited worksheet is missing from native candidate")?;
+            let xml = String::from_utf8(read_part(&mut archive, &sheet.part)?)?;
+            let expanded = expand_worksheet_dimension(&xml)?;
+            let original_doc = Document::parse(&xml)?;
+            let expanded_doc = Document::parse(&expanded)?;
+            let dimension_ref = |doc: &Document<'_>| {
+                doc.root_element()
+                    .children()
+                    .find(|n| is_element(*n, "dimension"))
+                    .and_then(|n| n.attribute("ref"))
+                    .map(str::to_owned)
+            };
+            ensure!(
+                dimension_ref(&original_doc) == dimension_ref(&expanded_doc),
+                "native candidate dimension does not cover its stored cells"
+            );
+        }
         for operation in &plan.operations {
             match operation {
                 EditOperation::SetDefinedName {
@@ -614,7 +646,71 @@ fn patch_cells_xml(xml: &str, updates: &[CellUpdate]) -> Result<String> {
             .collect::<String>();
         edits.push((position..position, content.into_bytes()));
     }
-    apply_xml_edits(xml, edits)
+    expand_worksheet_dimension(&apply_xml_edits(xml, edits)?)
+}
+
+/// A streaming reader trusts dimension/@ref and can otherwise miss appended
+/// cells. Expand the existing declaration to cover every stored cell, keeping
+/// any larger source extent (including formatting-only areas) intact.
+fn expand_worksheet_dimension(xml: &str) -> Result<String> {
+    let document = Document::parse(xml).context("parse native candidate dimension")?;
+    let root = document.root_element();
+    let dimensions = root
+        .children()
+        .filter(|n| is_element(*n, "dimension"))
+        .collect::<Vec<_>>();
+    ensure!(
+        dimensions.len() <= 1,
+        "worksheet contains duplicate dimension elements"
+    );
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    let mut include = |address: &str| -> Result<()> {
+        let (row, column, _) = parse_cell_address(address)?;
+        bounds = Some(match bounds {
+            Some((r1, c1, r2, c2)) => (r1.min(row), c1.min(column), r2.max(row), c2.max(column)),
+            None => (row, column, row, column),
+        });
+        Ok(())
+    };
+    if let Some(dimension) = dimensions.first() {
+        let range = dimension
+            .attribute("ref")
+            .context("worksheet dimension has no ref")?;
+        let (first, last) = range.split_once(':').unwrap_or((range, range));
+        let (r1, c1, _) = parse_cell_address(first)?;
+        let (r2, c2, _) = parse_cell_address(last)?;
+        ensure!(r1 <= r2 && c1 <= c2, "worksheet dimension is reversed");
+        include(first)?;
+        include(last)?;
+    }
+    for cell in root
+        .children()
+        .filter(|n| is_element(*n, "sheetData"))
+        .flat_map(|n| n.descendants())
+        .filter(|n| is_element(*n, "c"))
+    {
+        include(
+            cell.attribute("r")
+                .context("stored cell has no coordinate")?,
+        )?;
+    }
+    let (r1, c1, r2, c2) = bounds.unwrap_or((1, 1, 1, 1));
+    let address = |row, mut column: u32| {
+        let mut letters = Vec::new();
+        while column > 0 {
+            letters.push((b'A' + ((column - 1) % 26) as u8) as char);
+            column = (column - 1) / 26;
+        }
+        format!("{}{row}", letters.into_iter().rev().collect::<String>())
+    };
+    let first = address(r1, c1);
+    let last = address(r2, c2);
+    let range = if first == last {
+        first
+    } else {
+        format!("{first}:{last}")
+    };
+    update_worksheet_element_attributes(xml, None, "dimension", &[("ref".into(), Some(range))])
 }
 
 // Used to avoid adding worksheet rows under an empty self-closing sheetData
@@ -1614,5 +1710,152 @@ fn xml_bool(value: bool) -> &'static str {
         "1"
     } else {
         "0"
+    }
+}
+
+#[cfg(test)]
+mod dimension_tests {
+    use super::*;
+
+    #[test]
+    fn native_validator_rejects_stale_dimension_without_changing_source() -> Result<()> {
+        let root = std::env::temp_dir().join(format!(
+            "native-dimension-validation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir(&root)?;
+        let input = root.join("source.xlsx");
+        let output = root.join("candidate.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("Data")?.write_string(0, 0, "header")?;
+        book.save(&input)?;
+        let original = fs::read(&input)?;
+        let plan = ExcelEditPlan {
+            request_id: "native-dimension-validation".into(),
+            input: input.clone(),
+            output: output.clone(),
+            format: WorkbookFormat::Xlsx,
+            workbook: crate::inspect_xlsx_profile(&input)?,
+            operations: vec![EditOperation::SetCellValue {
+                sheet: "Data".into(),
+                cell: "AA100".into(),
+                value: crate::CellValue::Text("tail".into()),
+            }],
+            preserve: [crate::PreservationRequirement::CellValuesAndTypes].into(),
+            drop_allowed: Default::default(),
+        };
+        let edited = RustNativeOoxmlBackend::apply_bytes(&original, &plan)?;
+        fs::write(&output, &edited)?;
+        NativeOoxmlValidator.validate(&plan, &output)?;
+        let mut archive = ZipArchive::new(Cursor::new(edited))?;
+        let part = "xl/worksheets/sheet1.xml";
+        let xml = String::from_utf8(read_part(&mut archive, part)?)?;
+        ensure!(xml.contains("A1:AA100"), "fixture dimension missing");
+        let replacements =
+            BTreeMap::from([(part.to_owned(), xml.replace("A1:AA100", "A1").into_bytes())]);
+        fs::write(&output, rewrite_package(&mut archive, &replacements)?)?;
+        let error = NativeOoxmlValidator.validate(&plan, &output).unwrap_err();
+        assert!(
+            error.to_string().contains("dimension does not cover"),
+            "{error:#}"
+        );
+        assert_eq!(fs::read(&input)?, original);
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn native_cell_append_expands_dimension_at_row_and_column_boundaries() -> Result<()> {
+        let xml = format!(
+            r#"<worksheet xmlns="{MAIN_NS}"><dimension ref="A1:B1"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>header</t></is></c></row></sheetData></worksheet>"#
+        );
+        let updates = ["Z9", "AA10", "Z99", "AA100"]
+            .into_iter()
+            .map(|address| {
+                let (row, column, address) = parse_cell_address(address).unwrap();
+                CellUpdate {
+                    row,
+                    column,
+                    address,
+                    value: crate::CellValue::Decimal("0".into()),
+                }
+            })
+            .collect::<Vec<_>>();
+        let result = patch_cells_xml(&xml, &updates)?;
+        let doc = Document::parse(&result)?;
+        assert_eq!(
+            doc.descendants()
+                .find(|n| is_element(*n, "dimension"))
+                .and_then(|n| n.attribute("ref")),
+            Some("A1:AA100")
+        );
+        for update in updates {
+            assert!(doc
+                .descendants()
+                .any(|n| is_element(n, "c") && n.attribute("r") == Some(update.address.as_str())));
+        }
+        assert!(result.contains("header"));
+        Ok(())
+    }
+
+    #[test]
+    fn dimensions_handle_missing_prefixed_and_oversized_declarations_without_shrinking(
+    ) -> Result<()> {
+        for (xml, expected) in [
+            (
+                format!(r#"<worksheet xmlns="{MAIN_NS}"><sheetData/></worksheet>"#),
+                "AA100",
+            ),
+            (
+                format!(r#"<x:worksheet xmlns:x="{MAIN_NS}"><x:sheetData /></x:worksheet>"#),
+                "AA100",
+            ),
+            (
+                format!(
+                    r#"<worksheet xmlns="{MAIN_NS}"><dimension ref="A1:XFD1048576"/><sheetData/></worksheet>"#
+                ),
+                "A1:XFD1048576",
+            ),
+        ] {
+            let (row, column, address) = parse_cell_address("AA100")?;
+            let result = patch_cells_xml(
+                &xml,
+                &[CellUpdate {
+                    row,
+                    column,
+                    address,
+                    value: crate::CellValue::Text("tail".into()),
+                }],
+            )?;
+            let doc = Document::parse(&result)?;
+            assert_eq!(
+                doc.root_element()
+                    .children()
+                    .find(|n| is_element(*n, "dimension"))
+                    .and_then(|n| n.attribute("ref")),
+                Some(expected)
+            );
+            let children: Vec<_> = doc
+                .root_element()
+                .children()
+                .filter(|n| n.is_element())
+                .map(|n| n.tag_name().name())
+                .collect();
+            assert_eq!(children, ["dimension", "sheetData"]);
+        }
+        for invalid in ["A0:B2", "XFE1", "B2:A1", "A1:B2:C3", ""] {
+            let xml = format!(
+                r#"<worksheet xmlns="{MAIN_NS}"><dimension ref="{invalid}"/><sheetData/></worksheet>"#
+            );
+            assert!(
+                expand_worksheet_dimension(&xml).is_err(),
+                "invalid ref: {invalid}"
+            );
+        }
+        Ok(())
     }
 }

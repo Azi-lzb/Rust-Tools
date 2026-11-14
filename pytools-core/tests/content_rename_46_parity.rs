@@ -16,11 +16,37 @@ fn cases() -> Value {
         .expect("valid content rename cases")
 }
 
-fn baseline() -> Value {
+fn historical_baseline() -> Value {
     serde_json::from_str(include_str!(
         "../probe/reports/content_rename_46_python_baseline.json"
     ))
     .expect("valid Python operation 4-6 baseline")
+}
+
+fn baseline() -> Value {
+    serde_json::from_str(include_str!(
+        "fixtures/content_prefix_43_current_contract.json"
+    ))
+    .expect("reviewed current 4-3 safety contract")
+}
+
+#[test]
+fn current_contract_preserves_the_historical_baseline_and_explains_middle_text_difference() {
+    let old = historical_baseline();
+    let current = baseline();
+    assert_eq!(old["operation46"]["stats"]["ok"], 5);
+    assert_eq!(old["operation46"]["stats"]["skip"], 7);
+    let mut expected = old["operation46"]["final_entries"].clone();
+    for name in expected.as_array_mut().unwrap() {
+        if name == "report_A_B_later.xlsx" {
+            *name = json!("A_B_report_A_B_later.xlsx");
+        }
+    }
+    expected
+        .as_array_mut()
+        .unwrap()
+        .sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    assert_eq!(current["operation46"]["final_entries"], expected);
 }
 
 fn temporary_directory() -> PathBuf {
@@ -189,7 +215,7 @@ fn run_case(case: &Value, expected_final_entries: &Value, root: &Path) -> Value 
 }
 
 #[test]
-fn operation_46_matches_python_for_prefixes_conflicts_and_skips() {
+fn operation_46_matches_current_safety_contract_for_prefixes_conflicts_and_skips() {
     let cases = cases();
     let expected = baseline()["operation46"].clone();
     let case = &cases["operation46"];
@@ -198,13 +224,13 @@ fn operation_46_matches_python_for_prefixes_conflicts_and_skips() {
 
     assert_eq!(actual["stats"], expected["stats"]);
     assert_eq!(actual["final_entries"], expected["final_entries"]);
-    assert_eq!(actual["stats"]["ok"], 5);
-    assert_eq!(actual["stats"]["skip"], 7);
+    assert_eq!(actual["stats"]["ok"], 6);
+    assert_eq!(actual["stats"]["skip"], 6);
     fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
-fn operation_46_cli_executes_rust_workflow_against_python_baseline() {
+fn operation_46_cli_executes_rust_workflow_against_current_safety_contract() {
     let cases = cases();
     let expected = baseline()["operation46"].clone();
     let case = &cases["operation46"];

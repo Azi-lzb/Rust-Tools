@@ -219,7 +219,7 @@ fn sheet_rename_cli_rewrites_references_and_protects_source_snapshot() -> Result
     assert_eq!(actual["rename_ok"], baseline["result"]["rename_ok"]);
     assert_eq!(actual["skip"], baseline["result"]["skip"]);
     assert_eq!(actual["files"][0]["status"], "renamed");
-    // Openpyxl 改名路径不使用通用 ExcelEditPlan executor，execution 计划报告为空。
+    // 默认 Openpyxl 路径保留旧 JSON 契约，execution 计划报告为空。
     assert!(actual["files"][0]["execution"].is_null());
     // 核心契约：跨表公式与命名区域引用随改名自动更新。
     let renamed_path = PathBuf::from(
@@ -356,6 +356,58 @@ fn sheet_rename_preserves_saved_formula_cache() -> Result<()> {
         formula_cache_cell.contains("<v>cell-a</v>"),
         "saved formula cache was not retained: {formula_cache_cell}"
     );
+    Ok(())
+}
+
+#[test]
+fn sheet_rename_preserves_quoted_chain_and_case_variant_reference_targets() -> Result<()> {
+    let dir = TestDir::new("quoted-chain")?;
+    let input = dir.path("input.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("A")?;
+    sheet.write_number(0, 0, 7)?;
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("B")?;
+    sheet.write_number(0, 0, 9)?;
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("Summary")?;
+    sheet.write_formula(0, 0, "='B'!A1")?;
+    sheet.write_formula(1, 0, "=a!A1")?;
+    sheet.write_formula(2, 0, "=\"B!A1\"")?;
+    sheet.write_string(3, 0, "B!A1")?;
+    workbook.define_name("Lookup", "='b'!$A$1")?;
+    workbook.save(&input)?;
+    let output = run_cli_excel(&fixture("config.xlsx"), &input)?;
+    assert!(
+        output.status.success(),
+        "quoted chain rename failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(report["rename_ok"], 2);
+    assert_eq!(report["files"][0]["engine"], "openpyxl");
+    let summary = read_worksheet_part(&input, "Summary")?;
+    assert!(summary.contains("<f>A!A1</f>"), "{summary}");
+    assert!(summary.contains("<f>RenamedA!A1</f>"), "{summary}");
+    assert!(summary.contains("B!A1"), "string data missing: {summary}");
+    let xml = read_part(&input, "xl/workbook.xml")?;
+    let document = roxmltree::Document::parse(&xml)?;
+    let lookup = document.descendants().find(|node| {
+        node.tag_name().name() == "definedName" && node.attribute("name") == Some("Lookup")
+    });
+    assert_eq!(lookup.and_then(|node| node.text()), Some("A!$A$1"));
+    let dump = read_workbook(&input)?;
+    assert_eq!(dump.sheets[0].name, "RenamedA");
+    assert_eq!(dump.sheets[1].name, "A");
+    assert_eq!(dump.sheets[0].values["A1"]["value"].as_f64(), Some(7.0));
+    assert_eq!(dump.sheets[1].values["A1"]["value"].as_f64(), Some(9.0));
+    assert_eq!(dump.sheets[2].values["A4"]["value"], "B!A1");
+    assert_eq!(
+        dump.sheets[2].formulas["A3"].trim_start_matches('='),
+        "\"B!A1\""
+    );
+    assert_eq!(fs::read_dir(&dir.0)?.count(), 1, "candidate leaked");
     Ok(())
 }
 
@@ -530,6 +582,71 @@ fn legacy_xls_sheet_rename_requires_windows_com() -> Result<()> {
         pytools_core::file_commit::sha256_file(&input)?,
         original_hash
     );
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_sheet_rename_missing_runtime_preserves_source_and_cleans_candidate() -> Result<()> {
+    let dir = TestDir::new("linux-missing-runtime")?;
+    let input = dir.path("input.xlsx");
+    fs::copy(fixture("input.xlsx"), &input)?;
+    let before = fs::read(&input)?;
+    let config = fixture("config.xlsx");
+    let config_before = fs::read(&config)?;
+    let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["rename-sheets", "--config"])
+        .arg(&config)
+        .arg(&input)
+        .env_remove("PYTOOLS_EXCEL_EDIT_ROUTE")
+        .env("PYTOOLS_OPENPYXL_PYTHON", dir.path("missing-python"))
+        .env("PYTOOLS_OPENPYXL_WORKER", dir.path("missing-worker.py"))
+        .output()?;
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Openpyxl"));
+    assert_eq!(fs::read(&input)?, before);
+    assert_eq!(fs::read(&config)?, config_before);
+    assert_eq!(fs::read_dir(&dir.0)?.count(), 1, "candidate leaked");
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_sheet_rename_ambiguous_indirect_preserves_source_and_cleans_candidate() -> Result<()> {
+    let dir = TestDir::new("linux-indirect")?;
+    let input = dir.path("input.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("A")?;
+    sheet.write_number(0, 0, 42)?;
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("B")?;
+    sheet.write_string(1, 0, "A")?;
+    sheet.write_formula(0, 0, "=INDIRECT(A2&\"!A1\")")?;
+    workbook.save(&input)?;
+    let before = fs::read(&input)?;
+    // The business API retains the full error chain; the user CLI deliberately
+    // summarizes worker diagnostics. Verify the specific refusal at its source.
+    let error = pytools_core::sheet_rename::run_batch_sheet_rename(
+        &fixture("config.xlsx"),
+        std::slice::from_ref(&input),
+        false,
+    )
+    .expect_err("ambiguous dynamic reference must be rejected");
+    let detail = format!("{error:#}");
+    assert!(detail.contains("INDIRECT"), "unexpected refusal: {detail}");
+    assert_eq!(fs::read(&input)?, before);
+    assert_eq!(fs::read_dir(&dir.0)?.count(), 1, "candidate leaked");
+    let output = run_cli_excel(&fixture("config.xlsx"), &input)?;
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains("命令执行失败"),
+        "unexpected refusal: {error}"
+    );
+    assert!(!error.contains("Traceback"));
+    assert_eq!(fs::read(&input)?, before);
+    assert_eq!(fs::read_dir(&dir.0)?.count(), 1, "candidate leaked");
     Ok(())
 }
 

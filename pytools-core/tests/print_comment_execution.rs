@@ -148,6 +148,74 @@ fn style_bold(book: &excel_editor::Workbook, sheet: &str, cell: &str) -> Result<
 }
 
 #[test]
+fn comment_print_still_rejects_missing_seed_allowance_and_contradictory_width() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    make_source(&source)?;
+    let original = fs::read(&source)?;
+    for missing_allowance in [true, false] {
+        let output = dir.path(if missing_allowance {
+            "missing-allowance.xlsx"
+        } else {
+            "wrong-width.xlsx"
+        });
+        let mut plan =
+            pytools_core::print_ops::build_comment_print_plan(&source, &output, false, false)?
+                .plan
+                .context("comment print plan missing")?;
+        assert!(plan
+            .drop_allowed
+            .keys()
+            .all(|name| name.starts_with("__pt_print_seed_")));
+        assert!(!plan.drop_allowed.contains_key("Marked_1"));
+        if missing_allowance {
+            plan.drop_allowed.clear();
+        } else {
+            let mut changed = false;
+            for operation in &mut plan.operations {
+                if let EditOperation::SetColumnWidth {
+                    sheet,
+                    column_index: 1,
+                    width,
+                } = operation
+                {
+                    if sheet == "Marked_1" {
+                        *width = 13.0;
+                        changed = true;
+                    }
+                }
+            }
+            assert!(changed);
+        }
+        let cap = capability_for(&plan);
+        let capability_path = dir.path(if missing_allowance {
+            "missing.capability.json"
+        } else {
+            "width.capability.json"
+        });
+        fs::write(&capability_path, serde_json::to_vec(&cap)?)?;
+        let error = pytools_core::edit_plan::apply_plan_with_capability_file(
+            &plan,
+            &capability_path,
+            PLATFORM,
+        )
+        .unwrap_err();
+        let detail = format!("{error:#}");
+        assert!(
+            detail.contains(if missing_allowance {
+                "RowAndColumnDimensions"
+            } else {
+                "column-width readback mismatch"
+            }),
+            "{detail}"
+        );
+        assert!(!output.exists(), "invalid candidate must not be published");
+        assert_eq!(fs::read(&source)?, original);
+    }
+    Ok(())
+}
+
+#[test]
 fn pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier() -> Result<()> {
     let dir = TestDir::new();
     let source = dir.path("source.xlsx");
@@ -250,6 +318,17 @@ fn pt_3_1_and_pt_3_2_candidates_execute_through_excel_modifier() -> Result<()> {
             assert!(first
                 .column_dimension_by_number(1)
                 .is_some_and(|column| column.width() > 0.0));
+            assert_eq!(first.column_dimension_by_number(1).unwrap().width(), 14.7109375,
+                "source B width must be copied to target A without accepting a default-width substitution");
+            for column in [2, 3] {
+                assert_eq!(
+                    first
+                        .column_dimension_by_number(column)
+                        .context("default width missing")?
+                        .width(),
+                    13.0
+                );
+            }
         }
         assert_eq!(fs::read(&source)?, source_before);
     }

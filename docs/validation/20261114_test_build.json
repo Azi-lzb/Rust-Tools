@@ -1,0 +1,102 @@
+{
+  "source_base": "9f53c56ef041f7238855bfc36dbab9001c14b082",
+  "source_fingerprint": "c651c51cb49d3ad7990cf87904cd1a6b53dda1d7e83f42e7fa63d1d8e716a96e",
+  "full_workspace_command": "cargo test --offline --workspace --no-fail-fast -- --test-threads=1",
+  "full_workspace": {
+    "windows": {
+      "complete": true,
+      "exit": 0,
+      "passed": 646,
+      "failed": 0,
+      "ignored": 21,
+      "result_groups": 74
+    },
+    "wsl": {
+      "complete": true,
+      "exit": 0,
+      "passed": 638,
+      "failed": 0,
+      "ignored": 21,
+      "result_groups": 74
+    },
+    "docker": {
+      "complete": true,
+      "exit": 0,
+      "passed": 638,
+      "failed": 0,
+      "ignored": 21,
+      "result_groups": 74
+    }
+  },
+  "full_test_note": "Rust and Worker product sources match the full regression freeze. Packaging scripts subsequently received safety/inventory corrections and package-specific validation.",
+  "python_discovery": {
+    "windows": {
+      "exit": 0,
+      "run": 28,
+      "skipped": 7,
+      "passed": 21
+    },
+    "wsl": {
+      "exit": 0,
+      "run": 28,
+      "skipped": 9,
+      "passed": 19
+    },
+    "docker": {
+      "exit": 0,
+      "run": 28,
+      "skipped": 9,
+      "passed": 19
+    }
+  },
+  "worker_python_each_platform": 29,
+  "windows_explicit_gates_passed": 11,
+  "linux_explicit_gates_passed_each": 7,
+  "package_checks": {
+    "windows_zip_verifier": "PASS",
+    "windows_release_smoke": {
+      "status": "PASS",
+      "exe_sha256": "cddd5f4c8c76e9742879b0302540483bbb0811638a6c5aa353ece3a368258254",
+      "source_worker_overrides": false,
+      "startup": "PASS",
+      "rename_chain_case_names_cache_strings": "PASS",
+      "repeat_byte_invariance": "PASS",
+      "append_routes": "PASS",
+      "existing_biff_append_safely_refused": "PASS",
+      "runtime_resolution": "packaged-layout",
+      "business_originals_used": false
+    },
+    "rocky8_extracted_deb_smoke": {
+      "status": "PASS",
+      "exe_sha256": "7673053a60870a8606980f973a2db2ee6d76f6a046d067897c0e5a3f3cf54531",
+      "source_worker_overrides": false,
+      "startup": "PASS",
+      "rename_chain_case_names_cache_strings": "PASS",
+      "repeat_byte_invariance": "PASS",
+      "append_routes": "PASS",
+      "existing_biff_append_safely_refused": "PASS",
+      "runtime_resolution": "packaged-layout",
+      "business_originals_used": false
+    },
+    "packaging_safety_tests": 5
+  },
+  "artifacts": {
+    "windows": {
+      "file": "RustTools-windows-x64-TEST-main-20261114-095927.zip",
+      "sha256": "ffe7aca3f6fe5b34c9b7a92fec92ceb58424436ccf8aa131004e45ea3287d04e"
+    },
+    "linux": {
+      "file": "rusttools_0.1.0-20261114-test-main_amd64.deb",
+      "sha256": "716be33389801a36e225242776487e754a2bc35ee21f9067fa504970d182557c",
+      "max_glibc": "2.28"
+    }
+  },
+  "configuration": "Both local configs kept byte-identical; packages copy root config; no configuration/business workbook added to Git.",
+  "not_tested": [
+    "Kylin V10 physical target",
+    "DEB install/upgrade/uninstall",
+    "clean Windows machine",
+    "renewed WPS-specific acceptance",
+    "FAT/exFAT/SMB"
+  ]
+}

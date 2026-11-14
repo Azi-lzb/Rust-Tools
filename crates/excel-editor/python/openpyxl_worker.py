@@ -1946,39 +1946,32 @@ def _needs_sheet_name_quotes(name: str) -> bool:
     )
 
 
-_QUOTED_SHEET_REFERENCE = re.compile(r"'((?:[^']|'')*)'!")
-_BARE_SHEET_REFERENCE = re.compile(r"([^\W\d][\w.]*)!", re.UNICODE)
+_SHEET_REFERENCE = re.compile(
+    r"'((?:[^']|'')*)'!|(?<![\w.\]])([^\W\d][\w.]*)!", re.UNICODE
+)
 
 
 def _rewrite_formula_sheet_references(value: str, renames: Dict[str, str]) -> str:
     """Rewrite direct internal sheet references, leaving formula string data untouched."""
     if not renames:
         return value
+    folded_renames = {name.lower(): new for name, new in renames.items()}
 
     def rewrite_segment(segment: str) -> str:
-        def quoted(match: re.Match[str]) -> str:
-            name = match.group(1).replace("''", "'")
-            replacement = renames.get(name)
+        def reference(match: re.Match[str]) -> str:
+            quoted = match.group(1)
+            name = quoted.replace("''", "'") if quoted is not None else match.group(2)
+            if "[" in name or "]" in name:
+                return match.group(0)
+            replacement = folded_renames.get(name.lower())
             if replacement is None:
                 return match.group(0)
             if _needs_sheet_name_quotes(replacement):
                 return "'" + replacement.replace("'", "''") + "'!"
             return replacement + "!"
 
-        segment = _QUOTED_SHEET_REFERENCE.sub(quoted, segment)
-
-        def bare(match: re.Match[str]) -> str:
-            # A sheet name following `]` belongs to an external workbook.
-            if match.start() > 0 and segment[match.start() - 1] == "]":
-                return match.group(0)
-            replacement = renames.get(match.group(1))
-            if replacement is None:
-                return match.group(0)
-            if _needs_sheet_name_quotes(replacement):
-                return "'" + replacement.replace("'", "''") + "'!"
-            return replacement + "!"
-
-        return _BARE_SHEET_REFERENCE.sub(bare, segment)
+        # One substitution pass: B -> A must not be processed again as A -> C.
+        return _SHEET_REFERENCE.sub(reference, segment)
 
     return "".join(
         part if is_literal else rewrite_segment(part)
@@ -2008,6 +2001,8 @@ def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, An
     renames = _sheet_rename_map(operations)
     if not renames:
         return
+    folded_names = {name.lower() for name in renames}
+    sheet_names_by_lower = {name.lower(): name for name in workbook.sheetnames}
     from openpyxl.formula import Tokenizer
     from openpyxl.utils.cell import range_boundaries
     from openpyxl.worksheet.formula import DataTableFormula
@@ -2029,7 +2024,7 @@ def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, An
                             continue
                         for reference_prefix in segment.split("!")[:-1]:
                             if ":" in reference_prefix and any(
-                                old_name in reference_prefix for old_name in renames
+                                old_name.lower() in reference_prefix.lower() for old_name in renames
                             ):
                                 raise WorkerError(
                                     "unsupported_sheet_rename_formula",
@@ -2060,12 +2055,11 @@ def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, An
                         sheet_reference, target = reference.rsplit("!", 1)
                         source_sheet_name = sheet_reference.strip("'").replace("''", "'")
                         target_sheet_name = renames.get(source_sheet_name, source_sheet_name)
-                        lookup_name = (
-                            source_sheet_name
-                            if source_sheet_name in workbook.sheetnames
-                            else target_sheet_name
+                        lookup_name = sheet_names_by_lower.get(
+                            source_sheet_name.lower(),
+                            sheet_names_by_lower.get(target_sheet_name.lower()),
                         )
-                        if lookup_name not in workbook.sheetnames:
+                        if lookup_name is None:
                             continue
                         target_sheet = workbook[lookup_name]
                     target = target.replace("$", "")
@@ -2076,7 +2070,7 @@ def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, An
                     if min_col != max_col or min_row != max_row:
                         continue
                     selector_value = target_sheet.cell(min_row, min_col).value
-                    if isinstance(selector_value, str) and selector_value in renames:
+                    if isinstance(selector_value, str) and selector_value.lower() in folded_names:
                         raise WorkerError(
                             "unsupported_dynamic_sheet_reference",
                             "INDIRECT selector {}!{} contains a worksheet name being renamed; refusing an incomplete rewrite".format(
@@ -2084,7 +2078,8 @@ def _preflight_dynamic_sheet_rename(workbook: Any, operations: List[Dict[str, An
                             ),
                             unsupported=True,
                         )
-                if any(old_name + "!" in formula or "'" + old_name.replace("'", "''") + "'!" in formula
+                lower_formula = formula.lower()
+                if any(old_name.lower() + "!" in lower_formula or "'" + old_name.lower().replace("'", "''") + "'!" in lower_formula
                        for old_name in renames):
                     raise WorkerError(
                         "unsupported_dynamic_sheet_reference",

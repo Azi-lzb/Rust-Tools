@@ -1409,7 +1409,12 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
                 .workbook
                 .features_present
                 .is_subset(&candidate_profile.features_present),
-            "目标候选文件丢失了原工作簿结构"
+            "目标候选文件丢失了原工作簿结构：{:?}",
+            edit_plan
+                .workbook
+                .features_present
+                .difference(&candidate_profile.features_present)
+                .collect::<Vec<_>>()
         );
         crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
             .context("目标工作簿在候选生成期间发生变化，未执行追加")?;

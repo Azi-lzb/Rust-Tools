@@ -28,6 +28,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -127,6 +128,13 @@ def main() -> None:
         if make.returncode != 0:
             fail(f"生成合成工作簿失败：{make.stderr.strip()[:300]}")
         before_hash = sha256(fixture)
+        # An empty <definedNames/> container does not declare a defined name.
+        # Match the actual inventory inspected by the Rust backend.
+        with zipfile.ZipFile(fixture) as bundle:
+            workbook_xml = ET.fromstring(bundle.read("xl/workbook.xml"))
+        features = ["relationships"]
+        if workbook_xml.findall(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}definedName"):
+            features.append("defined_names")
 
         output = work / "result.xlsx"
         plan = {
@@ -137,7 +145,7 @@ def main() -> None:
             "workbook": {
                 "format": "xlsx",
                 "inventory_complete": True,
-                "features_present": ["relationships", "defined_names"],
+                "features_present": features,
             },
             "operations": [
                 {"operation": "set_cell_value", "sheet": "Data", "cell": "A1",
@@ -153,7 +161,7 @@ def main() -> None:
             "status": "passed",
             "format": "xlsx",
             "operations": ["set_cell_value", "set_column_width"],
-            "supported_features": ["relationships", "defined_names"],
+            "supported_features": features,
             "preserved": ["cell_values_and_types"],
             "platform": "windows-x86_64",
             "evidence": {

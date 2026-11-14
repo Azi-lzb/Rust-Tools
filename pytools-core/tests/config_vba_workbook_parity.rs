@@ -21,10 +21,29 @@ fn expected_section(name: &str) -> Result<Value> {
     let raw = fs::read_to_string(fixture("expected_loaders.json"))
         .context("read expected_loaders.json")?;
     let value: Value = serde_json::from_str(&raw)?;
-    Ok(value
+    let mut expected = value
         .get(name)
         .cloned()
-        .with_context(|| format!("expected_loaders.json misses section {name}"))?)
+        .with_context(|| format!("expected_loaders.json misses section {name}"))?;
+    if name == "timeline_rules" {
+        // The immutable PyCode baseline predates this optional column. The
+        // real legacy fixture has no configured match: require an empty
+        // value for every row, rather than discarding the new actual field.
+        for row in expected
+            .as_array_mut()
+            .context("timeline baseline must be an array")?
+        {
+            let previous = row
+                .as_object_mut()
+                .context("timeline rule must be an object")?
+                .insert("target_header_match".into(), Value::String(String::new()));
+            anyhow::ensure!(
+                previous.is_none(),
+                "legacy baseline already contains target_header_match"
+            );
+        }
+    }
+    Ok(expected)
 }
 
 fn actual(name: &str, value: impl serde::Serialize) -> (String, Value) {

@@ -246,7 +246,7 @@ impl EditBackend for UmyaXlsxBackend {
     }
 
     fn validate_output(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
-        crate::OpenpyxlXlsxValidator.validate(plan, candidate_output)
+        crate::OpenpyxlXlsxValidator.validate_with_print_area_policy(plan, candidate_output, true)
     }
 }
 

@@ -31,8 +31,12 @@ if (Test-Path -LiteralPath $archive) { throw "Package already exists: $archive" 
 
 # Stage inside the project (GetTempPath proved flaky under -File invocation:
 # the freshly created directory vanished before the first copy).
-$stage = Join-Path $ProjectRoot ".package-stage-$stamp"
-if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+$rootPath = [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\', '/')
+$stage = [System.IO.Path]::GetFullPath((Join-Path $rootPath ".package-stage-$stamp"))
+if (-not $stage.StartsWith($rootPath + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Package staging path escapes project root: $stage"
+}
+if (Test-Path -LiteralPath $stage) { throw "Package staging path already exists: $stage" }
 New-Item -ItemType Directory -Path $stage | Out-Null
 if (-not (Test-Path -LiteralPath $stage)) { throw "stage directory was not created: $stage" }
 
@@ -53,5 +57,11 @@ try {
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive
     Write-Host ("Package created: " + $archive)
 } finally {
-    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $stage) {
+        $cleanupPath = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $stage).Path)
+        if ($cleanupPath -ne $stage -or ((Get-Item -LiteralPath $stage -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "Refusing cleanup of changed package staging path: $stage"
+        }
+        Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

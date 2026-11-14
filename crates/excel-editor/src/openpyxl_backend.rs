@@ -948,6 +948,20 @@ pub struct OpenpyxlXlsxValidator;
 
 impl OutputValidator for OpenpyxlXlsxValidator {
     fn validate(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
+        self.validate_with_print_area_policy(plan, candidate_output, false)
+    }
+}
+
+impl OpenpyxlXlsxValidator {
+    // Openpyxl keeps absolute print-layout coordinates when rows move. UMYA
+    // adjusts them on deletion. Keep each backend's existing contract strict;
+    // accepting either address would hide a genuine, unplanned layout change.
+    pub(crate) fn validate_with_print_area_policy(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+        adjust_print_areas_for_row_deletions: bool,
+    ) -> Result<()> {
         let source =
             read_workbook(&plan.input).context("read source workbook for openpyxl validation")?;
         let output = read_workbook(candidate_output)
@@ -973,7 +987,12 @@ impl OutputValidator for OpenpyxlXlsxValidator {
         validate_preserved_formulas(&source.sheets, &output.sheets, plan)?;
         validate_preserved_comments(&source.sheets, &output.sheets, plan)?;
         validate_preserved_merges(&source.sheets, &output.sheets, plan)?;
-        validate_preserved_ooxml_metadata(&plan.input, candidate_output, plan)?;
+        validate_preserved_ooxml_metadata_with_print_area_policy(
+            &plan.input,
+            candidate_output,
+            plan,
+            adjust_print_areas_for_row_deletions,
+        )?;
         validate_requested_sheet_layout(plan, candidate_output)?;
         Ok(())
     }
@@ -1421,10 +1440,20 @@ fn validate_preserved_dimensions(
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_preserved_ooxml_metadata(
     input_path: &Path,
     output_path: &Path,
     plan: &ExcelEditPlan,
+) -> Result<()> {
+    validate_preserved_ooxml_metadata_with_print_area_policy(input_path, output_path, plan, false)
+}
+
+fn validate_preserved_ooxml_metadata_with_print_area_policy(
+    input_path: &Path,
+    output_path: &Path,
+    plan: &ExcelEditPlan,
+    adjust_print_areas_for_row_deletions: bool,
 ) -> Result<()> {
     let checked = [
         PreservationRequirement::DefinedNames,
@@ -1459,7 +1488,12 @@ fn validate_preserved_ooxml_metadata(
         .preserve
         .contains(&PreservationRequirement::DefinedNames)
     {
-        validate_preserved_defined_names(&source, &output, plan)?;
+        validate_preserved_defined_names_with_print_area_policy(
+            &source,
+            &output,
+            plan,
+            adjust_print_areas_for_row_deletions,
+        )?;
     }
     if plan
         .preserve
@@ -2252,10 +2286,20 @@ fn canonical_defined_names(
     Ok(names)
 }
 
+#[cfg(test)]
 fn validate_preserved_defined_names(
     source: &WorkbookPreservationSnapshot,
     output: &WorkbookPreservationSnapshot,
     plan: &ExcelEditPlan,
+) -> Result<()> {
+    validate_preserved_defined_names_with_print_area_policy(source, output, plan, false)
+}
+
+fn validate_preserved_defined_names_with_print_area_policy(
+    source: &WorkbookPreservationSnapshot,
+    output: &WorkbookPreservationSnapshot,
+    plan: &ExcelEditPlan,
+    adjust_print_areas_for_row_deletions: bool,
 ) -> Result<()> {
     let (retained_sheets, deleted_sheets) =
         planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
@@ -2289,7 +2333,12 @@ fn validate_preserved_defined_names(
     for defined_name in &source.defined_names {
         let Some(source_scope) = &defined_name.scope else {
             let mut rewritten = defined_name.clone();
-            if rewrite_defined_name_sheet_references(&mut rewritten, None, &plan.operations)? {
+            if rewrite_defined_name_sheet_references(
+                &mut rewritten,
+                None,
+                &plan.operations,
+                adjust_print_areas_for_row_deletions,
+            )? {
                 expected.push(rewritten);
             }
             continue;
@@ -2329,6 +2378,7 @@ fn validate_preserved_defined_names(
                 &mut rewritten,
                 Some(source_scope),
                 &plan.operations,
+                adjust_print_areas_for_row_deletions,
             )? {
                 expected.push(rewritten);
             }
@@ -2395,6 +2445,21 @@ fn validate_preserved_defined_names(
             *actual_count <= 1,
             "openpyxl output contains duplicate AutoFilter defined names for a worksheet"
         );
+    }
+    // Writers differ on optional quotes around a simple worksheet name.
+    // Normalize only that spelling, using identities of actual worksheets.
+    // This also agrees with append's resolved-area name comparison. Formula
+    // string literals, external references, coordinates, scope, attributes
+    // and the number of names remain strict.
+    let sheet_identities: BTreeMap<_, _> = output
+        .sheet_order
+        .iter()
+        .map(|name| (name.clone(), name.clone()))
+        .collect();
+    for defined_name in expected.iter_mut().chain(actual.iter_mut()) {
+        if let Some(text) = defined_name.element.text.as_mut() {
+            *text = rewrite_formula_sheet_references(text, &sheet_identities);
+        }
     }
     expected.sort();
     actual.sort();
@@ -4827,6 +4892,7 @@ fn rewrite_defined_name_sheet_references(
     defined_name: &mut CanonicalDefinedName,
     source_scope: Option<&str>,
     operations: &[EditOperation],
+    adjust_print_areas_for_row_deletions: bool,
 ) -> Result<bool> {
     let (renames, _) = sheet_name_changes(operations);
     if let Some(text) = defined_name.element.text.as_mut() {
@@ -4838,14 +4904,18 @@ fn rewrite_defined_name_sheet_references(
                 (namespace.is_empty() && attribute == "name").then_some(value.as_str())
             })
             .unwrap_or("unnamed");
-        let Some(expected_address) =
+        let Some(expected_address) = (if !adjust_print_areas_for_row_deletions
+            && name.eq_ignore_ascii_case("_xlnm.Print_Area")
+        {
+            Some(text.clone())
+        } else {
             crate::umya_backend::expected_defined_name_address_after_row_deletions(
                 name,
                 text,
                 source_scope,
                 operations,
             )?
-        else {
+        }) else {
             return Ok(false);
         };
         *text = rewrite_formula_sheet_references(&expected_address, &renames);
@@ -4922,7 +4992,7 @@ fn rewrite_sheet_reference_prefix(prefix: &[char], renames: &BTreeMap<String, St
                     .iter()
                     .collect::<String>()
                     .replace("''", "'");
-                if let Some(new_name) = renames.get(&old_name) {
+                if let Some(new_name) = renamed_sheet_reference(renames, &old_name) {
                     let mut result: String = prefix[..cursor - 1].iter().collect();
                     result.push_str(&render_sheet_reference(new_name));
                     return result;
@@ -4942,12 +5012,23 @@ fn rewrite_sheet_reference_prefix(prefix: &[char], renames: &BTreeMap<String, St
         return prefix.iter().collect();
     }
     let old_name: String = prefix[start..].iter().collect();
-    let Some(new_name) = renames.get(&old_name) else {
+    let Some(new_name) = renamed_sheet_reference(renames, &old_name) else {
         return prefix.iter().collect();
     };
     let mut result: String = prefix[..start].iter().collect();
     result.push_str(&render_sheet_reference(new_name));
     result
+}
+
+fn renamed_sheet_reference<'a>(
+    renames: &'a BTreeMap<String, String>,
+    old_name: &str,
+) -> Option<&'a str> {
+    let folded = old_name.to_lowercase();
+    renames
+        .iter()
+        .find(|(name, _)| name.to_lowercase() == folded)
+        .map(|(_, new_name)| new_name.as_str())
 }
 
 fn is_bare_sheet_character(character: char) -> bool {
@@ -6626,6 +6707,82 @@ mod tests {
     }
 
     #[test]
+    fn defined_name_quote_normalization_keeps_references_and_literal_text_strict() -> Result<()> {
+        let source = WorkbookPreservationSnapshot {
+            sheet_order: vec!["Report".into(), "O'Brien, East".into()],
+            defined_names: vec![
+                defined_name(None, "Keep", "'Report'!$A$1:$B$50"),
+                defined_name(None, "Literal", "\"Report!A1\""),
+                defined_name(None, "Escaped", "'O''Brien, East'!$A$1"),
+            ],
+            ..WorkbookPreservationSnapshot::default()
+        };
+        let plan = defined_name_plan(Vec::new(), BTreeMap::new());
+        let mut output = source.clone();
+        output.defined_names[0].element.text = Some("Report!$A$1:$B$50".into());
+        validate_preserved_defined_names(&source, &output, &plan)?;
+        for (index, changed) in [
+            (0, "Report!$A$1:$B$49"),
+            (1, "\"'Report'!A1\""),
+            (2, "'O''Brien, West'!$A$1"),
+        ] {
+            let mut damaged = output.clone();
+            damaged.defined_names[index].element.text = Some(changed.into());
+            assert!(validate_preserved_defined_names(&source, &damaged, &plan).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn print_area_preserves_absolute_layout_through_openpyxl_row_edits() -> Result<()> {
+        let source = WorkbookPreservationSnapshot {
+            sheet_order: vec!["Report".to_owned()],
+            defined_names: vec![defined_name(
+                Some("Report"),
+                "_xlnm.Print_Area",
+                "'Report'!$A$1:$B$50",
+            )],
+            ..WorkbookPreservationSnapshot::default()
+        };
+        let plan = defined_name_plan(
+            vec![
+                EditOperation::DeleteRows {
+                    sheet: "Report".into(),
+                    first_row: 30,
+                    count: 1,
+                },
+                EditOperation::InsertRows {
+                    sheet: "Report".into(),
+                    first_row: 30,
+                    count: 2,
+                },
+            ],
+            BTreeMap::new(),
+        );
+        validate_preserved_defined_names(&source, &source, &plan)?;
+        let mut unquoted = source.clone();
+        unquoted.defined_names[0].element.text = Some("Report!$A$1:$B$50".into());
+        validate_preserved_defined_names(&source, &unquoted, &plan)?;
+        unquoted.defined_names[0].element.text = Some("Other!$A$1:$B$50".into());
+        assert!(validate_preserved_defined_names(&source, &unquoted, &plan).is_err());
+        let mut damaged = source.clone();
+        damaged.defined_names[0].element.text = Some("'Report'!$A$1:$B$49".into());
+        assert!(validate_preserved_defined_names(&source, &damaged, &plan).is_err());
+        damaged.defined_names.clear();
+        assert!(validate_preserved_defined_names(&source, &damaged, &plan).is_err());
+        // The UMYA adapter keeps its prior, independently checked deletion
+        // semantics; the Openpyxl fix must not accept either result loosely.
+        let mut adjusted = source.clone();
+        adjusted.defined_names[0].element.text = Some("'Report'!$A$1:$B$49".into());
+        validate_preserved_defined_names_with_print_area_policy(&source, &adjusted, &plan, true)?;
+        assert!(validate_preserved_defined_names_with_print_area_policy(
+            &source, &source, &plan, true
+        )
+        .is_err());
+        Ok(())
+    }
+
+    #[test]
     fn explicitly_requested_print_area_is_checked_by_its_operation_readback() -> Result<()> {
         let source = WorkbookPreservationSnapshot {
             sheet_order: vec!["Report".to_owned()],
@@ -7701,6 +7858,18 @@ mod phase2_metadata_identity_tests {
 mod sheet_rename_formula_reference_tests {
     use super::rewrite_formula_sheet_references;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn rewrites_chain_and_case_variant_references_once() {
+        let renames = BTreeMap::from([
+            ("A".to_owned(), "RenamedA".to_owned()),
+            ("B".to_owned(), "A".to_owned()),
+        ]);
+        assert_eq!(
+            rewrite_formula_sheet_references("'B'!$A$1+a!A1+\"b!A1\"", &renames),
+            "A!$A$1+RenamedA!A1+\"b!A1\""
+        );
+    }
 
     #[test]
     fn rewrites_direct_quoted_and_bare_references_but_not_string_or_external_data() {

@@ -179,10 +179,11 @@ wb.save(fixture)
 
 # 与 Rust 包检查器对齐的部件清单特性（openpyxl 会写出空 <definedNames/>）。
 import zipfile
+from xml.etree import ElementTree as ET
 with zipfile.ZipFile(fixture) as archive:
-    workbook_xml = archive.read("xl/workbook.xml").decode("utf-8")
+    workbook_xml = ET.fromstring(archive.read("xl/workbook.xml"))
 features = ["relationships"]
-if "<definedNames" in workbook_xml:
+if workbook_xml.findall(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}definedName"):
     features.append("defined_names")
 
 output = plan_dir / "result.xlsx"

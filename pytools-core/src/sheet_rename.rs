@@ -337,6 +337,19 @@ fn run_batch_sheet_rename_impl(
                 .with_context(|| format!("ExcelEditPlan 工作表改名失败：{}", input.display()))?;
                 let engine = crate::excel_core_diag::engine_label(execution.engine).to_owned();
                 (Some(execution), engine)
+            } else if cfg!(target_os = "linux") && plan.is_some() {
+                // Linux has no COM session. Use the packaged Openpyxl plan
+                // executor, keeping its reference/cache preservation and
+                // readback validation before the common snapshot-safe commit.
+                candidate_owned = true;
+                crate::inplace_edit::execute_candidate(
+                    plan.as_ref().expect("XLSX rename plan exists"),
+                    crate::inplace_edit::InPlaceEngine::Openpyxl,
+                )
+                .with_context(|| format!("Openpyxl 工作表改名失败：{}", input.display()))?;
+                // Preserve the default route's legacy JSON shape; an explicit
+                // ExcelEditPlan route above still exposes its execution report.
+                (None, "openpyxl".to_owned())
             } else {
                 candidate_owned = true;
                 let mut original = fs::File::open(&input)

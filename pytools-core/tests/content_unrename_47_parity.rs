@@ -11,11 +11,52 @@ fn cases() -> Value {
         .expect("valid content unrename cases")
 }
 
-fn baseline() -> Value {
+fn historical_baseline() -> Value {
     serde_json::from_str(include_str!(
         "../probe/reports/content_unrename_47_python_baseline.json"
     ))
     .expect("valid Python operation 4-7 baseline")
+}
+
+fn baseline() -> Value {
+    let mut baseline = historical_baseline();
+    baseline["operation47"] = serde_json::from_str::<Value>(include_str!(
+        "fixtures/content_prefix_43_current_contract.json"
+    ))
+    .expect("reviewed current 4-3 safety contract")["operation47"]
+        .clone();
+    baseline
+}
+
+#[test]
+fn current_contract_preserves_historical_expectations_and_limits_undo_to_one_complete_prefix() {
+    let old = historical_baseline();
+    let current = baseline();
+    assert_eq!(old["operation47"]["stats"]["ok"], 8);
+    assert_eq!(old["operation47"]["stats"]["skip"], 5);
+    let mut expected = old["operation47"]["final_entries"].clone();
+    for name in expected.as_array_mut().unwrap() {
+        for (before, after) in [
+            ("partial.xlsx", "A_partial.xlsx"),
+            ("repeat.xlsx", "A_B_repeat.xlsx"),
+            ("anyorder.xlsx", "B_A_B_anyorder.xlsx"),
+            ("B_missing_sheet.xlsx", "A_B_missing_sheet.xlsx"),
+        ] {
+            if name == before {
+                *name = json!(after);
+                break;
+            }
+        }
+    }
+    expected
+        .as_array_mut()
+        .unwrap()
+        .sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    assert_eq!(current["operation47"]["final_entries"], expected);
+    assert_eq!(
+        current["legacy_without_sort_sheet"],
+        old["legacy_without_sort_sheet"]
+    );
 }
 
 fn temporary_directory(label: &str) -> PathBuf {
@@ -200,7 +241,7 @@ fn run_case(
 }
 
 #[test]
-fn operation_47_matches_python_for_xlsx_xlsm_prefixes_collisions_and_failures() {
+fn operation_47_matches_current_safety_contract_for_xlsx_xlsm_prefixes_collisions_and_failures() {
     let cases = cases();
     let expected = baseline();
     let case = &cases["operation47"];
@@ -212,8 +253,8 @@ fn operation_47_matches_python_for_xlsx_xlsm_prefixes_collisions_and_failures() 
         actual["final_entries"],
         expected["operation47"]["final_entries"]
     );
-    assert_eq!(actual["stats"]["ok"], 8);
-    assert_eq!(actual["stats"]["skip"], 5);
+    assert_eq!(actual["stats"]["ok"], 5);
+    assert_eq!(actual["stats"]["skip"], 8);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -295,14 +336,14 @@ fn run_cli_case(case: &Value, expected: &Value, root: &Path, include_sort_sheet:
 }
 
 #[test]
-fn operation_47_cli_executes_rust_workflow_against_python_baseline() {
+fn operation_47_cli_executes_rust_workflow_against_current_safety_contract() {
     let cases = cases();
     let expected = baseline();
     let case = &cases["operation47"];
     let root = temporary_directory("cli-main");
     let result = run_cli_case(case, &expected["operation47"], &root, true);
-    assert_eq!(result["ok"], 8);
-    assert_eq!(result["skip"], 5);
+    assert_eq!(result["ok"], 5);
+    assert_eq!(result["skip"], 8);
     fs::remove_dir_all(root).unwrap();
 }
 
