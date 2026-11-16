@@ -233,6 +233,40 @@ fn user_batch_logging_matches_saved_output_at_four_batch_sizes() -> Result<()> {
 }
 
 #[test]
+fn used_range_summary_trims_style_only_headers_and_retains_numeric_zero() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("style-only-tail.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    sheet.set_name("Data")?;
+    sheet.write_string(0, 0, "name")?;
+    sheet.write_number(1, 1, 0.0)?;
+    sheet.write_string(1, 3, "")?;
+    sheet.write_blank(1, 25, &rust_xlsxwriter::Format::new().set_bold())?;
+    workbook.save(&source)?;
+    let before = fs::read(&source)?;
+
+    let result = pytools_core::summary_ops::summarize_used_ranges(
+        &[source.clone()],
+        &root.path().join("output"),
+    )?;
+    assert!(result.saved);
+    assert_eq!((result.files, result.rows), (1, 2));
+    let output = read_workbook(result.path.context("summary output missing")?)?;
+    let sheet = output
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "汇总")
+        .context("summary sheet missing")?;
+    assert_eq!(sheet.values["E1"]["value"].as_str(), Some("列2"));
+    assert_eq!(sheet.values["E3"]["value"].as_f64(), Some(0.0));
+    assert!(!sheet.values.contains_key("F1"));
+    assert!(!sheet.values.contains_key("AC1"));
+    assert_eq!(fs::read(&source)?, before);
+    Ok(())
+}
+
+#[test]
 fn interactive_menu_routes_used_range_summary_through_global_config() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_app_config(root.path())?;

@@ -16590,6 +16590,7 @@ fn commit_wide_summary_existing_target_openpyxl(
     use excel_editor::{
         EditOperation, ExcelEditPlan, PreservationRequirement, RangeStyleMode, WorkbookFormat,
     };
+    pytools_core::file_commit::ensure_target_writable(target)?;
 
     anyhow::ensure!(!appends.is_empty(), "目标追加计划没有任何工作表");
     let summary_max_col = appends
@@ -16961,7 +16962,9 @@ fn execute_wide_summary_target_writes(
         }
         let existed = target.is_file();
         let original_hash = if existed {
-            match sha256_file(target) {
+            match pytools_core::file_commit::ensure_target_writable(target)
+                .and_then(|_| sha256_file(target))
+            {
                 Ok(hash) => Some(hash),
                 Err(error) => {
                     any_failed = true;
@@ -16972,7 +16975,7 @@ fn execute_wide_summary_target_writes(
                         total_inputs,
                         "target_write",
                         "failed",
-                        "读取目标工作簿快照失败；未执行写入".to_owned(),
+                        format!("目标工作簿不可写；未执行写入：{error:#}"),
                         Some(stage_started.elapsed().as_millis()),
                         0,
                         &["pytools-core", "sha2"],

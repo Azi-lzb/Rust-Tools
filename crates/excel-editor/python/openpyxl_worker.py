@@ -2400,7 +2400,8 @@ def _copy_dimensions(source: Any, target: Any, bounds: Tuple[int, int, int, int]
 
 
 def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, Any],
-                     materialized: Optional[Dict[int, Set[str]]] = None) -> None:
+                     materialized: Optional[Dict[int, Set[str]]] = None,
+                     import_sources: Optional[Dict[str, Any]] = None) -> None:
     from openpyxl.comments import Comment
     from openpyxl.styles import PatternFill
     from openpyxl.utils.cell import get_column_letter, coordinate_to_tuple, range_boundaries
@@ -2479,8 +2480,19 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
             materialize = False
             hide_zero = False
         else:
-            source_workbook = __import__("openpyxl").load_workbook(payload["source_workbook"], data_only=False, keep_links=True)
-            cached_source = __import__("openpyxl").load_workbook(payload["source_workbook"], data_only=True, keep_links=True)
+            source_key = str(Path(payload["source_workbook"]).resolve())
+            pair = import_sources.get(source_key) if import_sources is not None else None
+            if pair is None:
+                source_workbook = __import__("openpyxl").load_workbook(source_key, data_only=False, keep_links=True)
+                try:
+                    cached_source = __import__("openpyxl").load_workbook(source_key, data_only=True, keep_links=True)
+                except Exception:
+                    source_workbook.close()
+                    raise
+                if import_sources is not None:
+                    import_sources[source_key] = (source_workbook, cached_source)
+            else:
+                source_workbook, cached_source = pair
             source_name = payload["source_sheet"]
             source_range = payload["source_range"]
             style_mode = payload.get("style_mode", "none")
@@ -2502,7 +2514,7 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
             _copy_merges(source, target, bounds, payload["target_start"])
         if dimension_options:
             _copy_dimensions(source, target, bounds, payload["target_start"], dimension_options)
-        if kind == "import_range":
+        if kind == "import_range" and import_sources is None:
             source_workbook.close()
             cached_source.close()
     elif kind == "set_page_settings":
@@ -3034,6 +3046,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         )
     except Exception as error:
         raise WorkerError("workbook_open_failed", str(error))
+    import_sources: Dict[str, Any] = {}
     try:
         initial_sheet_names = list(workbook.sheetnames)
         _rewrite_sheet_references_before_rename(workbook, operations)
@@ -3049,7 +3062,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         materialized_by_sheet: Dict[int, Set[str]] = {}
         for operation in operations:
             try:
-                _apply_operation(workbook, cached_workbook, operation, materialized_by_sheet)
+                _apply_operation(workbook, cached_workbook, operation, materialized_by_sheet, import_sources)
             except WorkerError:
                 raise
             except Exception as error:
@@ -3068,6 +3081,9 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as error:
             raise WorkerError("save_failed", str(error))
     finally:
+        for source_workbook, cached_source in import_sources.values():
+            source_workbook.close()
+            cached_source.close()
         workbook.close()
         if cached_workbook is not None:
             cached_workbook.close()
