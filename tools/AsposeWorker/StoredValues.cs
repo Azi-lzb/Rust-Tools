@@ -11,8 +11,10 @@ internal sealed class StoredValues
     private readonly Dictionary<(string Sheet, string Cell), Value> values = new();
     public StoredValues(string input, Workbook workbook)
     {
-        var missing = new HashSet<(string, string)>();
-        if (Path.GetExtension(input).Equals(".xlsx", StringComparison.OrdinalIgnoreCase))
+        bool ooxml = Path.GetExtension(input).Equals(".xlsx", StringComparison.OrdinalIgnoreCase);
+        var cached = new HashSet<(string, string)>();
+        var emptyText = new HashSet<(string, string)>();
+        if (ooxml)
         {
             using var zip = ZipFile.OpenRead(input);
             XDocument Read(string name) { using var f = zip.GetEntry(name)!.Open(); return XDocument.Load(f); }
@@ -22,11 +24,24 @@ internal sealed class StoredValues
             {
                 string part = Uri.UnescapeDataString(new Uri(new Uri("http://ooxml/xl/workbook.xml"), relationships[(string)sheet.Attribute(r + "id")!]).AbsolutePath.TrimStart('/'));
                 foreach (var cell in Read(part).Descendants(s + "c"))
-                    if (cell.Element(s + "f") is not null && string.IsNullOrEmpty(cell.Element(s + "v")?.Value)) missing.Add(((string)sheet.Attribute("name")!, (string)cell.Attribute("r")!));
+                {
+                    var key = ((string)sheet.Attribute("name")!, (string)cell.Attribute("r")!);
+                    var value = cell.Element(s + "v");
+                    // Include array followers (their XML has no <f>). These
+                    // sets decode stored values; absence never rejects a job.
+                    if (value is not null && (value.Value.Length != 0 || (string?)cell.Attribute("t") == "str")) cached.Add(key);
+                    if (value is not null && value.Value.Length == 0 && (string?)cell.Attribute("t") == "str") emptyText.Add(key);
+                }
             }
         }
         foreach (Worksheet sheet in workbook.Worksheets) foreach (Cell cell in sheet.Cells)
-            values[(sheet.Name, cell.Name)] = missing.Contains((sheet.Name, cell.Name)) ? new(null, false) : new(cell.Value, cell.Type == CellValueType.IsError);
+        {
+            var key = (sheet.Name, cell.Name);
+            bool formulaResult = cell.IsFormula || cell.IsArrayFormula;
+            values[key] = ooxml && formulaResult && !cached.Contains(key) ? new(null, false)
+                : ooxml && formulaResult && emptyText.Contains(key) ? new("", false)
+                : new(cell.Value, cell.Type == CellValueType.IsError);
+        }
     }
     public Value At(string sheet, string cell) => values.GetValueOrDefault((sheet, cell), new(null, false));
 }

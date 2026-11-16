@@ -111,11 +111,10 @@ fn unsupported_and_precision_routes_fail_before_any_write() -> Result<()> {
         count: 1,
     }];
     let routed = route_plan(&plan, &RouteConfig::new(RouteMode::AsposeOnly));
-    if cfg!(windows) {
+    if cfg!(any(windows, target_os = "linux")) {
         assert_eq!(routed?.engine, EngineId::AsposeWorker);
     } else {
-        // Linux deliberately has no Aspose route. A supported Windows
-        // operation must still fail before any worker or candidate is created.
+        // Unavailable platforms must fail before a worker or candidate is created.
         let error = routed.expect_err("Aspose must remain unavailable on this platform");
         assert!(format!("{error:#}").contains("Windows"));
     }
@@ -124,7 +123,7 @@ fn unsupported_and_precision_routes_fail_before_any_write() -> Result<()> {
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured resident Aspose Worker; synthetic isolated candidates"]
 fn real_worker_structural_plan_primitives_validate_before_publish() -> Result<()> {
@@ -230,7 +229,7 @@ fn real_worker_structural_plan_primitives_validate_before_publish() -> Result<()
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires real Aspose Worker; checks import loads across resident generations"]
 fn real_worker_rotates_before_multi_workbook_request_budget() -> Result<()> {
@@ -296,7 +295,7 @@ fn real_worker_rotates_before_multi_workbook_request_budget() -> Result<()> {
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires real Aspose Worker; validates large instruction sidecars and cleanup"]
 fn real_worker_large_instruction_batch_uses_verified_temporary_sidecar() -> Result<()> {
@@ -405,7 +404,7 @@ fn explicit_missing_worker_does_not_fallback_or_touch_source() -> Result<()> {
         .output()?;
     assert!(!o.status.success());
     let error = String::from_utf8_lossy(&o.stderr);
-    if cfg!(windows) {
+    if cfg!(any(windows, target_os = "linux")) {
         assert!(error.contains("RUSTTOOLS_ASPOSE_WORKER_EXE"), "{error}");
     } else {
         assert!(error.contains("Windows"), "{error}");
@@ -552,7 +551,7 @@ fn evaluation_allowance_is_narrow_and_normal_validator_remains_strict() -> Resul
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires ASPOSE_TEST_PYTHON; protocol failure injection, not real Aspose acceptance"]
 fn candidate_validation_failure_and_worker_loss_preserve_original_without_replay() -> Result<()> {
@@ -609,7 +608,7 @@ fn candidate_validation_failure_and_worker_loss_preserve_original_without_replay
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured Aspose .NET Worker; synthetic files only"]
 fn real_worker_modifies_value_fill_formula_and_reuses_batch_process() -> Result<()> {
@@ -669,7 +668,7 @@ fn real_worker_modifies_value_fill_formula_and_reuses_batch_process() -> Result<
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured Aspose .NET Worker; synthetic institution batch"]
 fn real_institution_batch_and_legacy_format_rejection() -> Result<()> {
@@ -741,7 +740,7 @@ fn real_institution_batch_and_legacy_format_rejection() -> Result<()> {
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured Aspose .NET Worker; synthetic configured duplicate marking"]
 fn real_duplicate_marking_uses_selected_aspose() -> Result<()> {
@@ -821,7 +820,7 @@ fn forced_openpyxl_header_uses_semantic_validation_without_aspose() -> Result<()
         .any(|h| h.text.contains("万美元")));
     Ok(())
 }
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured Aspose .NET Worker; real CLI on synthetic copies"]
 fn real_header_cli_retains_watermark_and_commits_validated_change() -> Result<()> {

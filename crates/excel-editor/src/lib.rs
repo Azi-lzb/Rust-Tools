@@ -13,7 +13,10 @@ mod worker_process;
 
 pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
 pub use ooxml_header_backend::{OoxmlHeaderTextBackend, OoxmlHeaderTextValidator};
-pub use openpyxl_backend::{OpenpyxlWorkerConfig, OpenpyxlXlsxBackend, OpenpyxlXlsxValidator};
+pub use openpyxl_backend::{
+    read_explicit_empty_formula_results, ArrayFormulaResults, OpenpyxlWorkerConfig,
+    OpenpyxlXlsxBackend, OpenpyxlXlsxValidator,
+};
 pub use plan::{
     BackendAttempt, BackendAttemptOutcome, BackendCapability, BackendErrorKind, BackendFailure,
     BackendRouteDecision, CapabilityEvidence, CapabilityStatus, CellValue, EditBackend,

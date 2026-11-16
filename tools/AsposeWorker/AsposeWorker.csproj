@@ -8,4 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Aspose.Cells" Version="26.10.0" />
   </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+  </ItemGroup>
 </Project>

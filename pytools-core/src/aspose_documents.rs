@@ -38,7 +38,11 @@ fn command() -> Result<(PathBuf, Vec<String>)> {
             let exe = std::env::current_exe()?
                 .parent()
                 .context("missing executable directory")?
-                .join("workers/aspose-words/AsposeWordsWorker.exe");
+                .join(if cfg!(windows) {
+                    "workers/aspose-words/AsposeWordsWorker.exe"
+                } else {
+                    "workers/aspose-words/AsposeWordsWorker"
+                });
             ensure!(exe.is_file(), "未配置 Aspose.Words Worker；请设置 RUSTTOOLS_ASPOSE_WORDS_EXE，或 RUSTTOOLS_ASPOSE_DOTNET + RUSTTOOLS_ASPOSE_WORDS_DLL");
             Ok((exe, vec!["--stdio".into()]))
         }
@@ -46,8 +50,8 @@ fn command() -> Result<(PathBuf, Vec<String>)> {
 }
 pub fn preflight() -> Result<()> {
     ensure!(
-        cfg!(windows),
-        "Aspose.Words 当前仅启用 Windows 评估路径；其他平台路由不变"
+        cfg!(any(windows, target_os = "linux")),
+        "Aspose.Words Worker 仅支持 Windows 和 Linux；未回退其他引擎"
     );
     ensure!(
         std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none(),

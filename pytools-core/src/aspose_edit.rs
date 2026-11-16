@@ -44,8 +44,8 @@ impl ModifyMode {
     pub fn preflight(self) -> Result<()> {
         if self == Self::Aspose {
             ensure!(
-                cfg!(windows),
-                "Aspose 修改接入当前仅验证 Windows；其他平台路由不变"
+                cfg!(any(windows, target_os = "linux")),
+                "Aspose Worker 仅支持 Windows 和 Linux；未回退其他引擎"
             );
             ensure!(
                 std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none(),
@@ -230,7 +230,10 @@ fn operations(plan: &ExcelEditPlan) -> Result<Vec<WorkbookOperation>> {
         .collect()
 }
 pub(crate) fn ensure_supported(plan: &ExcelEditPlan) -> Result<()> {
-    ensure!(cfg!(windows), "Aspose 修改当前仅验证 Windows");
+    ensure!(
+        cfg!(any(windows, target_os = "linux")),
+        "Aspose Worker 仅支持 Windows 和 Linux；未回退其他引擎"
+    );
     plan.validate()?;
     ensure!(
         plan.format == WorkbookFormat::Xlsx
@@ -335,6 +338,9 @@ pub(crate) struct AsposePlanValidator;
 impl OutputValidator for AsposePlanValidator {
     fn validate(&self, plan: &ExcelEditPlan, output: &Path) -> Result<()> {
         excel_editor::OpenpyxlXlsxValidator.validate_with_evaluation_sheet(plan, output)
+    }
+    fn validate_with_notes(&self, plan: &ExcelEditPlan, output: &Path) -> Result<Vec<String>> {
+        excel_editor::OpenpyxlXlsxValidator.validate_with_evaluation_sheet_and_notes(plan, output)
     }
 }
 

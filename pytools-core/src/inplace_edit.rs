@@ -296,7 +296,38 @@ pub(crate) fn plan_for_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Ex
                 .remove(&PreservationRequirement::RowAndColumnDimensions);
         }
     }
+    if engine != InPlaceEngine::RustNative {
+        relax_incidental_appearance(&mut execution_plan);
+    }
     execution_plan
+}
+
+/// Data edits, row deletion, sheet renaming and header-text replacement do not
+/// ask for an unrelated font/size round-trip. Explicit fill operations still
+/// validate their requested color independently. Copy/import, print settings,
+/// sizing and other format-oriented plans retain their existing contracts.
+/// Apply only to object-model writers, after the engine has been selected.
+pub(crate) fn relax_incidental_appearance(plan: &mut ExcelEditPlan) {
+    if plan.operations.is_empty()
+        || !plan.operations.iter().all(|op| {
+            matches!(
+                op,
+                EditOperation::SetCellValue { .. }
+                    | EditOperation::SetFormulaText { .. }
+                    | EditOperation::SetComment { .. }
+                    | EditOperation::SetCellFillColor { .. }
+                    | EditOperation::DeleteRows { .. }
+                    | EditOperation::InsertRows { .. }
+                    | EditOperation::RenameSheet { .. }
+                    | EditOperation::ReplaceHeaderText { .. }
+            )
+        })
+    {
+        return;
+    }
+    plan.preserve.remove(&PreservationRequirement::Styles);
+    plan.preserve
+        .remove(&PreservationRequirement::RowAndColumnDimensions);
 }
 
 /// openpyxl 引擎可用性预检：返回不可用原因，供菜单提前提示。
@@ -309,6 +340,203 @@ pub fn openpyxl_unavailable_reason() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validation_policy_accepts_font_drift_but_rejects_wrong_marking_and_data() -> Result<()> {
+        use excel_editor::{OpenpyxlXlsxValidator, OutputValidator, WorkbookFormat};
+        let dir = std::env::temp_dir().join(format!(
+            "mark-content-policy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir)?;
+        let source = dir.join("source.xlsx");
+        for label in ["source", "correct", "wrong-fill", "wrong-data"] {
+            let mut book = rust_xlsxwriter::Workbook::new();
+            let sheet = book.add_worksheet();
+            sheet.set_name("Data")?;
+            let marked = if label == "source" {
+                rust_xlsxwriter::Format::new()
+            } else {
+                rust_xlsxwriter::Format::new().set_background_color(if label == "wrong-fill" {
+                    0x0000FF
+                } else {
+                    0xFF0000
+                })
+            };
+            sheet.write_string_with_format(0, 0, "duplicate", &marked)?;
+            let font = rust_xlsxwriter::Format::new()
+                .set_font_name(if label == "source" {
+                    "Calibri"
+                } else {
+                    "Arial"
+                })
+                .set_font_size(if label == "source" { 11.0 } else { 25.0 });
+            sheet.write_number_with_format(
+                0,
+                1,
+                if label == "wrong-data" { 8.0 } else { 7.0 },
+                &font,
+            )?;
+            book.save(dir.join(format!("{label}.xlsx")))?;
+        }
+        let before = std::fs::read(&source)?;
+        let plan = ExcelEditPlan {
+            request_id: "mark-policy-test".into(),
+            input: source.clone(),
+            output: dir.join("published.xlsx"),
+            format: WorkbookFormat::Xlsx,
+            workbook: excel_editor::inspect_xlsx_profile(&source)?,
+            operations: vec![EditOperation::SetCellFillColor {
+                sheet: "Data".into(),
+                cell: "A1".into(),
+                argb: "FFFF0000".into(),
+            }],
+            preserve: [
+                PreservationRequirement::CellValuesAndTypes,
+                PreservationRequirement::FormulaText,
+                PreservationRequirement::Styles,
+                PreservationRequirement::RowAndColumnDimensions,
+            ]
+            .into_iter()
+            .collect(),
+            drop_allowed: Default::default(),
+        };
+        assert!(OpenpyxlXlsxValidator
+            .validate(&plan, &dir.join("correct.xlsx"))
+            .is_err());
+        let relaxed = plan_for_engine(&plan, InPlaceEngine::Openpyxl);
+        OpenpyxlXlsxValidator.validate(&relaxed, &dir.join("correct.xlsx"))?;
+        for label in ["wrong-fill", "wrong-data"] {
+            assert!(OpenpyxlXlsxValidator
+                .validate(&relaxed, &dir.join(format!("{label}.xlsx")))
+                .is_err());
+        }
+        assert_eq!(std::fs::read(&source)?, before);
+        assert!(!plan.output.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn validation_policy_follows_operations_and_keeps_explicit_format_contracts() {
+        use excel_editor::{CellValue, WorkbookFormat, WorkbookProfile};
+        let base = ExcelEditPlan {
+            request_id: "policy-test".into(),
+            input: "input.xlsx".into(),
+            output: "output.xlsx".into(),
+            format: WorkbookFormat::Xlsx,
+            workbook: WorkbookProfile {
+                format: WorkbookFormat::Xlsx,
+                inventory_complete: true,
+                features_present: Default::default(),
+            },
+            operations: vec![],
+            preserve: [
+                PreservationRequirement::Styles,
+                PreservationRequirement::RowAndColumnDimensions,
+                PreservationRequirement::CellValuesAndTypes,
+                PreservationRequirement::FormulaText,
+                PreservationRequirement::DefinedNames,
+            ]
+            .into_iter()
+            .collect(),
+            drop_allowed: Default::default(),
+        };
+        let data_ops = [
+            EditOperation::SetCellValue {
+                sheet: "Data".into(),
+                cell: "A1".into(),
+                value: CellValue::Text("new".into()),
+            },
+            EditOperation::SetCellFillColor {
+                sheet: "Data".into(),
+                cell: "A1".into(),
+                argb: "FFFF0000".into(),
+            },
+            EditOperation::DeleteRows {
+                sheet: "Data".into(),
+                first_row: 2,
+                count: 1,
+            },
+            EditOperation::RenameSheet {
+                old_name: "Data".into(),
+                new_name: "New".into(),
+            },
+            EditOperation::ReplaceHeaderText {
+                sheet: "Data".into(),
+                search: "万元".into(),
+                replacement: "万美元".into(),
+            },
+        ];
+        for op in data_ops {
+            let mut source = base.clone();
+            source.operations = vec![op];
+            for engine in [
+                InPlaceEngine::Openpyxl,
+                InPlaceEngine::Umya,
+                InPlaceEngine::BetterOffice,
+                InPlaceEngine::Composite,
+                InPlaceEngine::Aspose,
+            ] {
+                let adjusted = plan_for_engine(&source, engine);
+                assert!(!adjusted.preserve.contains(&PreservationRequirement::Styles));
+                assert!(!adjusted
+                    .preserve
+                    .contains(&PreservationRequirement::RowAndColumnDimensions));
+                for property in [
+                    PreservationRequirement::CellValuesAndTypes,
+                    PreservationRequirement::FormulaText,
+                    PreservationRequirement::DefinedNames,
+                ] {
+                    assert!(adjusted.preserve.contains(&property));
+                }
+                assert_eq!(adjusted.operations, source.operations);
+                assert_eq!(adjusted.input, source.input);
+                assert_eq!(adjusted.output, source.output);
+            }
+            assert!(source.preserve.contains(&PreservationRequirement::Styles));
+            assert!(plan_for_engine(&source, InPlaceEngine::RustNative)
+                .preserve
+                .contains(&PreservationRequirement::Styles));
+        }
+        for op in [
+            EditOperation::SetRowHeight {
+                sheet: "Data".into(),
+                row_index: 1,
+                height: 30.0,
+            },
+            EditOperation::SetColumnWidth {
+                sheet: "Data".into(),
+                column_index: 1,
+                width: 20.0,
+            },
+            EditOperation::SetPageSettings {
+                sheet: "Data".into(),
+                settings: Default::default(),
+            },
+            EditOperation::CopyRange {
+                source_sheet: "Data".into(),
+                source_range: "A1:B2".into(),
+                target_sheet: "Data".into(),
+                target_start: "C1".into(),
+                copy_values: true,
+                copy_formulas: false,
+                copy_styles: true,
+                copy_comments: false,
+            },
+        ] {
+            let mut source = base.clone();
+            source.operations = vec![op];
+            assert!(plan_for_engine(&source, InPlaceEngine::Openpyxl)
+                .preserve
+                .contains(&PreservationRequirement::Styles));
+            assert!(plan_for_engine(&source, InPlaceEngine::Aspose)
+                .preserve
+                .contains(&PreservationRequirement::RowAndColumnDimensions));
+        }
+    }
 
     #[test]
     fn umya_accepts_only_plain_ooxml() {

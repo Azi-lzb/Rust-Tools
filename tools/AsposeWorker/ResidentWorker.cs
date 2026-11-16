@@ -169,6 +169,7 @@ internal static class ResidentWorker
         string? line;
         while ((line = Console.ReadLine()) is not null)
         {
+            string? ownedCandidate = null;
             string? id = null, runId = null;
             var elapsed = Stopwatch.StartNew();
             try
@@ -232,7 +233,11 @@ internal static class ResidentWorker
                 double transformMs = elapsed.Elapsed.TotalMilliseconds - loadMs;
                 // Evaluation sheets are deliberately retained. Never rename or
                 // delete a business worksheet based on an evaluation-like name.
-                using (var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None)) wb.Save(file, SaveFormat.Xlsx);
+                using (var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    ownedCandidate = output;
+                    wb.Save(file, SaveFormat.Xlsx);
+                }
                 double saveMs = elapsed.Elapsed.TotalMilliseconds - loadMs - transformMs;
                 var preservation = Stopwatch.StartNew();
                 int preservedDefaults = method == "Modify" ? WorksheetDefaults.Preserve(input, output, PlanOperations.FinalIdentities(sourceSheets, requestedOperations)) : 0;
@@ -266,11 +271,20 @@ internal static class ResidentWorker
                            output_active_index = active, load_ms = loadMs, transform_ms = transformMs, save_ms = saveMs,
                            preserve_defaults_ms = preserveDefaultsMs, preserved_default_sheets = preservedDefaults,
                            processing_ms = elapsed.Elapsed.TotalMilliseconds, attempts, pid = Environment.ProcessId, draining = attempts >= MaxAttempts });
+                ownedCandidate = null; // The successful response has handed ownership to the host.
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { run_id = runId, request_id = id, timestamp = DateTimeOffset.UtcNow.ToString("O"), stage = method, input, candidate = output,
                     status = "candidate_saved", attempts, elapsed_ms = elapsed.Elapsed.TotalMilliseconds, evaluation_output = !wb.IsLicensed }));
             }
             catch (Exception ex)
             {
+                // A post-save preservation failure must not leave a plausible
+                // result behind. Never delete a pre-existing candidate: this
+                // path is owned only after CreateNew successfully opened it.
+                if (ownedCandidate is not null)
+                {
+                    try { File.Delete(ownedCandidate); }
+                    catch (Exception cleanup) { Console.Error.WriteLine(JsonSerializer.Serialize(new { run_id = runId, request_id = id, stage = "failed_candidate_cleanup", exception = cleanup.ToString() })); }
+                }
                 Emit(new { request_id = id, ok = false, code = ex is NotSupportedException ? "UNSUPPORTED" : ex is InvalidDataException ? "OUTPUT_VALIDATION_FAILED" : "ENGINE_ERROR",
                            message = ex.Message, attempts, pid = Environment.ProcessId, draining = attempts >= MaxAttempts });
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { run_id = runId, request_id = id, timestamp = DateTimeOffset.UtcNow.ToString("O"), status = "failed", exception = ex.ToString() }));

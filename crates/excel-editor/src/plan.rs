@@ -937,6 +937,17 @@ pub trait EditBackend: Send + Sync {
 pub trait OutputValidator: Send + Sync {
     /// Validate the candidate output against the original request contract.
     fn validate(&self, original_plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()>;
+
+    /// Non-blocking observations for the developer execution report. They do
+    /// not become per-cell messages in the user-facing batch summary.
+    fn validate_with_notes(
+        &self,
+        original_plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
+        self.validate(original_plan, candidate_output)?;
+        Ok(Vec::new())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1317,25 +1328,31 @@ impl ExcelModifier {
                     &attempts,
                 ));
             }
-            if let Err(error) = self.validator.validate(plan, output_candidate.path()) {
-                let message = error.to_string();
-                attempts.push(BackendAttempt {
-                    engine,
-                    outcome: BackendAttemptOutcome::ValidationFailed,
-                    message: message.clone(),
-                    elapsed_ms: attempt_started.elapsed().as_millis(),
-                });
-                if openpyxl_fallback_available {
-                    continue;
+            let validation_notes = match self
+                .validator
+                .validate_with_notes(plan, output_candidate.path())
+            {
+                Ok(notes) => notes,
+                Err(error) => {
+                    let message = error.to_string();
+                    attempts.push(BackendAttempt {
+                        engine,
+                        outcome: BackendAttemptOutcome::ValidationFailed,
+                        message: message.clone(),
+                        elapsed_ms: attempt_started.elapsed().as_millis(),
+                    });
+                    if openpyxl_fallback_available {
+                        continue;
+                    }
+                    return Err(execution_error(
+                        ExcelModifierErrorKind::OutputValidationFailed,
+                        Some(engine),
+                        format!("output validation failed: {message}"),
+                        &route,
+                        &attempts,
+                    ));
                 }
-                return Err(execution_error(
-                    ExcelModifierErrorKind::OutputValidationFailed,
-                    Some(engine),
-                    format!("output validation failed: {message}"),
-                    &route,
-                    &attempts,
-                ));
-            }
+            };
             OpenOptions::new()
                 .write(true)
                 .open(output_candidate.path())
@@ -1376,7 +1393,14 @@ impl ExcelModifier {
             attempts.push(BackendAttempt {
                 engine,
                 outcome: BackendAttemptOutcome::Succeeded,
-                message: "validated output published".to_owned(),
+                message: if validation_notes.is_empty() {
+                    "validated output published".to_owned()
+                } else {
+                    format!(
+                        "validated output published; {}",
+                        validation_notes.join("; ")
+                    )
+                },
                 elapsed_ms: attempt_started.elapsed().as_millis(),
             });
             return Ok(EditExecutionReport {
@@ -1582,6 +1606,45 @@ mod tests {
     }
 
     struct RejectValidator;
+
+    #[test]
+    fn validation_notes_are_retained_in_successful_developer_report() {
+        struct WithNotes;
+        impl OutputValidator for WithNotes {
+            fn validate(&self, plan: &ExcelEditPlan, path: &Path) -> Result<()> {
+                PrefixValidator.validate(plan, path)
+            }
+            fn validate_with_notes(
+                &self,
+                plan: &ExcelEditPlan,
+                path: &Path,
+            ) -> Result<Vec<String>> {
+                self.validate(plan, path)?;
+                Ok(vec!["append cosmetic normalization: cells=2".into()])
+            }
+        }
+        let directory = TestDir::new();
+        let plan = plan(&directory.0, vec![set_value()]);
+        let modifier = ExcelModifier::new(
+            "test-linux-x86_64",
+            vec![backend(
+                capability(EngineId::UmyaSpreadsheet, [EditOperationKind::SetCellValue]),
+                Action::Write,
+                Arc::new(Mutex::new(Vec::new())),
+            )],
+            Arc::new(WithNotes),
+        )
+        .unwrap();
+        let report = modifier.execute(&plan).unwrap();
+        assert!(report
+            .attempts
+            .last()
+            .unwrap()
+            .message
+            .contains("cosmetic normalization: cells=2"));
+        assert_eq!(fs::read(&plan.input).unwrap(), b"original workbook bytes");
+        assert!(plan.output.is_file());
+    }
 
     impl OutputValidator for RejectValidator {
         fn validate(&self, _plan: &ExcelEditPlan, _candidate_output: &Path) -> Result<()> {

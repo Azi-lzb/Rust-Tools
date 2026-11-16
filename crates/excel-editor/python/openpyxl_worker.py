@@ -20,7 +20,7 @@ import zipfile
 from copy import copy
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from xml.etree import ElementTree
 from xml.parsers import expat
 from xml.sax.saxutils import escape as xml_escape
@@ -1319,6 +1319,88 @@ def _restore_calculation_chain(
             )
 
 
+def _explicit_empty_strings(path: Path) -> Set[Tuple[str, str]]:
+    """Read literal empty text, never a formula's empty cached result."""
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    result: Set[Tuple[str, str]] = set()
+    with zipfile.ZipFile(str(path)) as package:
+        strings = []
+        if "xl/sharedStrings.xml" in package.namelist():
+            strings = ["".join(t.text or "" for t in si.iter(ns + "t"))
+                       for si in ElementTree.fromstring(package.read("xl/sharedStrings.xml"))]
+        for sheet, part in _worksheet_parts_by_title(package).items():
+            for cell in ElementTree.fromstring(package.read(part)).iter(ns + "c"):
+                if cell.find(ns + "f") is not None:
+                    continue
+                kind, value = cell.get("t"), cell.find(ns + "v")
+                empty = False
+                if kind == "s" and value is not None and value.text is not None:
+                    empty = strings[int(value.text)] == ""
+                elif kind == "inlineStr":
+                    text_nodes = list(cell.iter(ns + "t"))
+                    empty = bool(text_nodes) and all((t.text or "") == "" for t in text_nodes)
+                elif kind == "str" and value is not None:
+                    empty = (value.text or "") == ""
+                if empty:
+                    result.add((sheet, cell.get("r", "").replace("$", "").upper()))
+    return result
+
+
+def _restore_unmodified_empty_strings(input_path: Path, output_path: Path,
+                                     operations: List[Dict[str, Any]]) -> None:
+    """Preserve type markers instead of treating empty text as a blank in validation.
+
+    Only proven-unmodified coordinates are restored. An unexpected nonempty
+    output or formula is an error, never overwritten to hide corruption.
+    """
+    targets = set()
+    # The copy verifier owns the entire value/formula destination rectangle.
+    # Do not restore a source literal into it, even when blank source cells
+    # may be skipped by the engine. Style-only copies do not own values.
+    mapping_operations = [
+        dict(op, materialize_blank_cells=True)
+        if op.get("operation") in ("copy_range", "import_range") else op
+        for op in operations
+    ]
+    for sheet, address in _explicit_empty_strings(input_path):
+        if any(op.get("operation") in ("insert_columns", "delete_columns")
+               for op in operations):
+            raise WorkerError("unsupported_empty_string_mapping", "column movement with literal empty text is not validated", unsupported=True)
+        destination = _formula_cache_destination(sheet, address, mapping_operations)
+        if destination is not None:
+            targets.add(destination)
+    if not targets:
+        return
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    output_empty = _explicit_empty_strings(output_path)
+    missing: Dict[str, Set[str]] = {}
+    with zipfile.ZipFile(str(output_path)) as package:
+        parts = _worksheet_parts_by_title(package)
+        by_sheet: Dict[str, Dict[str, Any]] = {}
+        for sheet, address in targets:
+            if sheet not in by_sheet:
+                if sheet not in parts:
+                    raise WorkerError("empty_string_restore_failed", "surviving worksheet missing: " + sheet)
+                by_sheet[sheet] = {c.get("r"): c for c in ElementTree.fromstring(package.read(parts[sheet])).iter(ns + "c")}
+            cell = by_sheet[sheet].get(address)
+            if cell is None:
+                missing.setdefault(sheet, set()).add(address)
+            elif (sheet, address) not in output_empty:
+                blank = (cell.find(ns + "f") is None
+                         and cell.get("t", "n") in ("n", "str", "inlineStr")
+                         and all((node.text or "") == "" for node in cell.iter(ns + "v"))
+                         and all((node.text or "") == "" for node in cell.iter(ns + "t")))
+                if not blank:
+                    raise WorkerError("empty_string_restore_failed", "unmodified empty text changed at " + sheet + "!" + address)
+    if missing:
+        _materialize_tracked_cells(output_path, missing)
+    _restore_planned_empty_strings(output_path, [
+        {"operation": "set_cell_value", "sheet": sheet, "cell": address,
+         "value": {"type": "text", "value": ""}}
+        for sheet, address in sorted(targets)
+    ])
+
+
 def _restore_planned_empty_strings(
     output_path: Path,
     operations: List[Dict[str, Any]],
@@ -1375,7 +1457,7 @@ def _restore_planned_empty_strings(
     def set_empty_inline_string(xml_data: bytes, address: str) -> bytes:
         coordinate = re.escape(address.encode("ascii"))
         pattern = re.compile(
-            rb"<c\b(?=[^>]*\br=(?:\""
+            rb"<(?:[A-Za-z_][\w.-]*:)?c\b(?=[^>]*\br=(?:\""
             + coordinate
             + rb"\"|'"
             + coordinate
@@ -1425,8 +1507,59 @@ def _restore_planned_empty_strings(
                 content,
                 flags=re.DOTALL,
             )
-        replacement = opening + b"<is><t></t></is>" + closing_tag
+        prefix = tag_match.group("tag").rsplit(b":", 1)[0] + b":" if b":" in tag_match.group("tag") else b""
+        replacement = opening + b"<" + prefix + b"is><" + prefix + b"t></" + prefix + b"t></" + prefix + b"is>" + content + closing_tag
         return xml_data[:match.start()] + replacement + xml_data[match.end():]
+
+    def set_empty_inline_strings(xml_data: bytes, addresses: Set[str]) -> bytes:
+        # One namespace-aware pass per worksheet. Applying the single-cell
+        # patch to the entire XML once per empty cell would be quadratic on
+        # real templates containing thousands of literal empty strings.
+        parser = expat.ParserCreate(namespace_separator="}")
+        main_cell = "http://schemas.openxmlformats.org/spreadsheetml/2006/main}c"
+        spans = []
+        seen: Set[str] = set()
+        active = None
+
+        def tag_end(start: int) -> int:
+            quote = None
+            for index in range(start, len(xml_data)):
+                value = xml_data[index]
+                if quote is not None:
+                    if value == quote: quote = None
+                elif value in (34, 39): quote = value
+                elif value == 62: return index + 1
+            raise WorkerError("empty_string_restore_failed", "unterminated cell XML")
+
+        def start(name: str, attrs: Dict[str, str]) -> None:
+            nonlocal active
+            if name != main_cell: return
+            address = attrs.get("r", "")
+            if address not in addresses: return
+            if address in seen: raise WorkerError("empty_string_restore_failed", "duplicate empty-text cell " + address)
+            seen.add(address)
+            begin = parser.CurrentByteIndex
+            opening_end = tag_end(begin)
+            active = (address, begin, opening_end, xml_data[begin:opening_end].rstrip().endswith(b"/>"))
+
+        def end(name: str) -> None:
+            nonlocal active
+            if name == main_cell and active is not None:
+                address, begin, opening_end, self_closing = active
+                spans.append((begin, opening_end if self_closing else tag_end(parser.CurrentByteIndex), address))
+                active = None
+
+        parser.StartElementHandler = start
+        parser.EndElementHandler = end
+        parser.Parse(xml_data, True)
+        if seen != addresses: raise WorkerError("empty_string_restore_failed", "empty-text cell missing after save")
+        chunks = []
+        previous = 0
+        for begin, end_index, address in spans:
+            chunks.extend((xml_data[previous:begin], set_empty_inline_string(xml_data[begin:end_index], address)))
+            previous = end_index
+        chunks.append(xml_data[previous:])
+        return b"".join(chunks)
 
     replacement = output_path.with_name(output_path.name + ".empty-strings.tmp")
     if replacement.exists():
@@ -1443,9 +1576,7 @@ def _restore_planned_empty_strings(
                         "worksheet is missing for empty-text writes: " + sheet,
                     )
                 xml_data = source.read(part)
-                for address in addresses:
-                    xml_data = set_empty_inline_string(xml_data, address)
-                updates[part] = xml_data
+                updates[part] = set_empty_inline_strings(xml_data, addresses)
         with zipfile.ZipFile(str(output_path), "r") as source, zipfile.ZipFile(
             str(replacement), "w"
         ) as target:
@@ -3095,6 +3226,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
     _restore_unmodified_column_dimensions(input_path, output_path, operations)
     _restore_header_footer_settings(input_path, output_path, operations)
     _restore_calculation_chain(input_path, output_path, operations)
+    _restore_unmodified_empty_strings(input_path, output_path, operations)
     _restore_planned_empty_strings(output_path, operations)
     after_hash = _sha256(input_path)
     if after_hash != before_hash:

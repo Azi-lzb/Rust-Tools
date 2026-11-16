@@ -1,12 +1,18 @@
-pytools（通用汇总工具，Rust 版）
+RustTools（通用汇总工具，Rust 版）
 ================================
 
-本包安装 /usr/bin/pytools 命令行入口。功能覆盖原 py_statistics_tools
-约定的时序、宽表汇总、去重、打印、转换、汇总、归档与快捷工具九类业务，
-以 `pytools` 无参数启动交互菜单，或以子命令直接调用（如
-`pytools summary-used-range`、`pytools wide-summary`）。
+本包安装 /opt/rusttools/RustTools 和 /usr/bin/RustTools 入口。
+无参数启动七类交互菜单，也可以使用 summary-used-range 等子命令。
+Openpyxl 使用随包隔离 Python，无需安装系统 Python。
 
-核心路径为纯 Rust 实现，不依赖 Python、Office、WPS 或 COM；公式计算等
-外部引擎能力默认关闭，显式触发且不可用时按规则提示，不阻塞其他功能。
+包含 workers/aspose、workers/aspose-words 时，可在执行模式中手动选择
+Aspose.Cells / Aspose.Words .NET；两者自带 Linux x64 .NET 运行时，
+不需要 .NET SDK，依赖包管理器声明的 ICU、OpenSSL 等系统库。
+评估水印、额外 Sheet 和活动页变化按本轮约定保留；请使用副本验收。
+自动路由不变；加入 Worker 不代表放开 XLS 追加或其他未支持格式。
+Excel/WPS COM 仅适用于 Windows。Linux 默认不提供 XLS 转换；
+显式 Aspose 转换使用独立候选、验证和安全发布路径，不调用 COM。
 
-可选能力与运行历史输出目录沿用全局配置（`pytools config-view` 可查看）。
+config/config.xlsx 注册为 conffile，升级时由 dpkg 保护用户配置。
+普通打包只构建、解压和冒烟检查，不安装、修改或卸载宿主程序。
+glibc 2.28 静态检查和隔离测试不等于麒麟 V10 实机安装验收。

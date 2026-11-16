@@ -75,7 +75,24 @@ impl AsposeConversionSession {
             .context("Aspose 转换失败，未回退其他引擎")?;
         let validation_started = Instant::now();
         let saved = excel_reader::read_workbook(&candidate)?;
-        crate::aspose_integration::validate_recalculated_workbook(&source, &saved)?;
+        let array_results = if input
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+        {
+            let original = excel_editor::ArrayFormulaResults::read(&input)?;
+            ensure!(
+                original == excel_editor::ArrayFormulaResults::read(&candidate)?,
+                "Aspose 转换改变数组公式结果范围"
+            );
+            original
+        } else {
+            excel_editor::ArrayFormulaResults::default()
+        };
+        crate::aspose_integration::validate_recalculated_workbook_with_arrays(
+            &source,
+            &saved,
+            &array_results,
+        )?;
         if input
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
@@ -94,10 +111,8 @@ impl AsposeConversionSession {
                 preserve: [
                     P::FormulaText,
                     P::CommentsAndPositions,
-                    P::Styles,
                     P::MergedRanges,
                     P::DefinedNames,
-                    P::RowAndColumnDimensions,
                     P::PageSettings,
                     P::HeaderFooterText,
                     P::Relationships,

@@ -950,6 +950,14 @@ impl OutputValidator for OpenpyxlXlsxValidator {
     fn validate(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
         self.validate_with_print_area_policy(plan, candidate_output, false)
     }
+
+    fn validate_with_notes(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
+        self.validate_internal(plan, candidate_output, false, false)
+    }
 }
 
 impl OpenpyxlXlsxValidator {
@@ -968,6 +976,7 @@ impl OpenpyxlXlsxValidator {
             adjust_print_areas_for_row_deletions,
             false,
         )
+        .map(|_| ())
     }
 
     /// Comparison-only allowance for an explicitly selected evaluation engine.
@@ -977,6 +986,15 @@ impl OpenpyxlXlsxValidator {
         plan: &ExcelEditPlan,
         candidate_output: &Path,
     ) -> Result<()> {
+        self.validate_with_evaluation_sheet_and_notes(plan, candidate_output)
+            .map(|_| ())
+    }
+
+    pub fn validate_with_evaluation_sheet_and_notes(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
         self.validate_internal(plan, candidate_output, false, true)
     }
 
@@ -986,7 +1004,7 @@ impl OpenpyxlXlsxValidator {
         candidate_output: &Path,
         adjust_print_areas_for_row_deletions: bool,
         allow_evaluation: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
         let source =
             read_workbook(&plan.input).context("read source workbook for openpyxl validation")?;
         let mut output = read_workbook(candidate_output)
@@ -1021,14 +1039,66 @@ impl OpenpyxlXlsxValidator {
             "openpyxl output contains no worksheets"
         );
         validate_sheet_names(&source.sheets, &output.sheets, &plan.operations)?;
-        validate_requested_operations(&source.sheets, &output.sheets, &plan.operations)?;
+        validate_requested_operations(
+            &source.sheets,
+            &output.sheets,
+            &plan.operations,
+            !plan.preserve.contains(&PreservationRequirement::Styles),
+        )?;
         validate_calculation_properties(candidate_output, &plan.operations)?;
+        let mut notes = Vec::new();
         if plan.operations.iter().any(needs_umya_readback)
             || plan.preserve.contains(&PreservationRequirement::Styles)
         {
-            validate_umya_readback(plan, candidate_output)?;
+            notes = validate_umya_readback(
+                plan,
+                candidate_output,
+                is_append_only(plan, &source.sheets)?,
+            )?;
         }
-        validate_preserved_values(&source.sheets, &output.sheets, plan)?;
+        let array_results = ArrayFormulaResults::read(&plan.input)?;
+        if plan
+            .preserve
+            .contains(&PreservationRequirement::FormulaText)
+            && !array_results.ranges.is_empty()
+        {
+            let actual = ArrayFormulaResults::read(candidate_output)?;
+            let order = source
+                .sheets
+                .iter()
+                .map(|s| s.name.clone())
+                .collect::<Vec<_>>();
+            let (retained, _) = planned_sheet_provenance(&order, &plan.operations)?;
+            for (old_name, ranges) in &array_results.ranges {
+                let Some(new_name) = retained.get(old_name) else {
+                    continue;
+                };
+                // Structural edits have their own reference-rewrite contract.
+                // Here protect stationary array extent as well as anchor text.
+                if plan.operations.iter().any(|op| matches!(op,
+                    EditOperation::InsertRows {sheet,..} | EditOperation::DeleteRows {sheet,..}
+                    | EditOperation::InsertColumns {sheet,..} | EditOperation::DeleteColumns {sheet,..} if sheet == old_name)) { continue; }
+                for range in ranges {
+                    let anchor = format!("{}{}", column_letters(range.1), range.0);
+                    if cell_formula_is_modified(old_name, &anchor, &plan.operations) {
+                        continue;
+                    }
+                    anyhow::ensure!(
+                        actual
+                            .ranges
+                            .get(new_name)
+                            .is_some_and(|r| r.contains(range)),
+                        "unmodified array formula extent changed at {old_name}!{anchor}"
+                    );
+                }
+            }
+        }
+        validate_preserved_values_with_array_results(
+            &source.sheets,
+            &output.sheets,
+            plan,
+            &array_results,
+        )?;
         validate_preserved_formulas(&source.sheets, &output.sheets, plan)?;
         validate_preserved_comments(&source.sheets, &output.sheets, plan)?;
         validate_preserved_merges(&source.sheets, &output.sheets, plan)?;
@@ -1040,8 +1110,46 @@ impl OpenpyxlXlsxValidator {
             allow_evaluation,
         )?;
         validate_requested_sheet_layout(plan, candidate_output)?;
-        Ok(())
+        Ok(notes)
     }
+}
+
+/// Prove the scope from the actual operations and original data, not a menu
+/// label. No replacement, overwrite, row movement or style operation qualifies.
+fn is_append_only(plan: &ExcelEditPlan, sheets: &[SheetDump]) -> Result<bool> {
+    let mut last_rows = BTreeMap::new();
+    for sheet in sheets {
+        let mut last = 0;
+        for address in sheet
+            .values
+            .keys()
+            .chain(sheet.formulas.keys())
+            .chain(sheet.comments.keys())
+        {
+            last = last.max(parse_cell(address)?.0);
+        }
+        for range in &sheet.merges {
+            last = last.max(parse_range(range)?.2);
+        }
+        last_rows.insert(sheet.name.as_str(), last);
+    }
+    let mut wrote = false;
+    for op in &plan.operations {
+        match op {
+            EditOperation::SetCellValue { sheet, cell, .. }
+            | EditOperation::SetFormulaText { sheet, cell, .. } => {
+                let Some(last) = last_rows.get(sheet.as_str()) else {
+                    return Ok(false);
+                };
+                if parse_cell(cell)?.0 <= *last {
+                    return Ok(false);
+                }
+                wrote = true;
+            }
+            _ => return Ok(false),
+        }
+    }
+    Ok(wrote)
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1551,15 +1659,20 @@ fn validate_preserved_ooxml_metadata_internal(
         normalize_evaluation_save_defaults(output_path, &mut output)?;
         // Equal explicit defaults are safe to ignore only when the worksheet
         // defaults themselves have not changed. Hidden/style/outline attributes remain.
-        let a = sheet_format_defaults(input_path)?;
-        let b = sheet_format_defaults(output_path)?;
-        let (identities, _) = planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
-        anyhow::ensure!(
-            identities
-                .iter()
-                .all(|(source_name, output_name)| b.get(output_name) == a.get(source_name)),
-            "Aspose changed worksheet dimension defaults"
-        );
+        if plan
+            .preserve
+            .contains(&PreservationRequirement::RowAndColumnDimensions)
+        {
+            let a = sheet_format_defaults(input_path)?;
+            let b = sheet_format_defaults(output_path)?;
+            let (identities, _) = planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
+            anyhow::ensure!(
+                identities
+                    .iter()
+                    .all(|(source_name, output_name)| b.get(output_name) == a.get(source_name)),
+                "Aspose changed worksheet dimension defaults"
+            );
+        }
     }
     if plan
         .preserve
@@ -2868,6 +2981,7 @@ fn validate_requested_operations(
     source_sheets: &[SheetDump],
     sheets: &[SheetDump],
     operations: &[EditOperation],
+    ignore_date_format: bool,
 ) -> Result<()> {
     let by_name: BTreeMap<_, _> = sheets
         .iter()
@@ -2937,6 +3051,7 @@ fn validate_requested_operations(
                 *copy_comments,
                 false,
                 &operations[..operation_index],
+                ignore_date_format,
             )?,
             EditOperation::ImportRange {
                 source_workbook,
@@ -2968,6 +3083,7 @@ fn validate_requested_operations(
                     *copy_comments,
                     *hide_zero,
                     &[],
+                    ignore_date_format,
                 )?;
             }
             _ => {}
@@ -3033,7 +3149,11 @@ fn needs_umya_readback(operation: &EditOperation) -> bool {
     )
 }
 
-fn validate_umya_readback(plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
+fn validate_umya_readback(
+    plan: &ExcelEditPlan,
+    candidate_output: &Path,
+    append_only: bool,
+) -> Result<Vec<String>> {
     let source = if plan.preserve.contains(&PreservationRequirement::Styles) {
         Some(crate::open_xlsx(&plan.input).context("open source workbook for style readback")?)
     } else {
@@ -3042,19 +3162,22 @@ fn validate_umya_readback(plan: &ExcelEditPlan, candidate_output: &Path) -> Resu
     let output = crate::open_xlsx(candidate_output)
         .context("open openpyxl output with umya for independent Rust readback")?;
 
-    if let Some(source) = &source {
-        validate_unmodified_styles(plan, source, &output)?;
-    }
+    let notes = match &source {
+        Some(source) => validate_unmodified_styles_with_notes(plan, source, &output, append_only)?,
+        None => Vec::new(),
+    };
 
-    let expected_styles = expected_import_styles(plan)?;
-    for ((sheet_name, address), expected) in expected_styles {
-        let actual = style_at(&output, &sheet_name, &address)?;
-        anyhow::ensure!(
-            styles_semantically_equal(&actual, &expected),
-            "Rust style readback mismatch at {sheet_name}!{address}: expected {expected:?}, got {actual:?}"
-        );
+    if plan.preserve.contains(&PreservationRequirement::Styles) {
+        let expected_styles = expected_import_styles(plan)?;
+        for ((sheet_name, address), expected) in expected_styles {
+            let actual = style_at(&output, &sheet_name, &address)?;
+            anyhow::ensure!(
+                styles_semantically_equal(&actual, &expected),
+                "Rust style readback mismatch at {sheet_name}!{address}: expected {expected:?}, got {actual:?}"
+            );
+        }
+        validate_copy_style_results(&output, &plan.operations)?;
     }
-    validate_copy_style_results(&output, &plan.operations)?;
 
     let mut row_heights = BTreeMap::new();
     let mut column_widths = BTreeMap::new();
@@ -3121,7 +3244,7 @@ fn validate_umya_readback(plan: &ExcelEditPlan, candidate_output: &Path) -> Resu
                 sheet,
                 cell,
                 value: crate::CellValue::DateTime { number_format, .. },
-            } => {
+            } if plan.preserve.contains(&PreservationRequirement::Styles) => {
                 let actual = output
                     .sheet_by_name(sheet)
                     .with_context(|| format!("date-style output sheet {sheet:?} missing"))?
@@ -3219,14 +3342,25 @@ fn validate_umya_readback(plan: &ExcelEditPlan, candidate_output: &Path) -> Resu
             _ => {}
         }
     }
-    Ok(())
+    Ok(notes)
 }
 
+#[cfg(test)]
 fn validate_unmodified_styles(
     plan: &ExcelEditPlan,
     source: &umya_spreadsheet::Workbook,
     output: &umya_spreadsheet::Workbook,
 ) -> Result<()> {
+    validate_unmodified_styles_with_notes(plan, source, output, false).map(|_| ())
+}
+
+fn validate_unmodified_styles_with_notes(
+    plan: &ExcelEditPlan,
+    source: &umya_spreadsheet::Workbook,
+    output: &umya_spreadsheet::Workbook,
+    append_only: bool,
+) -> Result<Vec<String>> {
+    let mut notes = Vec::new();
     for source_sheet in source.sheet_collection() {
         let source_name = source_sheet.name();
         let mut output_name = source_name.to_owned();
@@ -3252,6 +3386,8 @@ fn validate_unmodified_styles(
             .sheet_by_name(&output_name)
             .with_context(|| format!("style-preservation output sheet {output_name:?} missing"))?;
         let row_map = plan_row_map(plan, source_name)?;
+        let mut cosmetic_count = 0;
+        let mut examples = Vec::new();
         for source_cell in source_sheet.cells() {
             let address = source_cell.coordinate().to_string();
             let output_address = match &row_map {
@@ -3263,13 +3399,25 @@ fn validate_unmodified_styles(
                 },
                 None => address.clone(),
             };
-            if style_is_modified_by_plan(plan, source_name, &output_name, &output_address)? {
+            if !append_only
+                && style_is_modified_by_plan(plan, source_name, &output_name, &output_address)?
+            {
                 continue;
             }
             let actual = output_sheet
                 .cell(output_address.as_str())
                 .map(|cell| cell.style().clone())
                 .unwrap_or_default();
+            if append_only
+                && !styles_semantically_equal(&actual, source_cell.style())
+                && styles_differ_only_cosmetically(&actual, source_cell.style())
+            {
+                cosmetic_count += 1;
+                if examples.len() < 3 {
+                    examples.push(output_address.clone());
+                }
+                continue;
+            }
             // openpyxl normalizes non-anchor cells in merged ranges when it
             // loads/saves a workbook. Validate only border sides on the
             // merged range perimeter here; non-border style comes from the
@@ -3308,8 +3456,77 @@ fn validate_unmodified_styles(
                 "Rust unmodified-style readback mismatch at {output_name}!{address}"
             );
         }
+        if cosmetic_count > 0 {
+            notes.push(format!("append cosmetic normalization: sheet={output_name:?}, cells={cosmetic_count}, examples={}", examples.join(",")));
+        }
     }
-    Ok(())
+    Ok(notes)
+}
+
+/// Only ordinary font identity/color, small font-size drift and fill/border
+/// colors may differ. Data formats, emphasis, alignment, protection and the
+/// presence/shape of fills/borders stay significant even for pure appends.
+fn styles_differ_only_cosmetically(
+    actual: &umya_spreadsheet::Style,
+    expected: &umya_spreadsheet::Style,
+) -> bool {
+    let mut normalized = actual.clone();
+    let a = actual.font().cloned().unwrap_or_default();
+    let b = expected.font().cloned().unwrap_or_default();
+    if a.bold() != b.bold()
+        || a.italic() != b.italic()
+        || a.underline() != b.underline()
+        || a.strikethrough() != b.strikethrough()
+        || (a.size() - b.size()).abs() > 1.0
+        || a.vertical_text_alignment() != b.vertical_text_alignment()
+    {
+        return false;
+    }
+    normalized.set_font(b);
+    let a = actual.fill().cloned().unwrap_or_default();
+    let b = expected.fill().cloned().unwrap_or_default();
+    if a.gradient_fill() != b.gradient_fill()
+        || a.pattern_fill()
+            .map(|p| p.pattern_type())
+            .unwrap_or(&umya_spreadsheet::PatternValues::None)
+            != b.pattern_fill()
+                .map(|p| p.pattern_type())
+                .unwrap_or(&umya_spreadsheet::PatternValues::None)
+    {
+        return false;
+    }
+    normalized.set_fill(b);
+    let a = actual.borders().cloned().unwrap_or_default();
+    let b = expected.borders().cloned().unwrap_or_default();
+    // Compare every border flag and line style after removing colors only.
+    let mut a_without_colors = a.clone();
+    let mut b_without_colors = b.clone();
+    for borders in [&mut a_without_colors, &mut b_without_colors] {
+        let clear = |side: &mut umya_spreadsheet::Border| {
+            let style = side.style().clone();
+            *side = Default::default();
+            side.set_style(style);
+        };
+        clear(borders.left_mut());
+        clear(borders.right_mut());
+        clear(borders.top_mut());
+        clear(borders.bottom_mut());
+        clear(borders.diagonal_mut());
+        clear(borders.vertical_mut());
+        clear(borders.horizontal_mut());
+    }
+    if a_without_colors != b_without_colors {
+        return false;
+    }
+    normalized.set_borders(b);
+    // Protection must remain explicit/default equivalent; never allow an
+    // omitted protection record to mask changed locking/hidden-formula flags.
+    if actual.protection().cloned().unwrap_or_default()
+        != expected.protection().cloned().unwrap_or_default()
+    {
+        return false;
+    }
+    styles_semantically_equal(&normalized, expected)
 }
 
 /// openpyxl materializes the effective bottom/right edges of a merged range
@@ -4410,10 +4627,17 @@ fn styles_semantically_equal_except_borders(
 
     fonts_semantically_equal(actual.font(), expected.font())
         && equal_fill(actual.fill(), expected.fill())
-        // 同理：openpyxl 写出显式默认对齐/保护，umya 侧可能为未设置。
-        && match (actual.alignment(), expected.alignment()) {
-            (Some(a), Some(b)) => a == b,
-            _ => true,
+        // Compare effective values, not EnumValue/BooleanValue presence flags.
+        // General/bottom/false/0 can be either explicit or omitted after an
+        // engine round trip. Missing non-default alignment still fails.
+        && {
+            let a = actual.alignment().cloned().unwrap_or_default();
+            let b = expected.alignment().cloned().unwrap_or_default();
+            a.horizontal() == b.horizontal()
+                && a.vertical() == b.vertical()
+                && a.wrap_text() == b.wrap_text()
+                && a.text_rotation() == b.text_rotation()
+                && a.indent() == b.indent()
         }
         && match (actual.protection(), expected.protection()) {
             (Some(a), Some(b)) => a == b,
@@ -4463,6 +4687,7 @@ fn validate_range_copy(
     copy_comments: bool,
     hide_zero: bool,
     preceding_operations: &[EditOperation],
+    ignore_date_format: bool,
 ) -> Result<()> {
     let source = source_sheets
         .iter()
@@ -4553,7 +4778,9 @@ fn validate_range_copy(
                         match (expected, actual) {
                             (None, None) => true,
                             (Some(expected), Some(actual)) =>
-                                json_value_equal(expected, Some(actual)),
+                                json_value_equal(expected, Some(actual))
+                                    || (ignore_date_format
+                                        && numeric_value_ignoring_date_format(expected, actual)),
                             _ => false,
                         },
                         "copied cell value/type mismatch at {target_sheet_name}!{target_address}"
@@ -4701,10 +4928,102 @@ fn merged_non_anchor_payload_loss_exempt(
             .is_some_and(|range| output_sheet.merges.contains(&range))
 }
 
+/// A present empty string cache is a valid formula result; a missing <v> is
+/// not proof of an empty result. No formula evaluation or string inference.
+pub fn read_explicit_empty_formula_results(path: &Path) -> Result<BTreeSet<(String, String)>> {
+    let mut result = BTreeSet::new();
+    let mut zip = zip::ZipArchive::new(File::open(path)?)?;
+    for (sheet, part) in worksheet_parts_by_name(path)? {
+        let xml = read_zip_part(&mut zip, &part)?;
+        let doc = roxmltree::Document::parse(&xml)?;
+        for cell in doc.descendants().filter(|n| {
+            n.has_tag_name((SPREADSHEET_MAIN_NS, "c")) && n.attribute("t") == Some("str")
+        }) {
+            let formula = cell
+                .children()
+                .any(|n| n.has_tag_name((SPREADSHEET_MAIN_NS, "f")));
+            let cache = cell
+                .children()
+                .find(|n| n.has_tag_name((SPREADSHEET_MAIN_NS, "v")));
+            if formula
+                && cache.is_some_and(|v| {
+                    v.text().is_none_or(str::is_empty) && !v.children().any(|c| c.is_element())
+                })
+            {
+                let address = cell
+                    .attribute("r")
+                    .context("formula cell address missing")?;
+                parse_cell(address)?;
+                result.insert((sheet.clone(), normalize_address(address)));
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// Array followers contain derived results even though only their anchor has
+/// an <f> element. Keep finite ranges, never expand a potentially huge grid.
+#[derive(Default, Eq, PartialEq)]
+pub struct ArrayFormulaResults {
+    ranges: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
+}
+
+impl ArrayFormulaResults {
+    pub fn read(path: &Path) -> Result<Self> {
+        let mut result = Self::default();
+        let mut zip = zip::ZipArchive::new(File::open(path)?)?;
+        for (sheet, part) in worksheet_parts_by_name(path)? {
+            let xml = read_zip_part(&mut zip, &part)?;
+            let document = roxmltree::Document::parse(&xml)?;
+            for formula in document.descendants().filter(|n| {
+                n.has_tag_name((SPREADSHEET_MAIN_NS, "f")) && n.attribute("t") == Some("array")
+            }) {
+                let reference = formula
+                    .attribute("ref")
+                    .context("array formula result range missing")?;
+                result
+                    .ranges
+                    .entry(sheet.clone())
+                    .or_default()
+                    .push(parse_range(reference)?);
+            }
+        }
+        for ranges in result.ranges.values_mut() {
+            ranges.sort_unstable();
+        }
+        Ok(result)
+    }
+
+    pub fn contains(&self, sheet: &str, address: &str) -> Result<bool> {
+        let Some(ranges) = self.ranges.get(sheet) else {
+            return Ok(false);
+        };
+        let (row, col) = parse_cell(address)?;
+        Ok(ranges
+            .iter()
+            .any(|&(r1, c1, r2, c2)| row >= r1 && row <= r2 && col >= c1 && col <= c2))
+    }
+}
+
+#[cfg(test)]
 fn validate_preserved_values(
     source: &[SheetDump],
     output: &[SheetDump],
     plan: &ExcelEditPlan,
+) -> Result<()> {
+    validate_preserved_values_with_array_results(
+        source,
+        output,
+        plan,
+        &ArrayFormulaResults::default(),
+    )
+}
+
+fn validate_preserved_values_with_array_results(
+    source: &[SheetDump],
+    output: &[SheetDump],
+    plan: &ExcelEditPlan,
+    array_results: &ArrayFormulaResults,
 ) -> Result<()> {
     if !plan
         .preserve
@@ -4712,6 +5031,7 @@ fn validate_preserved_values(
     {
         return Ok(());
     }
+    let append_only = is_append_only(plan, source)?;
     let renamed: BTreeMap<String, String> = plan
         .operations
         .iter()
@@ -4748,21 +5068,15 @@ fn validate_preserved_values(
                 },
                 None => address.clone(),
             };
-            if cell_value_is_modified(&old_sheet.name, &output_address, &plan.operations) {
+            if !append_only
+                && cell_value_is_modified(&old_sheet.name, &output_address, &plan.operations)
+            {
                 continue;
             }
-            // 公式单元格的缓存值是上一次保存时的派生结果：计划写入其依赖
-            // 区间时，worker 有意不恢复旧缓存（输出不带过期数值），Excel/WPS
-            // 打开时按 fullCalcOnLoad/forceFullCalc 重算。公式文本本身由
-            // validate_preserved_formulas 单独校验，因此这里豁免缓存值比较。
-            // 仅在计划真的写入单元格时豁免；行位移计划保持原严格口径。
+            // Stored formula results are caches, never literal business data.
+            // Formula text is verified independently, including shared cells.
             if old_sheet.formulas.contains_key(address)
-                && plan.operations.iter().any(|operation| {
-                    matches!(
-                        operation,
-                        EditOperation::SetCellValue { .. } | EditOperation::SetFormulaText { .. }
-                    )
-                })
+                || array_results.contains(&old_sheet.name, address)?
             {
                 continue;
             }
@@ -4774,7 +5088,12 @@ fn validate_preserved_values(
                 continue;
             }
             anyhow::ensure!(
-                json_value_equal(value, actual),
+                !new_sheet.formulas.contains_key(&output_address)
+                    && (json_value_equal(value, actual)
+                        || (!plan.preserve.contains(&PreservationRequirement::Styles)
+                            && actual.is_some_and(|actual| numeric_value_ignoring_date_format(
+                                value, actual
+                            )))),
                 "unmodified cell value changed at {}!{}: expected {:?}, got {:?}",
                 old_sheet.name,
                 address,
@@ -4797,6 +5116,7 @@ fn validate_preserved_formulas(
     {
         return Ok(());
     }
+    let append_only = is_append_only(plan, source)?;
     let (renamed, deleted) = sheet_name_changes(&plan.operations);
     for old_sheet in source {
         if deleted.contains(&old_sheet.name) {
@@ -4824,7 +5144,9 @@ fn validate_preserved_formulas(
                 // formula adjustment plus the requesting side's readback.
                 continue;
             }
-            if cell_formula_is_modified(&old_sheet.name, &output_address, &plan.operations) {
+            if !append_only
+                && cell_formula_is_modified(&old_sheet.name, &output_address, &plan.operations)
+            {
                 continue;
             }
             if !new_sheet.formulas.contains_key(&output_address)
@@ -4833,12 +5155,16 @@ fn validate_preserved_formulas(
             {
                 continue;
             }
-            let expected_formula = crate::umya_backend::expected_formula_after_row_deletions(
-                &old_sheet.name,
-                formula,
-                &plan.operations,
-            )?;
-            let expected_formula = rewrite_formula_sheet_references(&expected_formula, &renamed);
+            let expected_formula = if append_only {
+                formula.clone()
+            } else {
+                let adjusted = crate::umya_backend::expected_formula_after_row_deletions(
+                    &old_sheet.name,
+                    formula,
+                    &plan.operations,
+                )?;
+                rewrite_formula_sheet_references(&adjusted, &renamed)
+            };
             anyhow::ensure!(
                 new_sheet.formulas.get(&output_address) == Some(&expected_formula),
                 "unmodified formula changed at {}!{}",
@@ -5366,6 +5692,23 @@ fn json_value_equal(expected: &serde_json::Value, actual: Option<&serde_json::Va
     }
 }
 
+// A date number format changes the reader's label, not the stored Excel
+// serial. Text "0", booleans, blanks and other types stay distinct.
+fn numeric_value_ignoring_date_format(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    let numeric = |v: &serde_json::Value| {
+        matches!(
+            v["type"].as_str(),
+            Some("number" | "integer" | "datetime_serial")
+        )
+    };
+    numeric(a)
+        && numeric(b)
+        && a["value"]
+            .as_f64()
+            .zip(b["value"].as_f64())
+            .is_some_and(|(a, b)| a == b)
+}
+
 fn normalize_address(address: &str) -> String {
     address.replace('$', "").to_ascii_uppercase()
 }
@@ -5601,6 +5944,296 @@ fn worker_failure_with_diagnostics(message: String, diagnostics: &serde_json::Va
 #[cfg(test)]
 mod tests {
     #[test]
+    fn formula_caches_are_not_literal_values_even_without_cell_writes() -> Result<()> {
+        let mut original = sheet_dump("Sheet1", &[]);
+        original.values.insert(
+            "A1".into(),
+            serde_json::json!({"type":"number","value":0.0}),
+        );
+        original.values.insert(
+            "B1".into(),
+            serde_json::json!({"type":"number","value":3.0}),
+        );
+        original.values.insert(
+            "B2".into(),
+            serde_json::json!({"type":"number","value":4.0}),
+        );
+        original.formulas.insert("B1".into(), "A1+3".into());
+        original.formulas.insert("B2".into(), "A2+3".into());
+        let mut saved = sheet_dump("Sheet1", &[]);
+        saved.values = original.values.clone();
+        saved.formulas = original.formulas.clone();
+        saved.values.remove("B1");
+        saved.values.insert(
+            "B2".into(),
+            serde_json::json!({"type":"error","value":"#VALUE!"}),
+        );
+        let mut plan = dimension_plan(vec![], BTreeMap::new());
+        plan.preserve = [
+            PreservationRequirement::CellValuesAndTypes,
+            PreservationRequirement::FormulaText,
+        ]
+        .into_iter()
+        .collect();
+        validate_preserved_values(
+            std::slice::from_ref(&original),
+            std::slice::from_ref(&saved),
+            &plan,
+        )?;
+        validate_preserved_formulas(
+            std::slice::from_ref(&original),
+            std::slice::from_ref(&saved),
+            &plan,
+        )?;
+        for bad in [
+            serde_json::json!({"type":"string","value":"0"}),
+            serde_json::json!({"type":"number","value":1.0}),
+        ] {
+            saved.values.insert("A1".into(), bad);
+            assert!(validate_preserved_values(
+                std::slice::from_ref(&original),
+                std::slice::from_ref(&saved),
+                &plan
+            )
+            .is_err());
+        }
+        saved
+            .values
+            .insert("A1".into(), original.values["A1"].clone());
+        saved.formulas.insert("A1".into(), "0".into());
+        assert!(validate_preserved_values(
+            std::slice::from_ref(&original),
+            std::slice::from_ref(&saved),
+            &plan
+        )
+        .is_err());
+        saved.formulas.remove("A1");
+        saved.formulas.insert("B2".into(), "A2+4".into());
+        assert!(validate_preserved_formulas(&[original], &[saved], &plan).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn append_tolerance_requires_proven_tail_writes() -> Result<()> {
+        let mut sheet = sheet_dump("Sheet1", &["B8:C10"]);
+        sheet
+            .values
+            .insert("A9".into(), serde_json::json!({"type":"string","value":""}));
+        sheet.formulas.insert("AA99".into(), "A9".into());
+        let write = |cell: &str| EditOperation::SetCellValue {
+            sheet: "Sheet1".into(),
+            cell: cell.into(),
+            value: crate::CellValue::Text("new".into()),
+        };
+        let plan = |ops| dimension_plan(ops, BTreeMap::new());
+        assert!(is_append_only(
+            &plan(vec![write("AA100"), write("Z100")]),
+            std::slice::from_ref(&sheet)
+        )?);
+        for cell in ["A1", "C10", "AA99"] {
+            assert!(!is_append_only(
+                &plan(vec![write(cell)]),
+                std::slice::from_ref(&sheet)
+            )?);
+        }
+        assert!(!is_append_only(
+            &plan(vec![]),
+            std::slice::from_ref(&sheet)
+        )?);
+        assert!(!is_append_only(
+            &plan(vec![
+                write("A100"),
+                EditOperation::SetRowHeight {
+                    sheet: "Sheet1".into(),
+                    row_index: 1,
+                    height: 20.0
+                }
+            ]),
+            &[sheet]
+        )?);
+        Ok(())
+    }
+
+    #[test]
+    fn append_tolerance_allows_minor_cosmetics_but_keeps_business_styles() {
+        use umya_spreadsheet::{BorderStyleValues, Color, NumberingFormat, Style};
+        let mut original = Style::default();
+        original
+            .font_mut()
+            .set_name("Calibri")
+            .set_size(11.0)
+            .set_bold(true);
+        original.set_background_color_solid("FFFF0000");
+        original
+            .borders_mut()
+            .bottom_mut()
+            .set_style(BorderStyleValues::Thin)
+            .set_color(Color::default());
+        let mut minor = original.clone();
+        minor
+            .font_mut()
+            .set_name("Arial")
+            .set_size(11.5)
+            .color_mut()
+            .set_argb_str("FF0000FF");
+        minor.set_background_color_solid("FFFE0000");
+        minor.borders_mut().bottom_mut().set_color({
+            let mut c = Color::default();
+            c.set_argb_str("FF0000FF");
+            c
+        });
+        assert!(!styles_semantically_equal(&minor, &original));
+        assert!(styles_differ_only_cosmetically(&minor, &original));
+        for index in 0..7 {
+            let mut bad = minor.clone();
+            match index {
+                0 => {
+                    bad.font_mut().set_bold(false);
+                }
+                1 => {
+                    bad.font_mut().set_size(15.0);
+                }
+                2 => {
+                    let mut format = NumberingFormat::default();
+                    format.set_format_code("0.00%");
+                    bad.set_number_format(format);
+                }
+                3 => {
+                    bad.alignment_mut().set_wrap_text(true);
+                }
+                4 => {
+                    bad.borders_mut()
+                        .bottom_mut()
+                        .set_style(BorderStyleValues::None);
+                }
+                5 => {
+                    bad.set_fill(Default::default());
+                }
+                _ => {
+                    bad.protection_mut().set_locked(false);
+                }
+            }
+            assert!(
+                !styles_differ_only_cosmetically(&bad, &original),
+                "unsafe style case {index}"
+            );
+        }
+    }
+
+    #[test]
+    fn append_tolerance_reports_cosmetics_without_weakening_data_formula_or_merge_checks(
+    ) -> Result<()> {
+        let mut original = umya_spreadsheet::new_file();
+        original
+            .sheet_by_name_mut("Sheet1")
+            .unwrap()
+            .cell_mut("A1")
+            .style_mut()
+            .font_mut()
+            .set_name("Calibri")
+            .set_size(11.0);
+        let mut output = original.clone();
+        output
+            .sheet_by_name_mut("Sheet1")
+            .unwrap()
+            .cell_mut("A1")
+            .style_mut()
+            .font_mut()
+            .set_name("Arial");
+        let mut plan = dimension_plan(
+            vec![EditOperation::SetCellValue {
+                sheet: "Sheet1".into(),
+                cell: "A100".into(),
+                value: crate::CellValue::Text("new".into()),
+            }],
+            BTreeMap::new(),
+        );
+        assert!(validate_unmodified_styles(&plan, &original, &output).is_err());
+        let notes = validate_unmodified_styles_with_notes(&plan, &original, &output, true)?;
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].contains("cells=1") && notes[0].contains("A1"));
+        let mut source = sheet_dump("Sheet1", &["B1:C1"]);
+        source.values.insert(
+            "A1".into(),
+            serde_json::json!({"type":"number","value":42.0}),
+        );
+        source.formulas.insert("Z9".into(), "A1*2".into());
+        let mut candidate = sheet_dump("Sheet1", &["B1:C1"]);
+        candidate.values = source.values.clone();
+        candidate.formulas = source.formulas.clone();
+        plan.preserve = [
+            PreservationRequirement::CellValuesAndTypes,
+            PreservationRequirement::FormulaText,
+            PreservationRequirement::MergedRanges,
+        ]
+        .into_iter()
+        .collect();
+        validate_preserved_values(
+            std::slice::from_ref(&source),
+            std::slice::from_ref(&candidate),
+            &plan,
+        )?;
+        validate_preserved_formulas(
+            std::slice::from_ref(&source),
+            std::slice::from_ref(&candidate),
+            &plan,
+        )?;
+        candidate.values.insert(
+            "A1".into(),
+            serde_json::json!({"type":"number","value":43.0}),
+        );
+        assert!(validate_preserved_values(
+            std::slice::from_ref(&source),
+            std::slice::from_ref(&candidate),
+            &plan
+        )
+        .is_err());
+        candidate.formulas.insert("Z9".into(), "A1*3".into());
+        assert!(validate_preserved_formulas(
+            std::slice::from_ref(&source),
+            std::slice::from_ref(&candidate),
+            &plan
+        )
+        .is_err());
+        candidate.merges.clear();
+        assert!(validate_preserved_merges(&[source], &[candidate], &plan).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn alignment_defaults_are_equivalent_but_real_changes_are_rejected() {
+        use umya_spreadsheet::{
+            Alignment, HorizontalAlignmentValues, Style, VerticalAlignmentValues,
+        };
+        let mut explicit = Alignment::default();
+        explicit.set_horizontal(HorizontalAlignmentValues::General);
+        explicit.set_vertical(VerticalAlignmentValues::Bottom);
+        explicit.set_wrap_text(false);
+        explicit.set_indent(0);
+        explicit.set_text_rotation(0);
+        let mut source = Style::default();
+        source.set_alignment(explicit.clone());
+        assert!(super::styles_semantically_equal(&source, &Style::default()));
+        for index in 0..5 {
+            let mut changed = explicit.clone();
+            match index {
+                0 => changed.set_horizontal(HorizontalAlignmentValues::Center),
+                1 => changed.set_vertical(VerticalAlignmentValues::Top),
+                2 => changed.set_wrap_text(true),
+                3 => changed.set_indent(1),
+                _ => changed.set_text_rotation(45),
+            }
+            let mut output = Style::default();
+            output.set_alignment(changed);
+            assert!(!super::styles_semantically_equal(&source, &output));
+            assert!(!super::styles_semantically_equal(
+                &Style::default(),
+                &output
+            ));
+        }
+    }
+
+    #[test]
     fn deleted_sheet_relationship_exemption_keeps_package_and_survivor_checks() {
         let source = vec![
             ("xl/worksheets/_rels/sheet1.xml.rels".into(), Vec::new()),
@@ -5677,6 +6310,7 @@ mod tests {
                 false,
                 hide,
                 &[],
+                false,
             )
         };
         assert!(check(&target, true).is_ok());

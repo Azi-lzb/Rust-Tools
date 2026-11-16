@@ -48,25 +48,98 @@ internal static class FormulaPreservation
         return Regex.Replace(formula, "\"(?:[^\"]|\"\")*\"|" + Regex.Escape(quoted) + "|(?<![A-Za-z0-9_.'\\]])" + Regex.Escape(oldName) + "!",
             m => m.Value.StartsWith('"') ? m.Value : replacement);
     }
+    private static (int R1, int C1, int R2, int C2) Bounds(string range)
+    {
+        var cells = range.Replace("$", "").Split(':');
+        if (cells.Length is < 1 or > 2) throw new NotSupportedException("Invalid grouped formula range");
+        Aspose.Cells.CellsHelper.CellNameToIndex(cells[0], out int r, out int c);
+        Aspose.Cells.CellsHelper.CellNameToIndex(cells[^1], out int z, out int x);
+        if (r < 0 || c < 0 || z < r || x < c || z >= 1048576 || x >= 16384)
+            throw new NotSupportedException("Invalid grouped formula bounds");
+        return (r, c, z, x);
+    }
+    private static bool WritesInto(string sheet, string range, JsonElement outer)
+    {
+        string kind = T(outer, "op"); var p = outer;
+        if (kind == "edit_plan_operation") { p = p.GetProperty("operation"); kind = T(p, "operation"); }
+        string target = p.TryGetProperty("sheet", out var s) ? s.GetString()! : p.TryGetProperty("target_sheet", out s) ? s.GetString()! : "";
+        if (target != sheet) return false;
+        var group = Bounds(range);
+        if (kind is "set_value" or "set_formula" or "set_cell_value" or "set_formula_text")
+        {
+            var cell = Bounds(T(p, "cell"));
+            return cell.R1 >= group.R1 && cell.R1 <= group.R2 && cell.C1 >= group.C1 && cell.C1 <= group.C2;
+        }
+        if (kind is not "copy_range" and not "import_range") return false;
+        if (!p.GetProperty("copy_values").GetBoolean() && !p.GetProperty("copy_formulas").GetBoolean()) return false;
+        var source = Bounds(T(p, "source_range")); var at = Bounds(T(p, "target_start"));
+        return at.R1 <= group.R2 && at.R1 + source.R2 - source.R1 >= group.R1 &&
+               at.C1 <= group.C2 && at.C1 + source.C2 - source.C1 >= group.C1;
+    }
     public static void Preserve(string source, string candidate, JsonElement operations, bool preserveCaches = true, HashSet<(string Sheet, string Cell)>? invalidated = null)
     {
         if (!Path.GetExtension(source).Equals(".xlsx", StringComparison.OrdinalIgnoreCase)) return;
         var ops = operations.EnumerateArray().ToArray();
+        var writes = new CellWriteIndex(operations);
         using var input = ZipFile.OpenRead(source); using var output = ZipFile.Open(candidate, ZipArchiveMode.Update);
         var outputParts = Parts(output);
         foreach (var (sourceSheet, part) in Parts(input))
         {
+            var identities = PlanOperations.FinalIdentities(new[] { sourceSheet }, operations);
+            if (!identities.TryGetValue(sourceSheet, out string? finalName)) continue;
             string sheet = sourceSheet;
             var originals = Read(input, part).Descendants(S + "c").Where(c => c.Element(S + "f") is not null)
                 .Select(c => (Address: (string)c.Attribute("r")!, Formula: new XElement(c.Element(S + "f")!), Value: c.Element(S + "v") is { } v ? new XElement(v) : null, Type: (string?)c.Attribute("t"))).ToArray();
+            var grouped = originals.Where(c => (string?)c.Formula.Attribute("t") is "shared" or "array").ToArray();
+            var staleArrayRanges = new HashSet<string>(StringComparer.Ordinal);
+            if (grouped.Length > 0)
+            {
+                // Only untouched, stationary groups are enabled. Appending values
+                // elsewhere is safe; moving a grid or writing into a group is not.
+                if (ops.Any(o => T(o, "op") == "edit_plan_operation" && T(o.GetProperty("operation"), "operation") is
+                    "rename_sheet" or "insert_rows" or "delete_rows" or "insert_columns" or "delete_columns"))
+                    throw new NotSupportedException("Moving/renaming shared or array formulas is not validated");
+                var mastersById = grouped.Where(c => (string?)c.Formula.Attribute("t") == "shared" && c.Formula.Attribute("ref") is not null)
+                    .GroupBy(c => (string?)c.Formula.Attribute("si") ?? "")
+                    .ToDictionary(g => g.Key, g => g.ToArray());
+                var checkedRanges = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var cell in grouped)
+                {
+                    string? range = (string?)cell.Formula.Attribute("ref");
+                    if ((string?)cell.Formula.Attribute("t") == "shared")
+                    {
+                        string id = (string?)cell.Formula.Attribute("si") ?? throw new InvalidDataException("Shared formula id missing");
+                        if (!mastersById.TryGetValue(id, out var masters) || masters.Length != 1 || string.IsNullOrEmpty(masters[0].Formula.Value)) throw new InvalidDataException("Shared formula master is ambiguous");
+                        range = (string?)masters[0].Formula.Attribute("ref");
+                    }
+                    if (range is null) throw new NotSupportedException("Grouped formula range missing");
+                    var bounds = Bounds(range); var address = Bounds(cell.Address);
+                    if (address.R1 < bounds.R1 || address.R1 > bounds.R2 || address.C1 < bounds.C1 || address.C1 > bounds.C2)
+                        throw new InvalidDataException("Formula member outside its group");
+                    if (checkedRanges.Add(range) && (writes.StationaryScalarPlan
+                        ? writes.Intersects(sourceSheet, bounds.R1, bounds.C1, bounds.R2, bounds.C2)
+                        : ops.Any(o => WritesInto(sourceSheet, range, o))))
+                        throw new NotSupportedException("Writing into a shared/array formula range is not validated: " + sourceSheet + "!" + range);
+                    if (preserveCaches && (string?)cell.Formula.Attribute("t") == "array" && invalidated is not null &&
+                        invalidated.Any(c => {
+                            if (c.Sheet != sourceSheet) return false;
+                            var at = Bounds(c.Cell);
+                            return at.R1 >= bounds.R1 && at.R1 <= bounds.R2 && at.C1 >= bounds.C1 && at.C1 <= bounds.C2;
+                        }))
+                        staleArrayRanges.Add(range);
+                }
+            }
             var expected = new Dictionary<string, XElement>();
             var caches = new Dictionary<string, (XElement? Value, string? Type)>();
             foreach (var original in originals)
             {
                 string name = sheet, address = original.Address; var formula = new XElement(original.Formula); bool retained = true;
-                if (formula.Attributes().Any(a => a.Name.LocalName is "t" or "si" or "ref"))
-                    throw new NotSupportedException("Shared/array formula lexical preservation is not validated");
-                foreach (var outer in ops)
+                if ((string?)formula.Attribute("t") is { } type && type is not "normal" and not "shared" and not "array")
+                    throw new NotSupportedException("Formula type is not validated: " + type);
+                if ((string?)formula.Attribute("t") is not "shared" and not "array" && formula.Attributes().Any(a => a.Name.LocalName is "si" or "ref"))
+                    throw new NotSupportedException("Ambiguous formula grouping metadata");
+                if (writes.StationaryScalarPlan) retained = !writes.Contains(name, address);
+                else foreach (var outer in ops)
                 {
                     string outerKind = T(outer, "op");
                     if (outerKind != "edit_plan_operation")
@@ -96,24 +169,53 @@ internal static class FormulaPreservation
                     if (preserveCaches) caches[address] = invalidated?.Contains((sourceSheet, original.Address)) == true ? (null, null) : (original.Value, original.Type);
                 }
             }
-            var identities = PlanOperations.FinalIdentities(new[] { sourceSheet }, operations);
-            if (!identities.TryGetValue(sourceSheet, out string? finalName) || expected.Count == 0) continue;
+            if (expected.Count == 0) continue;
             var document = Read(output, outputParts[finalName]);
             // Index once: scanning the entire sheet for every formula is
             // quadratic on the complex-workbook probe. Duplicate addresses
             // remain an error rather than silently choosing one cell.
             var savedCells = document.Descendants(S + "c").ToDictionary(c => (string)c.Attribute("r")!, StringComparer.Ordinal);
+            // Never orphan SDK-generated shared followers by replacing only
+            // part of one of its groups. Original groups get fresh per-sheet
+            // ids, avoiding collisions with newly generated formula groups.
+            foreach (var group in savedCells.Where(c => (string?)c.Value.Element(S + "f")?.Attribute("t") == "shared")
+                .GroupBy(c => (string?)c.Value.Element(S + "f")?.Attribute("si")))
+                if (group.Any(c => expected.ContainsKey(c.Key)) && group.Any(c => !expected.ContainsKey(c.Key)))
+                    throw new NotSupportedException("Saved shared formula group crosses a modified range");
+            int nextShared = savedCells.Values.Select(c => (int?)c.Element(S + "f")?.Attribute("si") ?? -1).DefaultIfEmpty(-1).Max();
+            var sharedIds = new Dictionary<string, int>();
             foreach (var (address, formula) in expected)
             {
                 if (!savedCells.TryGetValue(address, out var cell))
                     throw new InvalidDataException("Saved formula cell missing: " + finalName + "!" + address);
                 var actual = cell.Element(S + "f") ?? throw new InvalidDataException("Saved formula missing");
+                if ((string?)formula.Attribute("t") == "shared")
+                {
+                    string id = (string)formula.Attribute("si")!;
+                    if (!sharedIds.TryGetValue(id, out int mapped)) sharedIds[id] = mapped = checked(++nextShared);
+                    formula.SetAttributeValue("si", mapped);
+                }
                 actual.ReplaceWith(formula);
                 if (caches.TryGetValue(address, out var cached))
                 {
                     cell.Element(S + "v")?.Remove();
                     cell.SetAttributeValue("t", cached.Type);
                     if (cached.Value is not null) cell.Add(new XElement(cached.Value));
+                }
+            }
+            // Array followers have no original <f> node, but their values are
+            // caches too. Clear the whole affected result extent, never refuse
+            // a content-safe edit merely because recalculation is needed.
+            foreach (string range in staleArrayRanges)
+            {
+                var bounds = Bounds(range);
+                foreach (var (address, cell) in savedCells)
+                {
+                    var at = Bounds(address);
+                    if (at.R1 < bounds.R1 || at.R1 > bounds.R2 || at.C1 < bounds.C1 || at.C1 > bounds.C2) continue;
+                    cell.Element(S + "v")?.Remove();
+                    cell.Element(S + "is")?.Remove();
+                    cell.SetAttributeValue("t", null);
                 }
             }
             Save(output, outputParts[finalName], document);

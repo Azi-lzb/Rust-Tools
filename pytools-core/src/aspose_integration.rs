@@ -47,8 +47,8 @@ impl ValidationCalcMode {
         match self {
             Self::Aspose => {
                 ensure!(
-                    cfg!(windows),
-                    "Aspose 菜单接入当前仅验证 Windows，其他平台路由不变"
+                    cfg!(any(windows, target_os = "linux")),
+                    "Aspose Worker 仅支持 Windows 和 Linux；未回退其他引擎"
                 );
                 worker_command()?;
             }
@@ -105,7 +105,11 @@ pub(crate) fn worker_command() -> Result<(PathBuf, Vec<String>)> {
     let packaged = std::env::current_exe()?
         .parent()
         .context("无法定位程序目录")?
-        .join("workers/aspose/AsposeWorker.exe");
+        .join(if cfg!(windows) {
+            "workers/aspose/AsposeWorker.exe"
+        } else {
+            "workers/aspose/AsposeWorker"
+        });
     if packaged.is_file() {
         return Ok((packaged, vec!["--stdio".to_owned()]));
     }
@@ -182,7 +186,12 @@ impl AsposeCalculationSession {
             })
             .context("Aspose 计算失败；未切换到其他引擎，校验副本未提交")?;
         let output = excel_reader::read_workbook(&candidate).context("Aspose 候选缓存无法回读")?;
-        validate_recalculated_workbook(&source, &output)?;
+        let array_results = excel_editor::ArrayFormulaResults::read(&working_copy)?;
+        ensure!(
+            array_results == excel_editor::ArrayFormulaResults::read(&candidate)?,
+            "Aspose 计算改变数组公式结果范围"
+        );
+        validate_recalculated_workbook_with_arrays(&source, &output, &array_results)?;
         crate::conversion_engine::ensure_aspose_validation_functions_supported(&output, regions)?;
         let commit =
             crate::file_commit::replace_target_from_candidate(&candidate, &working_copy, &before)
@@ -242,9 +251,22 @@ fn formula_key(formula: &str, names: &[&str]) -> String {
     flush(&mut segment, &mut out);
     out
 }
-pub(crate) fn validate_recalculated_workbook(
+#[cfg(test)]
+fn validate_recalculated_workbook(
     source: &excel_reader::WorkbookDump,
     output: &excel_reader::WorkbookDump,
+) -> Result<()> {
+    validate_recalculated_workbook_with_arrays(
+        source,
+        output,
+        &excel_editor::ArrayFormulaResults::default(),
+    )
+}
+
+pub(crate) fn validate_recalculated_workbook_with_arrays(
+    source: &excel_reader::WorkbookDump,
+    output: &excel_reader::WorkbookDump,
+    array_results: &excel_editor::ArrayFormulaResults,
 ) -> Result<()> {
     let names: Vec<&str> = source.sheets.iter().map(|s| s.name.as_str()).collect();
     ensure!(
@@ -266,13 +288,17 @@ pub(crate) fn validate_recalculated_workbook(
                 a.name
             );
         }
+        let mut source_merges = a.merges.clone();
+        let mut saved_merges = b.merges.clone();
+        source_merges.sort();
+        saved_merges.sort();
         ensure!(
-            a.merges == b.merges && a.comments == b.comments,
+            source_merges == saved_merges && a.comments == b.comments,
             "Aspose 计算改变合并区域或批注：{}",
             a.name
         );
         for (cell, value) in &a.values {
-            if !a.formulas.contains_key(cell) {
+            if !a.formulas.contains_key(cell) && !array_results.contains(&a.name, cell)? {
                 ensure!(
                     !b.formulas.contains_key(cell)
                         && b.values
@@ -296,6 +322,54 @@ pub(crate) fn validate_recalculated_workbook(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn validation_policy_checks_array_extent_and_literals_not_recalculated_caches() -> Result<()> {
+        let root = std::env::temp_dir().join(format!(
+            "calc-content-policy-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        ));
+        fs::create_dir_all(&root)?;
+        let path = root.join("source.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("Data")?;
+        sheet.write_number(0, 0, 7)?;
+        sheet.write_formula(0, 2, "=A1+1")?;
+        sheet.write_array_formula(2, 1, 3, 1, "=A1:A2*2")?;
+        sheet.merge_range(9, 0, 9, 1, "first", &rust_xlsxwriter::Format::new())?;
+        sheet.merge_range(11, 0, 11, 1, "second", &rust_xlsxwriter::Format::new())?;
+        book.save(&path)?;
+        let source = excel_reader::read_workbook(&path)?;
+        let mut output = excel_reader::read_workbook(&path)?;
+        output.sheets[0].values.remove("C1");
+        output.sheets[0].values.insert(
+            "B3".into(),
+            serde_json::json!({"type":"number","value":14.0}),
+        );
+        output.sheets[0].values.insert(
+            "B4".into(),
+            serde_json::json!({"type":"number","value":999.0}),
+        );
+        output.sheets[0].merges.reverse();
+        let arrays = excel_editor::ArrayFormulaResults::read(&path)?;
+        validate_recalculated_workbook_with_arrays(&source, &output, &arrays)?;
+        ensure!(
+            arrays != excel_editor::ArrayFormulaResults::default(),
+            "array extent must not disappear"
+        );
+        output.sheets[0].values.insert(
+            "A1".into(),
+            serde_json::json!({"type":"string","value":"7"}),
+        );
+        assert!(validate_recalculated_workbook_with_arrays(&source, &output, &arrays).is_err());
+        output.sheets[0]
+            .values
+            .insert("A1".into(), source.sheets[0].values["A1"].clone());
+        output.sheets[0].formulas.insert("C1".into(), "A1+2".into());
+        assert!(validate_recalculated_workbook_with_arrays(&source, &output, &arrays).is_err());
+        Ok(())
+    }
     #[test]
     fn explicit_modes_are_strict() {
         assert_eq!(

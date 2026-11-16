@@ -42,6 +42,20 @@ fn valid_time(route: &Route) -> Option<f64> {
     })
 }
 
+fn baseline_name(case: &Case) -> &str {
+    match case.baseline.as_str() {
+        "openpyxl" => "Openpyxl",
+        "com" => "Excel/WPS COM（本次测 Excel）",
+        "auto" => match case.context.as_str() {
+            "5-4" => "原 OOXML 页眉路径",
+            "4-7" => "原 OOXML 修复路径",
+            "4-4-xlsx" | "4-4-xls" | "4-4-word" => "原 Excel/WPS COM 路径",
+            _ => "原自动路径",
+        },
+        other => other,
+    }
+}
+
 fn lookup(references: &References, context: &str, engine: &str) -> String {
     let Some(case) = references.cases.iter().find(|c| c.context == context) else {
         return "待测".into();
@@ -67,7 +81,7 @@ fn lookup(references: &References, context: &str, engine: &str) -> String {
     if engine == case.baseline {
         "1.00×，基准".into()
     } else {
-        format!("约 {:.2}×", time / base)
+        format!("约 {:.2}×，相对{}", time / base, baseline_name(case))
     }
 }
 
@@ -92,7 +106,10 @@ pub fn conversion_hint(operation: &str, engine: &str) -> String {
 
 pub fn current_policy_hint(context: &str) -> Option<String> {
     use crate::excel_edit_router::{RouteMode, ROUTE_ENV};
-    let mode: RouteMode = std::env::var(ROUTE_ENV).ok()?.parse().ok()?;
+    let configured = std::env::var(ROUTE_ENV).ok()?;
+    let Ok(mode) = configured.parse::<RouteMode>() else {
+        return Some("编辑策略配置无效；执行时拒绝，不自动改用默认引擎".into());
+    };
     let engine = match mode {
         RouteMode::OpenpyxlOnly => "openpyxl",
         RouteMode::UmyaOnly => "umya",
@@ -102,10 +119,59 @@ pub fn current_policy_hint(context: &str) -> Option<String> {
         RouteMode::Auto => "route_auto",
     };
     Some(format!(
-        "{}；参考耗时 {}",
+        "{}：{}；参考耗时 {}",
         mode.as_str(),
+        modification_policy_description(mode),
         hint(context, engine)
     ))
+}
+
+pub fn modification_policy_description(mode: crate::excel_edit_router::RouteMode) -> &'static str {
+    use crate::excel_edit_router::RouteMode;
+    match mode {
+        RouteMode::OpenpyxlOnly => "Openpyxl，不切换其他引擎",
+        RouteMode::UmyaOnly => "UMYA，不切换其他引擎",
+        RouteMode::BetterOfficeOnly => "BetterOffice，不切换其他引擎",
+        RouteMode::RustNativeOnly => "RustNative OOXML，不切换其他引擎",
+        RouteMode::AsposeOnly => "Aspose .NET，保留评估水印，不切换其他引擎",
+        RouteMode::Auto => {
+            "按修改计划选择 RustNative/UMYA/BetterOffice/Openpyxl；满足安全条件时才回退 Openpyxl"
+        }
+    }
+}
+
+/// Display the existing per-feature path, without selecting or probing an engine.
+pub fn default_modification_hint(context: &str) -> String {
+    let xlsx = match context {
+        "1-1" => "新建 XLSX：Rust；修改既有 XLSX：Openpyxl",
+        "2-3" => "新建 XLSX：Rust；追加既有 XLSX：Openpyxl；既有 XLS 追加拒绝",
+        "5-4" => "XLSX：OOXML 定点页眉修改；就地修改允许安全回退 Openpyxl",
+        "5-6" => "新建 XLSX：Rust；追加既有目标：Openpyxl",
+        _ => "XLSX 修改：Openpyxl",
+    };
+    let legacy = if matches!(context, "4-5" | "5-1" | "5-2" | "5-3" | "5-4" | "5-7") {
+        if cfg!(windows) {
+            "；XLS：功能专用 Excel/WPS COM"
+        } else {
+            "；XLS 修改不支持"
+        }
+    } else {
+        ""
+    };
+    format!("{xlsx}{legacy}")
+}
+
+pub fn default_conversion_hint(operation: &str) -> &'static str {
+    match (operation, cfg!(windows), cfg!(target_os = "linux")) {
+        ("files.excel_open_repair", true, _) => "XLSX：OOXML 修复；XLS：Excel/WPS COM 转换后修复",
+        ("files.excel_open_repair", _, true) => "XLSX：OOXML 修复；XLS：LibreOffice 转换后修复",
+        ("files.excel_open_repair", _, _) => "XLSX：OOXML 修复；XLS 转换不可用",
+        (_, true, _) => "Excel/WPS COM（优先 Excel，按原规则使用 WPS）",
+        ("files.office_conversion.excel", _, true) => {
+            "转 XLSX：LibreOffice + BetterOffice（按支持格式）；XLSX 同格式重存不可用"
+        }
+        _ => "当前平台无可用的原 Office 转换路径",
+    }
 }
 
 pub fn write_note(output: &mut impl Write, context: &str) -> std::io::Result<()> {
@@ -130,7 +196,7 @@ pub fn write_note(output: &mut impl Write, context: &str) -> std::io::Result<()>
     )?;
     writeln!(
         output,
-        "按完整处理总耗时比较；仅供参考，实际耗时随文件内容变化。"
+        "耗时倍数 = 该选项总耗时 ÷ 基准总耗时（含启动，不含人工操作）；0.50× 用时一半，2.00× 用时两倍。仅供参考。"
     )
 }
 
@@ -181,7 +247,7 @@ mod tests {
                 {"engine":"partial","status":"PASS","files":50,"verified_outputs":49,"total_e2e_ms":10},
                 {"engine":"zero","status":"PASS","files":50,"verified_outputs":50,"total_e2e_ms":0}
             ]}]})).unwrap();
-        assert_eq!(lookup(&references, "3-1", "rust"), "约 0.50×");
+        assert_eq!(lookup(&references, "3-1", "rust"), "约 0.50×，相对Openpyxl");
         for engine in ["aspose", "partial", "zero"] {
             assert!(!lookup(&references, "3-1", engine).contains('×'));
         }

@@ -6,4 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Aspose.Words" Version="26.10.0" /></ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.152.1" />
+  </ItemGroup>
 </Project>

@@ -1,5 +1,24 @@
 # Optional resident Aspose engine — evaluation trial
 
+## 2026-11-16 Linux DEB opt-in delivery
+
+The Linux TEST-main package can include self-contained linux-x64 Cells and
+Words workers under `workers/aspose` and `workers/aspose-words`. Set
+`ASPOSE_WORKERS_SOURCE` when running `pytools-core/packaging/build_deb.sh`;
+`packaging/aspose/stage-linux-workers.sh` rejects incomplete/Windows payloads,
+checks every native ELF against glibc 2.28 and normalizes file permissions.
+The DEB declares ICU/OpenSSL and other native OS dependencies. An installed
+.NET SDK/runtime is not required. The Linux menu now permits explicit Aspose
+selection; Auto, COM platform restrictions and supported-format limits remain
+unchanged. Evaluation output remains intact. The package performs extract-only
+smokes using synthetic inputs; this does not certify a Kylin installation or
+all business menus. Earlier statements below that Linux is unchanged describe
+the dated Windows-only rollout.
+
+The Linux Skia native assets match each pinned Aspose dependency, following
+[Cells Linux guidance](https://docs.aspose.com/cells/net/how-to-run-aspose-cells-for-net6/)
+and [Words Linux guidance](https://docs.aspose.com/words/net/how-to-run-aspose-words-in-docker/).
+
 ## 2026-11-16 test-package delivery
 
 Windows TEST-main packages now include independent, self-contained Cells and

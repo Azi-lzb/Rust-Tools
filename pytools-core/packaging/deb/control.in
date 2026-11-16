@@ -5,7 +5,7 @@ Priority: optional
 Architecture: amd64
 Installed-Size: @INSTALLED_SIZE@
 Maintainer: rusttools local build <noreply@localhost>
-Depends: libc6 (>= 2.28), xdg-utils
+Depends: libc6 (>= 2.28), xdg-utils@ASPOSE_DEPENDS@
 Description: 通用汇总工具（Rust 版）
  时序、宽表汇总、去重、打印、转换、汇总、归档等报表批量处理工具。
  本包为 Rust 原生实现，核心路径不依赖 Python、Office、WPS 或 COM；

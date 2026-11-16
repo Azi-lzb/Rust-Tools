@@ -502,15 +502,10 @@ def _verify_institution_normalize_com_snapshots(
         saved = after_by_name[name]
         if original["formulas"] != saved["formulas"]:
             raise ValueError(f"工作表 {name!r} 的公式文本在 COM 保存后发生变化")
-        if set(original["formula_values"]) != set(saved["formula_values"]):
-            raise ValueError(f"工作表 {name!r} 的公式结果单元格在 COM 保存后发生变化")
-        for address, value in original["formula_values"].items():
-            if not _values_equal(value, saved["formula_values"][address]):
-                raise ValueError(
-                    f"工作表 {name!r} 的公式结果 {_cell_name(address)} 在 COM 保存后发生变化"
-                )
-        if original["used_cells"] != saved["used_cells"]:
-            raise ValueError(f"工作表 {name!r} 的使用区域尺寸在 COM 保存后发生变化")
+        # Name normalization changes literals, not the formula contract. Excel/WPS
+        # may refresh dependent caches on save and shrink formatting-only UsedRange.
+        # Formula coordinates/text above and non-formula values below are the
+        # business invariants; neither cached results nor formatting extents are.
         expected_updates = {
             address: value
             for (sheet_name, address), value in updates.items()

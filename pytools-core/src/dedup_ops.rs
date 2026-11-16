@@ -1286,11 +1286,9 @@ pub fn build_append_by_config_plans(
             let preserve = BTreeSet::from([
                 PreservationRequirement::CellValuesAndTypes,
                 PreservationRequirement::FormulaText,
-                PreservationRequirement::Styles,
                 PreservationRequirement::CommentsAndPositions,
                 PreservationRequirement::MergedRanges,
                 PreservationRequirement::DefinedNames,
-                PreservationRequirement::RowAndColumnDimensions,
                 PreservationRequirement::PageSettings,
                 PreservationRequirement::HeaderFooterText,
                 PreservationRequirement::Relationships,
@@ -1358,6 +1356,7 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     let before = read_workbook(&plan.target).context("读取目标工作簿失败")?;
     let before_names = read_defined_names(&plan.target).context("读取目标工作簿名称定义失败")?;
     let before_comments = read_ooxml_comments(&plan.target).context("读取目标工作簿批注失败")?;
+    let array_results = excel_editor::ArrayFormulaResults::read(&plan.target)?;
     validate_append_scope(edit_plan, &before)?;
 
     if let Some(parent) = plan
@@ -1405,7 +1404,7 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             );
             after.sheets.pop();
         }
-        validate_append_candidate(edit_plan, &before, &after)?;
+        validate_append_candidate(edit_plan, &before, &after, &array_results)?;
         let actual_names = read_defined_names(&plan.candidate)?;
         anyhow::ensure!(
             comparable_defined_names(&before_names)? == comparable_defined_names(&actual_names)?,
@@ -1537,6 +1536,7 @@ fn validate_append_candidate(
     plan: &ExcelEditPlan,
     before: &WorkbookDump,
     after: &WorkbookDump,
+    array_results: &excel_editor::ArrayFormulaResults,
 ) -> Result<()> {
     let mut expected_sheets = before
         .sheets
@@ -1582,6 +1582,11 @@ fn validate_append_candidate(
             original.name
         );
         for (cell, expected) in &original.values {
+            if original.formulas.contains_key(cell)
+                || array_results.contains(&original.name, cell)?
+            {
+                continue;
+            }
             if touched.contains(&(original.name.as_str(), cell.as_str()))
                 && probe_value_is_blank(expected)
             {
@@ -1592,7 +1597,21 @@ fn validate_append_candidate(
                 .get(cell)
                 .with_context(|| format!("原有单元格 {:?}!{cell} 未保留", original.name))?;
             anyhow::ensure!(
-                same_probe_value(expected, actual),
+                !saved.formulas.contains_key(cell)
+                    && (same_probe_value(expected, actual)
+                        || (!plan.preserve.contains(&PreservationRequirement::Styles)
+                            && matches!(
+                                expected["type"].as_str(),
+                                Some("number" | "integer" | "datetime_serial")
+                            )
+                            && matches!(
+                                actual["type"].as_str(),
+                                Some("number" | "integer" | "datetime_serial")
+                            )
+                            && expected["value"]
+                                .as_f64()
+                                .zip(actual["value"].as_f64())
+                                .is_some_and(|(a, b)| a == b))),
                 "原有单元格 {:?}!{cell} 的值或类型发生变化",
                 original.name
             );
@@ -2560,6 +2579,74 @@ fn cell_address(row: usize, mut col: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn append_validation_ignores_formula_results_but_keeps_literal_values_and_formulas(
+    ) -> anyhow::Result<()> {
+        use super::*;
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "append-content-contract-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root)?;
+        let path = root.join("source.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("Data")?;
+        sheet.write_number(0, 0, 7)?;
+        sheet.write_formula(8, 3, rust_xlsxwriter::Formula::new("A1+1").set_result("8"))?;
+        sheet.write_array_formula(
+            8,
+            4,
+            9,
+            4,
+            rust_xlsxwriter::Formula::new("A1:A2*2").set_result("14"),
+        )?;
+        book.save(&path)?;
+        let original = fs::read(&path)?;
+        let before = read_workbook(&path)?;
+        let mut after = read_workbook(&path)?;
+        after.sheets[0].values.remove("D9");
+        after.sheets[0].values.insert(
+            "E9".into(),
+            serde_json::json!({"type":"error","value":"#VALUE!"}),
+        );
+        after.sheets[0].values.insert(
+            "E10".into(),
+            serde_json::json!({"type":"number","value":123.0}),
+        );
+        let index = excel_editor::ArrayFormulaResults::read(&path)?;
+        let plan = ExcelEditPlan {
+            request_id: "append-content-contract".into(),
+            input: path.clone(),
+            output: root.join("candidate.xlsx"),
+            format: WorkbookFormat::Xlsx,
+            workbook: inspect_xlsx_profile(&path)?,
+            operations: vec![],
+            preserve: [
+                PreservationRequirement::CellValuesAndTypes,
+                PreservationRequirement::FormulaText,
+            ]
+            .into_iter()
+            .collect(),
+            drop_allowed: BTreeMap::new(),
+        };
+        validate_append_candidate(&plan, &before, &after, &index)?;
+        after.sheets[0].values.insert(
+            "A1".into(),
+            serde_json::json!({"type":"string","value":"7"}),
+        );
+        assert!(validate_append_candidate(&plan, &before, &after, &index).is_err());
+        after.sheets[0]
+            .values
+            .insert("A1".into(), before.sheets[0].values["A1"].clone());
+        after.sheets[0].formulas.insert("D9".into(), "A1+2".into());
+        assert!(validate_append_candidate(&plan, &before, &after, &index).is_err());
+        assert_eq!(fs::read(&path)?, original);
+        assert!(!plan.output.exists());
+        Ok(())
+    }
+
     use super::{iso_datetime_to_excel_serial, normalize, precheck_dedup_tasks};
     use crate::config::DedupTask;
     use std::{

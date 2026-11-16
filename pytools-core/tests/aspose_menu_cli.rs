@@ -256,7 +256,7 @@ fn forced_betteroffice_budget_refusal_is_locatable_and_never_falls_back() -> Res
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn real_batch(count: usize) -> Result<()> {
     let r = root(&format!("real-{count}"))?;
     let c = config(&r, "betteroffice")?;
@@ -321,20 +321,20 @@ fn real_batch(count: usize) -> Result<()> {
     println!("REAL_ASPOSE_REPORT={}", r.display());
     Ok(())
 }
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "Requires explicitly configured external Aspose worker and .NET runtime"]
 fn real_aspose_two_files_reuses_worker_and_preserves_sources() -> Result<()> {
     real_batch(2)
 }
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "Requires explicitly configured external Aspose worker and .NET runtime"]
 fn real_aspose_main_batch_rotates_after_99_successful_files() -> Result<()> {
     real_batch(100)
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "Requires explicitly configured external Aspose worker and .NET runtime"]
 fn real_aspose_unknown_function_cannot_be_reported_as_validation_pass() -> Result<()> {

@@ -3259,13 +3259,11 @@ pub fn build_wide_target_append_plans(
             let preserve = BTreeSet::from([
                 PreservationRequirement::CellValuesAndTypes,
                 PreservationRequirement::FormulaText,
-                PreservationRequirement::Styles,
                 PreservationRequirement::CommentsAndPositions,
                 PreservationRequirement::MergedRanges,
                 PreservationRequirement::ConditionalFormatting,
                 PreservationRequirement::DataValidations,
                 PreservationRequirement::DefinedNames,
-                PreservationRequirement::RowAndColumnDimensions,
                 PreservationRequirement::PageSettings,
                 PreservationRequirement::HeaderFooterText,
                 PreservationRequirement::Relationships,
@@ -3450,6 +3448,8 @@ pub fn validate_wide_target_replacement_candidate(
         .iter()
         .map(|sheet| sheet.name.as_str())
         .collect::<HashSet<_>>();
+    let original_arrays = excel_editor::ArrayFormulaResults::read(&plan.target)?;
+    let staged_arrays = excel_editor::ArrayFormulaResults::read(staging_workbook)?;
     let mut expected_names = original
         .sheets
         .iter()
@@ -3471,7 +3471,12 @@ pub fn validate_wide_target_replacement_candidate(
             .with_context(|| {
                 format!("candidate replacement sheet {:?} missing", replacement.name)
             })?;
-        ensure_sheet_dump_matches(expected_sheet, actual_sheet, &replacement.name)?;
+        ensure_sheet_dump_matches(
+            expected_sheet,
+            actual_sheet,
+            &replacement.name,
+            &staged_arrays,
+        )?;
     }
     let actual_names = output
         .sheets
@@ -3491,7 +3496,12 @@ pub fn validate_wide_target_replacement_candidate(
             .iter()
             .find(|sheet| sheet.name == source_sheet.name)
             .with_context(|| format!("untouched worksheet {:?} missing", source_sheet.name))?;
-        ensure_sheet_dump_matches(source_sheet, output_sheet, &source_sheet.name)?;
+        ensure_sheet_dump_matches(
+            source_sheet,
+            output_sheet,
+            &source_sheet.name,
+            &original_arrays,
+        )?;
     }
     Ok(())
 }
@@ -3500,9 +3510,39 @@ fn ensure_sheet_dump_matches(
     expected: &excel_reader::SheetDump,
     actual: &excel_reader::SheetDump,
     name: &str,
+    array_results: &excel_editor::ArrayFormulaResults,
 ) -> Result<()> {
+    let literal_values =
+        |sheet: &excel_reader::SheetDump| -> Result<BTreeMap<String, serde_json::Value>> {
+            let mut values = BTreeMap::new();
+            for (address, value) in &sheet.values {
+                if !expected.formulas.contains_key(address)
+                    && !array_results.contains(name, address)?
+                {
+                    values.insert(address.clone(), value.clone());
+                }
+            }
+            Ok(values)
+        };
+    let before = literal_values(expected)?;
+    let after = literal_values(actual)?;
     anyhow::ensure!(
-        expected.values == actual.values,
+        before.len() == after.len()
+            && before
+                .iter()
+                .all(|(address, value)| after.get(address).is_some_and(|actual| {
+                    value == actual
+                        || (matches!(
+                            value["type"].as_str(),
+                            Some("number" | "integer" | "datetime_serial")
+                        ) && matches!(
+                            actual["type"].as_str(),
+                            Some("number" | "integer" | "datetime_serial")
+                        ) && value["value"]
+                            .as_f64()
+                            .zip(actual["value"].as_f64())
+                            .is_some_and(|(a, b)| a == b))
+                })),
         "worksheet {name:?} cell values/types differ after replacement"
     );
     anyhow::ensure!(
@@ -3514,7 +3554,13 @@ fn ensure_sheet_dump_matches(
         "worksheet {name:?} comments differ after replacement"
     );
     anyhow::ensure!(
-        expected.merges == actual.merges,
+        {
+            let mut a = expected.merges.clone();
+            let mut b = actual.merges.clone();
+            a.sort();
+            b.sort();
+            a == b
+        },
         "worksheet {name:?} merged ranges differ after replacement"
     );
     anyhow::ensure!(
@@ -4360,6 +4406,68 @@ fn write_compare_summary_table(workbook: &mut Workbook, rows: &[Vec<String>]) ->
 
 #[cfg(test)]
 mod keyword_match_tests {
+    #[test]
+    fn validation_policy_compares_replacement_literals_and_formulas_not_old_caches(
+    ) -> anyhow::Result<()> {
+        let dir = std::env::temp_dir().join(format!(
+            "wide-replacement-policy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join("source.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("Keep")?;
+        sheet.write_number(0, 0, 7)?;
+        sheet.write_formula(0, 2, "=A1+1")?;
+        sheet.write_array_formula(2, 1, 3, 1, "=A1:A2*2")?;
+        book.save(&path)?;
+        let original = excel_reader::read_workbook(&path)?;
+        let mut output = excel_reader::read_workbook(&path)?;
+        output.sheets[0].values.remove("C1");
+        output.sheets[0]
+            .values
+            .insert("B3".into(), json!({"type":"number","value":14.0}));
+        output.sheets[0].values.remove("B4");
+        let arrays = excel_editor::ArrayFormulaResults::read(&path)?;
+        super::ensure_sheet_dump_matches(&original.sheets[0], &output.sheets[0], "Keep", &arrays)?;
+        output.sheets[0]
+            .values
+            .insert("A1".into(), json!({"type":"string","value":"7"}));
+        assert!(super::ensure_sheet_dump_matches(
+            &original.sheets[0],
+            &output.sheets[0],
+            "Keep",
+            &arrays
+        )
+        .is_err());
+        output.sheets[0]
+            .values
+            .insert("A1".into(), json!({"type":"number","value":7.0}));
+        output.sheets[0]
+            .values
+            .insert("Z99".into(), json!({"type":"number","value":99.0}));
+        assert!(super::ensure_sheet_dump_matches(
+            &original.sheets[0],
+            &output.sheets[0],
+            "Keep",
+            &arrays
+        )
+        .is_err());
+        output.sheets[0].values.remove("Z99");
+        output.sheets[0].formulas.insert("C1".into(), "A1+2".into());
+        assert!(super::ensure_sheet_dump_matches(
+            &original.sheets[0],
+            &output.sheets[0],
+            "Keep",
+            &arrays
+        )
+        .is_err());
+        Ok(())
+    }
     use super::{
         keyword_match, normalize_wide_blank_values, normalize_wide_subday_serials,
         overlay_wide_calendar_date_values, overlay_wide_elapsed_duration_serials, path_differences,

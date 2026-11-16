@@ -620,13 +620,8 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                 "print source range is empty on configuration row {}",
                 task.row_no
             );
-            validate_static_print_values(sheet, &ranges).with_context(|| {
-                format!(
-                    "validate static print values for {}!{}",
-                    source.display(),
-                    task.source_ws
-                )
-            })?;
+            // Static print consumes the stored data-only view, including blank
+            // or stale caches. It does not require or perform recalculation.
             let target_sheet = if task.target_ws.trim().is_empty() {
                 task.source_ws.clone()
             } else {
@@ -2421,61 +2416,6 @@ fn parse_ranges(text: &str) -> Result<Vec<(usize, usize, usize, usize)>> {
         })
         .collect()
 }
-fn validate_static_print_values(
-    sheet: &SheetDump,
-    ranges: &[(usize, usize, usize, usize)],
-) -> Result<()> {
-    anyhow::ensure!(
-        sheet.formula_status == "read_by_calamine",
-        "formula metadata is unavailable for static print worksheet {:?}",
-        sheet.name
-    );
-    for address in sheet.formulas.keys() {
-        if address_in_ranges(address, ranges) {
-            let Some(value) = sheet.values.get(address) else {
-                anyhow::bail!(
-                    "formula cached value is missing at {}!{}",
-                    sheet.name,
-                    address
-                );
-            };
-            if value.get("type").and_then(serde_json::Value::as_str) == Some("string")
-                && value
-                    .get("value")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(str::is_empty)
-            {
-                anyhow::bail!(
-                    "formula cached value is blank or unavailable at {}!{}",
-                    sheet.name,
-                    address
-                );
-            }
-        }
-    }
-    for (address, value) in &sheet.values {
-        if address_in_ranges(address, ranges)
-            && value.get("type").and_then(serde_json::Value::as_str) == Some("error")
-        {
-            // 原 PyTools print_310.py 不拒绝错误值，直接输出其显示文本；
-            // 这里仅记录性放行，保持与旧工具一致的可用性。
-            let _ = (address, value);
-        }
-    }
-    Ok(())
-}
-
-fn address_in_ranges(address: &str, ranges: &[(usize, usize, usize, usize)]) -> bool {
-    let Some((row, column)) = parse_a1(address) else {
-        return false;
-    };
-    ranges
-        .iter()
-        .any(|(start_row, start_column, end_row, end_column)| {
-            row >= *start_row && row <= *end_row && column >= *start_column && column <= *end_column
-        })
-}
-
 fn parse_a1(text: &str) -> Option<(usize, usize)> {
     let text = text.trim().trim_start_matches('$');
     let split = text.find(|c: char| c.is_ascii_digit())?;
@@ -2608,28 +2548,83 @@ mod tests {
     }
 
     #[test]
-    fn static_print_allows_excel_error_cells_in_selected_ranges() {
-        let mut values = BTreeMap::new();
-        values.insert("B2".to_owned(), json!({"type": "error", "value": "Div0"}));
-        let sheet = SheetDump {
-            name: "Source".to_owned(),
-            values,
-            formulas: BTreeMap::new(),
-            formula_status: "read_by_calamine".to_owned(),
-            merges: Vec::new(),
-            merge_status: "read_by_calamine".to_owned(),
-            comments: BTreeMap::new(),
-            comments_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
-            conditional_formatting: Vec::new(),
-            conditional_formatting_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
-            data_validations: Vec::new(),
-            data_validations_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
-        };
+    fn static_print_writes_cached_error_display_values() -> Result<()> {
+        let dir = std::env::temp_dir().join(format!(
+            "print-cached-error-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir)?;
+        let output = dir.join("output.xlsx");
+        let mut book = Workbook::new();
+        let sheet = book.add_worksheet();
+        sheet.set_name("Output")?;
+        write_static_print_cell(
+            sheet,
+            0,
+            0,
+            &json!({"type":"error","value":"#DIV/0!"}),
+            None,
+        )?;
+        book.save(&output)?;
+        let stored = read_workbook(&output)?;
+        assert_eq!(stored.sheets[0].values["A1"]["value"], json!("#DIV/0!"));
+        assert!(stored.sheets[0].formulas.is_empty());
+        Ok(())
+    }
 
-        // 原 PyTools print_310.py 不拒绝错误值，直接输出其显示文本；
-        // 因此这里要求放行而不是报错。
-        validate_static_print_values(&sheet, &[(1, 2, 3, 4)])
-            .expect("Excel error cells must not block static print output");
+    #[test]
+    fn static_print_materializes_current_cached_value_without_recalculation() -> Result<()> {
+        let dir = std::env::temp_dir().join(format!(
+            "print-stale-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir)?;
+        let source = dir.join("source.xlsx");
+        let target = dir.join("target.xlsx");
+        let mut book = Workbook::new();
+        book.add_worksheet().set_name("Data")?.write_formula(
+            0,
+            0,
+            rust_xlsxwriter::Formula::new("2+2").set_result("17"),
+        )?;
+        book.save(&source)?;
+        let before = fs::read(&source)?;
+        let task = PrintTask {
+            row_no: 2,
+            enabled: true,
+            mode: 1,
+            source_wb: Some(source.clone()),
+            source_ws: "Data".into(),
+            source_ranges: "A1".into(),
+            target_wb: Some(target.clone()),
+            target_ws: "Output".into(),
+            fit_wide: 1,
+            fit_tall: 0,
+            orientation: "横向".into(),
+            center_h: false,
+            center_v: false,
+            drop_comments: true,
+            hide_zero: false,
+            remark: String::new(),
+        };
+        let reports = build_config_print_plans(&[task])?;
+        let plans = reports
+            .into_iter()
+            .filter_map(|r| r.plan)
+            .collect::<Vec<_>>();
+        assert_eq!(plans.len(), 1);
+        write_static_print_plans(&plans)?;
+        let stored = read_workbook(&target)?;
+        assert_eq!(stored.sheets[0].values["A1"]["value"].as_f64(), Some(17.0));
+        assert!(stored.sheets[0].formulas.is_empty());
+        assert_eq!(fs::read(&source)?, before);
+        Ok(())
     }
 
     #[test]

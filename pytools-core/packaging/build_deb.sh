@@ -37,6 +37,10 @@ case "${PACKAGE_KIND:-test}" in
   test) VERSION="$VERSION-test-${branch//\//-}" ;;
   *) echo "PACKAGE_KIND must be test or release" >&2; exit 1 ;;
 esac
+if [[ -n "${PACKAGE_REVISION:-}" ]]; then
+    [[ "$PACKAGE_REVISION" =~ ^[a-z0-9][a-z0-9.+]*$ ]] || { echo "Invalid PACKAGE_REVISION" >&2; exit 1; }
+    VERSION="$VERSION.$PACKAGE_REVISION"
+fi
 case "$branch" in
   feature/business-development) default_target=/mnt/f/RustBuild/pytools-feature ;;
   test/business-coverage) default_target=/mnt/f/RustBuild/pytools-test ;;
@@ -91,6 +95,13 @@ mv "$APP_ROOT/python/worker/openpyxl_worker.py" "$APP_ROOT/python/openpyxl_worke
 mv "$APP_ROOT/python/worker/libreoffice_calc_worker.py" "$APP_ROOT/python/libreoffice_calc_worker.py"
 rmdir "$APP_ROOT/python/worker"
 
+# Optional, explicit Aspose selection; Auto keeps the existing engine routes.
+aspose_depends=""
+if [[ -n "${ASPOSE_WORKERS_SOURCE:-}" ]]; then
+    bash "$WORKSPACE/packaging/aspose/stage-linux-workers.sh" "$ASPOSE_WORKERS_SOURCE" "$APP_ROOT"
+    aspose_depends=", libstdc++6, libgcc-s1 | libgcc1, zlib1g, libssl3 | libssl1.1, libicu72 | libicu70 | libicu67 | libicu66 | libicu63 | libicu60 | libicu74 | libicu76 | libicu77 | libicu78"
+fi
+
 # 默认配置：优先项目根的真实 config（与 Windows 包同源）；缺失时用二进制
 # 自带 config-init 生成空白模板。注册为 conffile，升级绝不覆盖用户改动。
 if [[ -f "$WORKSPACE/config.xlsx" ]]; then
@@ -131,13 +142,17 @@ cat > "$STAGING/DEBIAN/conffiles" <<'EOF'
 /opt/rusttools/config/config.xlsx
 EOF
 
+echo "== protecting application files from group/other writes =="
+chmod -R go-w "$APP_ROOT"
 installed_size="$(du -sk --exclude=DEBIAN "$STAGING/opt" "$STAGING/usr" | awk '{s+=$1} END {print s}')"
 sed -e "s/@VERSION@/$VERSION/" -e "s/@INSTALLED_SIZE@/$installed_size/" \
+    -e "s/@ASPOSE_DEPENDS@/$aspose_depends/" \
     "$WORKSPACE/$CRATE/packaging/deb/control.in" > "$STAGING/DEBIAN/control"
 
 echo "== building deb =="
 mkdir -p "$OUT_DIR"
 deb="$OUT_DIR/rusttools_${VERSION}_amd64.deb"
+[[ ! -e "$deb" ]] || { echo "Refusing to overwrite existing DEB: $deb" >&2; exit 1; }
 dpkg-deb --build --root-owner-group "$STAGING" "$deb"
 
 echo "== verifying package =="
@@ -244,6 +259,12 @@ PYEOF
 if [ $? -ne 0 ]; then
     echo "FAIL: synthetic openpyxl edit smoke test" >&2
     exit 1
+fi
+
+if [[ -n "${ASPOSE_WORKERS_SOURCE:-}" ]]; then
+    echo "== smoke test: packaged Linux Aspose workers (no installed dotnet) =="
+    "$RUNTIME_PY" -I "$WORKSPACE/packaging/aspose/smoke-linux-package.py" \
+        "$smoke_dir/opt/rusttools" "$smoke_plan_dir/aspose"
 fi
 
 # Installation/upgrade testing is explicitly separate: isolated_install_smoke.sh.

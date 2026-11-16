@@ -794,12 +794,20 @@ where
                 let current = pytools_core::excel_edit_router::RouteConfig::from_environment()?;
                 writeln!(output, "------ Excel 编辑引擎路由 ------")?;
                 writeln!(output, "当前模式：{}", current.mode.as_str())?;
+                writeln!(
+                    output,
+                    "当前方式：{}",
+                    pytools_core::engine_reference::modification_policy_description(current.mode)
+                )?;
                 writeln!(output, "这是全局路由策略；耗时因业务而异，请参考具体功能的 50 份初测，不提供统一倍率。")?;
                 writeln!(output, "  1  OpenpyxlOnly（默认 Worker）")?;
                 writeln!(output, "  2  UMYAOnly")?;
                 writeln!(output, "  3  BetterOfficeOnly")?;
                 writeln!(output, "  4  RustNativeOnly")?;
-                writeln!(output, "  5  Auto")?;
+                writeln!(
+                    output,
+                    "  5  Auto（按计划选择 RustNative/UMYA/BetterOffice/Openpyxl）"
+                )?;
                 writeln!(output, "  0  返回")?;
                 let Some(route_choice) = read_menu_choice(input, output, "路由模式> ")? else {
                     continue;
@@ -16767,13 +16775,11 @@ fn commit_wide_summary_existing_target_openpyxl(
         preserve: std::collections::BTreeSet::from([
             PreservationRequirement::CellValuesAndTypes,
             PreservationRequirement::FormulaText,
-            PreservationRequirement::Styles,
             PreservationRequirement::CommentsAndPositions,
             PreservationRequirement::MergedRanges,
             PreservationRequirement::ConditionalFormatting,
             PreservationRequirement::DataValidations,
             PreservationRequirement::DefinedNames,
-            PreservationRequirement::RowAndColumnDimensions,
             PreservationRequirement::PageSettings,
             PreservationRequirement::HeaderFooterText,
             PreservationRequirement::Relationships,
@@ -16781,19 +16787,19 @@ fn commit_wide_summary_existing_target_openpyxl(
         ]),
         drop_allowed: Default::default(),
     };
-    plan.validate().context("校验 1-1 Openpyxl 追加计划失败")?;
+    plan.validate().context("校验 1-1 目标追加计划失败")?;
     verify_planning_snapshot(target, Some(expected_hash))
         .context("目标工作簿在规划期间发生变化，未执行追加")?;
 
     let candidate = wide_target_candidate_path(target)?;
     let mut plan = plan;
     plan.output = candidate.path().to_path_buf();
-    plan.validate().context("校验 1-1 Openpyxl 候选路径失败")?;
+    plan.validate().context("校验 1-1 目标候选路径失败")?;
     pytools_core::inplace_edit::execute_candidate(
         &plan,
         pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
     )
-    .context("openpyxl 生成并校验目标候选文件失败")?;
+    .context("修改引擎生成并校验目标候选文件失败")?;
     replace_target_from_candidate(candidate.path(), target, expected_hash)
         .context("校验并安全替换目标工作簿失败")?;
     Ok(())
@@ -18872,7 +18878,8 @@ fn choose_aspose_conversion_mode<R: BufRead, W: Write>(
         writeln!(output, "执行模式：")?;
         writeln!(
             output,
-            "  1 自动路由（原路径；参考耗时 {}）",
+            "  1 自动路由（{}；参考耗时 {}）",
+            pytools_core::engine_reference::default_conversion_hint(operation_id),
             pytools_core::engine_reference::conversion_hint(operation_id, "auto")
         )?;
         writeln!(
@@ -18952,11 +18959,16 @@ fn choose_modification_mode<R: BufRead, W: Write>(
         } else if reference_context == "5-4" {
             writeln!(
                 output,
-                "  1  自动路由（沿用现有规则；参考耗时 {}）",
+                "  1  自动路由（{}；参考耗时 {}）",
+                pytools_core::engine_reference::default_modification_hint(reference_context),
                 pytools_core::engine_reference::hint(reference_context, "auto")
             )?;
         } else {
-            writeln!(output, "  1  自动路由（沿用现有规则）")?;
+            writeln!(
+                output,
+                "  1  自动路由（{}）",
+                pytools_core::engine_reference::default_modification_hint(reference_context)
+            )?;
         }
         writeln!(
             output,
@@ -18998,7 +19010,21 @@ fn choose_validation_calc_mode<R: BufRead, W: Write>(
     use pytools_core::aspose_integration::ValidationCalcMode;
     loop {
         writeln!(output, "选择本次计算模式：")?;
-        writeln!(output, "  1  自动（保持现有规则）")?;
+        writeln!(
+            output,
+            "  1  自动（按校验计算配置；未配置时优先 BetterOffice）"
+        )?;
+        writeln!(
+            output,
+            "     默认回退：{}；以“校验计算引擎/校验计算回退”配置为准。",
+            if cfg!(windows) {
+                "Excel/WPS COM"
+            } else if cfg!(target_os = "linux") {
+                "LibreOffice Calc"
+            } else {
+                "当前平台无可用的 Office 回退引擎"
+            }
+        )?;
         writeln!(
             output,
             "  2  Excel/WPS COM（参考耗时 {}；本次基准为 Excel）",

@@ -200,12 +200,12 @@ internal sealed class PlanOperations : IDisposable
         for (int r = b.Row; r < b.Row + b.Rows; r++) for (int c = b.Column; c < b.Column + b.Columns; c++)
         {
             var cell = source.Cells[r, c];
-            if (cell.IsArrayFormula) throw new NotSupportedException("Array formula copying is not validated");
+            if (cell.IsArrayFormula && B(p, "copy_formulas")) throw new NotSupportedException("Array formula copying is not validated");
             if (cell.Value is null && !cell.IsFormula && styleMode == "none" && !B(p, "copy_comments") && !B(p, "materialize_blank_cells")) continue;
             var comment = source.Comments[r, c];
             var ownedStyle = wb.CreateStyle(); ownedStyle.Copy(cell.GetStyle());
-            var stored = cell.IsFormula ? cachedValues.At(source.Name, cell.Name) : new StoredValues.Value(cell.Value, cell.Type == CellValueType.IsError);
-            snapshots.Add(new(r, c, stored.Data, stored.Error, cell.IsFormula ? cell.R1C1Formula : null, ownedStyle, comment?.Note, comment?.Author));
+            var stored = cell.IsFormula || cell.IsArrayFormula ? cachedValues.At(source.Name, cell.Name) : new StoredValues.Value(cell.Value, cell.Type == CellValueType.IsError);
+            snapshots.Add(new(r, c, stored.Data, stored.Error, B(p, "copy_formulas") && cell.IsFormula ? cell.R1C1Formula : null, ownedStyle, comment?.Note, comment?.Author));
         }
         foreach (var item in snapshots)
         {

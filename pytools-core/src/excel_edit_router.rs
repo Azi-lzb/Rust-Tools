@@ -525,6 +525,11 @@ fn execution_plan_for(
             .preserve
             .remove(&PreservationRequirement::UnmodifiedPackageParts);
     }
+    // Auto may retry a selected native plan through Openpyxl. Its content
+    // contract must also allow that writer's incidental appearance drift.
+    if engine != EngineId::RustNativeOoxml || route_config.mode == RouteMode::Auto {
+        crate::inplace_edit::relax_incidental_appearance(&mut execution_plan);
+    }
     execution_plan
 }
 
@@ -662,6 +667,62 @@ mod tests {
         let selection = route_plan(&plan, &RouteConfig::default()).unwrap();
         assert_eq!(selection.engine, EngineId::OpenpyxlWorker);
         assert!(!selection.fallback_to_openpyxl);
+    }
+
+    #[test]
+    fn validation_policy_is_applied_after_manual_route_selection() {
+        let mut plan = minimal_plan(vec![EditOperation::SetCellFillColor {
+            sheet: "Sheet1".into(),
+            cell: "A1".into(),
+            argb: "FFFF0000".into(),
+        }]);
+        plan.preserve = [
+            PreservationRequirement::Styles,
+            PreservationRequirement::RowAndColumnDimensions,
+            PreservationRequirement::CellValuesAndTypes,
+            PreservationRequirement::FormulaText,
+        ]
+        .into_iter()
+        .collect();
+        for (mode, engine) in [
+            (RouteMode::OpenpyxlOnly, EngineId::OpenpyxlWorker),
+            (RouteMode::UmyaOnly, EngineId::UmyaSpreadsheet),
+            (RouteMode::AsposeOnly, EngineId::AsposeWorker),
+        ] {
+            let config = RouteConfig::new(mode);
+            let selected = route_plan(&plan, &config).unwrap();
+            assert_eq!(selected.engine, engine);
+            let adjusted = execution_plan_for(&plan, &config, selected.engine);
+            assert!(!adjusted.preserve.contains(&PreservationRequirement::Styles));
+            assert!(adjusted
+                .preserve
+                .contains(&PreservationRequirement::CellValuesAndTypes));
+            assert!(adjusted
+                .preserve
+                .contains(&PreservationRequirement::FormulaText));
+            assert_eq!(adjusted.operations, plan.operations);
+            assert_eq!(route_plan(&plan, &config).unwrap().engine, engine);
+        }
+        plan.operations = vec![EditOperation::SetCellValue {
+            sheet: "Sheet1".into(),
+            cell: "A1".into(),
+            value: excel_editor::CellValue::Text("new".into()),
+        }];
+        let auto = RouteConfig::new(RouteMode::Auto);
+        let selection = route_plan(&plan, &auto).unwrap();
+        assert_eq!(selection.engine, EngineId::RustNativeOoxml);
+        assert!(selection.fallback_to_openpyxl);
+        let fallback_plan = execution_plan_for(&plan, &auto, selection.engine);
+        assert!(!fallback_plan
+            .preserve
+            .contains(&PreservationRequirement::Styles));
+        assert!(fallback_plan
+            .preserve
+            .contains(&PreservationRequirement::CellValuesAndTypes));
+        assert_eq!(
+            route_plan(&plan, &auto).unwrap().engine,
+            EngineId::RustNativeOoxml
+        );
     }
 
     #[test]
