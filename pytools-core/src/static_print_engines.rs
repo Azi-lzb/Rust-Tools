@@ -31,6 +31,7 @@ use std::{
 pub enum StaticPrintEngine {
     RustWriter,
     Openpyxl,
+    Aspose,
 }
 
 impl StaticPrintEngine {
@@ -38,6 +39,7 @@ impl StaticPrintEngine {
         match self {
             Self::RustWriter => "Rust (calamine + OOXML + rust_xlsxwriter)",
             Self::Openpyxl => "Openpyxl",
+            Self::Aspose => "Aspose .NET (evaluation copy)",
         }
     }
 }
@@ -769,13 +771,17 @@ pub fn run_openpyxl_engine(tasks: &[PrintTask], python: &Path) -> Result<StaticP
     });
     let plan_path = unique_temp_json(&plan).context("[准备] 创建 openpyxl 临时计划失败")?;
     let script = r#"
-import json, sys, copy, time
+import json, sys, copy, time, os
 from pathlib import Path
 import openpyxl
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.cell import get_column_letter, range_boundaries
 from openpyxl.worksheet.properties import PageSetupProperties
 
+bench_timing = os.environ.get('PYTOOLS_PRINT_BENCH_TIMING') == '1'
+if bench_timing:
+    print('PYTOOLS_PRINT_READY', flush=True)
+processing_started = time.perf_counter_ns()
 plan = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 task_ok = task_skip = task_failed = 0
 outputs, issues, events = [], [], []
@@ -997,21 +1003,55 @@ for t in plan['tasks']:
         issues.append(f"第 {t.get('row_no')} 行：[{stage}] 失败：{type(e).__name__}: {e}；源文件：{src_path}；目标文件：{tgt_path}")
 
 sys.stdout.reconfigure(encoding='utf-8')
-print(json.dumps({'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': task_failed, 'outputs': outputs, 'issues': issues, 'events': events}, ensure_ascii=True))
+result = {'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': task_failed, 'outputs': outputs, 'issues': issues, 'events': events}
+if bench_timing:
+    result['benchmark_processing_ms'] = (time.perf_counter_ns() - processing_started) / 1e6
+print(json.dumps(result, ensure_ascii=True))
 "#;
-    let output = Command::new(python)
+    let mut command = Command::new(python);
+    command
         .arg("-c")
         .arg(script)
         .arg(&plan_path)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .with_context(|| {
-            format!(
-                "无法启动随包 openpyxl 运行时：{}（3-1 打印不采用 PATH 上的 Python）",
-                python.display()
-            )
-        })?;
+        .stderr(Stdio::piped());
+    let bench_timing = std::env::var("PYTOOLS_PRINT_BENCH_TIMING").as_deref() == Ok("1");
+    let mut worker_startup_ms = 0.0;
+    let output = if bench_timing {
+        use std::io::{BufRead, Read};
+        let clock = Instant::now();
+        let mut child = command.spawn().context("start timed print Python")?;
+        let mut stderr = child.stderr.take().context("missing print stderr")?;
+        let error_reader = std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).map(|_| bytes)
+        });
+        let mut reader =
+            std::io::BufReader::new(child.stdout.take().context("missing print stdout")?);
+        let mut ready = String::new();
+        reader.read_line(&mut ready)?;
+        worker_startup_ms = clock.elapsed().as_secs_f64() * 1000.0;
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes)?;
+        let status = child.wait()?;
+        let stderr = error_reader
+            .join()
+            .map_err(|_| anyhow::anyhow!("print stderr reader panicked"))??;
+        ensure!(
+            ready.trim() == "PYTOOLS_PRINT_READY",
+            "print benchmark did not receive readiness: {}",
+            String::from_utf8_lossy(&stderr)
+        );
+        std::process::Output {
+            status,
+            stdout: bytes,
+            stderr,
+        }
+    } else {
+        command
+            .output()
+            .with_context(|| format!("无法启动随包 openpyxl 运行时：{}", python.display()))?
+    };
     let _ = fs::remove_file(&plan_path);
     ensure!(
         output.status.success(),
@@ -1083,6 +1123,12 @@ print(json.dumps({'task_ok': task_ok, 'task_skipped': task_skip, 'task_failed': 
         })
         .unwrap_or_default();
     run.events = mapped;
+    if bench_timing {
+        run.events.push(DiagEvent::new("openpyxl", DiagStage::ModifyWorkbook, DiagOutcome::Ok)
+            .with_message("print benchmark timing")
+            .with_details(serde_json::json!({"worker_startup_ms": worker_startup_ms, "worker_processing_ms": report["benchmark_processing_ms"]})));
+    }
+
     run.task_ok = run.task_ok.max(0);
     // 多行配置可以写入同一个工作簿，最终输出列表按文件去重，任务计数不变。
     let mut seen = std::collections::HashSet::new();
@@ -1215,6 +1261,7 @@ pub fn run_configured_static_print_with_python(
     } else {
         match engine {
             StaticPrintEngine::RustWriter => run_rust_print_engine(&tasks),
+            StaticPrintEngine::Aspose => run_aspose_print_engine(&tasks),
             StaticPrintEngine::Openpyxl => {
                 let python = match python_override {
                     Some(path) => path.to_path_buf(),
@@ -1237,4 +1284,326 @@ pub fn run_configured_static_print_with_python(
     events.append(&mut run.events);
     run.events = events;
     Ok(run)
+}
+
+/// Independent inspection outputs. Rust retains print configuration semantics;
+/// the Worker receives only the resulting generic edit primitives.
+pub fn run_aspose_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
+    use excel_editor::{
+        EditOperation as Op, ExcelEditPlan, PageOrientation, PageSettings,
+        PreservationRequirement as P, RangeStyleMode, WorkbookFormat,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+    let _scope =
+        crate::aspose_edit::ModifyExecutionScope::enter(crate::aspose_edit::ModifyMode::Aspose)?;
+    let mut run = StaticPrintRun::default();
+    let mut groups: BTreeMap<PathBuf, Vec<&PrintTask>> = BTreeMap::new();
+    for task in tasks.iter().filter(|t| t.enabled) {
+        if let Some(target) = &task.target_wb {
+            groups
+                .entry(aspose_output_path(target))
+                .or_default()
+                .push(task);
+        } else {
+            run.task_skipped += 1;
+            run.issues
+                .push(format!("第 {} 行：目标工作簿为空", task.row_no));
+        }
+    }
+    for (target, group) in groups {
+        let started = Instant::now();
+        let mut rejected_tasks = 0usize;
+        let mut accepted_tasks = 0usize;
+        let result = (|| -> Result<()> {
+            ensure!(
+                target
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("xlsx")),
+                "Aspose 打印仅支持 XLSX 副本"
+            );
+            ensure!(
+                !target.exists(),
+                "拒绝覆盖已有打印目标：{}",
+                target.display()
+            );
+            let parent = target
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            fs::create_dir_all(parent)?;
+            let parent = fs::canonicalize(parent)?;
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos();
+            let scratch = parent.join(format!(".aspose-print-{}-{stamp}", std::process::id()));
+            fs::create_dir(&scratch)?;
+            struct Cleanup(PathBuf);
+            impl Drop for Cleanup {
+                fn drop(&mut self) {
+                    let _ = fs::remove_file(self.0.join("seed.xlsx"));
+                    let _ = fs::remove_file(self.0.join("candidate.xlsx"));
+                    let _ = fs::remove_dir(&self.0);
+                }
+            }
+            let _cleanup = Cleanup(scratch.clone());
+            let seed = scratch.join("seed.xlsx");
+            let names: BTreeSet<_> = group
+                .iter()
+                .map(|t| t.target_ws.trim().chars().take(31).collect::<String>())
+                .collect();
+            let mut seed_name = "__Aspose_Print_Seed__".to_owned();
+            while names.contains(&seed_name) {
+                seed_name.push('_');
+            }
+            let mut skeleton = rust_xlsxwriter::Workbook::new();
+            skeleton.add_worksheet().set_name(&seed_name)?;
+            skeleton.save(&seed)?;
+            let mut operations = Vec::<Op>::new();
+            let mut order = Vec::<String>::new();
+            let mut setups = BTreeMap::<String, PageSettings>::new();
+            let mut snapshots = BTreeMap::new();
+            for task in &group {
+                let checkpoint = (
+                    operations.clone(),
+                    order.clone(),
+                    setups.clone(),
+                    snapshots.clone(),
+                );
+                let planned = (|| -> Result<()> {
+                    ensure!(matches!(task.mode, 1 | 2 | 3), "打印 mode 必须为 1/2/3");
+                    let source =
+                        fs::canonicalize(task.source_wb.as_ref().context("源工作簿为空")?)?;
+                    ensure!(
+                        source
+                            .extension()
+                            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx")),
+                        "Aspose 打印输入仅启用 XLSX"
+                    );
+                    snapshots
+                        .entry(source.clone())
+                        .or_insert(crate::file_commit::sha256_file(&source)?);
+                    let dump = excel_reader::read_workbook(&source)?;
+                    let sheet = dump
+                        .sheets
+                        .iter()
+                        .find(|s| s.name == task.source_ws)
+                        .context("打印源工作表不存在")?;
+                    let styles = crate::ooxml_cell_styles::SourceStyles::load(&source)?;
+                    let layout = styles.sheet_layout(&source, &task.source_ws)?;
+                    let mut ranges = parse_ranges(&task.source_ranges)?;
+                    if ranges.is_empty() {
+                        let mut rows = Vec::new();
+                        let mut cols = Vec::new();
+                        let indices = styles.cell_style_indices(&source, &task.source_ws)?;
+                        for address in sheet
+                            .values
+                            .keys()
+                            .chain(sheet.formulas.keys())
+                            .chain(indices.keys())
+                        {
+                            if let Some((r, c)) = parse_a1(address) {
+                                rows.push(r);
+                                cols.push(c);
+                            }
+                        }
+                        ranges.push((
+                            *rows.iter().min().unwrap_or(&1),
+                            *cols.iter().min().unwrap_or(&1),
+                            *rows.iter().max().unwrap_or(&1),
+                            *cols.iter().max().unwrap_or(&1),
+                        ));
+                    }
+                    let name: String = task.target_ws.trim().chars().take(31).collect();
+                    ensure!(!name.is_empty(), "目标工作表为空");
+                    // Each configuration replaces the target sheet. The target is
+                    // still a fresh in-memory sheet: discard superseded primitives
+                    // instead of validating writes that are intentionally replaced.
+                    if order.iter().any(|s| *s == name) {
+                        operations.retain(|op| {
+                            !matches!(op,
+                        Op::ImportRange { target_sheet, .. } if target_sheet == &name)
+                        });
+                        operations.retain(|op| !matches!(op,
+                        Op::SetRowHeight { sheet, .. } | Op::SetColumnWidth { sheet, .. } if sheet == &name));
+                    } else {
+                        operations.push(Op::CreateSheet { name: name.clone() });
+                        order.push(name.clone());
+                    }
+                    let mut next = 1usize;
+                    let mut width = 1usize;
+                    for (r1, c1, r2, c2) in ranges {
+                        operations.push(Op::ImportRange {
+                            source_workbook: source.clone(),
+                            source_sheet: task.source_ws.clone(),
+                            source_range: format!(
+                                "{}{}:{}{}",
+                                column_letters(c1),
+                                r1,
+                                column_letters(c2),
+                                r2
+                            ),
+                            target_sheet: name.clone(),
+                            target_start: format!("A{next}"),
+                            copy_values: true,
+                            copy_formulas: false,
+                            style_mode: if task.mode == 3 {
+                                RangeStyleMode::Basic
+                            } else {
+                                RangeStyleMode::Full
+                            },
+                            copy_comments: task.mode != 3 && !task.drop_comments,
+                            copy_merges: true,
+                            copy_row_heights: false,
+                            copy_column_widths: false,
+                            copy_row_hidden: false,
+                            copy_column_hidden: false,
+                            copy_outline_levels: false,
+                            copy_all_row_dimensions: false,
+                            copy_all_column_dimensions: false,
+                            materialize_blank_cells: true,
+                            hide_zero: task.hide_zero,
+                        });
+                        if task.mode == 1 {
+                            for row in r1..=r2 {
+                                if let Some(height) = layout.row_heights.get(&(row as u32)) {
+                                    operations.push(Op::SetRowHeight {
+                                        sheet: name.clone(),
+                                        row_index: (next + row - r1) as u32,
+                                        height: *height,
+                                    });
+                                }
+                            }
+                        }
+                        if task.mode != 3 {
+                            for col in c1..=c2 {
+                                operations.push(Op::SetColumnWidth {
+                                    sheet: name.clone(),
+                                    column_index: (col - c1 + 1) as u32,
+                                    width: layout
+                                        .column_widths
+                                        .get(&(col as u32))
+                                        .copied()
+                                        .unwrap_or(13.0),
+                                });
+                            }
+                        }
+                        next += r2 - r1 + 2;
+                        width = width.max(c2 - c1 + 1);
+                    }
+                    setups.insert(
+                        name,
+                        PageSettings {
+                            orientation: Some(if task.orientation.contains("横向") {
+                                PageOrientation::Landscape
+                            } else {
+                                PageOrientation::Portrait
+                            }),
+                            fit_to_page: Some(true),
+                            fit_to_width: Some(task.fit_wide.max(1).try_into()?),
+                            fit_to_height: Some(task.fit_tall.max(0).try_into()?),
+                            clear_scale: true,
+                            paper_size: Some(9),
+                            print_area: Some(format!("A1:{}{}", column_letters(width), next - 1)),
+                            horizontal_centered: Some(task.center_h),
+                            vertical_centered: Some(task.center_v),
+                            footer: None,
+                        },
+                    );
+                    Ok(())
+                })();
+                match planned {
+                    Ok(()) => accepted_tasks += 1,
+                    Err(error) => {
+                        (operations, order, setups, snapshots) = checkpoint;
+                        rejected_tasks += 1;
+                        run.task_failed += 1;
+                        run.issues
+                            .push(format!("打印配置第 {} 行：{error:#}", task.row_no));
+                        run.events.push(
+                            DiagEvent::new(
+                                "aspose_worker",
+                                DiagStage::CopySheet,
+                                DiagOutcome::Failed,
+                            )
+                            .with_row(task.row_no)
+                            .with_sheet(task.source_ws.clone())
+                            .with_message(format!("{error:#}")),
+                        );
+                    }
+                }
+            }
+            ensure!(!order.is_empty(), "没有有效的打印配置，未生成输出");
+            operations.push(Op::DeleteSheet { name: seed_name });
+            for (index, name) in order.iter().enumerate() {
+                let mut settings = setups.remove(name).context("missing print setup")?;
+                settings.footer = Some(format!("第 {} 页 / 共 {} 页", index + 1, order.len()));
+                operations.push(Op::SetPageSettings {
+                    sheet: name.clone(),
+                    settings,
+                });
+            }
+            let plan = ExcelEditPlan {
+                request_id: format!("aspose-print-{stamp}"),
+                input: seed,
+                output: scratch.join("candidate.xlsx"),
+                format: WorkbookFormat::Xlsx,
+                workbook: excel_editor::inspect_xlsx_profile(&scratch.join("seed.xlsx"))?,
+                operations,
+                preserve: [
+                    P::CellValuesAndTypes,
+                    P::FormulaText,
+                    P::CommentsAndPositions,
+                    P::Styles,
+                    P::MergedRanges,
+                    P::RowAndColumnDimensions,
+                    P::SheetIdentityAndOrder,
+                ]
+                .into_iter()
+                .collect(),
+                drop_allowed: Default::default(),
+            };
+            crate::inplace_edit::execute_candidate(
+                &plan,
+                crate::inplace_edit::InPlaceEngine::Aspose,
+            )?;
+            for (path, hash) in snapshots {
+                crate::file_commit::verify_planning_snapshot(&path, Some(&hash))?;
+            }
+            crate::file_commit::create_target_from_candidate(&plan.output, &target)?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                run.task_ok += accepted_tasks;
+                run.outputs.push(target.clone());
+                run.events.push(
+                    DiagEvent::new("aspose_worker", DiagStage::SaveOutput, DiagOutcome::Ok)
+                        .with_file(target.to_string_lossy().into_owned())
+                        .with_elapsed_ms(started.elapsed().as_millis()),
+                );
+            }
+            Err(e) => {
+                run.task_failed += group.len().saturating_sub(rejected_tasks);
+                run.issues.push(format!("{}：{e:#}", target.display()));
+                run.events.push(
+                    DiagEvent::new("aspose_worker", DiagStage::SaveOutput, DiagOutcome::Failed)
+                        .with_file(target.to_string_lossy().into_owned())
+                        .with_message(format!("{e:#}")),
+                );
+            }
+        }
+    }
+    Ok(run)
+}
+
+pub fn aspose_output_path(target: &Path) -> PathBuf {
+    let stem = target.file_stem().unwrap_or_default().to_string_lossy();
+    if stem.ends_with("_Aspose") {
+        target.to_path_buf()
+    } else {
+        target.with_file_name(format!(
+            "{stem}_Aspose.{}",
+            target.extension().unwrap_or_default().to_string_lossy()
+        ))
+    }
 }

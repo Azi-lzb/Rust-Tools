@@ -1,0 +1,10 @@
+{
+  "contexts": 18,
+  "routes": 87,
+  "passed_routes": 63,
+  "gated_routes": 24,
+  "verified_outputs": 3150,
+  "all_published_timings_are_real_menu": true,
+  "benchmark_exe": "F:\\RustBuild\\pytools\\menu50-reference-20261115\\benchmark-RustTools.exe",
+  "benchmark_exe_sha256": "4b3df61ebbab9c4b20d4e4360afdb1dfb32297a5975f57be1c36eb43740f689a"
+}

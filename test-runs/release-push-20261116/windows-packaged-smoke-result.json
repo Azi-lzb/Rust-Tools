@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "exe_sha256": "67ca06c64d9c00eada0e8e45ecf00c7eaa2e2fdd721e4dd8e433d66a039e0712",
+  "source_worker_overrides": false,
+  "startup": "PASS",
+  "rename_chain_case_names_cache_strings": "PASS",
+  "repeat_byte_invariance": "PASS",
+  "append_routes": "PASS",
+  "existing_biff_append_safely_refused": "PASS",
+  "runtime_resolution": "packaged-layout",
+  "business_originals_used": false
+}

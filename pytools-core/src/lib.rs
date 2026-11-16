@@ -4,6 +4,10 @@
 //! `ooxml-patch` crates. This package contains no Audit-specific types or flows.
 
 pub mod archive_ops;
+pub mod aspose_conversion;
+pub mod aspose_documents;
+pub mod aspose_edit;
+pub mod aspose_integration;
 pub mod batch_ops;
 pub mod batch_rename;
 pub(crate) mod betteroffice_edit;
@@ -16,9 +20,10 @@ pub mod conversion_engine;
 pub mod date_parse;
 pub mod dedup_ops;
 pub mod edit_plan;
-pub mod excel_edit_router;
 pub mod engine_diag;
+pub mod engine_reference;
 pub mod excel_core_diag;
+pub mod excel_edit_router;
 pub mod excel_open_repair_batch;
 pub mod file_commit;
 pub mod file_sort_prefix;

@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "packaged_discovery": true,
+  "external_dotnet_or_worker_overrides": false,
+  "header_modified": true,
+  "word_source_unchanged": true,
+  "evaluation_output_retained": true
+}

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "aspose_menu_cli",
+    "filter": null,
+    "exit": 101,
+    "log": "windows-gate-0-aspose_menu_cli.log"
+  },
+  {
+    "name": "aspose_modify_cli",
+    "filter": null,
+    "exit": 0,
+    "log": "windows-gate-1-aspose_modify_cli.log"
+  },
+  {
+    "name": "openpyxl_worker",
+    "filter": null,
+    "exit": 0,
+    "log": "windows-gate-2-openpyxl_worker.log"
+  },
+  {
+    "name": "config_vba_workbook_parity",
+    "filter": "real_vba_workbook_loader_parity",
+    "exit": 0,
+    "log": "windows-gate-3-config_vba_workbook_parity.log"
+  },
+  {
+    "name": "conversion_pywin32_windows",
+    "filter": null,
+    "exit": 0,
+    "log": "windows-gate-4-conversion_pywin32_windows.log"
+  },
+  {
+    "name": "conversion_menu_cli",
+    "filter": "conversion_menu_batch_uses_pywin32_and_preserves_sources",
+    "exit": 0,
+    "log": "windows-gate-5-conversion_menu_cli.log"
+  },
+  {
+    "name": "sheet_rename_execution",
+    "filter": "legacy_xls_sheet_rename_uses_dedicated_com_route",
+    "exit": 0,
+    "log": "windows-gate-6-sheet_rename_execution.log"
+  },
+  {
+    "name": "conversion_menu_cli",
+    "filter": "conversion_cli_converts_verified_biff_with_et_suffix_without_claiming_native_et",
+    "exit": 0,
+    "log": "windows-gate-7-conversion_menu_cli.log"
+  },
+  {
+    "name": "conversion_menu_cli",
+    "filter": "conversion_cli_does_not_publish_biff_with_et_suffix_without_content_evidence",
+    "exit": 0,
+    "log": "windows-gate-8-conversion_menu_cli.log"
+  }
+]

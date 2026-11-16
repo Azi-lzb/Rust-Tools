@@ -1658,7 +1658,12 @@ fn wide_summary_fills_preexisting_blank_target_sheet() -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
     let report = latest_menu_json_report(&output)?;
-    assert_eq!(report["target_writes"][0]["status"], "succeeded");
+    assert_eq!(
+        report["target_writes"][0]["status"],
+        "succeeded",
+        "blank target result: {report}; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(report["target_writes"][0]["mode"], "空白工作表写入");
     assert!(report["target_writes"][0]["cells"].as_u64().unwrap_or(0) > 0);
     let after = read_workbook(&target)?;
@@ -2744,6 +2749,7 @@ fn timeline_precheck_menu_reports_errors_without_terminating_menu() -> Result<()
 }
 
 fn run_menu_with_view(config: &Path, log_view: &str, input: &str) -> Result<Output> {
+    let input = input.replacen("1\n1\n", "1\n1\n1\n", 1);
     // 涉及 openpyxl 目标写入的交互流程需要隔离运行时；环境变量已设置时
     // 显式注入两个变量（严格解析要求成对出现），未设置时保持继承环境。
     let isolated_runtime = std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON");
@@ -2785,6 +2791,7 @@ fn run_menu_with_capabilities(
     platform: &str,
     input: &str,
 ) -> Result<Output> {
+    let input = input.replacen("1\n1\n", "1\n1\n1\n", 1);
     let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")

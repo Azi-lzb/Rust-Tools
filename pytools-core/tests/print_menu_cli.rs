@@ -63,7 +63,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     assert!(menu.status.success());
     let menu_text = String::from_utf8_lossy(&menu.stdout);
     assert!(
-        menu_text.contains("1  按打印配置生成（Openpyxl）"),
+        menu_text.contains("1  按打印配置生成（选择执行模式）"),
         "{menu_text}"
     );
     // 双入口（2026-11-11 用户要求）：2 = Rust，独立实现、_Rust 输出、无自动路由。
@@ -79,7 +79,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     assert_eq!(rust_entries, 1, "Rust entry must appear once: {menu_text}");
     let openpyxl_entries = menu_text
         .lines()
-        .filter(|line| line.contains("按打印配置生成（Openpyxl）"))
+        .filter(|line| line.contains("按打印配置生成（选择执行模式）"))
         .count();
     assert_eq!(
         openpyxl_entries, 1,
@@ -92,7 +92,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     );
 
     // 3-1 保留原菜单编号，实际使用 openpyxl，直接执行且无 y 确认。
-    let print_run = run_menu(&config, "3\n1\n0\n0\n")?;
+    let print_run = run_menu(&config, "3\n1\n1\n0\n0\n")?;
     assert!(
         print_run.status.success(),
         "openpyxl print failed: {}",
@@ -171,7 +171,7 @@ fn configured_static_print_failure_shows_reason_and_returns_to_menu() -> Result<
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu(&config, "3\n1\n0\n0\n")?;
+    let output = run_menu(&config, "3\n1\n1\n0\n0\n")?;
     assert!(
         output.status.success(),
         "menu must stay usable after a failure"
@@ -210,7 +210,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
-    let execution = run_menu(&config, "3\n1\n0\n0\n")?;
+    let execution = run_menu(&config, "3\n1\n1\n0\n0\n")?;
     assert!(
         execution.status.success(),
         "static print failed: {}",

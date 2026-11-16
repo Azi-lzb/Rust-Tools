@@ -1,0 +1,9 @@
+Office COM: Excel.Application version 16.0
+test_print_modes_reopen_with_office (test_platform_office.OfficeValidation.test_print_modes_reopen_with_office) ... ok
+test_real_xls_refusal_preserves_workbook (test_platform_office.OfficeValidation.test_real_xls_refusal_preserves_workbook) ... ok
+test_xlsx_append_and_repeat_reopen_with_office (test_platform_office.OfficeValidation.test_xlsx_append_and_repeat_reopen_with_office) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 14.836s
+
+OK

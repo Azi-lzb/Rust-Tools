@@ -305,7 +305,7 @@ fn dedup_xls_com_routes_mark_and_delete() -> Result<()> {
         let before_rows = max_row_of(&read_workbook(&source)?, "Commented");
         let config = build_dedup_config(&root, &source)?;
 
-        let menu = run_menu(&config, "2\n1\n0\n0\n")?;
+        let menu = run_menu(&config, "2\n1\n1\n0\n0\n")?;
         ensure!(
             !menu.contains("执行失败"),
             "2-1 menu reported failure: {menu}"
@@ -316,7 +316,7 @@ fn dedup_xls_com_routes_mark_and_delete() -> Result<()> {
             "2-1 must keep all rows when marking"
         );
 
-        let menu = run_menu(&config, "2\n2\n0\n0\n")?;
+        let menu = run_menu(&config, "2\n2\n1\n0\n0\n")?;
         ensure!(
             !menu.contains("执行失败"),
             "2-2 menu reported failure: {menu}"

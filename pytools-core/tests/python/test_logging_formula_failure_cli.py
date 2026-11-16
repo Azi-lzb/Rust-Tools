@@ -69,7 +69,7 @@ for line in sys.stdin:
                                RUSTTOOLS_FAULT_MARKER=str(marker))
             output = subprocess.run(
                 [executable, "menu", "--config", str(config), "--log-view", "user"],
-                input=f"1\n5\n{template}\n1\n{source}\n0\n0\n",
+                input=f"1\n5\n1\n{template}\n1\n{source}\n0\n0\n",
                 capture_output=True, text=True, encoding="utf-8", timeout=90,
                 cwd=root, env=environment,
             )

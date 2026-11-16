@@ -1,0 +1,54 @@
+{
+  "windows": {
+    "passed": 669,
+    "failed": 2,
+    "ignored": 33,
+    "failed_cases": [
+      "test wide_summary_fills_preexisting_blank_target_sheet ... FAILED",
+      "test dedup_xls_com_routes_mark_and_delete ... FAILED"
+    ]
+  },
+  "wsl": {
+    "passed": 636,
+    "failed": 27,
+    "ignored": 22,
+    "failed_cases": [
+      "test file_sort_prefix::audit_prefix_regression::long_prefix_files_round_trip_without_overwriting_conflicts ... FAILED",
+      "test file_sort_prefix::prefix_ambiguity_pipeline_regression::loaded_sort_configuration_drives_add_repeat_remove_and_disabled_rule ... FAILED",
+      "test file_sort_prefix::prefix_position_regression::real_workbook_middle_text_repeat_undo_conflict_and_failed_move ... FAILED",
+      "test file_sort_prefix::tests::collision_move_does_not_overwrite_and_rollback_restores_source ... FAILED",
+      "test explicit_missing_worker_does_not_fallback_or_touch_source ... FAILED",
+      "test unsupported_and_precision_routes_fail_before_any_write ... FAILED",
+      "test date_serial_configuration_uses_safe_filename_and_preserves_contents ... FAILED",
+      "test rust_cli_runs_the_same_operation_and_writes_a_log ... FAILED",
+      "test rust_operation_matches_python_baseline_and_keeps_contents_and_collisions ... FAILED",
+      "test operation_46_cli_executes_rust_workflow_against_current_safety_contract ... FAILED",
+      "test operation_46_matches_current_safety_contract_for_prefixes_conflicts_and_skips ... FAILED",
+      "test operation_46_xls_integer_values_match_legacy_com_float_text ... FAILED",
+      "test operation_47_cli_executes_rust_workflow_against_current_safety_contract ... FAILED",
+      "test operation_47_cli_keeps_legacy_behavior_without_sort_config_sheet ... FAILED",
+      "test operation_47_matches_current_safety_contract_for_xlsx_xlsm_prefixes_collisions_and_failures ... FAILED",
+      "test operation_47_uses_no_sort_prefixes_when_legacy_config_sheet_is_absent ... FAILED",
+      "test batch_rename_menu_supports_user_developer_and_off_progress_views ... FAILED",
+      "test file_sort_menu_supports_user_developer_and_off_progress_views ... FAILED",
+      "test v2_file_menu_routes_supported_workflows ... FAILED",
+      "test workbook_content_naming_menu_logs_user_developer_and_off_views ... FAILED",
+      "test operation_49_cli_executes_rust_workflow_against_python_baseline ... FAILED",
+      "test operation_49_matches_python_rename_and_report_baseline ... FAILED",
+      "test operation_410_cli_executes_rust_workflow_against_python_baseline ... FAILED",
+      "test operation_410_matches_python_prefix_removal_and_report_baseline ... FAILED",
+      "test operation_48_cli_executes_rust_mapping_against_python_baseline ... FAILED",
+      "test operation_48_matches_pandas_nan_stringification_for_missing_config_cells ... FAILED",
+      "test operation_48_matches_python_order_collision_and_skip_behavior ... FAILED"
+    ]
+  },
+  "docker": {
+    "passed": 661,
+    "failed": 2,
+    "ignored": 22,
+    "failed_cases": [
+      "test explicit_missing_worker_does_not_fallback_or_touch_source ... FAILED",
+      "test unsupported_and_precision_routes_fail_before_any_write ... FAILED"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "path": "crates\\excel-reader\\tests\\fixtures\\synthetic_probe.xlsx",
+  "bytes": 5573,
+  "sha256": "2a31ad9ad545594fb6f85076ae42e98071ecffee1be3641f886ac65525001da0",
+  "sheets": [
+    "主要数据",
+    "窄表"
+  ],
+  "original_generation": "NOT_CONFIRMED",
+  "predates_current_task": true,
+  "review": "All cells and package parts inspected; placeholder data, no macros, external links or evaluation watermark",
+  "content_changed": false
+}

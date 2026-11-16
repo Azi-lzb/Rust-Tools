@@ -74,7 +74,7 @@ class AppendCandidateRoutes(unittest.TestCase):
         env = os.environ.copy()
         env["PYTOOLS_EXCEL_EDIT_ROUTE"] = route
         result = subprocess.run([EXE, "menu", "--config", str(config), "--log-view", "developer"],
-                                input="2\n3\n0\n", cwd=root, env=env, capture_output=True,
+                                input="2\n3\n1\n0\n", cwd=root, env=env, capture_output=True,
                                 text=True, encoding="utf-8", errors="replace", timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.last_terminal = result.stdout + result.stderr

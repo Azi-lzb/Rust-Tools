@@ -25,6 +25,7 @@ pub enum InPlaceEngine {
     BetterOffice,
     RustNative,
     Composite,
+    Aspose,
 }
 
 impl InPlaceEngine {
@@ -35,6 +36,7 @@ impl InPlaceEngine {
             Self::BetterOffice => "betteroffice",
             Self::RustNative => "rust-native-ooxml",
             Self::Composite => "in-memory-composite",
+            Self::Aspose => "aspose_worker",
         }
     }
 
@@ -45,6 +47,7 @@ impl InPlaceEngine {
             Self::BetterOffice => EngineId::BetterOffice,
             Self::RustNative => EngineId::RustNativeOoxml,
             Self::Composite => EngineId::Composite,
+            Self::Aspose => EngineId::AsposeWorker,
         }
     }
 
@@ -55,6 +58,7 @@ impl InPlaceEngine {
             EngineId::BetterOffice => Self::BetterOffice,
             EngineId::RustNativeOoxml => Self::RustNative,
             EngineId::Composite => Self::Composite,
+            EngineId::AsposeWorker => Self::Aspose,
             EngineId::OoxmlPatch => {
                 unreachable!("OOXML patch is not an ExcelEditPlan route engine")
             }
@@ -73,6 +77,7 @@ impl InPlaceEngine {
                 matches!(extension.as_str(), "xlsx" | "xltx")
             }
             Self::Openpyxl => matches!(extension.as_str(), "xlsx" | "xlsm" | "xltx" | "xltm"),
+            Self::Aspose => extension == "xlsx",
         }
     }
 
@@ -213,6 +218,9 @@ pub fn execute_candidate(
     plan: &ExcelEditPlan,
     engine: InPlaceEngine,
 ) -> Result<EditExecutionReport> {
+    if let Some(route_config) = crate::aspose_edit::route_override() {
+        return crate::excel_edit_router::execute_candidate_with_route_config(plan, &route_config);
+    }
     if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
         let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
         return crate::excel_edit_router::execute_candidate_with_route_config(plan, &route_config);
@@ -236,6 +244,9 @@ fn execute_candidate_with_engine(
 
 /// 就地执行一个 plan：先出候选、校验，再替换目标原文件。
 pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
+    if let Some(route_config) = crate::aspose_edit::route_override() {
+        return crate::excel_edit_router::execute_in_place_with_route_config(plan, &route_config);
+    }
     if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
         let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
         return crate::excel_edit_router::execute_in_place_with_route_config(plan, &route_config);
@@ -243,7 +254,10 @@ pub fn execute_in_place(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<I
     execute_in_place_with_engine(plan, engine)
 }
 
-fn execute_in_place_with_engine(plan: &ExcelEditPlan, engine: InPlaceEngine) -> Result<InPlaceOutcome> {
+fn execute_in_place_with_engine(
+    plan: &ExcelEditPlan,
+    engine: InPlaceEngine,
+) -> Result<InPlaceOutcome> {
     anyhow::ensure!(
         engine.accepts(&plan.input),
         "{}",

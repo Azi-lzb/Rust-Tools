@@ -1,0 +1,1047 @@
+[
+  {
+    "path": "fixtures\\generated\\10MiB.xlsx",
+    "bytes": 10295217,
+    "sha256": "12e15e209e60f6579f9568957b03a422fd288b069ab14a59cc3b26c447334aa4"
+  },
+  {
+    "path": "fixtures\\generated\\1MiB.xlsx",
+    "bytes": 1032702,
+    "sha256": "1ed03ffce2f8f5d16686ce391edfa3dc67287ad6562d58f624eaa42731774385"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\aspose-calculated.xlsx",
+    "bytes": 9612,
+    "sha256": "e425ad2bdec3fcad71ede6b46893169545adac367da2d093feca7be0286c33ca"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\aspose-header.xlsx",
+    "bytes": 11782,
+    "sha256": "45205fe7d1937edb68000927b7f99c7f9607989bcb7e2d5f843021d3a110b6e2"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\aspose-noop.xlsx",
+    "bytes": 11785,
+    "sha256": "30c683f403db716ed0d707897e410dc07369401910a470278203e84022f280fb"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\aspose-style.xlsx",
+    "bytes": 11808,
+    "sha256": "fc9a84fce52c0925ac314430ba2b09c6edec4885fabfa82ef21cef77b19594b3"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\aspose-value.xlsx",
+    "bytes": 11786,
+    "sha256": "f3d9c8abf63b177e62cdd5dec5bd2a080bb75a28a287bcfd60976d6bcd773f33"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\edit-input.xlsx",
+    "bytes": 7874,
+    "sha256": "dde20d69deb6fdf2a7d3ae61124b8af04143c34a24f75e9e360263e07ad03096"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\formula-missing-cache.xls",
+    "bytes": 5632,
+    "sha256": "ac3371bbb06781128e2fd9de74d237eae7dcaa018caab3e33e40d7d08258f2f8"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\ooxml-header.xlsx",
+    "bytes": 7903,
+    "sha256": "79f0585d0e5350e98e0424055246df7dc2af6044849c7ce1dd28d960c7134f30"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\openpyxl-header.xlsx",
+    "bytes": 7623,
+    "sha256": "56a7ee52ddc0beb927b25f226dd185dbf26580e1ef9ca2ef6215ce2a50aa1b8a"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\openpyxl-noop.xlsx",
+    "bytes": 7621,
+    "sha256": "c80f8c581a2238e2a2209b4d2b366343e73905a7a7c6599fdfc8b502e6aa739d"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\openpyxl-style.xlsx",
+    "bytes": 7632,
+    "sha256": "ae58b4563229af46d1ed8d135dd9262a55c8d651c659f76c6b19a72662df80a9"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\openpyxl-value.xlsx",
+    "bytes": 7623,
+    "sha256": "6def2fce1b662a54e279d834d9a6973a9be2f194a0f3297300da4b55096c35db"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\umya-noop.xlsx",
+    "bytes": 8369,
+    "sha256": "3a17a052b607799afa98bbbbd8568bc18b2a08e093f5d4b85db45830cd173e75"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\umya-style.xlsx",
+    "bytes": 8419,
+    "sha256": "ce269a587ce2ac2a619877f7196f2729ce5d0061d0cf3e060e1be253cc53bf96"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114\\umya-value.xlsx",
+    "bytes": 8385,
+    "sha256": "0826f29328d7f140d0b3d561c8a5fb1d7506f32093e7ad1a57a23cd075dcb70e"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\aspose-calculated.xlsx",
+    "bytes": 9612,
+    "sha256": "06e14dd3923ddf7ee873ee567d28e834d7db0deb3081461cf492cfde169a1753"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\aspose-header.xlsx",
+    "bytes": 11776,
+    "sha256": "bc5eb92c67aa09c289f3eb64c02fc7b1882c665b200cdea5ca35fcafc5278125"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\aspose-noop.xlsx",
+    "bytes": 11778,
+    "sha256": "43532ab56d07f2292704308b6fca694baac41131256b3450ecec1d258aa6e39b"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\aspose-style.xlsx",
+    "bytes": 11801,
+    "sha256": "80424daceec960a698997a3bf35579c13c74d38e5233909b9995f0cfc47bec1b"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\aspose-value.xlsx",
+    "bytes": 11778,
+    "sha256": "e9d734e50e6ab4be098c1b7de12024a41a1c3fbac1a433e3204e2822895dbed7"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\edit-input.xlsx",
+    "bytes": 7873,
+    "sha256": "6fc9263249bf7ee6205037adf3e336d632081ad679d5194a86bdadacd461e3ff"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\formula-missing-cache.xls",
+    "bytes": 5632,
+    "sha256": "ac3371bbb06781128e2fd9de74d237eae7dcaa018caab3e33e40d7d08258f2f8"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\ooxml-header.xlsx",
+    "bytes": 7903,
+    "sha256": "e394063da15efb22bba7a9c5c707b7ea7800d8623bdcc1ca453b2c53876696b3"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\openpyxl-header.xlsx",
+    "bytes": 7618,
+    "sha256": "57039031602dae9196ef12050515fa4f5d8e38e06539347380f8be6438e1b0d0"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\openpyxl-noop.xlsx",
+    "bytes": 7620,
+    "sha256": "2db9065a11bd5cd9e1d82e17fe9ba5415b516c83d01304153215508dca7211a3"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\openpyxl-style.xlsx",
+    "bytes": 7631,
+    "sha256": "23074002109a8efe38a59ed9caccf6addf541b10dc4ca896d1f8dde1135ef7ad"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\openpyxl-value.xlsx",
+    "bytes": 7622,
+    "sha256": "ec950392498216b3fa6ff2fcc3c5dfd19c259c6e965bb43f7bd8e09374911bc1"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\umya-noop.xlsx",
+    "bytes": 8368,
+    "sha256": "9b76718a636f138ba727f10d2dc0057e1ebc3d11816d4f7545c79f85b595edb0"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\umya-style.xlsx",
+    "bytes": 8418,
+    "sha256": "a894ebdd2ae1e0539cf629d2f93a12fab0086053a42131aa7ec449cf1101362c"
+  },
+  {
+    "path": "results\\capabilities-windows-20261114-verified\\umya-value.xlsx",
+    "bytes": 8384,
+    "sha256": "da73502c4d1aef1a8f2e80763bb1ccdc3a6c8b3605fd25cf31e492bc6666858d"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\aspose-roundtrip.xlsx",
+    "bytes": 8007,
+    "sha256": "c46cff7a7fae5ff88295fd68be2509a74171add30ad8a89d84d8891c85b9c731"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\aspose-write.xlsx",
+    "bytes": 8168,
+    "sha256": "9fde8585f7a5686b20e1dad5944ebf08f4bfcbec2135af729bc5c41dcb38ae9a"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\input.xlsx",
+    "bytes": 4937,
+    "sha256": "28c387582a051f2177d14f3562e6e952180001c6a73232848cb12ceb3ca544e7"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\openpyxl-roundtrip.xlsx",
+    "bytes": 4940,
+    "sha256": "c99bcd89dbb2b0478c3dfe9710a53794eca2142029a449d2fadca9945984a0a4"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\openpyxl-write.xlsx",
+    "bytes": 4923,
+    "sha256": "581013360d8fd8395522c52c50ddc78eaa6663db78c7e065ebfd2c1c8fc6290e"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\rust-roundtrip.xlsx",
+    "bytes": 5551,
+    "sha256": "01efa53b9e1ce30471ed87f91ff25bfb9b69bacdd65d43acfc7e182f2dc56378"
+  },
+  {
+    "path": "results\\protocol-0_0eg7bp\\rust-write.xlsx",
+    "bytes": 5551,
+    "sha256": "01efa53b9e1ce30471ed87f91ff25bfb9b69bacdd65d43acfc7e182f2dc56378"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\aspose-roundtrip.xlsx",
+    "bytes": 8003,
+    "sha256": "855a6e45c65371add099d21607aa4a09a99dbe2228fa83c0f0209e01b6084461"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\aspose-write.xlsx",
+    "bytes": 8165,
+    "sha256": "a8ed951e13994dfa3e6821618cd6ee1c30a73d6b2327fa33bc0897b3f75181f7"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\input.xlsx",
+    "bytes": 4937,
+    "sha256": "87fbb09ae5200a240ad9de1db24acc4324cbd80f6acc998ff59c764b7af689eb"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\openpyxl-roundtrip.xlsx",
+    "bytes": 4940,
+    "sha256": "f700ea54870fc3dd84a7a2bf346001d81840e4aabbcc05280ae7fe6d2bbd8023"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\openpyxl-write.xlsx",
+    "bytes": 4924,
+    "sha256": "1c4c325267b3312508363c401869e01c8f89c7149deb7a1ef979463effdbde1d"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\rust-roundtrip.xlsx",
+    "bytes": 5552,
+    "sha256": "fc1fff15995488cbccc1eab368107e23cca336b323dd127b9010e6756ccabe29"
+  },
+  {
+    "path": "results\\protocol-g4mnf3ne\\rust-write.xlsx",
+    "bytes": 5552,
+    "sha256": "fc1fff15995488cbccc1eab368107e23cca336b323dd127b9010e6756ccabe29"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\aspose-roundtrip.xlsx",
+    "bytes": 8006,
+    "sha256": "e2846f71b96fafffc97e4270d4f3a633fe56c4e7f1fda6b68581d0a265d1be3a"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\aspose-write.xlsx",
+    "bytes": 8168,
+    "sha256": "b24ab4f73540fa8f284d1dfe50031a4e699c29880ecb2c0b7773a6e3c4362bd0"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\input.xlsx",
+    "bytes": 4937,
+    "sha256": "2428e483b9f188d54a85871005beb11ee6108da6ea60e55edc10262c295a9b74"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\openpyxl-roundtrip.xlsx",
+    "bytes": 4941,
+    "sha256": "eac65c1732b4ca4928006cc3bed04e2ec382cb3b69f525431d6ec65c7f93fee4"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\openpyxl-write.xlsx",
+    "bytes": 4924,
+    "sha256": "9bab40b22b5aca0b8a578e22767a0c8823d812298f4adf21fac85cd425146320"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\rust-roundtrip.xlsx",
+    "bytes": 5552,
+    "sha256": "dd18c41ef455a6a6d99bc56814ec67fba9e379642670924266e0ef543427e9bc"
+  },
+  {
+    "path": "results\\protocol-t4iesyf6\\rust-write.xlsx",
+    "bytes": 5552,
+    "sha256": "dd18c41ef455a6a6d99bc56814ec67fba9e379642670924266e0ef543427e9bc"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-00.xlsx",
+    "bytes": 10716376,
+    "sha256": "54c486a51bd3d411cebf8afbbee1d23914ba271938d313eaabd6104587bd7a41"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-01.xlsx",
+    "bytes": 10716376,
+    "sha256": "ec6e36b28e59ee99aeeaaa6e186356fc0d6d96ecfded184f7b87e1c95be5d3e8"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-02.xlsx",
+    "bytes": 10716375,
+    "sha256": "e8f436fa6055fc3ebe7fd8cb81c2affc247eeaa88b4f1cb31873df0ab6320b32"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-03.xlsx",
+    "bytes": 10716376,
+    "sha256": "5eef27ce4382ab368f1461a6ec91b6d55daa4bb684733c76bc274cd00c3a6a70"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-04.xlsx",
+    "bytes": 10716377,
+    "sha256": "be26524d38de0577f4dd61be67551f060c9f0f53783d6ab1f46c35edcb8cfe4e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-05.xlsx",
+    "bytes": 10716377,
+    "sha256": "3660ad5292976e7fe01797b4b4af8292a071c659483f9bd5e361526f2e58d44c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-06.xlsx",
+    "bytes": 10716377,
+    "sha256": "1dfdaae50afbd1c8869423fd92efa41dbe7efe8300443a547838b2398e1b801c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-07.xlsx",
+    "bytes": 10716375,
+    "sha256": "dc9cc84e33204a850c047cceccbd3609a0c51d3f54efc078465e62ff984e9d57"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-08.xlsx",
+    "bytes": 10716376,
+    "sha256": "6ed13a93902ec50de82ca69202b88a167967d861ba5da6b735c20aa7666cb15d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-09.xlsx",
+    "bytes": 10716377,
+    "sha256": "fcece3b65444204d6fb4431722bc0c3938f10d4acf4246b2cc34ed6560977b6e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-10.xlsx",
+    "bytes": 10716376,
+    "sha256": "3585dc8f6ad863f4c7363b8de60d750ecfebed4aef62eef1693de5f7cceceed3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-11.xlsx",
+    "bytes": 10716376,
+    "sha256": "e07c796b1084267807ad786bdb26af02603f16dad00214e1802e7db8de376ee4"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-roundtrip-12.xlsx",
+    "bytes": 10716377,
+    "sha256": "a0e5f9c214fcfa5a4be1cd5a6a01d7f97b1bdee668202cb39e83f5f1b19087f8"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-00.xlsx",
+    "bytes": 10729665,
+    "sha256": "0854f70c34dbe7c916fd75ce401d0c578a6258ad23850e12876cb7204dd50922"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-01.xlsx",
+    "bytes": 10729669,
+    "sha256": "70f4f13f227099cfef0d5cca2ad3835827e442928482155b508a8d1229c08300"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-02.xlsx",
+    "bytes": 10729667,
+    "sha256": "1c2ba46bd16aa12d3ad1102c81f9ff0e15f961dfe45b45d1eafd4285bd418ee1"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-03.xlsx",
+    "bytes": 10729671,
+    "sha256": "7de77cd4db1bd3f0be39d33b3998f65390b511bc012b3b020787b28df0fc25bd"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-04.xlsx",
+    "bytes": 10729677,
+    "sha256": "01be0fd253b69e9c3fa4b5772146042673520e89251ec3da72f81759ac4a86fb"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-05.xlsx",
+    "bytes": 10729680,
+    "sha256": "ce735f634685b86543b00712880dc0015e9ebd5e5f9b5d612199f90d7c2fef15"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-06.xlsx",
+    "bytes": 10729663,
+    "sha256": "15efe134c202a821420fee7ba5ec6ae07a7d14e36d41fb7edf3ce27c697032f4"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-07.xlsx",
+    "bytes": 10729679,
+    "sha256": "33bad6fd95036594935db2219bb63a4f0d81c4b1f225097cac1f5e8f3f9d505e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-08.xlsx",
+    "bytes": 10729669,
+    "sha256": "7b3ede94cb723b1ea981d7336f2ec6413511d69ca2f38178323bc6de3dae1ed5"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-09.xlsx",
+    "bytes": 10729667,
+    "sha256": "ec9f2925cc2da32ddc9933146431035047b4c79c73767dcc8a83c96e48f6ab19"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-10.xlsx",
+    "bytes": 10729668,
+    "sha256": "fa3a3e4d3aa54d2e2e3ebdda2a21a0d18092a34ac87431374d89dc9a4ec34b0d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-11.xlsx",
+    "bytes": 10729668,
+    "sha256": "d85939ab2edcff16523d16fe75d1229734ae09446cd0504f3325e4488fa2bf39"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-10MiB-write-12.xlsx",
+    "bytes": 10729666,
+    "sha256": "334a8e842077cadd1c37491fdf1e79de087fac5e47d3b2313922be874193f2c6"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-00.xlsx",
+    "bytes": 1074793,
+    "sha256": "d9542bba8ff95c7fb72757629e63e2d619b2417e112abfdfa5063ca1b046fc75"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-01.xlsx",
+    "bytes": 1074793,
+    "sha256": "2f85670bcb98daa1165cdf8bcc14c8e9acd11e6a7726c2c1b0e6c330e3c922af"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-02.xlsx",
+    "bytes": 1074792,
+    "sha256": "fafd96b8066ea26e8578f42ddc5fe98583630c38d67b134f762e796d0d862144"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-03.xlsx",
+    "bytes": 1074793,
+    "sha256": "9837d6e571a25b8dfefbd227f949d1ae41f38cef6bbc4790a7e98b2fb547fc65"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-04.xlsx",
+    "bytes": 1074791,
+    "sha256": "555d062bbe73f4ea17e8467d9b678bf70b71940f955ec296df56674e16d1b497"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-05.xlsx",
+    "bytes": 1074792,
+    "sha256": "5a13d68ec1ff09e831aaeec0dc4e8772d99034defa2c1db1a5f565ea9ec1bdb7"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-06.xlsx",
+    "bytes": 1074794,
+    "sha256": "ea2efc591b8f98bcf97ddcec869cff90c85d336a8ef86cf9c6ad6cb4d8a7630e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-07.xlsx",
+    "bytes": 1074793,
+    "sha256": "82bb1b167013499305ce68d743038c5c5ce62feceb12b27b7bb05c081d4b07f3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-08.xlsx",
+    "bytes": 1074793,
+    "sha256": "c9c367a5b114f57cdcb1d20c072c3ce433d0869e08c28f1cf4b614a812fc36fe"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-09.xlsx",
+    "bytes": 1074793,
+    "sha256": "fd41ffaea652147b7d0237d27f968323544f32bc3609d72a718bc10b021e41e3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-10.xlsx",
+    "bytes": 1074793,
+    "sha256": "29952bad0e454b81342b7f05e538e0fc1a10ff102471eec58b0a66ada2df85a2"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-11.xlsx",
+    "bytes": 1074793,
+    "sha256": "7e5a349315771e6e2469209df443dc08576d350f3c2ddc92a494b1df6eab5d81"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-roundtrip-12.xlsx",
+    "bytes": 1074793,
+    "sha256": "d678411523572006a529f61ad5454af8e2216b712fd750621efd82785a1dea44"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-00.xlsx",
+    "bytes": 1075858,
+    "sha256": "05d72c22e596bc00d8955c22e268dcdc7bb3bc800c842c451cba1751472dbe3d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-01.xlsx",
+    "bytes": 1075850,
+    "sha256": "f2f3d6947cf48a62138170543a3657afcb33658ef8b2950cbf0ce5c8d9d5a31b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-02.xlsx",
+    "bytes": 1075852,
+    "sha256": "068a63c2a6d9c4cb73af8d72db6212566bff714355bedcef5e38f77efe52efbc"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-03.xlsx",
+    "bytes": 1075852,
+    "sha256": "403acb005125979155afdb03827ebf5216e1be5a099a860d587abd028364daea"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-04.xlsx",
+    "bytes": 1075850,
+    "sha256": "f021c5eb8d0a185c2cafdbbff5cdf218c01b407be5170777d42ff05dd6cf2682"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-05.xlsx",
+    "bytes": 1075852,
+    "sha256": "4bd4b4fb7a927edae56db4b0fa3a730d58191598b53f9b1804a2d252920e5e0e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-06.xlsx",
+    "bytes": 1075848,
+    "sha256": "2d208fad5ec91ca2cf4263afd8bfa1d21e35604f5fcd287bdbf99e0fa75748e6"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-07.xlsx",
+    "bytes": 1075861,
+    "sha256": "0e4c20a9fa7a45896a09d2c3c748790741120c4ac885ce2798b4f83e421dae9c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-08.xlsx",
+    "bytes": 1075853,
+    "sha256": "10cbaf47b65089a8e813fb64e8ed78057c9ae33d37611dd87fb94ec14147ffe2"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-09.xlsx",
+    "bytes": 1075850,
+    "sha256": "4bfbe597d455f248a1f5d2b004d9e4e89f4bd32021b610623f74b3c7529b3cac"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-10.xlsx",
+    "bytes": 1075852,
+    "sha256": "8fe7a97b7f1905f6aa0c7f1b6277cf4d24bda0e5d314897c459a80805f4a068c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-11.xlsx",
+    "bytes": 1075853,
+    "sha256": "3426ffcde1ab679be05c9da8ce6fa97c376c2912a9535241c9d1ed60ecaebee3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\aspose-1MiB-write-12.xlsx",
+    "bytes": 1075861,
+    "sha256": "e1dae509e041f19fdafab0c0dc15bf2b18ba236e52d43d41744787ed6b6bb6b0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-00.xlsx",
+    "bytes": 10295234,
+    "sha256": "d43733eec5ccce45ecc40db3bb523e6112c0d72514547a6e7dee2741fdb094b6"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-01.xlsx",
+    "bytes": 10295234,
+    "sha256": "bfe593e3d013fc2c98a49a7673a92e89f14b1b1e1483d3c3a294ea5df0a25a5b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-02.xlsx",
+    "bytes": 10295234,
+    "sha256": "74531f1d8b46fbfa0ed8730b045286bddc175cdd17a50632c991252f966fa8bc"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-03.xlsx",
+    "bytes": 10295234,
+    "sha256": "8400c80ddd91f78502ee9e3ea2d5b6e9a2a2e3eaf75ee6fc3b0c08aa1ce2b6bb"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-04.xlsx",
+    "bytes": 10295235,
+    "sha256": "c418420ea2a7dc8d640ad63eb8efe48c819db270ea37fbd1f3595aee108c8055"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-05.xlsx",
+    "bytes": 10295234,
+    "sha256": "3e0bb0df94ff8d50143b428e98e491b4384cadc123bfdce2900e0bada188f95d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-06.xlsx",
+    "bytes": 10295235,
+    "sha256": "0f7d02103e8725d90c95b627ca495c472ac2383d89d98d2e3887de3c66e8b33c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-07.xlsx",
+    "bytes": 10295235,
+    "sha256": "047f9508ce0532790eeab9a78f9e13c70ce78f4ad2f4526c755c743bb233ce37"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-08.xlsx",
+    "bytes": 10295234,
+    "sha256": "dbc8281a7c3e145ee40ee231b7d6b3ab5fe63e36f0d9540e1d60873524926788"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-09.xlsx",
+    "bytes": 10295234,
+    "sha256": "a25dda8e57a9ba8947ec2c7bef657718acdbca6af3956c2ae78b3c697209fc04"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-10.xlsx",
+    "bytes": 10295234,
+    "sha256": "fc252fe461900b117f53534cdc43c1e26a80728b0c32852f9481a02149c717fc"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-11.xlsx",
+    "bytes": 10295235,
+    "sha256": "361001ed84403b767df388f7e6fbe5b8878bc2df9915a4d384ed45dc93b362f1"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-roundtrip-12.xlsx",
+    "bytes": 10295235,
+    "sha256": "bd4b153cf81f6bce86c94c5b6e56eeac5fa0cf924d7cdd3571203baea0eb30bf"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-00.xlsx",
+    "bytes": 10295217,
+    "sha256": "920684333c157eca714f72b429e37d6b65376edf174df752a3b19afd66b19441"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-01.xlsx",
+    "bytes": 10295216,
+    "sha256": "ac6b1bbfcefd433a59accc263dc4bcb633a8a0e38f2a7de285eb9886c91705a2"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-02.xlsx",
+    "bytes": 10295216,
+    "sha256": "0532e2a655e95784c30a7ae168e5deb024a0ae0c530748e009f9cbe4ab57594b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-03.xlsx",
+    "bytes": 10295218,
+    "sha256": "443fefbfa4efdae4084b068660889c4c2a26a288535013905dc3a9fe8bb1a784"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-04.xlsx",
+    "bytes": 10295217,
+    "sha256": "ef8088bd9f5c43aafd4af6e771790d68c80573c648470d09d277e3e881d48c5f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-05.xlsx",
+    "bytes": 10295217,
+    "sha256": "7dda6a40da3ea2f781efd0d35ef71c1b41dfaaf39cb92ff41602cd460ce9b7cf"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-06.xlsx",
+    "bytes": 10295218,
+    "sha256": "c9c18c8db91ae816eb6e8fb3e8ef5817a9a1481e1df0246a3ff3ae0b1f58fef3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-07.xlsx",
+    "bytes": 10295218,
+    "sha256": "f7c980e86afdc14765d5e2f3ce1ad042896fe2540b5d277ce006b1a60f169252"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-08.xlsx",
+    "bytes": 10295218,
+    "sha256": "e111c46f07dee2aa2bcff851816a5798006bc8e50f6bc4ea78393b1ae4a98b82"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-09.xlsx",
+    "bytes": 10295217,
+    "sha256": "7002255fb48347f785f8cf68428ac0553cead18cf636c4e3c736063d1f2fbd3c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-10.xlsx",
+    "bytes": 10295217,
+    "sha256": "aafa3757cb5e3e38ea4840da2372d0dcac4eeafd4592bc75c31356bb8d0b89f1"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-11.xlsx",
+    "bytes": 10295217,
+    "sha256": "fa976eb9359787e60adeb376010ed6ebb7bd963254cc21d431a24f47f4fa598a"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-10MiB-write-12.xlsx",
+    "bytes": 10295217,
+    "sha256": "36045eb101afa90d1481414063e069697805fdf44a6002afd4892017514b7887"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-00.xlsx",
+    "bytes": 1032723,
+    "sha256": "6c5257ca70ba31fcde906a948456bfd04248a7beca22459aabc2564d06dee320"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-01.xlsx",
+    "bytes": 1032722,
+    "sha256": "03ac0674378fd8d67f2faa0ad085a739fb62dbdbbae1a202452f39389e634ca3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-02.xlsx",
+    "bytes": 1032723,
+    "sha256": "d7ecd908a10345c9667459d99b9541b26ead868154a79a7c4efbd8cffe5d0d5d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-03.xlsx",
+    "bytes": 1032723,
+    "sha256": "aba19160ec0d898145e5b82e4f47c137850365156105f97f090e432b21e4fb3f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-04.xlsx",
+    "bytes": 1032723,
+    "sha256": "3928663c29e56feb15fbf4099ef14463e00ac99b1eaefcc54ed1ae11a0f49fbe"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-05.xlsx",
+    "bytes": 1032723,
+    "sha256": "e614786e579f23b35b9e150b0164bdb4ea75d0eb2390da862a5fa17e989d46bb"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-06.xlsx",
+    "bytes": 1032723,
+    "sha256": "a998c51ec7b3ad704bd9707f84f54e502f5f05fe7570b329342461605766b258"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-07.xlsx",
+    "bytes": 1032722,
+    "sha256": "eb76c638a556fa2e0c3225093cc289c4466d1b348c2c730d98d929a38e91b600"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-08.xlsx",
+    "bytes": 1032723,
+    "sha256": "5987380b0432277d094309a37cb686e320a24817bee6ada8831e2a6037fe586b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-09.xlsx",
+    "bytes": 1032723,
+    "sha256": "25830c35672f91e2c0c8872aec115b7b964cc123b55c93952ebee9e0d2b678a7"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-10.xlsx",
+    "bytes": 1032723,
+    "sha256": "b9f697692b57af58e81d56efa4dfce1edbfd92697b97e8059dce30f8699d9f4b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-11.xlsx",
+    "bytes": 1032724,
+    "sha256": "23db84a48432da96a0741c71e66a3d515f788c158aaeab807b4c31d00c05343f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-roundtrip-12.xlsx",
+    "bytes": 1032722,
+    "sha256": "e59031c676d35fc8f41da257936fb30e1cff5829e8a70cef16b1344c7b428c3f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-00.xlsx",
+    "bytes": 1032705,
+    "sha256": "8d433babc01531538d7e60696427d5bf972be8327ae23f630f6c4643c7d58c96"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-01.xlsx",
+    "bytes": 1032706,
+    "sha256": "41a545c53973e584a15de13d32d7dd7a89645ca463e4bbb128e63c5aca867099"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-02.xlsx",
+    "bytes": 1032702,
+    "sha256": "fe40419c733ce096a1ecaae78978deb8b17f64f95263a59e0af59180bc2e3b8c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-03.xlsx",
+    "bytes": 1032706,
+    "sha256": "40604d42ec78e338ce7ce1646095f57e3253236b8716aae32a0d2102b5d4dc09"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-04.xlsx",
+    "bytes": 1032702,
+    "sha256": "52decde2ad666ad41ec409d9d3a2b1822827c00d662581c39fb87e6a40faeba4"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-05.xlsx",
+    "bytes": 1032702,
+    "sha256": "d42174366f7eafffe64d9ba952593bbd2f5d420f5ac99b4a00e205321630f447"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-06.xlsx",
+    "bytes": 1032703,
+    "sha256": "ced94c290ab4c97db23dbe70090f79af0a63b6cca933343d17b50f577f9535ef"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-07.xlsx",
+    "bytes": 1032706,
+    "sha256": "bad53cfc1d595c5884745e13ed5dc12c8405281dd2432cc12e0897eb4c0b8bc3"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-08.xlsx",
+    "bytes": 1032706,
+    "sha256": "bf2e1802baf1cfd6baedff3d285b0bafc718bcf336fe48a3613ed253a140f5da"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-09.xlsx",
+    "bytes": 1032702,
+    "sha256": "db800a97a024f50fc77272dbaa199426ae6790a753c704b2a72e222168225861"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-10.xlsx",
+    "bytes": 1032702,
+    "sha256": "f6d11bbe4cc2443611d3ee0b79ef92e89b660db0fef5e35d6dd4db80b069fd60"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-11.xlsx",
+    "bytes": 1032702,
+    "sha256": "417aa1ac8e8aa6246576ad060708111f540e2f0111dab9e7b17664b09271cde5"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\openpyxl-1MiB-write-12.xlsx",
+    "bytes": 1032706,
+    "sha256": "962985d7adc80e14496eee1814592613b39df7f7893647cb74b17a57bb8c5bdb"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-00.xlsx",
+    "bytes": 10071781,
+    "sha256": "22ef89318133bbb6b9021fa26685994fe757e48d9ea1a9311f85b11ccfb60a39"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-01.xlsx",
+    "bytes": 10071780,
+    "sha256": "ed03f7bdc7fb27c63dc3f0b8da971fde951848ef725a53b6ecf7b3f08281631f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-02.xlsx",
+    "bytes": 10071781,
+    "sha256": "7a6108818a4c93f4f6877a69c4b61b57393b1c72628bcba487362b9a1842ec59"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-03.xlsx",
+    "bytes": 10071780,
+    "sha256": "edfeea57c4d6bb20037833e63f05b9ad9ff652f75b7447ad22897342b5a31834"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-04.xlsx",
+    "bytes": 10071780,
+    "sha256": "eeed05e9f0e2a40bb67c71dd8e18e3d1e33fcca50fe72ed3aac291b1a5508907"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-05.xlsx",
+    "bytes": 10071780,
+    "sha256": "ebe3a3a98922dab3d12b1980140a2948af90c26ca1b99df84899967bb22fa79d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-06.xlsx",
+    "bytes": 10071780,
+    "sha256": "ffae0c5f4c6330c5bf317a32412a6f3b60d2d57ebbb019ed9e5cdb440aa2b603"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-07.xlsx",
+    "bytes": 10071780,
+    "sha256": "c7eddf76b565ca3233cf90dff0a7f1db0f24242384d9f99a38d4e4e4f10d91d2"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-08.xlsx",
+    "bytes": 10071780,
+    "sha256": "03008111acc1a77f215cd4abbc69430e223af2d30de3868859ec8540693321d7"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-09.xlsx",
+    "bytes": 10071780,
+    "sha256": "2f7ae4ffefbfdf656675a501deb20c38f8421e0e440b79521e6ff0b34aa6a4c0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-10.xlsx",
+    "bytes": 10071780,
+    "sha256": "844ea32ccc81368cacbb18ff6668295a58872c5c05a95c4df31521ea7e6da196"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-11.xlsx",
+    "bytes": 10071781,
+    "sha256": "7a2fca20c8779456a0f0f685125075fbb865b66506a6bfd1ac598e930e7c3d3c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-roundtrip-12.xlsx",
+    "bytes": 10071781,
+    "sha256": "d27e3599c2eb2ef78a068f044ba2d6599d94606bfe6f6c4ab66863f54fd1f8c5"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-00.xlsx",
+    "bytes": 10071781,
+    "sha256": "0c2a3deb505ec456fd5acaa669038e5e08cbce8c1b9a1366adfdd2c221276046"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-01.xlsx",
+    "bytes": 10071781,
+    "sha256": "a4d93fef96866e4824ab1ad3e32345c59c2c6d1ce982801156be98aa14838c08"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-02.xlsx",
+    "bytes": 10071781,
+    "sha256": "4c300fc3cc0071c7b9da757c0eca67bf4d09c08f28f9938e0c9d1ca096495580"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-03.xlsx",
+    "bytes": 10071781,
+    "sha256": "a8593c3e3f042b0dfdf2101eb1ed771b8f79a0f24e6332f62aa895e5c21b5a1c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-04.xlsx",
+    "bytes": 10071781,
+    "sha256": "ec6d51a170c58ea533c5b1db937e2cc1835a405ce31e7629c7a52bf94a89e942"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-05.xlsx",
+    "bytes": 10071781,
+    "sha256": "35578066ccbde7e93bd0d0af65c4a4185f9f67be620961ecfcbd5afed510914a"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-06.xlsx",
+    "bytes": 10071781,
+    "sha256": "dcae5baae79a2938b81136c65b809e2c838cb6388be1d801180f4c733dab949d"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-07.xlsx",
+    "bytes": 10071780,
+    "sha256": "8c92f86a3c5618d7ee914af7296e084730ca90df369b52c7ab5fa56421faf4f0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-08.xlsx",
+    "bytes": 10071781,
+    "sha256": "2a19ddac673798b3d447af164635ffea7ef85296dd42fc25535ebe90572f8fcb"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-09.xlsx",
+    "bytes": 10071781,
+    "sha256": "ae424e0623f9e38e35658a0076d995e0f11d1369a7f3df880e2fcb1cc88be476"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-10.xlsx",
+    "bytes": 10071781,
+    "sha256": "78c91fe83fc68619d95534446f8f50165eb8328c7274ed6b1c04d5fa35f3141a"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-11.xlsx",
+    "bytes": 10071781,
+    "sha256": "f2763b8f7f306ba90d6a5b9d14e0258dd39384301dbb776252ef8053c7515a1b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-10MiB-write-12.xlsx",
+    "bytes": 10071781,
+    "sha256": "29f971b99385d0994fe7963f7e80a9cf022119a1754fc34c883f7b619853aaad"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-00.xlsx",
+    "bytes": 1009478,
+    "sha256": "bc2cb38c2caa5b2ed524d71ec88b9434980a90c47fddcb024dd3830c2bbc9e9c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-01.xlsx",
+    "bytes": 1009478,
+    "sha256": "a006ce83ecc9b2c7a35f8c3ba31dfc967e8bfbbe55b307219360cd64956bab14"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-02.xlsx",
+    "bytes": 1009478,
+    "sha256": "f98a216cad9ed5d0e3ebd90d66bc2d1bdd5c057116c4dbe2f8208d5a2aa478c7"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-03.xlsx",
+    "bytes": 1009478,
+    "sha256": "71b7cfc814b4ae7e44921c70f549bc1c0d86fcecf8cb0fd5d7a9fa991a5acc04"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-04.xlsx",
+    "bytes": 1009477,
+    "sha256": "f731c1040cd7ab5b169e05abea1ca119543dd76729d361f9fefdf0d45c47641b"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-05.xlsx",
+    "bytes": 1009478,
+    "sha256": "8cd5e0a16430acc9efbf36d4e2a342a82aa5c54421f90127c36139e428f0283f"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-06.xlsx",
+    "bytes": 1009478,
+    "sha256": "b567b619122746c051ea4f295d6b84a3979919b41911fbb87cd392b7a38aec71"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-07.xlsx",
+    "bytes": 1009478,
+    "sha256": "063effce9360a497d3e31aa522a2a57c2ea011ba1112bdc415c65210d3d7b9b0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-08.xlsx",
+    "bytes": 1009478,
+    "sha256": "4da26d53031d69b48a7350b1068ce18308231bc80825df40547852c7c3f1f84e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-09.xlsx",
+    "bytes": 1009478,
+    "sha256": "1e5da62211b2aac2b5e2a8c86caa3e935505072183b49c602281a9482bae29d0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-10.xlsx",
+    "bytes": 1009478,
+    "sha256": "57ad85335c979c1c358cf27e4c2b73c06146b060356a5534955992ed460568b9"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-11.xlsx",
+    "bytes": 1009478,
+    "sha256": "0fdca8f4bea5cecc697cc72b625d9d3e2bd06ad0838b4e3fb8c0796968215d9c"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-roundtrip-12.xlsx",
+    "bytes": 1009478,
+    "sha256": "495fb9644dbc7d562e2d3d48731ede18fa6c585c1d2983d7c3e1dc24c6b02315"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-00.xlsx",
+    "bytes": 1009478,
+    "sha256": "b65491abf686d585e4fb2ad3f082c23f42598c738bfa64d964b9a8c3e9bc57a0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-01.xlsx",
+    "bytes": 1009478,
+    "sha256": "83b187e1cc1fe56b03f88bd521b468feb453d2fa88d3eb18188c273e71044ec5"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-02.xlsx",
+    "bytes": 1009478,
+    "sha256": "6e1606b222516fc825569ae15d993eba873ef42b51c3ea1e2ebee8decfea4e9e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-03.xlsx",
+    "bytes": 1009478,
+    "sha256": "4dd620d6d12e0884ec44731dc136478af380fad9a25d5f2ede994343321bf9e1"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-04.xlsx",
+    "bytes": 1009478,
+    "sha256": "39af25c8b302f3abddc5c5e862c157e85ffd3275ca5f7a2634ca33e805d00855"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-05.xlsx",
+    "bytes": 1009478,
+    "sha256": "06f12d0fdb18c6aacf4be523480b5203139aebb99680419085ac4ba7c601e718"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-06.xlsx",
+    "bytes": 1009478,
+    "sha256": "fd1fa3580eae3e9a6f5c1c4badf8da8e4d91fc81b9993be25b151d83623a16c4"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-07.xlsx",
+    "bytes": 1009478,
+    "sha256": "699e6b6b661afc0bad33741bb69c0faa7d0dc2b1532563db8c5806729faa5da9"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-08.xlsx",
+    "bytes": 1009478,
+    "sha256": "ee33a4a4dded858a2b9fa4ceb2e81c7f769d04216aa22b45a706386d63bdfec1"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-09.xlsx",
+    "bytes": 1009477,
+    "sha256": "83fc80421e34c0d1e0c4582a03347ce20fa508687832f0f5ac67782d96cd359e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-10.xlsx",
+    "bytes": 1009478,
+    "sha256": "b9872c552716c845971d9a63b29cc956e77d8e45adc13eb890d667d2a104a3e0"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-11.xlsx",
+    "bytes": 1009478,
+    "sha256": "956684f23061f797772f01c69ba6db9cdeee6551c19ad49c35db2201257de19e"
+  },
+  {
+    "path": "results\\windows-20261114-first\\raw\\rust-1MiB-write-12.xlsx",
+    "bytes": 1009478,
+    "sha256": "569197bfcc4f6c3ae22fb4f783d60341dc5aa42795f4dbc1697406f45234c875"
+  }
+]

@@ -3438,8 +3438,18 @@ pub fn validate_wide_target_replacement_candidate(
             staging_workbook.display()
         )
     })?;
-    let output = read_workbook(&plan.candidate)
+    let mut output = read_workbook(&plan.candidate)
         .with_context(|| format!("reopen wide target candidate {}", plan.candidate.display()))?;
+    if crate::aspose_edit::aspose_selected() {
+        anyhow::ensure!(
+            output
+                .sheets
+                .last()
+                .is_some_and(|s| s.name == "Evaluation Warning"),
+            "Aspose wide-summary candidate lost its verified evaluation marker"
+        );
+        output.sheets.pop(); // Comparison only, after the full plan validator.
+    }
     let replacement_names = replacements
         .sheets
         .iter()

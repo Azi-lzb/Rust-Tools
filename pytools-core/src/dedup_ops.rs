@@ -1375,8 +1375,12 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     );
 
     let result = (|| -> Result<()> {
-        if std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some() {
-            let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+        let scoped_route = crate::aspose_edit::route_override();
+        if scoped_route.is_some() || std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some()
+        {
+            let route_config = scoped_route
+                .map(Ok)
+                .unwrap_or_else(crate::excel_edit_router::RouteConfig::from_environment)?;
             crate::excel_edit_router::execute_candidate_with_route_config(edit_plan, &route_config)
                 .context("按 ExcelEditPlan 路由生成目标追加候选文件失败")?;
         } else {
@@ -1388,7 +1392,19 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
             )
             .context("openpyxl 修改目标候选文件失败")?;
         }
-        let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
+        let mut after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
+        if crate::aspose_edit::aspose_selected() {
+            // Comparison only. The full plan validator has already verified
+            // that the sole extra sheet is the appended evaluation marker.
+            anyhow::ensure!(
+                after
+                    .sheets
+                    .last()
+                    .is_some_and(|s| s.name == "Evaluation Warning"),
+                "missing evaluation sheet"
+            );
+            after.sheets.pop();
+        }
         validate_append_candidate(edit_plan, &before, &after)?;
         let actual_names = read_defined_names(&plan.candidate)?;
         anyhow::ensure!(
@@ -2678,6 +2694,14 @@ where
             .unwrap_or_default()
             .to_ascii_lowercase();
         if extension == "xls" {
+            if crate::aspose_edit::xlsx_only_selection() {
+                run.task_failed += group.len();
+                run.issues.push(format!(
+                    "{}：所选修改引擎仅支持 XLSX，未调用 COM",
+                    path.display()
+                ));
+                continue;
+            }
             #[cfg(windows)]
             handle_legacy_xls_duplicate_delete(&path, &group, &mut run);
             #[cfg(not(windows))]
@@ -3373,6 +3397,11 @@ pub fn mark_duplicates_in_place_with_progress<F>(
 where
     F: FnMut(&DedupTask),
 {
+    let mark_engine = if crate::aspose_edit::aspose_selected() {
+        "aspose_worker"
+    } else {
+        "openpyxl"
+    };
     let mut run = MarkDuplicatesRun::default();
     let enabled: Vec<&DedupTask> = tasks.iter().filter(|task| task.enabled).collect();
     anyhow::ensure!(
@@ -3386,7 +3415,7 @@ where
             run.task_skipped += 1;
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "openpyxl",
+                    mark_engine,
                     crate::engine_diag::DiagStage::ReadSource,
                     crate::engine_diag::DiagOutcome::Skipped,
                 )
@@ -3409,6 +3438,21 @@ where
             .and_then(|ext| ext.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
+        if crate::aspose_edit::xlsx_only_selection() && extension != "xlsx" {
+            run.task_skipped += group.len();
+            let message = "所选修改模式仅支持 XLSX；未回退 COM，原文件未修改";
+            run.issues.push(format!("{}：{message}", path.display()));
+            run.events.push(
+                crate::engine_diag::DiagEvent::new(
+                    mark_engine,
+                    crate::engine_diag::DiagStage::ModifyWorkbook,
+                    crate::engine_diag::DiagOutcome::Skipped,
+                )
+                .with_file(path.to_string_lossy().into_owned())
+                .with_message(message),
+            );
+            continue;
+        }
         if extension == "xls" {
             #[cfg(windows)]
             handle_legacy_xls_duplicate_mark(&path, &group, &mut run);
@@ -3431,7 +3475,7 @@ where
             };
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    "openpyxl",
+                    mark_engine,
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Skipped,
                 )
@@ -3616,7 +3660,7 @@ where
                 run.task_failed += task_duplicate_rows.len() + task_failures;
                 run.events.push(
                     crate::engine_diag::DiagEvent::new(
-                        "openpyxl",
+                        mark_engine,
                         crate::engine_diag::DiagStage::ModifyWorkbook,
                         crate::engine_diag::DiagOutcome::Failed,
                     )
@@ -3664,7 +3708,7 @@ where
                         run.saved_books.push(path.to_path_buf());
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
-                                "openpyxl",
+                                mark_engine,
                                 crate::engine_diag::DiagStage::SaveOutput,
                                 crate::engine_diag::DiagOutcome::Ok,
                             )
@@ -3676,7 +3720,7 @@ where
                         run.task_failed += task_duplicate_rows.len() + task_failures;
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
-                                "openpyxl",
+                                mark_engine,
                                 crate::engine_diag::DiagStage::SaveOutput,
                                 crate::engine_diag::DiagOutcome::Failed,
                             )
@@ -3695,15 +3739,15 @@ where
                     run.task_failed += task_duplicate_rows.len() + task_failures;
                     run.events.push(
                         crate::engine_diag::DiagEvent::new(
-                            "openpyxl",
+                            mark_engine,
                             crate::engine_diag::DiagStage::ModifyWorkbook,
                             crate::engine_diag::DiagOutcome::Failed,
                         )
                         .with_file(path.to_string_lossy().into_owned())
-                        .with_message(format!("openpyxl 生成标记候选失败：{error:#}")),
+                        .with_message(format!("修改引擎生成标记候选失败：{error:#}")),
                     );
                     run.issues.push(format!(
-                        "{}：openpyxl 生成标记候选失败，源文件未提交：{error:#}",
+                        "{}：修改引擎生成标记候选失败，源文件未提交：{error:#}",
                         path.display()
                     ));
                     let _ = fs::remove_file(&candidate);
@@ -3719,7 +3763,7 @@ where
         for (row_no, sheet, count, elapsed) in task_duplicate_rows {
             run.events.push(
                 crate::engine_diag::DiagEvent::new(
-                    if changed { "openpyxl" } else { "calamine" },
+                    if changed { mark_engine } else { "calamine" },
                     crate::engine_diag::DiagStage::ModifyWorkbook,
                     crate::engine_diag::DiagOutcome::Ok,
                 )

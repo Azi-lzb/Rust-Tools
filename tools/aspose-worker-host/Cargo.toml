@@ -1,0 +1,16 @@
+[package]
+name = "aspose-worker-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+excel-aspose = { path = "../../crates/excel-aspose" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+zip = "6"
+roxmltree = "0.21"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

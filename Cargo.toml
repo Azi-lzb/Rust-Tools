@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/excel-aspose",
     "crates/excel-reader",
     "crates/excel-writer",
     "crates/excel-editor",
@@ -12,6 +13,9 @@ exclude = [
     "vendor/betteroffice-xlsx-model",
     "vendor/betteroffice-xlsx-calc",
     "benchmark/excel-modify-engine",
+    "vendor/calamine-0.37.0",
+    "vendor/umya-spreadsheet-3.1.1",
+    "tools/aspose-worker-host",
 ]
 
 [workspace.package]
@@ -19,6 +23,7 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
+excel-aspose = { path = "crates/excel-aspose" }
 anyhow = "1"
 libc = "0.2"
 axum = "0.8"
@@ -43,6 +48,9 @@ zip = "6"
 
 # vendor 修改版 betteroffice 计算引擎（见 vendor/VENDOR_NOTES.md）：
 # 修复 used_range 被纯样式空格撑大 + 重算预算上限可配置。
+# Calamine/UMYA 同版本定点修补见 vendor/EXCEL_LIBRARY_FIXES.md；不改变引擎路由。
 [patch.crates-io]
+calamine = { path = "vendor/calamine-0.37.0" }
+umya-spreadsheet = { path = "vendor/umya-spreadsheet-3.1.1" }
 betteroffice-xlsx-model = { path = "vendor/betteroffice-xlsx-model" }
 betteroffice-xlsx-calc = { path = "vendor/betteroffice-xlsx-calc" }

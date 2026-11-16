@@ -244,6 +244,7 @@ where
         .context("system clock is before Unix epoch")?
         .as_nanos();
     let run_id = format!("pytools-pt-7-2-{}-{run_nonce}", std::process::id());
+    crate::aspose_edit::bind_run_id(&run_id);
     let run_started = Instant::now();
     let mut report = InstitutionNormalizeRunReport {
         schema_version: 1,
@@ -596,6 +597,15 @@ fn build_and_optionally_apply_institution_plan(
     let mut stage_components = BTreeMap::new();
     let mut actual_engine = None;
     let legacy_xls = has_extension(input, "xls");
+    if crate::aspose_edit::xlsx_only_selection() && !has_extension(input, "xlsx") {
+        return Err(normalize_file_failure(
+            "format_check",
+            "unsupported_format",
+            "所选修改模式仅支持 XLSX；未回退 COM，原文件未修改",
+            None,
+        )
+        .attach_state(&timings, &stage_components, actual_engine.as_deref()));
+    }
     if !has_extension(input, "xlsx")
         && !(legacy_xls
             && options.in_place
@@ -612,7 +622,7 @@ fn build_and_optionally_apply_institution_plan(
     // 就地修改的 .xlsx 走 openpyxl 引擎：先做运行时预检（与执行共用同一
     // 解析入口，含协议握手），失败时如实告知原因与修复建议，避免进入
     // 执行阶段后才给出误导性的“没有已验收的修改引擎”。
-    if options.in_place && !legacy_xls {
+    if options.in_place && !legacy_xls && !crate::aspose_edit::aspose_selected() {
         if let Some(reason) = crate::inplace_edit::openpyxl_unavailable_reason() {
             return Err(normalize_file_failure(
                 "engine_readiness_check",
@@ -1197,7 +1207,8 @@ fn build_and_optionally_apply_institution_plan(
                 .as_ref()
                 .ok_or_else(|| anyhow!("Openpyxl modification requires an XLSX edit plan"))?;
             crate::inplace_edit::execute_in_place(plan, engine).map(|outcome| {
-                let engine_name = engine.label().to_owned();
+                let engine_name =
+                    crate::excel_core_diag::engine_label(outcome.execution.engine).to_owned();
                 let mut components = vec!["Rust".to_owned(), "in-place".to_owned()];
                 components.push(engine_name.clone());
                 let commit = outcome.commit.clone();

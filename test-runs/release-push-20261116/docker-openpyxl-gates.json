@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "passed": 7,
+  "failed": 0,
+  "log": "docker-openpyxl-gates.log",
+  "command": [
+    "/build/docker-platform-validation/debug/deps/openpyxl_worker-771d477ae0316372",
+    "--ignored",
+    "--test-threads=1"
+  ]
+}

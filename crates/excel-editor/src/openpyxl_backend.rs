@@ -962,10 +962,55 @@ impl OpenpyxlXlsxValidator {
         candidate_output: &Path,
         adjust_print_areas_for_row_deletions: bool,
     ) -> Result<()> {
+        self.validate_internal(
+            plan,
+            candidate_output,
+            adjust_print_areas_for_row_deletions,
+            false,
+        )
+    }
+
+    /// Comparison-only allowance for an explicitly selected evaluation engine.
+    /// The actual candidate is never rewritten and other engines stay strict.
+    pub fn validate_with_evaluation_sheet(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<()> {
+        self.validate_internal(plan, candidate_output, false, true)
+    }
+
+    fn validate_internal(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+        adjust_print_areas_for_row_deletions: bool,
+        allow_evaluation: bool,
+    ) -> Result<()> {
         let source =
             read_workbook(&plan.input).context("read source workbook for openpyxl validation")?;
-        let output = read_workbook(candidate_output)
+        let mut output = read_workbook(candidate_output)
             .context("reopen openpyxl candidate with Calamine/OOXML reader")?;
+        if allow_evaluation {
+            anyhow::ensure!(
+                !source.sheets.iter().any(|s| s.name == "Evaluation Warning"),
+                "Source contains an ambiguous evaluation-like business sheet"
+            );
+            anyhow::ensure!(
+                output
+                    .sheets
+                    .iter()
+                    .filter(|s| s.name == "Evaluation Warning")
+                    .count()
+                    == 1
+                    && output
+                        .sheets
+                        .last()
+                        .is_some_and(|s| s.name == "Evaluation Warning"),
+                "Expected exactly one appended evaluation sheet"
+            );
+            output.sheets.pop(); // In-memory comparison only; never saved.
+        }
         let profile = crate::inspect_xlsx_profile(candidate_output)?;
         anyhow::ensure!(
             profile.inventory_complete,
@@ -987,11 +1032,12 @@ impl OpenpyxlXlsxValidator {
         validate_preserved_formulas(&source.sheets, &output.sheets, plan)?;
         validate_preserved_comments(&source.sheets, &output.sheets, plan)?;
         validate_preserved_merges(&source.sheets, &output.sheets, plan)?;
-        validate_preserved_ooxml_metadata_with_print_area_policy(
+        validate_preserved_ooxml_metadata_internal(
             &plan.input,
             candidate_output,
             plan,
             adjust_print_areas_for_row_deletions,
+            allow_evaluation,
         )?;
         validate_requested_sheet_layout(plan, candidate_output)?;
         Ok(())
@@ -1455,6 +1501,22 @@ fn validate_preserved_ooxml_metadata_with_print_area_policy(
     plan: &ExcelEditPlan,
     adjust_print_areas_for_row_deletions: bool,
 ) -> Result<()> {
+    validate_preserved_ooxml_metadata_internal(
+        input_path,
+        output_path,
+        plan,
+        adjust_print_areas_for_row_deletions,
+        false,
+    )
+}
+
+fn validate_preserved_ooxml_metadata_internal(
+    input_path: &Path,
+    output_path: &Path,
+    plan: &ExcelEditPlan,
+    adjust_print_areas_for_row_deletions: bool,
+    allow_evaluation: bool,
+) -> Result<()> {
     let checked = [
         PreservationRequirement::DefinedNames,
         PreservationRequirement::RowAndColumnDimensions,
@@ -1473,17 +1535,32 @@ fn validate_preserved_ooxml_metadata_with_print_area_policy(
         return Ok(());
     }
 
-    let source = workbook_preservation_snapshot(input_path).map_err(|error| {
+    let mut source = workbook_preservation_snapshot(input_path).map_err(|error| {
         anyhow::anyhow!(
             "read source OOXML metadata for openpyxl preservation validation: {error:#}"
         )
     })?;
-    let output = workbook_preservation_snapshot(output_path).map_err(|error| {
+    let mut output = workbook_preservation_snapshot(output_path).map_err(|error| {
         anyhow::anyhow!(
             "read output OOXML metadata for openpyxl preservation validation: {error:#}"
         )
     })?;
 
+    if allow_evaluation {
+        normalize_evaluation_save_defaults(input_path, &mut source)?;
+        normalize_evaluation_save_defaults(output_path, &mut output)?;
+        // Equal explicit defaults are safe to ignore only when the worksheet
+        // defaults themselves have not changed. Hidden/style/outline attributes remain.
+        let a = sheet_format_defaults(input_path)?;
+        let b = sheet_format_defaults(output_path)?;
+        let (identities, _) = planned_sheet_provenance(&source.sheet_order, &plan.operations)?;
+        anyhow::ensure!(
+            identities
+                .iter()
+                .all(|(source_name, output_name)| b.get(output_name) == a.get(source_name)),
+            "Aspose changed worksheet dimension defaults"
+        );
+    }
     if plan
         .preserve
         .contains(&PreservationRequirement::DefinedNames)
@@ -1653,6 +1730,91 @@ fn replace_header_footer_text(element: &mut CanonicalXmlElement, search: &str, r
 /// every source worksheet must appear with identical content, position must
 /// not matter. Content within one worksheet keeps its exact-order
 /// comparison; sheet-order correctness is owned by `validate_sheet_names`.
+// Aspose serializes default row heights and paperSize=1 explicitly. This is
+// comparison-only, scoped to the evaluation validator; no package is rewritten.
+fn sheet_format_defaults(path: &Path) -> Result<BTreeMap<String, Vec<(String, String)>>> {
+    let mut archive = zip::ZipArchive::new(File::open(path)?)?;
+    let mut result = BTreeMap::new();
+    for (sheet, part) in worksheet_parts_by_name(path)? {
+        let xml = read_zip_part(&mut archive, &part)?;
+        let document = roxmltree::Document::parse(&xml)?;
+        let mut attrs = document
+            .root_element()
+            .children()
+            .find(|n| n.is_element() && n.tag_name().name() == "sheetFormatPr")
+            .map(|n| {
+                n.attributes()
+                    .map(|a| (a.name().to_owned(), a.value().to_owned()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        attrs.sort();
+        result.insert(sheet, attrs);
+    }
+    Ok(result)
+}
+fn normalize_evaluation_save_defaults(
+    path: &Path,
+    snapshot: &mut WorkbookPreservationSnapshot,
+) -> Result<()> {
+    let defaults = sheet_format_defaults(path)?;
+    for (sheet, _, rows) in &mut snapshot.dimensions {
+        let height = defaults
+            .get(sheet)
+            .and_then(|attrs| attrs.iter().find(|(k, _)| k == "defaultRowHeight"))
+            .map(|(_, v)| v);
+        for (_, attrs) in rows {
+            if !attrs
+                .iter()
+                .any(|(k, v)| k == "customHeight" && v != "0" && v != "false")
+                && attrs.iter().any(|(k, v)| k == "ht" && Some(v) == height)
+            {
+                attrs.retain(|(k, _)| k != "ht");
+            }
+        }
+    }
+    // Only truly empty XML nodes are equivalent to an omitted header/footer;
+    // spaces, control codes, attributes and nonempty text must remain checked.
+    let mut archive = zip::ZipArchive::new(File::open(path)?)?;
+    for (sheet, part) in worksheet_parts_by_name(path)? {
+        let xml = read_zip_part(&mut archive, &part)?;
+        let document = roxmltree::Document::parse(&xml)?;
+        let empty = document
+            .root_element()
+            .children()
+            .find(|n| n.is_element() && n.tag_name().name() == "headerFooter")
+            .map(|header| {
+                header
+                    .children()
+                    .filter(|n| {
+                        n.is_element() && n.attributes().len() == 0 && n.children().next().is_none()
+                    })
+                    .map(|n| n.tag_name().name().to_owned())
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        if let Some((_, Some(header))) = snapshot
+            .header_footers
+            .iter_mut()
+            .find(|(name, _)| name == &sheet)
+        {
+            header.children.retain(|child| {
+                !empty.contains(child.name.rsplit(':').next().unwrap_or(&child.name))
+            });
+        }
+    }
+    for (_, settings) in &mut snapshot.page_settings {
+        for setting in settings {
+            if setting.name.ends_with(":pageSetup") {
+                setting
+                    .attributes
+                    .retain(|(ns, k, v)| !(ns.is_empty() && k == "paperSize" && v == "1"));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn per_sheet_entries_match_for_plan<T: PartialEq>(
     source: &[(String, T)],
     output: &[(String, T)],

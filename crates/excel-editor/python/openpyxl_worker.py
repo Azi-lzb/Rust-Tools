@@ -2408,9 +2408,20 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
     kind = operation["operation"]
     payload = operation
     if kind == "delete_rows":
-        workbook[payload["sheet"]].delete_rows(
-            int(payload["first_row"]), int(payload["count"])
-        )
+        worksheet = workbook[payload["sheet"]]
+        first, count = int(payload["first_row"]), int(payload["count"])
+        # openpyxl moves cells/comments, but leaves RowDimension keys behind.
+        # The Rust plan's preservation contract requires height/hidden/style/
+        # outline metadata to follow the same surviving rows as the cells.
+        affected = [(row, dimension) for row, dimension in worksheet.row_dimensions.items()
+                    if row >= first]
+        for row, _ in affected:
+            del worksheet.row_dimensions[row]
+        for row, dimension in affected:
+            if row >= first + count:
+                dimension.index = row - count
+                worksheet.row_dimensions[row - count] = dimension
+        worksheet.delete_rows(first, count)
     elif kind == "insert_rows":
         workbook[payload["sheet"]].insert_rows(
             int(payload["first_row"]), amount=int(payload["count"])

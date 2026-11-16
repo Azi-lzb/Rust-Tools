@@ -1,0 +1,82 @@
+[
+  {
+    "name": "apphost",
+    "startup_ms": 3214.9294999981066,
+    "request_ms": 4043.4966000029817,
+    "ready": {
+      "ready": true,
+      "protocol_version": 1,
+      "engine": "Aspose.Cells",
+      "sdk": "26.10",
+      "pid": 19280,
+      "evaluation_mode": true,
+      "max_attempts": 99
+    },
+    "response": {
+      "request_id": "direct-calc-apphost",
+      "ok": true,
+      "candidate": "F:\\RustBuild\\pytools\\release-push-20261116\\calc-direct-apphost.xlsx",
+      "evaluation_output": true,
+      "source_sheets": [
+        "数据",
+        "参数"
+      ],
+      "source_active_index": 0,
+      "output_sheets": [
+        "数据",
+        "参数",
+        "Evaluation Warning"
+      ],
+      "output_active_index": 2,
+      "load_ms": 1094.5122,
+      "transform_ms": 2233.3466,
+      "save_ms": 601.2952000000005,
+      "preserve_defaults_ms": 87.4555,
+      "preserved_default_sheets": 0,
+      "processing_ms": 4030.4234,
+      "attempts": 1,
+      "pid": 19280,
+      "draining": false
+    }
+  },
+  {
+    "name": "framework",
+    "startup_ms": 74922.18219999631,
+    "request_ms": 21140.228799995384,
+    "ready": {
+      "ready": true,
+      "protocol_version": 1,
+      "engine": "Aspose.Cells",
+      "sdk": "26.10",
+      "pid": 11696,
+      "evaluation_mode": true,
+      "max_attempts": 99
+    },
+    "response": {
+      "request_id": "direct-calc-framework",
+      "ok": true,
+      "candidate": "F:\\RustBuild\\pytools\\release-push-20261116\\calc-direct-framework.xlsx",
+      "evaluation_output": true,
+      "source_sheets": [
+        "数据",
+        "参数"
+      ],
+      "source_active_index": 0,
+      "output_sheets": [
+        "数据",
+        "参数",
+        "Evaluation Warning"
+      ],
+      "output_active_index": 2,
+      "load_ms": 8942.185,
+      "transform_ms": 222.98869999999988,
+      "save_ms": 1014.8877000000011,
+      "preserve_defaults_ms": 6528.0416,
+      "preserved_default_sheets": 0,
+      "processing_ms": 19067.8206,
+      "attempts": 1,
+      "pid": 11696,
+      "draining": false
+    }
+  }
+]

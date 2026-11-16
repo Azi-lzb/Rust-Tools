@@ -198,12 +198,17 @@ pub(crate) fn convert_one_with_runtime(
     );
     let xlsx_save_as_normalization = source_ext == "xlsx" && target == "xlsx";
     anyhow::ensure!(
-        source_ext != target || xlsx_save_as_normalization,
+        source_ext != target
+            || xlsx_save_as_normalization
+            || (engine == "aspose" && target == "docx"),
         "input is already in the requested format: .{target}"
     );
     anyhow::ensure!(
-        matches!(engine, "auto" | "lo" | "com" | "pywin32" | "native"),
-        "--engine must be auto, lo, com, pywin32 or native"
+        matches!(
+            engine,
+            "auto" | "lo" | "com" | "pywin32" | "native" | "aspose"
+        ),
+        "--engine must be auto, lo, com, pywin32, native or aspose"
     );
     // LibreOffice（lo）仅用于 Linux 电子表格 .xls/.xlsm → .xlsx；Word 目标
     // 与 Windows 默认路由仍走 pywin32（实际执行在 conversion_engine 分流）。
@@ -220,6 +225,13 @@ pub(crate) fn convert_one_with_runtime(
             || !matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "xlsx" | "et" | "ett"),
         "Excel workbook format conversion requires pywin32 with Microsoft Excel or WPS COM; native value-only conversion is not allowed for workbook formats"
     );
+    if engine == "aspose" {
+        return if target == "docx" {
+            crate::aspose_documents::convert(input, output, runtime)
+        } else {
+            crate::aspose_conversion::convert(input, output, runtime)
+        };
+    }
     if is_wps_native_spreadsheet(&source_ext) {
         anyhow::ensure!(
             !is_ooxml_spreadsheet_package(input)?,
@@ -714,7 +726,8 @@ where
             i += 1;
         }
         let components = conversion_components(&ext, &target, engine);
-        let same_format_copy = ext == target && !(ext == "xlsx" && target == "xlsx");
+        let same_format_copy =
+            ext == target && !(ext == "xlsx" && target == "xlsx") && engine != "aspose";
         let xlsx_save_as_normalization = ext == "xlsx" && target == "xlsx";
         let result = if same_format_copy {
             fs::copy(input, &output)
@@ -904,7 +917,7 @@ fn emit_conversion_event<F>(
 }
 
 fn conversion_components(ext: &str, target: &str, engine: &str) -> Vec<String> {
-    if ext == target && !(ext == "xlsx" && target == "xlsx") {
+    if ext == target && !(ext == "xlsx" && target == "xlsx") && engine != "aspose" {
         return vec!["Rust".to_owned(), "std::fs::copy".to_owned()];
     }
     if engine == "native" {

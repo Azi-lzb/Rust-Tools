@@ -31,7 +31,7 @@ class Boundaries(unittest.TestCase):
    plan=d/'plan.json';plan.write_text(json.dumps(dict(tasks=tasks)),encoding='utf-8');out=subprocess.run([sys.executable,'-I','-c',script,str(plan)],capture_output=True,text=True,encoding='utf-8',timeout=60);self.capture('print-mode-'+str(mode),out);self.assertEqual(out.returncode,0,out.stderr);report=json.loads(out.stdout);self.assertEqual((report['task_ok'],report['task_failed']),(2,0),report)
    config=self.config(d);settings=openpyxl.load_workbook(config);sheet=settings.create_sheet('打印配置');sheet.append(['是否启用','打印模式','源工作簿','源工作表','源工作表打印区域','目标工作簿','目标工作表','FitToPagesWide','FitToPagesTall','打印方向','水平居中','垂直居中','不输出批注','零值不输出']);cli_target=d/'cli-print.xlsx'
    for name,area in [('first','A1:B1'),('second','A1:AA100')]:sheet.append(['Y',mode,str(src),name,area,str(cli_target),'same',1,2,'横向','Y','N','Y','Y'])
-   settings.save(config);text=self.cli(config,'3\n1\n0\n0\n','print-menu-mode-'+str(mode));self.assertNotIn('执行失败',text)
+   settings.save(config);text=self.cli(config,'3\n1\n1\n0\n0\n','print-menu-mode-'+str(mode));self.assertNotIn('执行失败',text)
    ws=openpyxl.load_workbook(cli_target).active;self.assertEqual((ws['A1'].value,ws['B1'].value),('left','right'));self.assertFalse(list(ws.merged_cells.ranges));self.assertIsNone(ws['A2'].value);self.assertEqual(ws['B2'].value,'0');self.assertEqual(ws['AA10'].value,'00123');self.assertEqual(ws['A100'].value,'12345678901234567890')
    self.assertEqual(ws.row_dimensions[1].height,22 if mode==1 else None);self.assertEqual(ws.column_dimensions['A'].width,17 if mode in (1,2) else 13);self.assertEqual(ws['B1'].border.left.style if ws['B1'].border.left else None,'thin' if mode in (1,2) else None)
    self.assertEqual(str(ws.print_area),"'same'!$A$1:$AA$101");self.assertEqual(ws.page_setup.orientation,'landscape');self.assertEqual((ws.page_setup.fitToWidth,ws.page_setup.fitToHeight),(1,2));self.assertTrue(ws.print_options.horizontalCentered);self.assertFalse(ws.print_options.verticalCentered);self.assertEqual(ws.oddFooter.center.text,'第 1 页 / 共 1 页');self.assertEqual(digest(src),before)
@@ -41,8 +41,8 @@ class Boundaries(unittest.TestCase):
  def test_xlsx_append_real_menu_preserves_old_rows_and_repeat_is_noop(self):
   with tempfile.TemporaryDirectory() as folder:
    d=Path(folder);s=d/'source.xlsx';t=d/'target.xlsx';w=openpyxl.Workbook();w.active.title='Data';w.active.append(['ID','Amount']);w.active.append(['001',10]);w.active.append(['002',20]);w.save(s);w=openpyxl.Workbook();w.active.title='Combined';w.active.append(['ID','Amount']);w.active.append(['001',99]);w.save(t);sb=digest(s);config=self.config(d,t);cb=digest(config)
-   text=self.cli(config,'2\n3\n0\n','xlsx-append');self.assertNotIn('执行失败',text);rows=list(openpyxl.load_workbook(t,data_only=False).active.values);self.assertEqual(rows,[('ID','Amount'),('001',99),('002',20)])
-   text=self.cli(config,'2\n3\n0\n','xlsx-append-repeat');self.assertNotIn('执行失败',text);self.assertEqual(list(openpyxl.load_workbook(t).active.values),rows);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb)
+   text=self.cli(config,'2\n3\n1\n0\n','xlsx-append');self.assertNotIn('执行失败',text);rows=list(openpyxl.load_workbook(t,data_only=False).active.values);self.assertEqual(rows,[('ID','Amount'),('001',99),('002',20)])
+   text=self.cli(config,'2\n3\n1\n0\n','xlsx-append-repeat');self.assertNotIn('执行失败',text);self.assertEqual(list(openpyxl.load_workbook(t).active.values),rows);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb)
  @unittest.skipUnless(os.environ.get('RUSTTOOLS_TEST_COM')=='1','requires explicit COM synthetic-fixture authorization')
  def test_existing_xls_rejected_in_real_menu_with_real_biff_fixture(self):
   import win32com.client
@@ -55,12 +55,12 @@ class Boundaries(unittest.TestCase):
     if book is not None:book.Close(False)
     app.Quit()
    self.assertEqual(t.read_bytes()[:8],bytes.fromhex('d0cf11e0a1b11ae1'));tb=digest(t);sb=digest(s);config=self.config(d,t);cb=digest(config)
-   text=self.cli(config,'2\n3\n0\n','xls-refusal');self.assertIn('既有 XLS 去重追加已安全停用',text);self.assertEqual(digest(t),tb);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb);self.assertEqual(list(d.glob('*.xls')),[t]);self.assertFalse(any('candidate' in p.name.lower() and p.suffix.lower()=='.xls' for p in d.rglob('*')))
+   text=self.cli(config,'2\n3\n1\n0\n','xls-refusal');self.assertIn('既有 XLS 去重追加已安全停用',text);self.assertEqual(digest(t),tb);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb);self.assertEqual(list(d.glob('*.xls')),[t]);self.assertFalse(any('candidate' in p.name.lower() and p.suffix.lower()=='.xls' for p in d.rglob('*')))
  def test_delete_refuses_cross_sheet_formula_and_merged_duplicate_without_changes(self):
   from openpyxl.workbook.defined_name import DefinedName
   with tempfile.TemporaryDirectory() as folder:
    d=Path(folder);source=d/'source.xlsx';w=openpyxl.Workbook();a=w.active;a.title='Data';a.append(['ID','Amount','note','extra']);a.append(['001',10,'first','safe']);a.append(['001',20,'duplicate',None]);a.merge_cells('C3:D3');a.append(['002',30,'keep','tail']);w.create_sheet('References')['A1']='=Data!B4';w.defined_names.add(DefinedName('KeepRows',attr_text="'Data'!$A$1:$D$4"));w.save(source);before=digest(source);config=self.config(d,d/'unused.xlsx');cb=digest(config)
-   text=self.cli(config,'2\n2\n0\n','delete-structural-refusal');self.assertIn('执行失败',text);self.assertNotIn('删除重复行数：1',text);self.assertEqual(digest(source),before);self.assertEqual(digest(config),cb);self.assertFalse(any('pytools-dedup-' in p.name for p in d.rglob('*')))
+   text=self.cli(config,'2\n2\n1\n0\n','delete-structural-refusal');self.assertIn('执行失败',text);self.assertNotIn('删除重复行数：1',text);self.assertEqual(digest(source),before);self.assertEqual(digest(config),cb);self.assertFalse(any('pytools-dedup-' in p.name for p in d.rglob('*')))
  @unittest.skipUnless(sys.platform=='win32','Windows share-lock semantics')
  def test_delete_locked_source_fails_without_counting_or_losing_rows(self):
   import win32file,win32con
@@ -68,7 +68,7 @@ class Boundaries(unittest.TestCase):
    d=Path(folder);source=d/'source.xlsx';w=openpyxl.Workbook();w.active.title='Data';w.active.append(['ID','Amount']);w.active.append(['001',10]);w.active.append(['001',20]);w.save(source);before=digest(source);config=self.config(d,d/'unused.xlsx')
    handle=win32file.CreateFile(str(source),win32con.GENERIC_READ,win32con.FILE_SHARE_READ,None,win32con.OPEN_EXISTING,0,None)
    try:
-    text=self.cli(config,'2\n2\n0\n','delete-locked-source');self.assertIn('执行失败',text);self.assertNotIn('删除重复行数：1',text);self.assertEqual(digest(source),before)
+    text=self.cli(config,'2\n2\n1\n0\n','delete-locked-source');self.assertIn('执行失败',text);self.assertNotIn('删除重复行数：1',text);self.assertEqual(digest(source),before)
    finally:handle.Close()
    self.assertFalse(any('pytools-dedup-' in p.name for p in d.rglob('*')))
  def test_prefix_real_menu_middle_text_sorted_undo_and_collision(self):

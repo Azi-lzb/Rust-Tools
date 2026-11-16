@@ -1,0 +1,41 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling excel-aspose v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools\crates\excel-aspose)
+   Compiling aspose-worker-host v0.1.0 (C:\Users\AZI\Desktop\VibeCode\Rust-Tools\tools\aspose-worker-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4m 20s
+     Running unittests src\lib.rs (F:/RustBuild/pytools\debug\deps\aspose_worker_host-0323fce704518e70.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\worker_case.rs (F:/RustBuild/pytools\debug\deps\worker_case-d9a01c060ef1f41a.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\protocol.rs (F:/RustBuild/pytools\debug\deps\protocol-769ca6d57bf76db1.exe)
+
+running 11 tests
+test blocked_large_write_also_has_timeout ... ok
+test corrupt_candidate_is_not_accepted ... ok
+test crash_partial_candidate_is_not_accepted_or_retried ... ok
+test draining_response_is_delivered_before_next_worker_starts ... ok
+test nonfinite_number_rejected_before_serialization ... ok
+test request_timeout_does_not_replay ... ok
+test resident_health_and_request ... ok
+test response_identity_error_is_not_retried ... ok
+test source_snapshot_change_rejects_candidate ... ok
+test startup_timeout_reaps_owned_child ... ok
+test target_conflict_preserves_both_files_without_starting_worker ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.72s
+
+   Doc-tests aspose_worker_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

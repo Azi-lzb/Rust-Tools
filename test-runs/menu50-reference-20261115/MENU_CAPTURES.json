@@ -1,0 +1,122 @@
+[
+  {
+    "context": "1-1",
+    "status": "PASS",
+    "config_sha256": "960ab4276481ff888a1cd2ea96ba258e36c5d970a900276fc6531edf89f705d1",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\1-1\\stdout.txt"
+  },
+  {
+    "context": "1-5",
+    "status": "PASS",
+    "config_sha256": "6948c5760bc5b29dd9ca5d5b828aa72d91c291141cdc41a7e87da95fe2788a67",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\1-5\\stdout.txt"
+  },
+  {
+    "context": "2-1",
+    "status": "PASS",
+    "config_sha256": "87b7b12c6ce3194c4a3cf3ef39f7dff1df8886ae46b86474477e396400a22387",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\2-1\\stdout.txt"
+  },
+  {
+    "context": "2-2",
+    "status": "PASS",
+    "config_sha256": "42ace16c6ab03be768a8f33fc2d8804dcac45614234e65afffe647000b508e56",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\2-2\\stdout.txt"
+  },
+  {
+    "context": "2-3",
+    "status": "PASS",
+    "config_sha256": "2348e9e2efb74cadb7723088124db353587f123c9e837adbef4ae4b47df8e5d7",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\2-3\\stdout.txt"
+  },
+  {
+    "context": "3-1",
+    "status": "PASS",
+    "config_sha256": "d38ebb2503d6a927279a85f663ff66c8223017dd7452ee8f05b95601bebf1129",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\3-1\\stdout.txt"
+  },
+  {
+    "context": "4-4-xlsx",
+    "status": "PASS",
+    "config_sha256": "1be47963c8f791bc01c08988eb31234c3f3f7bff9522354dbc5682481a7cb138",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\4-4-xlsx\\stdout.txt"
+  },
+  {
+    "context": "4-4-word",
+    "status": "PASS",
+    "config_sha256": "0bd9c94f4ff51a80e76ef76e035db2c143f3906262e0fbd666bfcf7309e05ed4",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\4-4-word\\stdout.txt"
+  },
+  {
+    "context": "4-5",
+    "status": "PASS",
+    "config_sha256": "c82f7198850e27ff2523e42a782753868d8c7ce43e0aa1aa37c31628a5ac77cb",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\4-5\\stdout.txt"
+  },
+  {
+    "context": "4-7",
+    "status": "PASS",
+    "config_sha256": "2e04c6c1960ddbbc0440ed80faca2af915b2869c12813d4e3329175d13633e3d",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\4-7\\stdout.txt"
+  },
+  {
+    "context": "7-1",
+    "status": "PASS",
+    "config_sha256": "0aeac21f7be7a9ed2dd3c35e954a455e6b6b67eb9690a8554df5bf5fa9996e17",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\7-1\\stdout.txt"
+  },
+  {
+    "context": "1-8",
+    "status": "PASS",
+    "config_sha256": "ad9202e3341da3a299404a8e0fa404017cb195e92b6ef62394b2b6f3cc7f7679",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\1-8\\stdout.txt"
+  },
+  {
+    "context": "5-1",
+    "status": "PASS",
+    "config_sha256": "7b063e36e30c4ef7d2746a0be42b3240e4d07d9e97729b423cdb368d1728324d",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-1\\stdout.txt"
+  },
+  {
+    "context": "5-2",
+    "status": "PASS",
+    "config_sha256": "f26c3e04eb2b5fbeba2f15880f47d4a7aa2c7e24c673c5b1bc82be4e58d3c7fe",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-2\\stdout.txt"
+  },
+  {
+    "context": "5-3",
+    "status": "PASS",
+    "config_sha256": "79357e4a590b89a5805990f917375eeb081236e65ef4e621a719fa9c55bc4bd9",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-3\\stdout.txt"
+  },
+  {
+    "context": "5-4",
+    "status": "PASS",
+    "config_sha256": "80c56683804c2eec07f7310b7d10648ba433f7f7d5957212a75d190be92bb86d",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-4\\stdout.txt"
+  },
+  {
+    "context": "5-6",
+    "status": "PASS",
+    "config_sha256": "0bf78ef19abb68b4e08aedefe7ffa5ca36c11ef3b0f4c378143adad25e8585cd",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-6\\stdout.txt"
+  },
+  {
+    "context": "5-7",
+    "status": "PASS",
+    "config_sha256": "a77031d5476eb76d5aacc033ae38d620165b2ba42c4ce5212a4fbe651724a073",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-7\\stdout.txt"
+  },
+  {
+    "context": "1-1",
+    "policy": "UMYAOnly",
+    "status": "PASS",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\1-1-UMYAOnly\\stdout.txt"
+  },
+  {
+    "context": "5-4",
+    "policy": "RustNativeOnly",
+    "status": "PASS",
+    "stdout": "F:\\RustBuild\\pytools\\menu50-menu-captures-v2-20261115\\5-4-RustNativeOnly\\stdout.txt"
+  }
+]

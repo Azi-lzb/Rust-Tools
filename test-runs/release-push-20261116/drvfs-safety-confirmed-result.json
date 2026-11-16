@@ -1,0 +1,22 @@
+{
+  "status": "KNOWN_LIMITATION_SAFE_REJECTION",
+  "filesystem": "WSL DrvFS on Windows F drive",
+  "source_unchanged": true,
+  "existing_target_unchanged": true,
+  "configuration_unchanged": true,
+  "no_new_renamed_file": true,
+  "error": "EINVAL / no-overwrite rename unavailable",
+  "syscall": {
+    "conflict_errno": 17,
+    "absent_target_result": -1,
+    "absent_target_errno": 22,
+    "source_unchanged": true,
+    "target_unchanged": true,
+    "new_target_absent": true
+  },
+  "hashes": {
+    "F:\\RustBuild\\pytools\\release-push-20261116\\drvfs-safety-confirmed\\original.xlsx": "31d986f6468daa694dd37f7080b2889b741d08aea2d75cb1e9e21671b3dfeeb9",
+    "F:\\RustBuild\\pytools\\release-push-20261116\\drvfs-safety-confirmed\\A_original.xlsx": "836c7b0fa40fe7d602a22d3f540dc3ff307e78ae4aa4830df167a9873dfc8232",
+    "F:\\RustBuild\\pytools\\release-push-20261116\\drvfs-safety-confirmed\\config.xlsx": "9a74d7c55b0d0d4d2bdeb30e0464f13f19178e8cff857ef83c99874665be8829"
+  }
+}

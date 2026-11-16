@@ -1,0 +1,11 @@
+{
+  "archive": "F:\\RustBuild\\pytools\\release-push-20261116\\RustTools-windows-x64-TEST-main-20261116-093030.zip",
+  "bytes": 139000105,
+  "sha256": "109537b64b7ed2aa9618ece87767d8197a68b37e389eb74cf2b5336e7a5c1bbf",
+  "all_worker_files_verified": 391,
+  "difference_from_functionally_tested_zip": [
+    "doc/TEST_PACKAGE_20261116.md"
+  ],
+  "functional_payload_identical": true,
+  "local_dist_workers_are_physical": true
+}

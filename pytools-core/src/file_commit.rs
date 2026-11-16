@@ -83,12 +83,25 @@ pub fn verify_planning_snapshot(path: &Path, expected_sha256: Option<&str>) -> R
 /// Publish a validated candidate as a new target without replacing a path
 /// which appeared after planning.
 pub fn create_target_from_candidate(candidate: &Path, target: &Path) -> Result<TargetCommitReport> {
+    create_target_from_candidate_with_validator(candidate, target, |path, hash, role| {
+        verify_workbook_file(path, hash, role)
+    })
+}
+
+/// Same snapshot/no-overwrite/durability protocol for separately validated
+/// document containers. Callers must validate the actual container at each
+/// stage; workbook publication keeps its original fixed validator above.
+pub(crate) fn create_target_from_candidate_with_validator(
+    candidate: &Path,
+    target: &Path,
+    validate: impl Fn(&Path, &str, &str) -> Result<()>,
+) -> Result<TargetCommitReport> {
     let started = Instant::now();
     ensure_distinct_paths(candidate, target)?;
     ensure_regular_nonsymlink(candidate, "candidate")?;
     ensure_target_absent(target)?;
     let candidate_hash = sha256_file(candidate)?;
-    verify_workbook_file(candidate, &candidate_hash, "candidate")
+    validate(candidate, &candidate_hash, "candidate")
         .context("validate candidate workbook before publication")?;
     let parent = target_parent(target);
     fs::create_dir_all(parent)
@@ -106,7 +119,7 @@ pub fn create_target_from_candidate(candidate: &Path, target: &Path) -> Result<T
         });
     }
     let cleanup_warning = remove_sibling_warning(&staging);
-    if let Err(error) = verify_workbook_file(target, &candidate_hash, "published target") {
+    if let Err(error) = validate(target, &candidate_hash, "published target") {
         if sha256_file(target).ok().as_deref() == Some(candidate_hash.as_str()) {
             let _ = fs::remove_file(target);
             let _ = sync_parent(target);

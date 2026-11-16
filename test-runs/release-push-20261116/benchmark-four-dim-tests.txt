@@ -1,0 +1,16 @@
+test_calc_golden_is_not_derived_from_any_engine_output (test_four_dim.HarnessTests.test_calc_golden_is_not_derived_from_any_engine_output) ... ok
+test_calculation_rejects_boolean_nan_wrong_count_and_wrong_results (test_four_dim.HarnessTests.test_calculation_rejects_boolean_nan_wrong_count_and_wrong_results) ... ok
+test_chart_binding_normalization_keeps_raw_semantics_for_unknown_sheets (test_four_dim.HarnessTests.test_chart_binding_normalization_keeps_raw_semantics_for_unknown_sheets) ... ok
+test_controlled_profile_is_complete_and_uses_corrected_source (test_four_dim.HarnessTests.test_controlled_profile_is_complete_and_uses_corrected_source) ... ok
+test_corrected_cohort_and_preservation_are_reported_separately (test_four_dim.HarnessTests.test_corrected_cohort_and_preservation_are_reported_separately) ... ok
+test_corrected_customxml_has_workbook_ownership_and_unchanged_sheet_parts (test_four_dim.HarnessTests.test_corrected_customxml_has_workbook_ownership_and_unchanged_sheet_parts) ... ok
+test_current_measurements_have_all_rounds_and_single_aspose_lifecycle (test_four_dim.HarnessTests.test_current_measurements_have_all_rounds_and_single_aspose_lifecycle) ... ok
+test_fixed_write_schema (test_four_dim.HarnessTests.test_fixed_write_schema) ... ok
+test_formula_fixture_caches_are_stale_in_both_formats (test_four_dim.HarnessTests.test_formula_fixture_caches_are_stale_in_both_formats) ... ok
+test_invalid_round_cannot_win_or_get_pass_status (test_four_dim.HarnessTests.test_invalid_round_cannot_win_or_get_pass_status) ... ok
+test_part_audit_does_not_hide_metadata_or_unknown_parts (test_four_dim.HarnessTests.test_part_audit_does_not_hide_metadata_or_unknown_parts) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.416s
+
+OK

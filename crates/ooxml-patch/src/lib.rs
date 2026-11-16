@@ -21,6 +21,31 @@ const MAIN_NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const PACKAGE_REL_NS: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
 
+#[cfg(test)]
+mod dependency_sheet_namespace_regression {
+    use super::*;
+
+    #[test]
+    fn append_sheet_binds_relationship_namespace_in_its_own_scope() -> Result<()> {
+        for ancestor_binding in [String::new(), " xmlns:r=\"urn:unrelated\"".to_owned()] {
+            let source = format!(
+                r#"<workbook xmlns="{MAIN_NS}"{ancestor_binding}><sheets><sheet xmlns:r="{REL_NS}" name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+            );
+            let output = append_sheet_entry(source.as_bytes(), "参数", 2, "rId2")?;
+            let xml = std::str::from_utf8(&output)?;
+            let document = Document::parse(xml)?;
+            let sheets = document
+                .descendants()
+                .filter(|n| n.has_tag_name((MAIN_NS, "sheet")))
+                .collect::<Vec<_>>();
+            assert_eq!(sheets.len(), 2);
+            assert_eq!(sheets[1].attribute((REL_NS, "id")), Some("rId2"));
+            assert_eq!(sheets[0].attribute((REL_NS, "id")), Some("rId1"));
+        }
+        Ok(())
+    }
+}
+
 /// A requested width change in one worksheet. Column indexes are 1-based.
 #[derive(Clone, Debug)]
 pub struct ColumnWidthUpdate {
@@ -2831,7 +2856,9 @@ fn append_sheet_entry(
         .rfind("</sheets>")
         .context("workbook.xml has no </sheets>")?;
     let entry = format!(
-        r#"<sheet name="{}" sheetId="{sheet_id}" r:id="{relationship_id}"/>"#,
+        // Openpyxl may declare `r` on each existing sheet, not the workbook.
+        // Bind the inserted element independently of any ancestor prefix.
+        r#"<sheet xmlns="{MAIN_NS}" xmlns:r="{REL_NS}" name="{}" sheetId="{sheet_id}" r:id="{relationship_id}"/>"#,
         escape_xml_text(name)
     );
     let mut patched = xml.to_owned();

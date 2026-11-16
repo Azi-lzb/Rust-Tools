@@ -1,0 +1,20 @@
+[
+  {
+    "package": "calamine-0.37.0",
+    "archive_sha256": "c9ca341b94bc4b29e08970b1a03914fad2dfe177e2ecb67fcd6de9046004aafb",
+    "changed_files": [
+      "src/xls.rs"
+    ],
+    "missing_files": [],
+    "upstream_whitespace_preserved": true
+  },
+  {
+    "package": "umya-spreadsheet-3.1.1",
+    "archive_sha256": "032a20340d2eac6e2e6c940e6b793cd3b68223d5f9412724cb7e32ef17c584d0",
+    "changed_files": [
+      "src/structs/data_validation.rs"
+    ],
+    "missing_files": [],
+    "upstream_whitespace_preserved": true
+  }
+]

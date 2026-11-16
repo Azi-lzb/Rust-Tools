@@ -1,0 +1,22 @@
+[package]
+name = "excel-io-baseline"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+calamine = "=0.37.0"
+rust_xlsxwriter = "=0.101.0"
+serde_json = "1"
+sha2 = "0.10"
+umya-spreadsheet = "=3.1.1"
+ooxml-patch = { path = "../../../../../crates/ooxml-patch" }
+xlsx_calc = { package = "betteroffice-xlsx-calc", path = "../../../../../vendor/betteroffice-xlsx-calc" }
+xlsx_model = { package = "betteroffice-xlsx-model", path = "../../../../../vendor/betteroffice-xlsx-model" }
+
+[patch.crates-io]
+calamine = { path = "../../../../../vendor/calamine-0.37.0" }
+umya-spreadsheet = { path = "../../../../../vendor/umya-spreadsheet-3.1.1" }
+betteroffice-xlsx-model = { path = "../../../../../vendor/betteroffice-xlsx-model" }

@@ -1,0 +1,64 @@
+[
+  {
+    "name": "dotnet-self-contained",
+    "startup_ms": 52570.75869999244,
+    "request_ms": 29285.468899994157,
+    "response": {
+      "request_id": "dotnet-self-contained",
+      "ok": true,
+      "candidate": "F:\\RustBuild\\pytools\\release-push-20261116\\calc-direct-dotnet-self-contained.xlsx",
+      "evaluation_output": true,
+      "source_sheets": [
+        "数据",
+        "参数"
+      ],
+      "source_active_index": 0,
+      "output_sheets": [
+        "数据",
+        "参数",
+        "Evaluation Warning"
+      ],
+      "output_active_index": 2,
+      "load_ms": 20455.4316,
+      "transform_ms": 173.1902000000009,
+      "save_ms": 1340.6736999999994,
+      "preserve_defaults_ms": 6230.3235,
+      "preserved_default_sheets": 0,
+      "processing_ms": 28781.9875,
+      "attempts": 1,
+      "pid": 22076,
+      "draining": false
+    }
+  },
+  {
+    "name": "extended-apphost",
+    "startup_ms": 823.5975000134204,
+    "request_ms": 1977.6572999981,
+    "response": {
+      "request_id": "extended-apphost",
+      "ok": true,
+      "candidate": "\\\\?\\F:\\RustBuild\\pytools\\release-push-20261116\\calc-direct-extended-apphost.xlsx",
+      "evaluation_output": true,
+      "source_sheets": [
+        "数据",
+        "参数"
+      ],
+      "source_active_index": 0,
+      "output_sheets": [
+        "数据",
+        "参数",
+        "Evaluation Warning"
+      ],
+      "output_active_index": 2,
+      "load_ms": 1519.5639,
+      "transform_ms": 53.2688999999998,
+      "save_ms": 229.81090000000017,
+      "preserve_defaults_ms": 151.3129,
+      "preserved_default_sheets": 0,
+      "processing_ms": 1966.0025,
+      "attempts": 1,
+      "pid": 5568,
+      "draining": false
+    }
+  }
+]

@@ -66,7 +66,7 @@ fn user_fx_header_batch_reports_committed_workbooks_without_success_names() -> R
         .join(";");
     let output = run_menu(
         &config,
-        &format!("5\n4\n{selected}\n0\n"),
+        &format!("5\n4\n1\n{selected}\n0\n"),
         &["--log-view".into(), "user".into()],
     )?;
     assert!(
@@ -158,7 +158,11 @@ fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() ->
     // 结果断言依赖 JSON 输出，显式使用 developer 视图。
     let output = run_menu(
         &config,
-        &format!("5\n4\n{};{}\n0\n", target.display(), unsupported.display()),
+        &format!(
+            "5\n4\n1\n{};{}\n0\n",
+            target.display(),
+            unsupported.display()
+        ),
         &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
@@ -217,7 +221,7 @@ fn fx_header_menu_matches_python_baseline_without_external_capability() -> Resul
     let original = fs::read(&target)?;
     let output = run_menu(
         &config,
-        &format!("5\n4\n{}\n0\n", target.display()),
+        &format!("5\n4\n1\n{}\n0\n", target.display()),
         &["--log-view".to_owned(), "developer".to_owned()],
     )?;
     assert!(
@@ -349,7 +353,7 @@ fn fx_header_menu_off_view_saves_no_history_or_events() -> Result<()> {
 
     let output = run_menu(
         &config,
-        &format!("5\n4\n{}\n0\n", target.display()),
+        &format!("5\n4\n1\n{}\n0\n", target.display()),
         &["--log-view".to_owned(), "off".to_owned()],
     )?;
     assert!(

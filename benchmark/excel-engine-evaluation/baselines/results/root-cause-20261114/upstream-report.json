@@ -1,0 +1,654 @@
+{
+  "label": "upstream",
+  "independent_reader": [
+    {
+      "input": "xlwt-references.xls",
+      "differences": []
+    },
+    {
+      "input": "aspose-references.xls",
+      "differences": []
+    },
+    {
+      "input": "openpyxl-control.xlsx",
+      "differences": []
+    }
+  ],
+  "formulas": [
+    {
+      "input": "xlwt-references.xls",
+      "cases": 44,
+      "differences": [
+        {
+          "row": 1,
+          "expected": "SUMIF(Data!A2:A4,\"alpha\",Data!B2:B4)",
+          "actual": "SUMIF(Spare!$BTRM$2:$BTRM$4,\"alpha\",Spare!$BTRN$2:$BTRN$4)"
+        },
+        {
+          "row": 2,
+          "expected": "SUMPRODUCT(Data!B2:B4,Data!C2:C4)",
+          "actual": "SUMPRODUCT(Spare!$BTRN$2:$BTRN$4,Spare!$BTRO$2:$BTRO$4)"
+        },
+        {
+          "row": 3,
+          "expected": "IF(AND(Data!B2>0,Data!C2>0),ROUND(Data!B2*Data!C2,2),0)",
+          "actual": "IF(AND(Data!E$2>=0,Data!$I2>=0),ROUND(Data!E$2*Data!$I2,2),0)"
+        },
+        {
+          "row": 4,
+          "expected": "INDEX(Data!C2:C4,MATCH(\"beta\",Data!A2:A4,0))",
+          "actual": "INDEX(Spare!$BTRO$2:$BTRO$4,MATCH(\"beta\",Spare!$BTRM$2:$BTRM$4,0))"
+        },
+        {
+          "row": 6,
+          "expected": "$B2",
+          "actual": "B$2"
+        },
+        {
+          "row": 7,
+          "expected": "B$2",
+          "actual": "$B2"
+        },
+        {
+          "row": 10,
+          "expected": "SUM($Z99:AA$100)",
+          "actual": "SUM(Z$99:$AA100)"
+        },
+        {
+          "row": 11,
+          "expected": "Data!B2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 12,
+          "expected": "Data!$B2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 13,
+          "expected": "Data!B$2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 14,
+          "expected": "Data!$B$2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 15,
+          "expected": "SUM(Data!Z9:AA10)",
+          "actual": "SUM(Spare!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 16,
+          "expected": "SUM(Data!$Z9:AA$10)",
+          "actual": "SUM(Spare!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 17,
+          "expected": "SUM(Data!Z$99:$AA100)",
+          "actual": "SUM(Spare!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 18,
+          "expected": "SUM(Data!$Z$99:$AA$100)",
+          "actual": "SUM(Spare!$Z$99:$AA$100)"
+        },
+        {
+          "row": 19,
+          "expected": "'Data Set'!B2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 20,
+          "expected": "'Data Set'!$B2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 21,
+          "expected": "'Data Set'!B$2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 22,
+          "expected": "'Data Set'!$B$2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 23,
+          "expected": "SUM('Data Set'!Z9:AA10)",
+          "actual": "SUM(Data!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 24,
+          "expected": "SUM('Data Set'!$Z9:AA$10)",
+          "actual": "SUM(Data!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 25,
+          "expected": "SUM('Data Set'!Z$99:$AA100)",
+          "actual": "SUM(Data!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 26,
+          "expected": "SUM('Data Set'!$Z$99:$AA$100)",
+          "actual": "SUM(Data!$Z$99:$AA$100)"
+        },
+        {
+          "row": 27,
+          "expected": "'O''Brien'!B2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 28,
+          "expected": "'O''Brien'!$B2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 29,
+          "expected": "'O''Brien'!B$2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 30,
+          "expected": "'O''Brien'!$B$2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 31,
+          "expected": "SUM('O''Brien'!Z9:AA10)",
+          "actual": "SUM(Data Set!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 32,
+          "expected": "SUM('O''Brien'!$Z9:AA$10)",
+          "actual": "SUM(Data Set!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 33,
+          "expected": "SUM('O''Brien'!Z$99:$AA100)",
+          "actual": "SUM(Data Set!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 34,
+          "expected": "SUM('O''Brien'!$Z$99:$AA$100)",
+          "actual": "SUM(Data Set!$Z$99:$AA$100)"
+        },
+        {
+          "row": 35,
+          "expected": "Data!Z9",
+          "actual": "Data!CW$9"
+        },
+        {
+          "row": 36,
+          "expected": "Data!AA10",
+          "actual": "Data!$DA10"
+        },
+        {
+          "row": 37,
+          "expected": "Data!Z99",
+          "actual": "Data!CW$99"
+        },
+        {
+          "row": 38,
+          "expected": "Data!AA100",
+          "actual": "Data!$DA100"
+        },
+        {
+          "row": 39,
+          "expected": "Data!B2>0",
+          "actual": "Data!E$2>=0"
+        },
+        {
+          "row": 40,
+          "expected": "Data!B2>=0",
+          "actual": "Data!E$2>0"
+        },
+        {
+          "row": 41,
+          "expected": "Data!B2<0",
+          "actual": "Data!E$2<0"
+        },
+        {
+          "row": 42,
+          "expected": "Data!B2<=0",
+          "actual": "Data!E$2<=0"
+        },
+        {
+          "row": 43,
+          "expected": "Data!B2=0",
+          "actual": "Data!E$2=0"
+        },
+        {
+          "row": 44,
+          "expected": "Data!B2<>0",
+          "actual": "Data!E$2<>0"
+        }
+      ]
+    },
+    {
+      "input": "aspose-references.xls",
+      "cases": 44,
+      "differences": [
+        {
+          "row": 1,
+          "expected": "SUMIF(Data!A2:A4,\"alpha\",Data!B2:B4)",
+          "actual": "SUMIF(Data!$BTRM$2:$BTRM$4,\"alpha\",Data!$BTRN$2:$BTRN$4)"
+        },
+        {
+          "row": 2,
+          "expected": "SUMPRODUCT(Data!B2:B4,Data!C2:C4)",
+          "actual": "SUMPRODUCT(Data!$BTRN$2:$BTRN$4,Data!$BTRO$2:$BTRO$4)"
+        },
+        {
+          "row": 3,
+          "expected": "IF(AND(Data!B2>0,Data!C2>0),ROUND(Data!B2*Data!C2,2),0)",
+          "actual": "IF(AND(Data!E$2>=0,Data!$I2>=0),ROUND(Data!E$2*Data!$I2,2),0)"
+        },
+        {
+          "row": 4,
+          "expected": "INDEX(Data!C2:C4,MATCH(\"beta\",Data!A2:A4,0))",
+          "actual": "INDEX(Data!$BTRO$2:$BTRO$4,MATCH(\"beta\",Data!$BTRM$2:$BTRM$4,0))"
+        },
+        {
+          "row": 6,
+          "expected": "$B2",
+          "actual": "B$2"
+        },
+        {
+          "row": 7,
+          "expected": "B$2",
+          "actual": "$B2"
+        },
+        {
+          "row": 10,
+          "expected": "SUM($Z99:AA$100)",
+          "actual": "SUM(Z$99:$AA100)"
+        },
+        {
+          "row": 11,
+          "expected": "Data!B2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 12,
+          "expected": "Data!$B2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 13,
+          "expected": "Data!B$2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 14,
+          "expected": "Data!$B$2",
+          "actual": "Data!E$2"
+        },
+        {
+          "row": 15,
+          "expected": "SUM(Data!Z9:AA10)",
+          "actual": "SUM(Data!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 16,
+          "expected": "SUM(Data!$Z9:AA$10)",
+          "actual": "SUM(Data!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 17,
+          "expected": "SUM(Data!Z$99:$AA100)",
+          "actual": "SUM(Data!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 19,
+          "expected": "'Data Set'!B2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 20,
+          "expected": "'Data Set'!$B2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 21,
+          "expected": "'Data Set'!B$2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 22,
+          "expected": "'Data Set'!$B$2",
+          "actual": "Data Set!E$2"
+        },
+        {
+          "row": 23,
+          "expected": "SUM('Data Set'!Z9:AA10)",
+          "actual": "SUM(Data Set!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 24,
+          "expected": "SUM('Data Set'!$Z9:AA$10)",
+          "actual": "SUM(Data Set!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 25,
+          "expected": "SUM('Data Set'!Z$99:$AA100)",
+          "actual": "SUM(Data Set!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 26,
+          "expected": "SUM('Data Set'!$Z$99:$AA$100)",
+          "actual": "SUM(Data Set!$Z$99:$AA$100)"
+        },
+        {
+          "row": 27,
+          "expected": "'O''Brien'!B2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 28,
+          "expected": "'O''Brien'!$B2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 29,
+          "expected": "'O''Brien'!B$2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 30,
+          "expected": "'O''Brien'!$B$2",
+          "actual": "O'Brien!E$2"
+        },
+        {
+          "row": 31,
+          "expected": "SUM('O''Brien'!Z9:AA10)",
+          "actual": "SUM(O'Brien!$BTSL$9:$BTSM$10)"
+        },
+        {
+          "row": 32,
+          "expected": "SUM('O''Brien'!$Z9:AA$10)",
+          "actual": "SUM(O'Brien!$AVMH$9:$XGE$10)"
+        },
+        {
+          "row": 33,
+          "expected": "SUM('O''Brien'!Z$99:$AA100)",
+          "actual": "SUM(O'Brien!$XGD$99:$AVMI$100)"
+        },
+        {
+          "row": 34,
+          "expected": "SUM('O''Brien'!$Z$99:$AA$100)",
+          "actual": "SUM(O'Brien!$Z$99:$AA$100)"
+        },
+        {
+          "row": 35,
+          "expected": "Data!Z9",
+          "actual": "Data!CW$9"
+        },
+        {
+          "row": 36,
+          "expected": "Data!AA10",
+          "actual": "Data!$DA10"
+        },
+        {
+          "row": 37,
+          "expected": "Data!Z99",
+          "actual": "Data!CW$99"
+        },
+        {
+          "row": 38,
+          "expected": "Data!AA100",
+          "actual": "Data!$DA100"
+        },
+        {
+          "row": 39,
+          "expected": "Data!B2>0",
+          "actual": "Data!E$2>=0"
+        },
+        {
+          "row": 40,
+          "expected": "Data!B2>=0",
+          "actual": "Data!E$2>0"
+        },
+        {
+          "row": 41,
+          "expected": "Data!B2<0",
+          "actual": "Data!E$2<0"
+        },
+        {
+          "row": 42,
+          "expected": "Data!B2<=0",
+          "actual": "Data!E$2<=0"
+        },
+        {
+          "row": 43,
+          "expected": "Data!B2=0",
+          "actual": "Data!E$2=0"
+        },
+        {
+          "row": 44,
+          "expected": "Data!B2<>0",
+          "actual": "Data!E$2<>0"
+        }
+      ]
+    },
+    {
+      "input": "openpyxl-control.xlsx",
+      "cases": 44,
+      "differences": []
+    }
+  ],
+  "validation": {
+    "in_memory_before_save": [
+      {
+        "formula1": "0",
+        "formula2": "1000",
+        "sqref": "B2:B16"
+      },
+      {
+        "formula1": "-9",
+        "formula2": "99",
+        "sqref": "C2:C16"
+      },
+      {
+        "formula1": "-1.5",
+        "formula2": "2.75",
+        "sqref": "D2:D16"
+      },
+      {
+        "formula1": "0",
+        "formula2": "",
+        "sqref": "E2:E16"
+      },
+      {
+        "formula1": "\"A,B\"",
+        "formula2": "",
+        "sqref": "F2:F16"
+      },
+      {
+        "formula1": "AND(A1>0,A1<1000)",
+        "formula2": "",
+        "sqref": "G2:G16"
+      },
+      {
+        "formula1": "",
+        "formula2": "",
+        "sqref": "H2:H16"
+      }
+    ],
+    "after_reload": [
+      {
+        "formula1": "",
+        "formula2": "",
+        "sqref": "B2:B16"
+      },
+      {
+        "formula1": "",
+        "formula2": "",
+        "sqref": "C2:C16"
+      },
+      {
+        "formula1": "",
+        "formula2": "",
+        "sqref": "D2:D16"
+      },
+      {
+        "formula1": "0",
+        "formula2": "",
+        "sqref": "E2:E16"
+      },
+      {
+        "formula1": "\"A,B\"",
+        "formula2": "",
+        "sqref": "F2:F16"
+      },
+      {
+        "formula1": "AND(A1>0,A1<1000)",
+        "formula2": "",
+        "sqref": "G2:G16"
+      },
+      {
+        "formula1": "",
+        "formula2": "",
+        "sqref": "H2:H16"
+      }
+    ],
+    "raw_xml_before": [
+      {
+        "sqref": "B2:B16",
+        "formula1": "0",
+        "formula2": "1000",
+        "type": "whole",
+        "operator": "between",
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "C2:C16",
+        "formula1": "-9",
+        "formula2": "99",
+        "type": "whole",
+        "operator": "notBetween",
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "D2:D16",
+        "formula1": "-1.5",
+        "formula2": "2.75",
+        "type": "decimal",
+        "operator": "between",
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "E2:E16",
+        "formula1": "0",
+        "formula2": null,
+        "type": "whole",
+        "operator": "greaterThan",
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "F2:F16",
+        "formula1": "\"A,B\"",
+        "formula2": null,
+        "type": "list",
+        "operator": null,
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "G2:G16",
+        "formula1": "AND(A1>0,A1<1000)",
+        "formula2": null,
+        "type": "custom",
+        "operator": null,
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "H2:H16",
+        "formula1": null,
+        "formula2": null,
+        "type": null,
+        "operator": null,
+        "prompt": "keep bounds & message",
+        "promptTitle": "synthetic"
+      }
+    ],
+    "raw_xml_after": [
+      {
+        "sqref": "B2:B16",
+        "formula1": null,
+        "formula2": null,
+        "type": "whole",
+        "operator": "between",
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "C2:C16",
+        "formula1": null,
+        "formula2": null,
+        "type": "whole",
+        "operator": "notBetween",
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "D2:D16",
+        "formula1": null,
+        "formula2": null,
+        "type": "decimal",
+        "operator": "between",
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "E2:E16",
+        "formula1": "0",
+        "formula2": null,
+        "type": "whole",
+        "operator": "greaterThan",
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "F2:F16",
+        "formula1": "\"A,B\"",
+        "formula2": null,
+        "type": "list",
+        "operator": null,
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "G2:G16",
+        "formula1": "AND(A1>0,A1<1000)",
+        "formula2": null,
+        "type": "custom",
+        "operator": null,
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      },
+      {
+        "sqref": "H2:H16",
+        "formula1": null,
+        "formula2": null,
+        "type": null,
+        "operator": null,
+        "prompt": "keep bounds &amp; message",
+        "promptTitle": "synthetic"
+      }
+    ],
+    "raw_xml_equal": false
+  },
+  "input_hashes": {
+    "xlwt-references.xls": "a5771dcad0e6fd6c9d2d1755b9eec70c7516b114a9247cbbcb036bfa502fe489",
+    "aspose-references.xls": "48a58262f552c4a8c108a55a79ea9b13a58f68556bbfda792673649df936cfce",
+    "openpyxl-control.xlsx": "18cec75c5b455da6a181e6aec610e5fc803711e0f972d7886075c0d859f6ec26",
+    "validation-minimal.xlsx": "022915c2dc47079caa8c92becc324f6fde2cca6a1c5fd455f645db0517d52c87"
+  }
+}

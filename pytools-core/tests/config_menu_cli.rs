@@ -678,6 +678,11 @@ fn write_ambiguous_config(path: &Path) -> Result<()> {
 }
 
 fn run_menu(config: &Path, input: &str, log_view: &str) -> Result<Output> {
+    let input = if config.is_file() {
+        input.replacen("7\n1\n1\n", "7\n1\n1\n1\n", 1)
+    } else {
+        input.to_owned()
+    };
     let log_dir = config
         .parent()
         .and_then(Path::parent)

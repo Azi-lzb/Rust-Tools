@@ -1,0 +1,122 @@
+{
+  "aspose-calc-apphost-gates.log": {
+    "passed": 3,
+    "failed": 0,
+    "ignored": 0
+  },
+  "docker-final-workspace-launch.log": {
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0
+  },
+  "docker-final-workspace.log": {
+    "passed": 663,
+    "failed": 0,
+    "ignored": 22
+  },
+  "docker-openpyxl-gates.log": {
+    "passed": 7,
+    "failed": 0,
+    "ignored": 0
+  },
+  "docker-workspace.log": {
+    "passed": 661,
+    "failed": 2,
+    "ignored": 22
+  },
+  "resident-host-tests.log": {
+    "passed": 11,
+    "failed": 0,
+    "ignored": 0
+  },
+  "staged-diff-check.log": {
+    "passed": 149,
+    "failed": 2,
+    "ignored": 5
+  },
+  "wide-blank-detail.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "wide-blank-replay.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-final-workspace.log": {
+    "passed": 671,
+    "failed": 0,
+    "ignored": 33
+  },
+  "windows-gate-0-aspose_menu_cli.log": {
+    "passed": 1,
+    "failed": 2,
+    "ignored": 0
+  },
+  "windows-gate-1-aspose_modify_cli.log": {
+    "passed": 9,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-2-openpyxl_worker.log": {
+    "passed": 7,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-3-config_vba_workbook_parity.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-4-conversion_pywin32_windows.log": {
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-5-conversion_menu_cli.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-6-sheet_rename_execution.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-7-conversion_menu_cli.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-gate-8-conversion_menu_cli.log": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windows-platform-guards-final.log": {
+    "passed": 5,
+    "failed": 0,
+    "ignored": 9
+  },
+  "windows-workspace.log": {
+    "passed": 669,
+    "failed": 2,
+    "ignored": 33
+  },
+  "wsl-final-workspace.log": {
+    "passed": 663,
+    "failed": 0,
+    "ignored": 22
+  },
+  "wsl-openpyxl-gates.log": {
+    "passed": 7,
+    "failed": 0,
+    "ignored": 0
+  },
+  "wsl-workspace.log": {
+    "passed": 636,
+    "failed": 27,
+    "ignored": 22
+  }
+}

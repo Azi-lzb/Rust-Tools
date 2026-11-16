@@ -1,0 +1,2382 @@
+{
+  "formula": {
+    "formulas": [
+      "SUMIF(Data!A2:A4,\"alpha\",Data!B2:B4)",
+      "SUMPRODUCT(Data!B2:B4,Data!C2:C4)",
+      "IF(AND(Data!B2>0,Data!C2>0),ROUND(Data!B2*Data!C2,2),0)",
+      "INDEX(Data!C2:C4,MATCH(\"beta\",Data!A2:A4,0))"
+    ],
+    "expected": [
+      8,
+      68,
+      6,
+      5
+    ],
+    "biff_formula_caches": [
+      {
+        "row": 1,
+        "column": 1,
+        "cached_hex": "030000000000ffff",
+        "empty_cache": true
+      },
+      {
+        "row": 2,
+        "column": 1,
+        "cached_hex": "030000000000ffff",
+        "empty_cache": true
+      },
+      {
+        "row": 3,
+        "column": 1,
+        "cached_hex": "030000000000ffff",
+        "empty_cache": true
+      },
+      {
+        "row": 4,
+        "column": 1,
+        "cached_hex": "030000000000ffff",
+        "empty_cache": true
+      }
+    ],
+    "aspose_actual": [
+      8,
+      68,
+      6,
+      5
+    ],
+    "rust": {
+      "cells": [
+        {
+          "cache": "Some(String(\"\"))",
+          "column": 1,
+          "formula": "SUMIF(Calc!$BTRM$2:$BTRM$4,\"alpha\",Calc!$BTRN$2:$BTRN$4)",
+          "reason": "XLS formula text is not proven faithful; all XLS formulas refused; no calculation implemented",
+          "row": 1,
+          "sheet": "Calc"
+        },
+        {
+          "cache": "Some(String(\"\"))",
+          "column": 1,
+          "formula": "SUMPRODUCT(Calc!$BTRN$2:$BTRN$4,Calc!$BTRO$2:$BTRO$4)",
+          "reason": "XLS formula text is not proven faithful; all XLS formulas refused; no calculation implemented",
+          "row": 2,
+          "sheet": "Calc"
+        },
+        {
+          "cache": "Some(String(\"\"))",
+          "column": 1,
+          "formula": "IF(AND(Data!E$2>=0,Data!$I2>=0),ROUND(Data!E$2*Data!$I2,2),0)",
+          "reason": "XLS formula text is not proven faithful; all XLS formulas refused; no calculation implemented",
+          "row": 3,
+          "sheet": "Calc"
+        },
+        {
+          "cache": "Some(String(\"\"))",
+          "column": 1,
+          "formula": "INDEX(Calc!$BTRO$2:$BTRO$4,MATCH(\"beta\",Calc!$BTRM$2:$BTRM$4,0))",
+          "reason": "XLS formula text is not proven faithful; all XLS formulas refused; no calculation implemented",
+          "row": 4,
+          "sheet": "Calc"
+        }
+      ],
+      "ok": true,
+      "reason": "formula cache cannot be safely preserved; input unchanged; no output created",
+      "status": "UNSUPPORTED"
+    },
+    "classification": "EXPECTED_CAPABILITY_GAP",
+    "aspose_invocation": "explicit CalculateFormula; opening/saving alone is not assumed to calculate",
+    "formula_text_diagnostic": {
+      "expected": [
+        "SUMIF(Data!A2:A4,\"alpha\",Data!B2:B4)",
+        "SUMPRODUCT(Data!B2:B4,Data!C2:C4)",
+        "IF(AND(Data!B2>0,Data!C2>0),ROUND(Data!B2*Data!C2,2),0)",
+        "INDEX(Data!C2:C4,MATCH(\"beta\",Data!A2:A4,0))"
+      ],
+      "calamine_observed": [
+        "SUMIF(Calc!$BTRM$2:$BTRM$4,\"alpha\",Calc!$BTRN$2:$BTRN$4)",
+        "SUMPRODUCT(Calc!$BTRN$2:$BTRN$4,Calc!$BTRO$2:$BTRO$4)",
+        "IF(AND(Data!E$2>=0,Data!$I2>=0),ROUND(Data!E$2*Data!$I2,2),0)",
+        "INDEX(Calc!$BTRO$2:$BTRO$4,MATCH(\"beta\",Calc!$BTRM$2:$BTRM$4,0))"
+      ],
+      "status": "UNEXPECTED_PARSER_DIFFERENCE",
+      "action": "all XLS formulas refused by this experimental adapter; no formula-preserving XLS claim; production routes unchanged"
+    }
+  },
+  "edits": [
+    {
+      "engine": "openpyxl",
+      "operation": "noop",
+      "semantic_unexpected": [],
+      "raw_package": {
+        "added": [],
+        "removed": [
+          "customXml/item1.xml"
+        ],
+        "changed": [
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "c545941ba36c15fcdce4ae4568c663f3ced1a2226ad5082d3fd66b178bfac11a",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "non_target_changed_parts": [
+        "_rels/.rels"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "openpyxl",
+      "operation": "value",
+      "semantic_unexpected": [],
+      "raw_package": {
+        "added": [],
+        "removed": [
+          "customXml/item1.xml"
+        ],
+        "changed": [
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "c545941ba36c15fcdce4ae4568c663f3ced1a2226ad5082d3fd66b178bfac11a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "39d3e5dc65f6b8c978e44e74c54549a3dc36d9d9a1646be658b726744fc8da55",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "non_target_changed_parts": [
+        "_rels/.rels"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "openpyxl",
+      "operation": "style",
+      "semantic_unexpected": [],
+      "raw_package": {
+        "added": [],
+        "removed": [
+          "customXml/item1.xml"
+        ],
+        "changed": [
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "c545941ba36c15fcdce4ae4568c663f3ced1a2226ad5082d3fd66b178bfac11a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "7723808d75847d27700cfd3b62346f1acff9f70b05e6230599d0237ebdf4bc43",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "5571ef8c37081eaeda14c7f937429aacd961ea325b4988ad2c36af5f268c07e1",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "non_target_changed_parts": [
+        "_rels/.rels"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "openpyxl",
+      "operation": "header",
+      "semantic_unexpected": [],
+      "raw_package": {
+        "added": [],
+        "removed": [
+          "customXml/item1.xml"
+        ],
+        "changed": [
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "c545941ba36c15fcdce4ae4568c663f3ced1a2226ad5082d3fd66b178bfac11a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "251a42097a924001b8e95e050b423c96a478f475df9fbedc5aaf380edfef99e2",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "non_target_changed_parts": [
+        "_rels/.rels"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "umya",
+      "operation": "noop",
+      "semantic_unexpected": [
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              null,
+              null
+            ]
+          ],
+          "classification": "DATA_VALIDATION_BOUNDS_LOST"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "8865c96f6f4cd31647c71f6f007b6139db6146d6420274ca8a24a6b0e07a699e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "73e5a29f48d5ab979eeda062493bc7e679265c1344ef936978b8becec5549497",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "97526ab6fcfdd569afdfcb2926e8b9b3a2f390d437532634c92563f8e9b2b113",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "c02ee80cc34a0eb6ac01d963bf35246bf9fcefdbb7dfbefd6fe089bc836b1f3f",
+            "canonical_xml_equal": true
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "ddffb1b6d40d0c8008b25bf9c200a4ffa8d2bb912776784522597f956d5299b9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "652a02d6ac6de3ddaa1b448fa3bce41c262ad628015efd57f160b66234e16202",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "a4d4e7efc485484dae27698587f7dcbd1c71d1bb579d9b525616fadaa17ae00a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "239c73ae24132fa3ae376a3bf6c2ca6c37a18cb70976fa9a8f58dc79aeecaf26",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "341bd6c7139e7fc88fb7d10c6e1ac48ac8e5cc79aeeae1b31bd0fbc39523916e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "5e3ae6536105f4c2eefa7dc26a1bf0f6154542f7503e1bf0ff606766905c969d",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "7fac23491e882aad6e1012f1b828b8812dac6402ea27e4fab98795eceea30432",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "umya",
+      "operation": "value",
+      "semantic_unexpected": [
+        {
+          "path": "/Data/col_widths/B",
+          "before": null,
+          "after": 8.38,
+          "classification": "column_dimension_change_review"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              null,
+              null
+            ]
+          ],
+          "classification": "DATA_VALIDATION_BOUNDS_LOST"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "8865c96f6f4cd31647c71f6f007b6139db6146d6420274ca8a24a6b0e07a699e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "73e5a29f48d5ab979eeda062493bc7e679265c1344ef936978b8becec5549497",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "97526ab6fcfdd569afdfcb2926e8b9b3a2f390d437532634c92563f8e9b2b113",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "c02ee80cc34a0eb6ac01d963bf35246bf9fcefdbb7dfbefd6fe089bc836b1f3f",
+            "canonical_xml_equal": true
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "ddffb1b6d40d0c8008b25bf9c200a4ffa8d2bb912776784522597f956d5299b9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "652a02d6ac6de3ddaa1b448fa3bce41c262ad628015efd57f160b66234e16202",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "a4d4e7efc485484dae27698587f7dcbd1c71d1bb579d9b525616fadaa17ae00a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "239c73ae24132fa3ae376a3bf6c2ca6c37a18cb70976fa9a8f58dc79aeecaf26",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "341bd6c7139e7fc88fb7d10c6e1ac48ac8e5cc79aeeae1b31bd0fbc39523916e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "0a4fd5d356e20cdbe187737ecc7fe3c624c3f54b736550a62318a4637ea34b52",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "7fac23491e882aad6e1012f1b828b8812dac6402ea27e4fab98795eceea30432",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "umya",
+      "operation": "style",
+      "semantic_unexpected": [
+        {
+          "path": "/Data/col_widths/B",
+          "before": null,
+          "after": 8.38,
+          "classification": "column_dimension_change_review"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              null,
+              null
+            ]
+          ],
+          "classification": "DATA_VALIDATION_BOUNDS_LOST"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "8865c96f6f4cd31647c71f6f007b6139db6146d6420274ca8a24a6b0e07a699e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "73e5a29f48d5ab979eeda062493bc7e679265c1344ef936978b8becec5549497",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "97526ab6fcfdd569afdfcb2926e8b9b3a2f390d437532634c92563f8e9b2b113",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "c02ee80cc34a0eb6ac01d963bf35246bf9fcefdbb7dfbefd6fe089bc836b1f3f",
+            "canonical_xml_equal": true
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "ddffb1b6d40d0c8008b25bf9c200a4ffa8d2bb912776784522597f956d5299b9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "cdc1adac326093f0c3cc509b661f1419cd864a385dcb93c27e33e12cfba341ba",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "a4d4e7efc485484dae27698587f7dcbd1c71d1bb579d9b525616fadaa17ae00a",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "239c73ae24132fa3ae376a3bf6c2ca6c37a18cb70976fa9a8f58dc79aeecaf26",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "341bd6c7139e7fc88fb7d10c6e1ac48ac8e5cc79aeeae1b31bd0fbc39523916e",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "b9d41fa772f73371f2197591b4774e13c1e847d8feb7fbfb1d68b0c01eb48310",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "7fac23491e882aad6e1012f1b828b8812dac6402ea27e4fab98795eceea30432",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false
+    },
+    {
+      "engine": "aspose",
+      "operation": "noop",
+      "semantic_unexpected": [
+        {
+          "path": "/Calc/row_heights/1",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/cells/A1/fill_color",
+          "before": "00FFFF00",
+          "after": "FFFFFF00",
+          "classification": "color_alpha_encoding_change"
+        },
+        {
+          "path": "/Data/row_heights/10",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/11",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/12",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/13",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/14",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/15",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/16",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/2",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/3",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/4",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/5",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/6",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/7",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/8",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/9",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              null,
+              "0",
+              "1000"
+            ]
+          ],
+          "classification": "explicit_default_validation_operator"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        },
+        {
+          "path": "/formula_caches/Calc!A1/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D10/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D11/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D12/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D13/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D14/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D15/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D16/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D2/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D3/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D4/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D5/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D6/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D7/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D8/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D9/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/worksheets/sheet3.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "cb52cc508d3aab724d80f9cab289497c65630e1a51b011481a770a5f2cccbee9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "117af601323764146fd6fd7c02b91a34242bc24e41c62aba682f46f4e89bd1e7",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "2c89170e70a2f7e0b4c9f6c5aff2ca5492bcfcdb8cb11ea8a955cc1223ae3df2",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "fc4d0afced2e7a8e5ba0972e34af52630fb110c47d7ad21b0562b39060c60745",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "8d18f99391223c9642ec1f1d595d135001b8edc7270a8c214175d50e271d77f6",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false,
+      "evaluation_view": {
+        "excluded_sheets": [
+          "Evaluation Warning"
+        ],
+        "excluded_parts": [
+          "xl/worksheets/sheet3.xml"
+        ],
+        "excluded_exclusive_evaluation_strings": [
+          {
+            "original_index": 20,
+            "text": "Evaluation Only. Created with Aspose.Cells for .NET. Copyright 2003 - 2026 Aspose Pty Ltd."
+          }
+        ],
+        "remaining_part_sha256": {
+          "[Content_Types].xml": "f821453b71b7a887d912fc6b21c8ddd058cf38e0e3c0436e5d018610c541d57e",
+          "_rels/.rels": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+          "docProps/app.xml": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+          "docProps/core.xml": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+          "xl/_rels/workbook.xml.rels": "85ed7224dfa970410b742f5e4450301e01f00ea3f11daf416d497dca687f5ada",
+          "xl/calcChain.xml": "8874d52a06bafb0e7f3b954a213f15a99fcaf89c916aa3cd68b80128bfcb7ea4",
+          "xl/comments1.xml": "fe321b44fbbdcdd5282023cb6b8e32c78e162ecfe5c89ad2fd5bb8732f44ca12",
+          "xl/drawings/vmlDrawing1.vml": "aa96ae91965f0f9c1b79ff11c1438ff3d2b403f9049b28bc4fed467ad83fe6c4",
+          "xl/sharedStrings.xml": "a837c6a6899315865c25fc193ce9c3fbbf4518d6a4969e027a985e9898e93ed5",
+          "xl/styles.xml": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+          "xl/theme/theme1.xml": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+          "xl/workbook.xml": "949c52e96aa7a32018952ac6bb28f3cfcf106fc7f69ae3777fb52ea2e9caa14a",
+          "xl/worksheets/_rels/sheet1.xml.rels": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+          "xl/worksheets/sheet1.xml": "0dc6e9c9ce5d9100e582f3f355fc92033137efa2aea0cd8c39db7f7e5e2aed63",
+          "xl/worksheets/sheet2.xml": "d687a6e70a5e55254edd63df9ffb79213b3264598f7c1a6b11745ae07a70f3c5"
+        },
+        "note": "comparison view only; exclusive evaluation strings removed with reference remapping; remaining shared styles, user strings and active-sheet changes are not blanket-filtered"
+      },
+      "filtered_package_diff": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet2.xml"
+        ]
+      }
+    },
+    {
+      "engine": "aspose",
+      "operation": "value",
+      "semantic_unexpected": [
+        {
+          "path": "/Calc/row_heights/1",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/cells/A1/fill_color",
+          "before": "00FFFF00",
+          "after": "FFFFFF00",
+          "classification": "color_alpha_encoding_change"
+        },
+        {
+          "path": "/Data/row_heights/10",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/11",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/12",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/13",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/14",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/15",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/16",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/2",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/3",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/4",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/5",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/6",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/7",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/8",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/9",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              null,
+              "0",
+              "1000"
+            ]
+          ],
+          "classification": "explicit_default_validation_operator"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        },
+        {
+          "path": "/formula_caches/Calc!A1/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D10/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D11/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D12/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D13/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D14/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D15/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D16/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D2/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D3/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D4/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D5/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D6/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D7/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D8/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D9/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/worksheets/sheet3.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "cb52cc508d3aab724d80f9cab289497c65630e1a51b011481a770a5f2cccbee9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "117af601323764146fd6fd7c02b91a34242bc24e41c62aba682f46f4e89bd1e7",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "2c89170e70a2f7e0b4c9f6c5aff2ca5492bcfcdb8cb11ea8a955cc1223ae3df2",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "b4ed7d85a5160154a0374dad8d90e57ec559d7823db0b65b092527eda4962488",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "8d18f99391223c9642ec1f1d595d135001b8edc7270a8c214175d50e271d77f6",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false,
+      "evaluation_view": {
+        "excluded_sheets": [
+          "Evaluation Warning"
+        ],
+        "excluded_parts": [
+          "xl/worksheets/sheet3.xml"
+        ],
+        "excluded_exclusive_evaluation_strings": [
+          {
+            "original_index": 20,
+            "text": "Evaluation Only. Created with Aspose.Cells for .NET. Copyright 2003 - 2026 Aspose Pty Ltd."
+          }
+        ],
+        "remaining_part_sha256": {
+          "[Content_Types].xml": "f821453b71b7a887d912fc6b21c8ddd058cf38e0e3c0436e5d018610c541d57e",
+          "_rels/.rels": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+          "docProps/app.xml": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+          "docProps/core.xml": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+          "xl/_rels/workbook.xml.rels": "85ed7224dfa970410b742f5e4450301e01f00ea3f11daf416d497dca687f5ada",
+          "xl/calcChain.xml": "8874d52a06bafb0e7f3b954a213f15a99fcaf89c916aa3cd68b80128bfcb7ea4",
+          "xl/comments1.xml": "fe321b44fbbdcdd5282023cb6b8e32c78e162ecfe5c89ad2fd5bb8732f44ca12",
+          "xl/drawings/vmlDrawing1.vml": "aa96ae91965f0f9c1b79ff11c1438ff3d2b403f9049b28bc4fed467ad83fe6c4",
+          "xl/sharedStrings.xml": "a837c6a6899315865c25fc193ce9c3fbbf4518d6a4969e027a985e9898e93ed5",
+          "xl/styles.xml": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+          "xl/theme/theme1.xml": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+          "xl/workbook.xml": "949c52e96aa7a32018952ac6bb28f3cfcf106fc7f69ae3777fb52ea2e9caa14a",
+          "xl/worksheets/_rels/sheet1.xml.rels": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+          "xl/worksheets/sheet1.xml": "6173dc9e2be3bbaa3134880a21280d7d2af90b252b88f82524fa2d5d3559536f",
+          "xl/worksheets/sheet2.xml": "d687a6e70a5e55254edd63df9ffb79213b3264598f7c1a6b11745ae07a70f3c5"
+        },
+        "note": "comparison view only; exclusive evaluation strings removed with reference remapping; remaining shared styles, user strings and active-sheet changes are not blanket-filtered"
+      },
+      "filtered_package_diff": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "fc4d0afced2e7a8e5ba0972e34af52630fb110c47d7ad21b0562b39060c60745",
+            "target_sha256": "b4ed7d85a5160154a0374dad8d90e57ec559d7823db0b65b092527eda4962488",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet3.xml",
+            "source_sha256": "0a7410f04289a492388307c641de395787bdc4baa2b2fd181ac3fe5ace23740f",
+            "target_sha256": "c147649d75dadb074c58d88ddbdd7de669469b575149d83af0752652bf16fa78",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop_filtered": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "xl/worksheets/sheet1.xml"
+        ]
+      }
+    },
+    {
+      "engine": "aspose",
+      "operation": "style",
+      "semantic_unexpected": [
+        {
+          "path": "/Calc/row_heights/1",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/cells/A1/fill_color",
+          "before": "00FFFF00",
+          "after": "FFFFFF00",
+          "classification": "color_alpha_encoding_change"
+        },
+        {
+          "path": "/Data/row_heights/10",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/11",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/12",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/13",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/14",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/15",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/16",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/2",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/3",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/4",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/5",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/6",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/7",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/8",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/9",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              null,
+              "0",
+              "1000"
+            ]
+          ],
+          "classification": "explicit_default_validation_operator"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        },
+        {
+          "path": "/formula_caches/Calc!A1/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D10/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D11/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D12/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D13/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D14/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D15/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D16/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D2/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D3/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D4/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D5/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D6/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D7/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D8/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D9/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/worksheets/sheet3.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "cb52cc508d3aab724d80f9cab289497c65630e1a51b011481a770a5f2cccbee9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "117af601323764146fd6fd7c02b91a34242bc24e41c62aba682f46f4e89bd1e7",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "0ebf63fc4577af84bb2a0daf7ac7388cb0712866cb70ed034e266fc18b5fbfe4",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "2c89170e70a2f7e0b4c9f6c5aff2ca5492bcfcdb8cb11ea8a955cc1223ae3df2",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "a201ed212d0a3619bfbbec699334cf9336385f4eef4a1ff72533d4c8e491dd19",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "8d18f99391223c9642ec1f1d595d135001b8edc7270a8c214175d50e271d77f6",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false,
+      "evaluation_view": {
+        "excluded_sheets": [
+          "Evaluation Warning"
+        ],
+        "excluded_parts": [
+          "xl/worksheets/sheet3.xml"
+        ],
+        "excluded_exclusive_evaluation_strings": [
+          {
+            "original_index": 20,
+            "text": "Evaluation Only. Created with Aspose.Cells for .NET. Copyright 2003 - 2026 Aspose Pty Ltd."
+          }
+        ],
+        "remaining_part_sha256": {
+          "[Content_Types].xml": "f821453b71b7a887d912fc6b21c8ddd058cf38e0e3c0436e5d018610c541d57e",
+          "_rels/.rels": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+          "docProps/app.xml": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+          "docProps/core.xml": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+          "xl/_rels/workbook.xml.rels": "85ed7224dfa970410b742f5e4450301e01f00ea3f11daf416d497dca687f5ada",
+          "xl/calcChain.xml": "8874d52a06bafb0e7f3b954a213f15a99fcaf89c916aa3cd68b80128bfcb7ea4",
+          "xl/comments1.xml": "fe321b44fbbdcdd5282023cb6b8e32c78e162ecfe5c89ad2fd5bb8732f44ca12",
+          "xl/drawings/vmlDrawing1.vml": "aa96ae91965f0f9c1b79ff11c1438ff3d2b403f9049b28bc4fed467ad83fe6c4",
+          "xl/sharedStrings.xml": "a837c6a6899315865c25fc193ce9c3fbbf4518d6a4969e027a985e9898e93ed5",
+          "xl/styles.xml": "0ebf63fc4577af84bb2a0daf7ac7388cb0712866cb70ed034e266fc18b5fbfe4",
+          "xl/theme/theme1.xml": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+          "xl/workbook.xml": "949c52e96aa7a32018952ac6bb28f3cfcf106fc7f69ae3777fb52ea2e9caa14a",
+          "xl/worksheets/_rels/sheet1.xml.rels": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+          "xl/worksheets/sheet1.xml": "858f60aa723ada04dc4c049ffb2f3eb2c21052286d6e7e6beda58ae03d31e832",
+          "xl/worksheets/sheet2.xml": "d687a6e70a5e55254edd63df9ffb79213b3264598f7c1a6b11745ae07a70f3c5"
+        },
+        "note": "comparison view only; exclusive evaluation strings removed with reference remapping; remaining shared styles, user strings and active-sheet changes are not blanket-filtered"
+      },
+      "filtered_package_diff": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+            "target_sha256": "0ebf63fc4577af84bb2a0daf7ac7388cb0712866cb70ed034e266fc18b5fbfe4",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "fc4d0afced2e7a8e5ba0972e34af52630fb110c47d7ad21b0562b39060c60745",
+            "target_sha256": "a201ed212d0a3619bfbbec699334cf9336385f4eef4a1ff72533d4c8e491dd19",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet3.xml",
+            "source_sha256": "0a7410f04289a492388307c641de395787bdc4baa2b2fd181ac3fe5ace23740f",
+            "target_sha256": "2135ca57998a7b0528d07d84cf7120b00e1347856c35c9ba780b1f2317c1637b",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop_filtered": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "xl/styles.xml",
+          "xl/worksheets/sheet1.xml"
+        ]
+      }
+    },
+    {
+      "engine": "aspose",
+      "operation": "header",
+      "semantic_unexpected": [
+        {
+          "path": "/Calc/row_heights/1",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/cells/A1/fill_color",
+          "before": "00FFFF00",
+          "after": "FFFFFF00",
+          "classification": "color_alpha_encoding_change"
+        },
+        {
+          "path": "/Data/row_heights/10",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/11",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/12",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/13",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/14",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/15",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/16",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/2",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/3",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/4",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/5",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/6",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/7",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/8",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/row_heights/9",
+          "before": null,
+          "after": 15.0,
+          "classification": "explicit_default_row_height"
+        },
+        {
+          "path": "/Data/validations",
+          "before": [
+            [
+              "B2:B16",
+              "whole",
+              "between",
+              "0",
+              "1000"
+            ]
+          ],
+          "after": [
+            [
+              "B2:B16",
+              "whole",
+              null,
+              "0",
+              "1000"
+            ]
+          ],
+          "classification": "explicit_default_validation_operator"
+        },
+        {
+          "path": "/defined_names/Quantity",
+          "before": "'Data'!$B$2:$B$16",
+          "after": "Data!$B$2:$B$16",
+          "classification": "equivalent_sheet_name_quoting"
+        },
+        {
+          "path": "/formula_caches/Calc!A1/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D10/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D11/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D12/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D13/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D14/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D15/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D16/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D2/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D3/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D4/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D5/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D6/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D7/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D8/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        },
+        {
+          "path": "/formula_caches/Data!D9/type",
+          "before": "n",
+          "after": "str",
+          "classification": "empty_formula_cache_type_encoding_change"
+        }
+      ],
+      "raw_package": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/worksheets/sheet3.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          {
+            "part": "[Content_Types].xml",
+            "source_sha256": "2bfafa3308d070ef0e5edb6ad76f5cfab78b16fda7eb04ecc58c959a3ba08c31",
+            "target_sha256": "cb52cc508d3aab724d80f9cab289497c65630e1a51b011481a770a5f2cccbee9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "_rels/.rels",
+            "source_sha256": "63038fb341c52af2aa14bbbd3d2a5a7dc0738496ede1ab828449687c1174b16f",
+            "target_sha256": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/app.xml",
+            "source_sha256": "209fca6b00afe72a5029754b94be5953d8f16d96f67130325566b9366ad4ccc5",
+            "target_sha256": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "docProps/core.xml",
+            "source_sha256": "518c1c1dc163b6373132472334230ff5fec119a0486734042db60e66f2c0d69e",
+            "target_sha256": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/_rels/workbook.xml.rels",
+            "source_sha256": "d3b58263f0f6fe71647d0431c9bd3d237fac84f69645ab20ddeffea7232374d0",
+            "target_sha256": "117af601323764146fd6fd7c02b91a34242bc24e41c62aba682f46f4e89bd1e7",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/styles.xml",
+            "source_sha256": "c0f9ff481fbdab6fa5fb571df6857dd46c0bc84530e8d42e64d713f564d85881",
+            "target_sha256": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/theme/theme1.xml",
+            "source_sha256": "d15e8ebf78ef7b9720839d7ae8fdc81a7df5bc24706d8e137df61a5683c358d9",
+            "target_sha256": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/workbook.xml",
+            "source_sha256": "eaaea4c5d95c02a283550cc3e2675d5a05e52623d99b4a241e098e8a5a407e1b",
+            "target_sha256": "2c89170e70a2f7e0b4c9f6c5aff2ca5492bcfcdb8cb11ea8a955cc1223ae3df2",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/_rels/sheet1.xml.rels",
+            "source_sha256": "f8fcd8fa63cdcb7017c989bcb5b5c34650e1af1636d854d3001a4d2f8c9ec5f0",
+            "target_sha256": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "613d428653f4dd27cc330e24a786dde4437e2eccd8cd5b78c19a441cf10165b4",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet2.xml",
+            "source_sha256": "64cc4ac5275edae584340f79b0ee8015bd34a3d3f78eb5bbc02992b222de84c3",
+            "target_sha256": "8d18f99391223c9642ec1f1d595d135001b8edc7270a8c214175d50e271d77f6",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": []
+      },
+      "non_target_changed_parts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/theme/theme1.xml",
+        "xl/workbook.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/sheet2.xml"
+      ],
+      "precise_part_patch": false,
+      "evaluation_view": {
+        "excluded_sheets": [
+          "Evaluation Warning"
+        ],
+        "excluded_parts": [
+          "xl/worksheets/sheet3.xml"
+        ],
+        "excluded_exclusive_evaluation_strings": [
+          {
+            "original_index": 20,
+            "text": "Evaluation Only. Created with Aspose.Cells for .NET. Copyright 2003 - 2026 Aspose Pty Ltd."
+          }
+        ],
+        "remaining_part_sha256": {
+          "[Content_Types].xml": "f821453b71b7a887d912fc6b21c8ddd058cf38e0e3c0436e5d018610c541d57e",
+          "_rels/.rels": "53956c053a1a6c680b5ac679c264bcfd5c5eced833e99f8b47c9d2a11626f1c1",
+          "docProps/app.xml": "0f68e7bb7d73dc8a6901df221a2fd19f428bf2bbb3971c5776afbc3373e4503f",
+          "docProps/core.xml": "a5a24da02ea310403161a0a288486979a1a426ed3ae82603190fdce8d83b97ec",
+          "xl/_rels/workbook.xml.rels": "85ed7224dfa970410b742f5e4450301e01f00ea3f11daf416d497dca687f5ada",
+          "xl/calcChain.xml": "8874d52a06bafb0e7f3b954a213f15a99fcaf89c916aa3cd68b80128bfcb7ea4",
+          "xl/comments1.xml": "fe321b44fbbdcdd5282023cb6b8e32c78e162ecfe5c89ad2fd5bb8732f44ca12",
+          "xl/drawings/vmlDrawing1.vml": "aa96ae91965f0f9c1b79ff11c1438ff3d2b403f9049b28bc4fed467ad83fe6c4",
+          "xl/sharedStrings.xml": "a837c6a6899315865c25fc193ce9c3fbbf4518d6a4969e027a985e9898e93ed5",
+          "xl/styles.xml": "0795b5d4fdb59a4274eb6782176a58b54693fd4a3c2e93da068e7e7f24d2639c",
+          "xl/theme/theme1.xml": "bf6dfcfb2b3280e414f47982c268c32d88cbcea468e3454ee20af170f5fb7ed9",
+          "xl/workbook.xml": "949c52e96aa7a32018952ac6bb28f3cfcf106fc7f69ae3777fb52ea2e9caa14a",
+          "xl/worksheets/_rels/sheet1.xml.rels": "0fdd8fe39daf5b6c1732793bf0aea8afde7d3b5568ea78590b6b6119960fb724",
+          "xl/worksheets/sheet1.xml": "169832c806e14093cedf727bd6cdf4706dcbe8175b825eed53418dd1d7ff0ba8",
+          "xl/worksheets/sheet2.xml": "d687a6e70a5e55254edd63df9ffb79213b3264598f7c1a6b11745ae07a70f3c5"
+        },
+        "note": "comparison view only; exclusive evaluation strings removed with reference remapping; remaining shared styles, user strings and active-sheet changes are not blanket-filtered"
+      },
+      "filtered_package_diff": {
+        "added": [
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml"
+        ],
+        "removed": [
+          "customXml/item1.xml",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml"
+        ],
+        "changed": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "fc4d0afced2e7a8e5ba0972e34af52630fb110c47d7ad21b0562b39060c60745",
+            "target_sha256": "613d428653f4dd27cc330e24a786dde4437e2eccd8cd5b78c19a441cf10165b4",
+            "canonical_xml_equal": false
+          },
+          {
+            "part": "xl/worksheets/sheet3.xml",
+            "source_sha256": "0a7410f04289a492388307c641de395787bdc4baa2b2fd181ac3fe5ace23740f",
+            "target_sha256": "27470b6a82632059143b1ed32eb0d5b0be1dba7cf79c3091a2b25e5cb830862d",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/calcChain.xml",
+          "xl/comments1.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/sharedStrings.xml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "versus_own_noop_filtered": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "xl/worksheets/sheet1.xml"
+        ]
+      }
+    },
+    {
+      "engine": "ooxml-patch",
+      "operation": "header",
+      "semantic_unexpected": [],
+      "raw_package": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "part": "xl/worksheets/sheet1.xml",
+            "source_sha256": "b8e07b6bab9bf7b9281e49122030707dc10aa98e8a2ca941ccd4df2588f5f844",
+            "target_sha256": "251a42097a924001b8e95e050b423c96a478f475df9fbedc5aaf380edfef99e2",
+            "canonical_xml_equal": false
+          }
+        ],
+        "unchanged": [
+          "[Content_Types].xml",
+          "_rels/.rels",
+          "customXml/item1.xml",
+          "docProps/app.xml",
+          "docProps/core.xml",
+          "xl/_rels/workbook.xml.rels",
+          "xl/comments/comment1.xml",
+          "xl/drawings/commentsDrawing1.vml",
+          "xl/styles.xml",
+          "xl/theme/theme1.xml",
+          "xl/workbook.xml",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/sheet2.xml"
+        ]
+      },
+      "non_target_changed_parts": [],
+      "precise_part_patch": true
+    }
+  ],
+  "input_integrity": {
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\excel-engine-evaluation\\baselines\\results\\capabilities-windows-20261114-verified\\edit-input.xlsx": true,
+    "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\benchmark\\excel-engine-evaluation\\baselines\\results\\capabilities-windows-20261114-verified\\formula-missing-cache.xls": true
+  }
+}

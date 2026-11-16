@@ -352,6 +352,165 @@ fn is_supported_workbook(path: &Path) -> bool {
             })
 }
 
+/// Explicit evaluation route. The existing narrow repair remains responsible
+/// for its two OOXML fixes; Aspose opens/saves only private copies. Auto and
+/// Linux platform routes above are unchanged.
+pub fn run_excel_open_repair_batch_aspose(
+    inputs: &[PathBuf],
+    recursive: bool,
+) -> Result<ExcelOpenRepairRunReport> {
+    crate::aspose_edit::ModifyMode::Aspose.preflight()?;
+    let started = Instant::now();
+    let files = collect_inputs(inputs, recursive)?;
+    let mut report = ExcelOpenRepairRunReport {
+        files_scanned: files.len(),
+        workbooks: 0,
+        repaired: 0,
+        unchanged: 0,
+        skipped: 0,
+        quoted_total: 0,
+        pane_fixed_total: 0,
+        external_refs_total: 0,
+        shared_formula_ref_fixed_total: 0,
+        missing_sheet_refs: Vec::new(),
+        external_links_dropped_files: 0,
+        elapsed_ms: 0,
+        files: Vec::new(),
+    };
+    let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+    for input in files {
+        let clock = Instant::now();
+        let mut item = ExcelOpenRepairFileResult {
+            input: input.clone(),
+            output: None,
+            status: "failed".into(),
+            quoted: 0,
+            pane_fixed: 0,
+            external_refs_stripped: 0,
+            missing_sheet_refs: Vec::new(),
+            external_links_dropped: false,
+            shared_formula_ref_fixed: 0,
+            reason: None,
+            elapsed_ms: 0,
+        };
+        let result = (|| -> Result<()> {
+            let input = fs::canonicalize(&input)?;
+            let extension = input
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            anyhow::ensure!(
+                matches!(extension.as_str(), "xlsx" | "xls"),
+                "Aspose 修复仅启用 XLS/XLSX 副本；未回退 COM"
+            );
+            let hash = crate::file_commit::sha256_file(&input)?;
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos();
+            let scratch = input
+                .parent()
+                .context("missing source parent")?
+                .join(format!(".aspose-repair-{}-{stamp}", std::process::id()));
+            fs::create_dir(&scratch)?;
+            struct Cleanup(PathBuf);
+            impl Drop for Cleanup {
+                fn drop(&mut self) {
+                    for name in ["input.xlsx", "candidate.xlsx"] {
+                        let _ = fs::remove_file(self.0.join(name));
+                    }
+                    let _ = fs::remove_dir(&self.0);
+                }
+            }
+            let _cleanup = Cleanup(scratch.clone());
+            let stage = scratch.join("input.xlsx");
+            let candidate = scratch.join("candidate.xlsx");
+            if extension == "xls" {
+                crate::conversion::convert_one_with_runtime(
+                    &input,
+                    &candidate,
+                    "xlsx",
+                    "aspose",
+                    &mut runtime,
+                )?;
+            } else {
+                crate::file_commit::copy_workbook_to_new_target(&input, &stage)?;
+            }
+            let repair_path = if extension == "xls" {
+                &candidate
+            } else {
+                &stage
+            };
+            let repair = repair_excel_com_open_issues(repair_path);
+            if !repair.changed && extension == "xlsx" {
+                item.status = "unchanged".into();
+                item.reason = Some(repair.reason);
+                return Ok(());
+            }
+            if extension == "xlsx" {
+                crate::conversion::convert_one_with_runtime(
+                    &stage,
+                    &candidate,
+                    "xlsx",
+                    "aspose",
+                    &mut runtime,
+                )?;
+            }
+            // Independently reopen after both the repair and the engine Save.
+            excel_reader::read_workbook(&candidate)?;
+            crate::file_commit::verify_planning_snapshot(&input, Some(&hash))?;
+            let desired = input.with_file_name(format!(
+                "{}-Excel修复_Aspose.xlsx",
+                input.file_stem().unwrap_or_default().to_string_lossy()
+            ));
+            anyhow::ensure!(
+                !desired.exists(),
+                "Aspose 修复目标已存在，拒绝覆盖：{}",
+                desired.display()
+            );
+            crate::file_commit::create_target_from_candidate(&candidate, &desired)?;
+            item.output = Some(desired);
+            item.status = if repair.changed {
+                "repaired"
+            } else {
+                "unchanged"
+            }
+            .into();
+            item.quoted = repair.quoted;
+            item.pane_fixed = repair.pane_fixed;
+            item.external_refs_stripped = repair.external_refs_stripped;
+            item.missing_sheet_refs = repair.missing_sheet_refs;
+            item.external_links_dropped = repair.external_links_dropped;
+            item.shared_formula_ref_fixed = repair.shared_formula_ref_fixed;
+            item.reason = Some("Aspose .NET 评估副本，水印保留".into());
+            Ok(())
+        })();
+        if let Err(error) = result {
+            item.reason = Some(format!("{error:#}"));
+        }
+        item.elapsed_ms = clock.elapsed().as_millis();
+        match item.status.as_str() {
+            "repaired" => report.repaired += 1,
+            "unchanged" => report.unchanged += 1,
+            _ => {}
+        }
+        report.workbooks += 1;
+        report.quoted_total += item.quoted;
+        report.pane_fixed_total += item.pane_fixed;
+        report.external_refs_total += item.external_refs_stripped;
+        report.shared_formula_ref_fixed_total += item.shared_formula_ref_fixed;
+        report.external_links_dropped_files += usize::from(item.external_links_dropped);
+        for name in &item.missing_sheet_refs {
+            if !report.missing_sheet_refs.contains(name) {
+                report.missing_sheet_refs.push(name.clone());
+            }
+        }
+        report.files.push(item);
+    }
+    report.elapsed_ms = started.elapsed().as_millis();
+    Ok(report)
+}
+
 /// 修复副本发布名：`<stem>-Excel修复.<ext>`，已存在时追加 `_1`、`_2`…
 /// 把非 ZIP 的 .xls 另存为 .xlsx（目标即 `-Excel修复` 副本路径）。
 ///

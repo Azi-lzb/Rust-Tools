@@ -138,6 +138,9 @@ pub(crate) fn apply_plan(
     let mut backends: Vec<Arc<dyn EditBackend>> = Vec::new();
     for capability in capabilities.iter().cloned() {
         match capability.engine {
+            EngineId::AsposeWorker => backends.push(Arc::new(
+                crate::aspose_edit::AsposeEditBackend::new(capability)?,
+            )),
             EngineId::UmyaSpreadsheet => backends.push(Arc::new(UmyaXlsxBackend::new(capability)?)),
             EngineId::OoxmlPatch => {
                 backends.push(Arc::new(OoxmlHeaderTextBackend::new(capability)?))
@@ -150,11 +153,9 @@ pub(crate) fn apply_plan(
                     "pytools",
                 )?))
             }
-            EngineId::RustNativeOoxml => {
-                backends.push(Arc::new(excel_editor::RustNativeOoxmlBackend::new(
-                    capability,
-                )?))
-            }
+            EngineId::RustNativeOoxml => backends.push(Arc::new(
+                excel_editor::RustNativeOoxmlBackend::new(capability)?,
+            )),
             EngineId::BetterOffice => {
                 backends.push(Arc::new(BetterOfficeAdapter::new(capability)?))
             }
@@ -164,7 +165,19 @@ pub(crate) fn apply_plan(
             other => anyhow::bail!("no runtime adapter is registered for backend {other}"),
         }
     }
-    let modifier = ExcelModifier::new(platform, backends, Arc::new(PlanOutputValidator))?;
+    let aspose = capabilities
+        .iter()
+        .any(|c| c.engine == EngineId::AsposeWorker);
+    anyhow::ensure!(
+        !aspose || capabilities.len() == 1,
+        "Aspose explicit route cannot mix fallback engines"
+    );
+    let validator: Arc<dyn excel_editor::OutputValidator> = if aspose {
+        Arc::new(crate::aspose_edit::AsposePlanValidator)
+    } else {
+        Arc::new(PlanOutputValidator)
+    };
+    let modifier = ExcelModifier::new(platform, backends, validator)?;
     modifier.execute(plan).map_err(anyhow::Error::from)
 }
 

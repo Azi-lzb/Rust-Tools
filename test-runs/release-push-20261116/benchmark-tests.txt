@@ -1,0 +1,22 @@
+test_biff_fixture_proves_empty_formula_caches (test_analysis.AnalysisTests.test_biff_fixture_proves_empty_formula_caches) ... ok
+test_exclusive_trial_sst_filtered_but_user_shared_string_retained (test_analysis.AnalysisTests.test_exclusive_trial_sst_filtered_but_user_shared_string_retained) ... ok
+test_failed_or_missing_round_not_reported_pass (test_analysis.AnalysisTests.test_failed_or_missing_round_not_reported_pass) ... ok
+test_part_diff_ignores_container_compression_but_detects_part_change (test_analysis.AnalysisTests.test_part_diff_ignores_container_compression_but_detects_part_change) ... ok
+test_rust_formula_refusal_preserves_input_and_has_no_output (test_analysis.AnalysisTests.test_rust_formula_refusal_preserves_input_and_has_no_output) ... ok
+test_saved_capability_outputs_have_intended_edit_and_preserve_other_values (test_analysis.AnalysisTests.test_saved_capability_outputs_have_intended_edit_and_preserve_other_values) ... ok
+test_validation_bounds_loss_is_never_default_normalized (test_analysis.AnalysisTests.test_validation_bounds_loss_is_never_default_normalized) ... ok
+test_vendor_view_never_modifies_raw_or_filters_original_sheet (test_analysis.AnalysisTests.test_vendor_view_never_modifies_raw_or_filters_original_sheet) ... ok
+preserved protocol outputs: C:\Users\AZI\Desktop\VibeCode\Rust-Tools\benchmark\excel-engine-evaluation\baselines\results\protocol-uwcv_joj
+test_all_adapters_small_and_existing_output_refused (test_protocol.ValidationTests.test_all_adapters_small_and_existing_output_refused) ... ok
+test_detect_mismatch_extra_and_vendor_lookalike (test_protocol.ValidationTests.test_detect_mismatch_extra_and_vendor_lookalike) ... ok
+test_calculation_is_explicit_and_rust_stays_unsupported_without_output (test_root_cause.RootCauseRegression.test_calculation_is_explicit_and_rust_stays_unsupported_without_output) ... ok
+test_postfix_edits_keep_intended_values_styles_merges_and_validation_bounds (test_root_cause.RootCauseRegression.test_postfix_edits_keep_intended_values_styles_merges_and_validation_bounds) ... ok
+test_prior_workbooks_and_protected_config_and_dist_remain_identical (test_root_cause.RootCauseRegression.test_prior_workbooks_and_protected_config_and_dist_remain_identical) ... ok
+test_report_uses_current_evidence_instead_of_stale_failure_text (test_root_cause.RootCauseRegression.test_report_uses_current_evidence_instead_of_stale_failure_text) ... ok
+test_two_xls_generators_reproduce_and_patch_matches_xlsx_control (test_root_cause.RootCauseRegression.test_two_xls_generators_reproduce_and_patch_matches_xlsx_control) ... ok
+test_validation_memory_was_correct_but_save_lost_bounds_now_preserved (test_root_cause.RootCauseRegression.test_validation_memory_was_correct_but_save_lost_bounds_now_preserved) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 77.033s
+
+OK

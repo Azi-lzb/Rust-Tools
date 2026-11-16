@@ -1,0 +1,157 @@
+{
+  "status": "PASS_EXPLICIT_WINDOWS_CALC_INTEGRATION",
+  "entry": "1 -> 5 -> 4; summary-named-validation --calc-engine aspose",
+  "automatic_route_unchanged": true,
+  "linux_routes_unchanged": true,
+  "watermark_policy": "Accepted evaluation output; raw candidates and calculation copies retain sheet and active-tab change",
+  "tests": {
+    "cli": {
+      "passed": 7,
+      "log": "cli-final-safety.log"
+    },
+    "unit": {
+      "passed": 3,
+      "log": "unit-final.log"
+    },
+    "real_net": {
+      "passed": 3,
+      "log": "real-final.log"
+    },
+    "host_protocol": {
+      "passed": 11,
+      "log": "host-regression.log"
+    },
+    "real_menu": {
+      "passed": 1,
+      "record": "menu-e2e/RESULT.json"
+    }
+  },
+  "real": [
+    {
+      "evidence": "test-runs\\aspose-main-integration-20261115\\evidence\\real-0",
+      "requested": "aspose",
+      "input_stats": {
+        "attempted": 100,
+        "cancelled": 0,
+        "failed": 0,
+        "pending": 0,
+        "selected": 100,
+        "skipped": 0,
+        "succeeded": 100
+      },
+      "output_stats": {
+        "saved": true,
+        "sheets_saved": 1,
+        "workbooks_saved": 1
+      },
+      "worker_processes": 2,
+      "error_summary": null,
+      "worker_count_basis": "Distinct per-spawn stderr logs with this run ID task events; matched against committed worker PIDs when available",
+      "worker_event_logs": [
+        "test-runs\\aspose-main-integration-20261115\\evidence\\real-0\\logs\\aspose-worker\\worker-1794707031083674200-1.jsonl",
+        "test-runs\\aspose-main-integration-20261115\\evidence\\real-0\\logs\\aspose-worker\\worker-1794707050686406700-2.jsonl"
+      ]
+    },
+    {
+      "evidence": "test-runs\\aspose-main-integration-20261115\\evidence\\real-1",
+      "requested": "aspose",
+      "input_stats": {
+        "attempted": 2,
+        "cancelled": 0,
+        "failed": 0,
+        "pending": 0,
+        "selected": 2,
+        "skipped": 0,
+        "succeeded": 2
+      },
+      "output_stats": {
+        "saved": true,
+        "sheets_saved": 1,
+        "workbooks_saved": 1
+      },
+      "worker_processes": 1,
+      "error_summary": null,
+      "worker_count_basis": "Distinct per-spawn stderr logs with this run ID task events; matched against committed worker PIDs when available",
+      "worker_event_logs": [
+        "test-runs\\aspose-main-integration-20261115\\evidence\\real-1\\logs\\aspose-worker\\worker-1794707053345383000-1.jsonl"
+      ]
+    },
+    {
+      "evidence": "test-runs\\aspose-main-integration-20261115\\evidence\\real-2",
+      "requested": "aspose",
+      "input_stats": {
+        "attempted": 1,
+        "cancelled": 0,
+        "failed": 1,
+        "pending": 0,
+        "selected": 1,
+        "skipped": 0,
+        "succeeded": 0
+      },
+      "output_stats": {
+        "saved": false,
+        "sheets_saved": 0,
+        "workbooks_saved": 0
+      },
+      "worker_processes": 1,
+      "error_summary": {
+        "code": "named_validation_calculation_error",
+        "file_name": "source-000.xlsx",
+        "message": "工作簿「source-000.xlsx」：公式重算校验区域失败：「source-000.xlsx」/「数据」；原因：Aspose 校验区域包含未识别函数或名称：数据!D2；候选未提交，未回退其他引擎",
+        "stage": "validation_calculation"
+      },
+      "worker_count_basis": "Distinct per-spawn stderr logs with this run ID task events; matched against committed worker PIDs when available",
+      "worker_event_logs": [
+        "test-runs\\aspose-main-integration-20261115\\evidence\\real-2\\logs\\aspose-worker\\worker-1794707055133918900-1.jsonl"
+      ]
+    }
+  ],
+  "protected_files": {
+    "config.xlsx": true,
+    "dist\\RustTools.exe": true,
+    "dist\\config\\config.xlsx": true
+  },
+  "existing_cargo_changes_preserved": true,
+  "shared_adapter_moved_without_semantic_change": true,
+  "formatting_audit": "format-audit.json",
+  "initial_failures_retained": {
+    "UTF8_paths": "real-tests.log -> fixed by explicit C# Console UTF-8; real-final.log passes",
+    "error_summary": "cli-release-check.log -> added existing structured error summary to compatible report; original assertion retained"
+  },
+  "source_sha256": {
+    "Cargo.toml": "19a96893f05321657c9d1375014bfa900d701de0aa63d782a6ce4abf4a92c642",
+    "Cargo.lock": "70d03aba940f6c40828cdeabdab9bb8124ce24ea520b6f0f33bc4e49591428ec",
+    "pytools-core/Cargo.toml": "9d534d0331e8617439b774a92baa533b47dada66c1d396e12c11eda3c7395061",
+    "pytools-core/src/lib.rs": "7f1c8f18cd91c4ef6e8ae6e77c02e7542d5e11708275aa24ed7c572d65b52540",
+    "pytools-core/src/bin/RustTools.rs": "d6de9726de9e4a63b68acb40b14933cd1eea8e7e9ec51f0494c68333909876b3",
+    "pytools-core/src/conversion_engine.rs": "bedc5da80a8f6e7ccf683329f6c678f6a8428660c49af955dd2892a7c679cde7",
+    "pytools-core/src/summary_ops.rs": "a08be2db8138c554219a038412cab10d22148a0d3133b0eaa6cf0984be9158d8",
+    "pytools-core/src/aspose_integration.rs": "9bd41a103cd74fd2b8659c71513fd45bf59650a4ff5c5fd2fddd1616ac7472da",
+    "pytools-core/tests/aspose_menu_cli.rs": "0e2bc2db573b75c13bac85429d12f0db85adab6a97818a11d999ae0715f4b006",
+    "crates/excel-aspose/Cargo.toml": "f5f2e13ac1ef90f80becfb5276576063d703f7cee9634b738640acf26153f439",
+    "crates/excel-aspose/src/lib.rs": "d08c3cafc4ba7a19b9ebc3b5b200fb985ffdb9aac697058b98a1438589b58d82",
+    "tools/aspose-worker-host/Cargo.toml": "f2ca42c57ba2bd9a6aea262d20540b9cd167c00563c9836c4dbe05e39f961e4a",
+    "tools/aspose-worker-host/Cargo.lock": "07d6e15276d3d1266418b45f8b1b45bce9ed011e179dd0875f0ad7801d376dac",
+    "tools/aspose-worker-host/src/lib.rs": "0e3dd46fb0873960b0c46ecc2b6030c066586541716a2a77ae4ad3c6ac7a7889",
+    "tools/AsposeWorker/Program.cs": "e533e46f6a8300d79aa28681d8eb93e21db4ea008e98c1ea7b0d70f87f0f1cbd",
+    "tools/AsposeWorker/README.md": "aaf597bf249146b60983c18c32d7b75779887e3cc9482fcbc6ea28a788c921c7",
+    "docs/ASPOSE_CALC_INTEGRATION.md": "ebfa06403464379657b8a60da63152eee02a1f723b4db980627244c6543d652e"
+  },
+  "binaries": {
+    "F:\\RustBuild\\pytools\\debug\\RustTools.exe": "830cc9a47f7f51d1cba844e7623b2fb4c82651d1dc20c9f55acde68d559bf1d1",
+    "F:\\RustBuild\\pytools\\aspose-worker\\bin\\AsposeWorker.dll": "813307686b6b1c18829174969de069b497026d236c6a345e8a328da41c89e238"
+  },
+  "not_tested": [
+    "full workspace tests",
+    "new Linux/WSL/Docker/Kylin route",
+    "WPS and forced COM real environment in this round",
+    "real business files manual acceptance",
+    "modification engine menu",
+    "4-4 Aspose conversion",
+    "packaging/install/dist",
+    "watermark removal/active tab restoration"
+  ],
+  "git": "No stage/commit/push/merge or other-worktree operation",
+  "test_cases_passed": 25,
+  "main_debug_binary": "F:/RustBuild/pytools/debug/RustTools.exe"
+}

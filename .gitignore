@@ -93,6 +93,19 @@ secrets.json
 # 人工测试包的运行产物不入库（样本输入保留）
 testdata/manual-menu/output/
 
+# Isolated Aspose worker build and evaluation-test output
+/tools/AsposeWorker/**/bin/
+/tools/AsposeWorker/**/obj/
+/tools/AsposeWorker/artifacts/
+/tools/AsposeWorker/test-output/
+/tools/AsposeWorker/**/*.dll
+/tools/AsposeWorker/**/*.pdb
+/tools/AsposeWordsWorker/**/bin/
+/tools/AsposeWordsWorker/**/obj/
+/tools/AsposeWordsWorker/**/*.dll
+/tools/AsposeWordsWorker/**/*.pdb
+/test-runs/aspose-full-integration-*/**/*.docx
+
 # Approved synthetic XLS → XLSX COM performance benchmark fixtures
 !/benchmarks/xls-to-xlsx-com/fixtures/**/
 !/benchmarks/xls-to-xlsx-com/fixtures/**/*.xls

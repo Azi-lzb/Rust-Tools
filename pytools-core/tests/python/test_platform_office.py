@@ -71,7 +71,7 @@ class OfficeValidation(unittest.TestCase):
             config = case.config(d, target)
             before = {p: digest(p) for p in (source, config)}
             for attempt in range(2):
-                text = case.cli(config, "2\n3\n0\n", "office-xlsx-append-" + str(attempt))
+                text = case.cli(config, "2\n3\n1\n0\n", "office-xlsx-append-" + str(attempt))
                 self.assertNotIn("执行失败", text)
                 output_before = digest(target)
                 book = self.app.Workbooks.Open(str(target), UpdateLinks=0, ReadOnly=True)
@@ -119,7 +119,7 @@ class OfficeValidation(unittest.TestCase):
             case = boundaries.Boundaries()
             config = case.config(d, target)
             before = {p: digest(p) for p in (source, target, config)}
-            text = case.cli(config, "2\n3\n0\n", "office-xls-refusal")
+            text = case.cli(config, "2\n3\n1\n0\n", "office-xls-refusal")
             self.assertIn("既有 XLS 去重追加已安全停用", text)
             for path, expected in before.items():
                 self.assertEqual(digest(path), expected)
@@ -166,7 +166,7 @@ class OfficeValidation(unittest.TestCase):
                     rules.append(["Y", mode, str(source), name, "A1:B2", str(target), "same",
                                   1, 2, "横向", "Y", "N", "Y", "Y"])
                 settings.save(config)
-                text = case.cli(config, "3\n1\n0\n0\n", "office-print-mode-" + str(mode))
+                text = case.cli(config, "3\n1\n1\n0\n0\n", "office-print-mode-" + str(mode))
                 self.assertNotIn("执行失败", text)
                 output_before = digest(target)
                 book = self.app.Workbooks.Open(str(target), UpdateLinks=0, ReadOnly=True)

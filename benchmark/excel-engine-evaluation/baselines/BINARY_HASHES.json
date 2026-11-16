@@ -1,0 +1,26 @@
+[
+  {
+    "path": "F:\\RustBuild\\pytools\\release\\excel-io-baseline.exe",
+    "sha256": "89a68256dff2104191ed8b3cdb405a03e630454383742115829c17f35768ebfd"
+  },
+  {
+    "path": "F:\\RustBuild\\pytools\\release\\capabilities.exe",
+    "sha256": "3da0b1dea3e79d658c95a431839dcfde448af0d3844ab359ff3e0673489a41ff"
+  },
+  {
+    "path": "F:\\RustBuild\\pytools\\io-dotnet\\IoBaseline.exe",
+    "sha256": "3437ea5c63613407d8f8c3993d4d4097f9bd38e38b7ee86707c1aba1aec79a8d"
+  },
+  {
+    "path": "F:\\RustBuild\\pytools\\io-dotnet\\IoBaseline.dll",
+    "sha256": "2880ebcf48726f6ab3ef06a78aed5c14dc0fc165652481f5d603d9a9821bd759"
+  },
+  {
+    "path": "F:\\RustBuild\\pytools\\io-capabilities\\Capabilities.exe",
+    "sha256": "c8b41f6065e255331b8851c4fc386f836721ee3d2fa1ee3e4b813f3008c56285"
+  },
+  {
+    "path": "F:\\RustBuild\\pytools\\io-capabilities\\Capabilities.dll",
+    "sha256": "fbb33302a0e20f4cfe9ec8ab8bee7448f9146f37d99d12b71556d684ac248c96"
+  }
+]

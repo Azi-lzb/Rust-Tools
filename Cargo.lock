@@ -290,8 +290,6 @@ dependencies = [
 [[package]]
 name = "calamine"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9ca341b94bc4b29e08970b1a03914fad2dfe177e2ecb67fcd6de9046004aafb"
 dependencies = [
  "atoi_simd",
  "byteorder",
@@ -692,6 +690,17 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "excel-aspose"
+version = "0.1.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "zip 6.0.0",
 ]
 
 [[package]]
@@ -1257,6 +1266,7 @@ dependencies = [
  "chrono",
  "csv",
  "encoding_rs",
+ "excel-aspose",
  "excel-editor",
  "excel-reader",
  "excel-writer",
@@ -1631,8 +1641,6 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "umya-spreadsheet"
 version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "032a20340d2eac6e2e6c940e6b793cd3b68223d5f9412724cb7e32ef17c584d0"
 dependencies = [
  "aes 0.9.3",
  "base64",

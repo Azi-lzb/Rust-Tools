@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "passed": 7,
+  "failed": 0,
+  "log": "wsl-openpyxl-gates.log",
+  "command": [
+    "/mnt/f/RustBuild/pytools/x86_64-unknown-linux-gnu/debug/deps/openpyxl_worker-0728f6d8c05ba82b",
+    "--ignored",
+    "--test-threads=1"
+  ]
+}

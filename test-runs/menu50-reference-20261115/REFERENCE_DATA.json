@@ -1,0 +1,727 @@
+{
+  "schema_version": 1,
+  "reference_date": "2026-11-15",
+  "platform": "Windows",
+  "build_profile": "Release",
+  "rounds": 1,
+  "sample": "50 small synthetic business files; 5-7 and 7-1 are 50 independent menu tasks",
+  "cases": [
+    {
+      "context": "1-1",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 43306.618
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 20159.2206
+        },
+        {
+          "engine": "umya",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11462.9069
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 43514.3349
+        }
+      ]
+    },
+    {
+      "context": "1-5",
+      "baseline": "com",
+      "routes": [
+        {
+          "engine": "com",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 14878.786
+        },
+        {
+          "engine": "betteroffice",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 752.6584
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 8418.6775
+        }
+      ]
+    },
+    {
+      "context": "2-1",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 33795.4758
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11614.7537
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 34503.3684
+        }
+      ]
+    },
+    {
+      "context": "2-2",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 35959.8947
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12733.7246
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 37198.5018
+        }
+      ]
+    },
+    {
+      "context": "2-3",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 34449.2689
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12766.0176
+        },
+        {
+          "engine": "umya",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 9517.6028
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 9584.6045
+        },
+        {
+          "engine": "rustnative",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 8827.8352
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 20860.0622
+        }
+      ]
+    },
+    {
+      "context": "3-1",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 1949.3902
+        },
+        {
+          "engine": "rust",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 3939.1724
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12666.1508
+        }
+      ]
+    },
+    {
+      "context": "4-4-xlsx",
+      "baseline": "auto",
+      "routes": [
+        {
+          "engine": "auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 31353.5129
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 6238.052
+        }
+      ]
+    },
+    {
+      "context": "4-4-xls",
+      "baseline": "auto",
+      "routes": [
+        {
+          "engine": "aspose",
+          "status": "PREFLIGHT_FAILED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 24968.8101
+        }
+      ]
+    },
+    {
+      "context": "4-4-word",
+      "baseline": "auto",
+      "routes": [
+        {
+          "engine": "auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 40822.5717
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 10884.2507
+        }
+      ]
+    },
+    {
+      "context": "4-5",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 32251.304
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11006.0625
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 31856.6212
+        }
+      ]
+    },
+    {
+      "context": "4-7",
+      "baseline": "auto",
+      "routes": [
+        {
+          "engine": "auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 366.1993
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12574.8105
+        }
+      ]
+    },
+    {
+      "context": "5-1",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 31167.1554
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 10154.3535
+        },
+        {
+          "engine": "umya",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 8205.7672
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 9440.7366
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 10490.9811
+        }
+      ]
+    },
+    {
+      "context": "5-2",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 32339.0748
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11710.1686
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 10976.1666
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 32144.3691
+        }
+      ]
+    },
+    {
+      "context": "5-3",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 29718.6269
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 8882.6167
+        },
+        {
+          "engine": "umya",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 4691.1676
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 4718.7391
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 4901.7637
+        }
+      ]
+    },
+    {
+      "context": "5-4",
+      "baseline": "auto",
+      "routes": [
+        {
+          "engine": "auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 5004.7108
+        },
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 34824.3143
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11912.3098
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 8535.4216
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 35835.9768
+        }
+      ]
+    },
+    {
+      "context": "5-6",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 41796.172
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 14408.703
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 32357.7305
+        }
+      ]
+    },
+    {
+      "context": "5-7",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 57514.473499999964
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 54624.33519999999
+        },
+        {
+          "engine": "umya",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12571.6334
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 12483.401899999999
+        },
+        {
+          "engine": "rustnative",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 10053.577399999998
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 11451.7804
+        }
+      ]
+    },
+    {
+      "context": "7-1",
+      "baseline": "openpyxl",
+      "routes": [
+        {
+          "engine": "openpyxl",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 67117.69840000002
+        },
+        {
+          "engine": "aspose",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 63447.7716
+        },
+        {
+          "engine": "umya",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "betteroffice_modify",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "rustnative",
+          "status": "GATED",
+          "files": 0,
+          "verified_outputs": 0,
+          "total_e2e_ms": null
+        },
+        {
+          "engine": "route_auto",
+          "status": "PASS",
+          "files": 50,
+          "verified_outputs": 50,
+          "total_e2e_ms": 77691.4507
+        }
+      ]
+    }
+  ]
+}

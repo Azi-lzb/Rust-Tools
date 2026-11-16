@@ -1,0 +1,33 @@
+test_empty_name_container_append_and_repeat_across_three_routes (test_append_candidate_routes.AppendCandidateRoutes) ... ok
+test_umya_preserves_real_names_print_area_and_freeze_panes (test_append_candidate_routes.AppendCandidateRoutes) ... ok
+test_umya_unsupported_chart_refusal_leaves_all_inputs_unchanged (test_append_candidate_routes.AppendCandidateRoutes) ... ok
+test_glibc_ceiling_accepts_older_and_rejects_unknown (test_audit_safety.AuditSafety) ... ok
+test_packaging_has_no_host_install_side_effects (test_audit_safety.AuditSafety) ... ok
+test_print_same_sheet_replaces_merges_and_dimensions (test_audit_safety.AuditSafety) ... ok
+test_release_guard_requires_main_and_explicit_acceptance (test_audit_safety.AuditSafety) ... ok
+test_worker_xls_append_refuses_before_any_io (test_audit_safety.AuditSafety) ... ok
+test_delete_locked_source_fails_without_counting_or_losing_rows (test_general_boundaries.Boundaries) ... skipped 'Windows share-lock semantics'
+test_delete_refuses_cross_sheet_formula_and_merged_duplicate_without_changes (test_general_boundaries.Boundaries) ... ok
+test_existing_xls_rejected_in_real_menu_with_real_biff_fixture (test_general_boundaries.Boundaries) ... skipped 'requires explicit COM synthetic-fixture authorization'
+test_prefix_real_menu_middle_text_sorted_undo_and_collision (test_general_boundaries.Boundaries) ... ok
+test_print_mode_1 (test_general_boundaries.Boundaries) ... ok
+test_print_mode_2 (test_general_boundaries.Boundaries) ... ok
+test_print_mode_3 (test_general_boundaries.Boundaries) ... ok
+test_xlsx_append_real_menu_preserves_old_rows_and_repeat_is_noop (test_general_boundaries.Boundaries) ... ok
+test_all_missing_worksheets_is_business_noop (test_logging_formula_failure_cli.FormulaFailureLoggingCliTests) ... ok
+test_missing_required_header_is_a_business_skip (test_logging_formula_failure_cli.FormulaFailureLoggingCliTests) ... ok
+test_missing_worksheet_is_a_business_skip (test_logging_formula_failure_cli.FormulaFailureLoggingCliTests) ... ok
+test_recalculation_failure_is_sanitized_and_never_counted_as_success (test_logging_formula_failure_cli.FormulaFailureLoggingCliTests) ... skipped 'Windows COM Worker protocol scenario'
+test_print_modes_reopen_with_office (test_platform_office.OfficeValidation) ... skipped 'requires explicit Excel COM authorization; WPS must use the read-only harness'
+test_real_xls_refusal_preserves_workbook (test_platform_office.OfficeValidation) ... skipped 'requires explicit Excel COM authorization; WPS must use the read-only harness'
+test_xlsx_append_and_repeat_reopen_with_office (test_platform_office.OfficeValidation) ... skipped 'requires explicit Excel COM authorization; WPS must use the read-only harness'
+test_existing_biff_is_refused_without_changing_inputs (test_platform_xls_refusal.XlsRefusal) ... ok
+test_sheet_references_are_rewritten_once_without_changing_string_or_external_data (test_sheet_reference_rename.SheetReferenceRename) ... ok
+test_print_modes_reopen_with_office (test_wps_readonly.WpsReadOnly) ... skipped 'requires explicit read-only WPS COM authorization'
+test_readonly_biff_does_not_change_bytes (test_wps_readonly.WpsReadOnly) ... skipped 'requires explicit read-only WPS COM authorization'
+test_xlsx_append_and_repeat_reopen_with_office (test_wps_readonly.WpsReadOnly) ... skipped 'requires explicit read-only WPS COM authorization'
+
+----------------------------------------------------------------------
+Ran 28 tests in 82.833s
+
+OK (skipped=9)

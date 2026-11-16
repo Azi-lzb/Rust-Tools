@@ -357,6 +357,21 @@ fn run() -> Result<()> {
         print_usage();
         return Ok(());
     }
+    let (arguments, _modify_scope) = if matches!(
+        command.as_str(),
+        "wide-summary"
+            | "dedup-append-execute"
+            | "village-split"
+            | "remove-foreign-bank"
+            | "institution-normalize"
+            | "fx-header"
+            | "rename-sheets"
+            | "extract-sheets"
+    ) {
+        extract_modification_mode(arguments)?
+    } else {
+        (arguments, None)
+    };
     match command.as_str() {
         "menu" | "interactive" => run_interactive_menu(arguments),
         "timeline-precheck" => run_timeline_precheck_cli(arguments),
@@ -741,7 +756,7 @@ where
         )?;
         writeln!(
             output,
-            "  5  按模板校验区域提取校验  【临时复制源文件并调用 Excel/WPS COM 重算；原文件不修改】"
+            "  5  按模板校验区域提取校验  【先选择计算模式；原文件不修改】"
         )?;
         writeln!(
             output,
@@ -779,6 +794,7 @@ where
                 let current = pytools_core::excel_edit_router::RouteConfig::from_environment()?;
                 writeln!(output, "------ Excel 编辑引擎路由 ------")?;
                 writeln!(output, "当前模式：{}", current.mode.as_str())?;
+                writeln!(output, "这是全局路由策略；耗时因业务而异，请参考具体功能的 50 份初测，不提供统一倍率。")?;
                 writeln!(output, "  1  OpenpyxlOnly（默认 Worker）")?;
                 writeln!(output, "  2  UMYAOnly")?;
                 writeln!(output, "  3  BetterOfficeOnly")?;
@@ -816,6 +832,10 @@ where
                     writeln!(output, "当前配置不可用；请先进入 7-1 初始化/修复配置。")?;
                     return Ok(());
                 }
+                let Some(mode) = choose_modification_mode(input, output, "1-1")? else {
+                    return Ok(());
+                };
+                let _modify_scope = pytools_core::aspose_edit::ModifyExecutionScope::enter(mode)?;
                 let Some(sources) = choose_source_files_or_folders_impl(
                     "选择时序宽表汇总源文件或文件夹",
                     NativeFileFilter::ExcelWorkbooks,
@@ -946,6 +966,10 @@ where
                 return Ok(());
             }
             "data.named_validation_extract" => {
+                let Some(calc_mode) = choose_validation_calc_mode(input, output)? else {
+                    writeln!(output, "[已取消]")?;
+                    return Ok(());
+                };
                 let Some(template) = choose_workbooks(
                     "选择按模板校验区域提取校验的模板工作簿",
                     false,
@@ -994,6 +1018,8 @@ where
                 let mut arguments = vec![
                     "--template".to_owned(),
                     template.to_string_lossy().into_owned(),
+                    "--calc-engine".to_owned(),
+                    calc_mode.as_str().to_owned(),
                 ];
                 arguments.extend(summary_cli_arguments(global, log_view));
                 arguments.extend(
@@ -1412,6 +1438,16 @@ where
                     writeln!(output, "[已取消] 配置文件未修改。")?;
                     continue;
                 }
+                let _modify_scope = if config_path.is_file() {
+                    let Some(mode) = choose_modification_mode(input, output, "7-1")? else {
+                        return Ok(());
+                    };
+                    Some(pytools_core::aspose_edit::ModifyExecutionScope::enter(
+                        mode,
+                    )?)
+                } else {
+                    None
+                };
                 let started_at = Local::now();
                 let started = Instant::now();
                 let mut facts = ConfigMenuRunFacts::new();
@@ -1907,12 +1943,17 @@ where
     verify_planning_snapshot(config_path, Some(&original_sha256))?;
     let execution_started = Instant::now();
     facts.excel_modifier_invoked = true;
-    facts.add_component("excel_editor::OpenpyxlXlsxBackend");
     let execution = pytools_core::inplace_edit::execute_candidate(
         &plan,
         pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
     )?;
-    facts.add_engine("openpyxl");
+    if execution.engine == excel_editor::EngineId::AsposeWorker {
+        facts.add_component("excel_aspose::AsposeWorkerBackend");
+        facts.add_engine("aspose_worker");
+    } else {
+        facts.add_component("excel_editor::OpenpyxlXlsxBackend");
+        facts.add_engine("openpyxl");
+    }
     let _candidate_view = view_config(&candidate_path)?;
     facts.add_component("pytools_core::config::view_config");
     let _candidate_global = load_global(&candidate_path)?;
@@ -2606,6 +2647,11 @@ where
             }
             "3" | "4" => {
                 if choice == "3" {
+                    let Some(mode) = choose_modification_mode(input, output, "2-1")? else {
+                        return Ok(());
+                    };
+                    let _modify_scope =
+                        pytools_core::aspose_edit::ModifyExecutionScope::enter(mode)?;
                     // 2-1 改为在源工作簿上就地标红标记重复行（对齐旧版 Python
                     // `dedup_311.py`），不再生成标记副本工作簿。
                     let label = "按配置检查重复（在源工作簿上标红标记重复行）";
@@ -2617,6 +2663,7 @@ where
                         )?;
                     }
                     let mut log = ConfiguredRunLog::new(global, "2-1", label, log_view);
+                    pytools_core::aspose_edit::bind_run_id(&log.tracker.run_id);
                     let mut report_tasks = Vec::new();
                     let mut progress_write_error = None;
                     let result = match load_dedup_tasks(config_path) {
@@ -2727,6 +2774,11 @@ where
                     return Ok(());
                 }
                 if choice == "4" {
+                    let Some(mode) = choose_modification_mode(input, output, "2-2")? else {
+                        return Ok(());
+                    };
+                    let _modify_scope =
+                        pytools_core::aspose_edit::ModifyExecutionScope::enter(mode)?;
                     // 2-2 改为在源工作簿上就地删除重复行（保留首次出现），
                     // 不再生成删除结果副本工作簿。
                     let label = "按配置删除重复（在源工作簿上就地删除重复行）";
@@ -2872,7 +2924,7 @@ where
 }
 
 fn run_interactive_dedup_append_menu<R, W>(
-    _input: &mut R,
+    input: &mut R,
     output: &mut W,
     config_path: &Path,
     global: &GlobalConfig,
@@ -2888,6 +2940,10 @@ where
         capabilities.is_some() == platform.is_some(),
         "--capabilities and --platform must be provided together"
     );
+    let Some(mode) = choose_modification_mode(input, output, "2-3")? else {
+        return Ok(());
+    };
+    let _modify_scope = pytools_core::aspose_edit::ModifyExecutionScope::enter(mode)?;
     let mut diagnostic = ConfiguredRunLog::new(global, "2-3", "按配置去重追加", log_view);
     let started_at = Local::now();
     let started = Instant::now();
@@ -3723,6 +3779,7 @@ impl ConfiguredRunLog {
     fn new(global: &GlobalConfig, feature: &str, label: &str, log_view: &str) -> Self {
         use pytools_core::run_logging::{EventWriter, Level, RunTracker};
         let tracker = RunTracker::new(feature, label, &[]);
+        pytools_core::aspose_edit::bind_run_id(&tracker.run_id);
         let writer = if log_view == "off" {
             None
         } else {
@@ -4832,6 +4889,7 @@ where
     use pytools_core::engine_diag::{DiagOutcome, DiagStage};
     use pytools_core::run_logging::{EventWriter, Level, RunTracker, TaskStatus};
     let tracker = RunTracker::new(feature_id, "按配置生成静态打印文件", &[]);
+    pytools_core::aspose_edit::bind_run_id(&tracker.run_id);
     let mut diagnostic = if log_view == "off" {
         None
     } else {
@@ -5279,11 +5337,12 @@ where
         writeln!(output, "------ 报表打印 ------")?;
         writeln!(
             output,
-            "  1  按打印配置生成（Openpyxl）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
+            "  1  按打印配置生成（选择执行模式）  【打印配置：源工作簿/源工作表/打印区域/目标工作簿】"
         )?;
         writeln!(
             output,
-            "  2  按打印配置生成（Rust）  【同一份打印配置；输出文件名追加 _Rust；暂不支持 XLSM】"
+            "  2  按打印配置生成（Rust）（mode 1 参考耗时 {}）  【同一份打印配置；输出文件名追加 _Rust；暂不支持 XLSM】",
+            pytools_core::engine_reference::hint("3-1", "rust")
         )?;
         writeln!(output, "  3  打印配置预校验  【打印配置】")?;
         writeln!(output, "  0  返回")?;
@@ -5293,12 +5352,44 @@ where
         };
         match menu_choice.as_str() {
             "1" => {
+                use pytools_core::static_print_engines::StaticPrintEngine;
+                writeln!(output, "打印执行模式：")?;
+                writeln!(
+                    output,
+                    "  1 Openpyxl（参考耗时 {}）",
+                    pytools_core::engine_reference::hint("3-1", "openpyxl")
+                )?;
+                writeln!(
+                    output,
+                    "  2 Rust（参考耗时 {}）",
+                    pytools_core::engine_reference::hint("3-1", "rust")
+                )?;
+                writeln!(
+                    output,
+                    "  3 Aspose .NET（参考耗时 {}；水印副本）",
+                    pytools_core::engine_reference::hint("3-1", "aspose")
+                )?;
+                writeln!(output, "  0 返回")?;
+                pytools_core::engine_reference::write_note(output, "3-1")?;
+                let engine = match read_menu_choice(input, output, "打印模式> ")?.as_deref() {
+                    Some("1") => StaticPrintEngine::Openpyxl,
+                    Some("2") => StaticPrintEngine::RustWriter,
+                    Some("3") => {
+                        pytools_core::aspose_edit::ModifyMode::Aspose.preflight()?;
+                        StaticPrintEngine::Aspose
+                    }
+                    Some("0") | None => continue,
+                    _ => {
+                        writeln!(output, "仅接受 1、2、3 或 0")?;
+                        continue;
+                    }
+                };
                 run_configured_static_print_menu(
                     output,
                     config_path,
                     global,
                     "3-1",
-                    pytools_core::static_print_engines::StaticPrintEngine::Openpyxl,
+                    engine,
                     log_view,
                 )?;
             }
@@ -5825,6 +5916,35 @@ where
                 continue;
             }
         };
+        let explicit_conversion_engine = if matches!(
+            operation_id,
+            "files.office_conversion.excel"
+                | "files.office_conversion.word"
+                | "files.excel_open_repair"
+        ) {
+            let Some(engine) = choose_aspose_conversion_mode(
+                input,
+                output,
+                operation_id == "files.office_conversion.word",
+                operation_id,
+            )?
+            else {
+                return Ok(());
+            };
+            Some(engine)
+        } else {
+            None
+        };
+        let _modify_scope = if operation_id == "files.rename_sheets" {
+            let Some(mode) = choose_modification_mode(input, output, "4-5")? else {
+                return Ok(());
+            };
+            Some(pytools_core::aspose_edit::ModifyExecutionScope::enter(
+                mode,
+            )?)
+        } else {
+            None
+        };
         let (title, filter) = match operation_id {
             "files.institution_filename_normalize" => {
                 ("批量重命名文件", NativeFileFilter::AllFiles)
@@ -5863,6 +5983,9 @@ where
         }
 
         let mut arguments = config_cli_arguments(config_path);
+        if let Some(engine) = explicit_conversion_engine {
+            arguments.extend(["--engine".to_owned(), engine.to_owned()]);
+        }
         match operation_id {
             "files.institution_filename_normalize" => {
                 arguments.push("--log-dir".to_owned());
@@ -6190,6 +6313,20 @@ where
         } else {
             None
         };
+        let _modify_scope = if matches!(
+            feature_id,
+            "PT-7-1" | "PT-7-2" | "PT-7-3" | "PT-7-4" | "PT-7-6" | "PT-7-7"
+        ) {
+            let Some(mode) = choose_modification_mode(input, output, &format!("5-{choice}"))?
+            else {
+                return Ok(());
+            };
+            Some(pytools_core::aspose_edit::ModifyExecutionScope::enter(
+                mode,
+            )?)
+        } else {
+            None
+        };
         match feature_id {
             "PT-7-1" => {
                 writeln!(output, "→ 第一次文件选择：选择 本期商业银行共享一批")?;
@@ -6350,6 +6487,18 @@ where
                         writeln!(
                             output,
                             "[跳过] {}：这是机构名称规范化结果目录中的副本，不重复处理。",
+                            display_path_for_user(&path)
+                        )?;
+                        continue;
+                    }
+                    if pytools_core::aspose_edit::xlsx_only_selection()
+                        && !path
+                            .extension()
+                            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+                    {
+                        writeln!(
+                            output,
+                            "[跳过] {}：所选修改模式仅支持 XLSX；未回退 COM。",
                             display_path_for_user(&path)
                         )?;
                         continue;
@@ -8512,6 +8661,10 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         "PT-7-1 本期与去年同期工作簿必须都是 .xls 或都是 .xlsx"
     );
     let legacy_xls_com = current_extension == "xls";
+    anyhow::ensure!(
+        !legacy_xls_com || !pytools_core::aspose_edit::xlsx_only_selection(),
+        "所选修改引擎仅支持 XLSX，未调用 COM"
+    );
     if legacy_xls_com {
         anyhow::ensure!(
             cfg!(windows),
@@ -8591,6 +8744,7 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-1-{}-{nonce}", std::process::id());
+    pytools_core::aspose_edit::bind_run_id(&run_id);
     let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
         "PT-7-1",
         "拆分村镇银行数据",
@@ -9252,6 +9406,13 @@ fn run_remove_foreign_bank_plan(arguments: Vec<String>) -> Result<()> {
 fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let (create_copy, arguments) = extract_boolean_flag(arguments, "create-copy")?;
     let options = parse_cli_arguments(arguments)?;
+    anyhow::ensure!(
+        !pytools_core::aspose_edit::xlsx_only_selection()
+            || options.positional.iter().all(|p| p
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))),
+        "所选修改引擎仅支持 XLSX，未调用 COM"
+    );
     let in_place = options.values.get("in-place").cloned();
     let config = required_path(&options, "config")?;
     anyhow::ensure!(
@@ -9344,6 +9505,7 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-3-{}-{nonce}", std::process::id());
+    pytools_core::aspose_edit::bind_run_id(&run_id);
     let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
         "PT-7-3",
         "删除分机构表中的外资行",
@@ -9867,14 +10029,15 @@ fn run_remove_foreign_bank_batch(arguments: Vec<String>, interactive: bool) -> R
                     let result = (|| -> Result<serde_json::Value> {
                         let mut candidate_plan = plan.clone();
                         candidate_plan.output = candidate.clone();
-                        pytools_core::inplace_edit::execute_candidate(
+                        let edit_execution = pytools_core::inplace_edit::execute_candidate(
                             &candidate_plan,
                             pytools_core::inplace_edit::InPlaceEngine::Openpyxl,
                         )?;
                         verify_planning_snapshot(&input, Some(&expected_source_hash))?;
                         create_target_from_candidate(&candidate, &output)?;
                         Ok(serde_json::json!({
-                            "engine": "openpyxl",
+                            "engine": if edit_execution.engine == excel_editor::EngineId::AsposeWorker { "aspose_worker" } else { "openpyxl" },
+                            "edit_execution": edit_execution,
                             "execution": "created_and_validated_workbook_copy",
                             "output": output,
                             "operation_count": plan.operations.len()
@@ -10588,6 +10751,10 @@ fn run_rural_loan_menu(
         .unwrap_or_default()
         .to_ascii_lowercase();
     let legacy_xls_com = !quarterly && current_extension == "xls" && previous_extension == "xls";
+    anyhow::ensure!(
+        !legacy_xls_com || !pytools_core::aspose_edit::xlsx_only_selection(),
+        "所选修改引擎仅支持 XLSX，未调用 COM"
+    );
     anyhow::ensure!(
         matches!(log_view, "user" | "developer" | "off"),
         "--log-view must be user, developer, or off"
@@ -11437,6 +11604,20 @@ fn run_institution_normalize_plan(arguments: Vec<String>) -> Result<()> {
 fn run_institution_normalize_batch(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let (apply, arguments) = extract_boolean_flag(arguments, "apply")?;
     let options = parse_cli_arguments(arguments)?;
+    let _modify_scope = options
+        .values
+        .get("modify-engine")
+        .map(|value| {
+            pytools_core::aspose_edit::ModifyExecutionScope::enter(
+                pytools_core::aspose_edit::ModifyMode::parse(value)?,
+            )
+        })
+        .transpose()?;
+    anyhow::ensure!(
+        !pytools_core::aspose_edit::aspose_selected() || options.values.contains_key("in-place"),
+        "Aspose 修改接入当前要求 --in-place auto；未切换默认候选路由"
+    );
+
     let config = required_path(&options, "config")?;
     let view = options
         .values
@@ -11987,6 +12168,20 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
     let (create_copy, arguments) = extract_boolean_flag(arguments, "create-copy")?;
     let (commit_target, arguments) = extract_boolean_flag(arguments, "commit-target")?;
     let options = parse_cli_arguments(arguments)?;
+    let _modify_scope = options
+        .values
+        .get("modify-engine")
+        .map(|value| {
+            pytools_core::aspose_edit::ModifyExecutionScope::enter(
+                pytools_core::aspose_edit::ModifyMode::parse(value)?,
+            )
+        })
+        .transpose()?;
+    anyhow::ensure!(
+        !pytools_core::aspose_edit::aspose_selected() || options.values.contains_key("in-place"),
+        "Aspose 修改接入当前要求 --in-place auto；未切换默认候选路由"
+    );
+
     let in_place = options.values.get("in-place").cloned();
     anyhow::ensure!(
         !options.positional.is_empty(),
@@ -12065,6 +12260,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let run_id = format!("pytools-pt-7-4-{}-{nonce}", std::process::id());
+    pytools_core::aspose_edit::bind_run_id(&run_id);
     let mut unified_tracker = pytools_core::run_logging::RunTracker::with_id(
         "PT-7-4",
         "修改外汇工作表页眉",
@@ -12142,6 +12338,14 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         let candidate = unique_workbook_candidate(input, &output_dir, "fx_header");
         let mut current_stage = "input_validation";
         let item_result = (|| -> Result<serde_json::Value> {
+            anyhow::ensure!(
+                !pytools_core::aspose_edit::xlsx_only_selection()
+                    || input
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("xlsx")),
+                "所选修改模式仅支持 XLSX；未回退 COM，原文件未修改"
+            );
+
             if in_place.is_none() {
                 anyhow::ensure!(
                     input
@@ -12561,6 +12765,7 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
         "product": "pytools",
         "feature_id": "PT-7-4",
         "function": "fx-header",
+        "requested_modify_engine": pytools_core::aspose_edit::requested_mode().as_str(),
         "run_id": run_id,
         "started_at": started_at,
         "status": status,
@@ -12703,20 +12908,30 @@ fn create_fx_header_copy(
         preflight.replacements > 0,
         "FX header patch found no matching text"
     );
-    if std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some() {
+    if pytools_core::aspose_edit::route_override().is_some()
+        || std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some()
+    {
         anyhow::ensure!(
             !candidate.exists(),
             "拒绝覆盖已存在的 FX 页眉路由候选文件：{}",
             candidate.display()
         );
-        let route_config = pytools_core::excel_edit_router::RouteConfig::from_environment()?;
+        let route_config = match pytools_core::aspose_edit::route_override() {
+            Some(config) => config,
+            None => pytools_core::excel_edit_router::RouteConfig::from_environment()?,
+        };
         let execution = pytools_core::excel_edit_router::execute_candidate_with_route_config(
             plan,
             &route_config,
         )
         .context("ExcelEditPlan FX 页眉路由执行失败")?;
-        ooxml_patch::validate_header_text_patch(input, candidate, &updates)
-            .context("validate routed FX header candidate")?;
+        if !matches!(
+            execution.engine,
+            excel_editor::EngineId::AsposeWorker | excel_editor::EngineId::OpenpyxlWorker
+        ) {
+            ooxml_patch::validate_header_text_patch(input, candidate, &updates)
+                .context("validate routed FX header candidate")?;
+        } // Rewriting engines already passed semantic validation in ExcelModifier.
         verify_planning_snapshot(input, Some(expected_source_hash))?;
 
         if !publish_copy {
@@ -12800,7 +13015,9 @@ fn execute_fx_header_in_place(
                 .context("remove rejected OOXML header candidate before Openpyxl fallback")?;
             verify_planning_snapshot(input, Some(expected_source_hash))
                 .context("source changed after OOXML header route; refusing fallback")?;
-            if std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some() {
+            if pytools_core::aspose_edit::route_override().is_some()
+                || std::env::var_os(pytools_core::excel_edit_router::ROUTE_ENV).is_some()
+            {
                 return Err(ooxml_error)
                     .context("the configured ExcelEditPlan route failed; manual mode does not switch engines");
             }
@@ -13169,12 +13386,18 @@ fn run_excel_open_repair_cli(arguments: Vec<String>, interactive: bool) -> Resul
     } else {
         None
     };
-    let result =
+    let result = if options.values.get("engine").is_some_and(|e| e == "aspose") {
+        pytools_core::excel_open_repair_batch::run_excel_open_repair_batch_aspose(
+            &options.positional,
+            recursive,
+        )
+    } else {
         pytools_core::excel_open_repair_batch::run_excel_open_repair_batch_with_legacy_conversion(
             &options.positional,
             recursive,
             legacy_engine,
-        );
+        )
+    };
     let report = match result {
         Ok(report) => report,
         Err(error) => {
@@ -18636,8 +18859,193 @@ fn run_summary_named_ranges_cli(arguments: Vec<String>, interactive: bool) -> Re
     }
 }
 
+fn choose_aspose_conversion_mode<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    word: bool,
+    operation_id: &str,
+) -> Result<Option<&'static str>> {
+    loop {
+        writeln!(output, "执行模式：")?;
+        writeln!(
+            output,
+            "  1 自动路由（原路径；参考耗时 {}）",
+            pytools_core::engine_reference::conversion_hint(operation_id, "auto")
+        )?;
+        writeln!(
+            output,
+            "  2 Aspose .NET（参考耗时 {}；带评估水印的副本，不回退）",
+            pytools_core::engine_reference::conversion_hint(operation_id, "aspose")
+        )?;
+        writeln!(output, "  0 返回")?;
+        pytools_core::engine_reference::write_note(
+            output,
+            if word {
+                "4-4-word"
+            } else if operation_id == "files.excel_open_repair" {
+                "4-7"
+            } else {
+                "4-4-excel"
+            },
+        )?;
+        match read_menu_choice(input, output, "执行模式> ")?.as_deref() {
+            Some("1") => return Ok(Some("auto")),
+            Some("2") => {
+                let result = if word {
+                    pytools_core::aspose_documents::preflight()
+                } else {
+                    pytools_core::aspose_edit::ModifyMode::Aspose.preflight()
+                };
+                if let Err(error) = result {
+                    writeln!(output, "Aspose 模式不可用：{error}")?;
+                    continue;
+                }
+                return Ok(Some("aspose"));
+            }
+            Some("0") | None => return Ok(None),
+            _ => writeln!(output, "仅接受 1、2 或 0")?,
+        }
+    }
+}
+
+fn extract_modification_mode(
+    arguments: Vec<String>,
+) -> Result<(
+    Vec<String>,
+    Option<pytools_core::aspose_edit::ModifyExecutionScope>,
+)> {
+    let mut args = arguments.into_iter();
+    let mut retained = Vec::new();
+    let mut mode = None;
+    while let Some(argument) = args.next() {
+        if argument == "--modify-engine" {
+            anyhow::ensure!(mode.is_none(), "--modify-engine may only be specified once");
+            mode = Some(pytools_core::aspose_edit::ModifyMode::parse(
+                &args.next().context("--modify-engine requires a value")?,
+            )?);
+        } else {
+            retained.push(argument);
+        }
+    }
+    Ok((
+        retained,
+        mode.map(pytools_core::aspose_edit::ModifyExecutionScope::enter)
+            .transpose()?,
+    ))
+}
+
+fn choose_modification_mode<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    reference_context: &str,
+) -> Result<Option<pytools_core::aspose_edit::ModifyMode>> {
+    use pytools_core::aspose_edit::ModifyMode;
+    loop {
+        writeln!(output, "修改执行模式（选文件前选择）")?;
+        if let Some(reference) =
+            pytools_core::engine_reference::current_policy_hint(reference_context)
+        {
+            writeln!(output, "  1  自动路由（当前策略 {reference}）")?;
+        } else if reference_context == "5-4" {
+            writeln!(
+                output,
+                "  1  自动路由（沿用现有规则；参考耗时 {}）",
+                pytools_core::engine_reference::hint(reference_context, "auto")
+            )?;
+        } else {
+            writeln!(output, "  1  自动路由（沿用现有规则）")?;
+        }
+        writeln!(
+            output,
+            "  2  Openpyxl（参考耗时 {}；不回退）",
+            pytools_core::engine_reference::hint(reference_context, "openpyxl")
+        )?;
+        writeln!(
+            output,
+            "  3  Aspose .NET（参考耗时 {}；评估水印保留，仅 XLSX，不回退）",
+            pytools_core::engine_reference::hint(reference_context, "aspose")
+        )?;
+        pytools_core::engine_reference::write_note(output, reference_context)?;
+        writeln!(output, "  0  返回")?;
+        let Some(choice) = read_menu_choice(input, output, "修改模式> ")? else {
+            return Ok(None);
+        };
+        let mode = match choice.as_str() {
+            "1" => ModifyMode::Auto,
+            "2" => ModifyMode::Openpyxl,
+            "3" => ModifyMode::Aspose,
+            "0" => return Ok(None),
+            _ => {
+                writeln!(output, "请输入 1、2、3 或 0")?;
+                continue;
+            }
+        };
+        if let Err(error) = mode.preflight() {
+            writeln!(output, "修改模式不可用：{error}")?;
+            continue;
+        }
+        return Ok(Some(mode));
+    }
+}
+
+fn choose_validation_calc_mode<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+) -> Result<Option<pytools_core::aspose_integration::ValidationCalcMode>> {
+    use pytools_core::aspose_integration::ValidationCalcMode;
+    loop {
+        writeln!(output, "选择本次计算模式：")?;
+        writeln!(output, "  1  自动（保持现有规则）")?;
+        writeln!(
+            output,
+            "  2  Excel/WPS COM（参考耗时 {}；本次基准为 Excel）",
+            pytools_core::engine_reference::hint("1-5", "com")
+        )?;
+        writeln!(
+            output,
+            "  3  BetterOffice（参考耗时 {}；不回退）",
+            pytools_core::engine_reference::hint("1-5", "betteroffice")
+        )?;
+        writeln!(
+            output,
+            "  4  Aspose .NET（参考耗时 {}；评估模式，副本保留水印；不回退）",
+            pytools_core::engine_reference::hint("1-5", "aspose")
+        )?;
+        pytools_core::engine_reference::write_note(output, "1-5")?;
+        writeln!(output, "  0  返回")?;
+        let Some(choice) = read_menu_choice(input, output, "计算模式> ")? else {
+            return Ok(None);
+        };
+        let mode = match choice.as_str() {
+            "1" => ValidationCalcMode::Auto,
+            "2" => ValidationCalcMode::Com,
+            "3" => ValidationCalcMode::BetterOffice,
+            "4" => ValidationCalcMode::Aspose,
+            "0" => return Ok(None),
+            _ => {
+                writeln!(output, "仅接受 1、2、3、4 或 0")?;
+                continue;
+            }
+        };
+        if let Err(error) = mode.preflight() {
+            writeln!(output, "本次模式不可用：{error}")?;
+            continue;
+        }
+        writeln!(output, "本次计算：{}", mode.label())?;
+        return Ok(Some(mode));
+    }
+}
+
 fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -> Result<()> {
     let options = parse_cli_arguments(arguments)?;
+    let calc_mode = pytools_core::aspose_integration::ValidationCalcMode::parse(
+        options
+            .values
+            .get("calc-engine")
+            .map(String::as_str)
+            .unwrap_or("auto"),
+    )?;
+    calc_mode.preflight()?;
     let template = required_path(&options, "template")?;
     anyhow::ensure!(
         !options.positional.is_empty(),
@@ -18696,10 +19104,15 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
     };
     let mut diagnostic_failed = false;
     let mut events = Vec::<SummaryRunEvent>::new();
-    let result = pytools_core::summary_ops::extract_named_validation_regions_with_progress(
+    let result = pytools_core::summary_ops::extract_named_validation_regions_with_execution(
         &template,
         &options.positional,
         &output_dir,
+        pytools_core::aspose_integration::ValidationExecution {
+            mode: calc_mode,
+            run_id: Some(run_id.clone()),
+            diagnostic_dir: Some(log_dir.join("aspose-worker")),
+        },
         |event| {
             if let Some(index) = event.progress.current_input_index {
                 match (
@@ -18945,6 +19358,8 @@ fn run_named_validation_extract_cli(arguments: Vec<String>, interactive: bool) -
             "product": "pytools",
             "feature_id": "PT-6-3",
             "function": "named-validation-extract",
+            "requested_calc_engine": calc_mode.as_str(),
+            "error_summary": unified.error_summary,
             "run_id": run_id,
             "started_at": started_at,
             "status": if business_noop { "skipped" } else if result.is_ok() { "succeeded" } else { "failed" },
@@ -23041,7 +23456,7 @@ fn print_usage() {
          wide-summary writes a summary workbook and the configured intermediate target; use menu 2-3 to append that intermediate to historical data\n\
          summary-used-range [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <workbook>...\n\
          summary-named-ranges --template <workbook.xlsx|xlsm> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx|xlsm>...\n\
-         summary-named-validation --template <workbook.xlsx|xlsm> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xls|xlsx|xlsm>...\n\
+         summary-named-validation --template <workbook.xlsx|xlsm> [--calc-engine auto|com|betteroffice|aspose] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xls|xlsx|xlsm>...\n\
          summary-comments --template <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
          excel-open-repair [--recursive] [--log-dir <dir>] [--log-view user|developer|off] <file-or-directory>... (修复 Excel COM 无法打开的 .xlsx/.xlsm；只产出修复副本，原件不变)\n\
          dedup-comment-plan --input <workbook.xlsx> --output <candidate.xlsx> [--action check|mark|delete] [--plan-output <plan.json>] [--capabilities <json> --platform <id>]\n\

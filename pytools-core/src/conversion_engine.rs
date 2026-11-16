@@ -45,6 +45,10 @@ const WPS_NATIVE_FILE_FORMAT_MIN: i32 = 65_521;
 
 /// State scoped to one user conversion request or batch.
 pub struct ConversionRuntime {
+    pub(crate) aspose_converter: Option<crate::aspose_conversion::AsposeConversionSession>,
+    pub(crate) aspose_document_converter: Option<crate::aspose_documents::AsposeDocumentSession>,
+    validation_execution: crate::aspose_integration::ValidationExecution,
+    aspose_calculator: Option<crate::aspose_integration::AsposeCalculationSession>,
     #[cfg(windows)]
     pywin32: Option<PythonExcelWorker>,
     #[cfg(target_os = "linux")]
@@ -57,6 +61,10 @@ pub struct ConversionRuntime {
 impl Default for ConversionRuntime {
     fn default() -> Self {
         Self {
+            aspose_converter: None,
+            aspose_document_converter: None,
+            validation_execution: crate::aspose_integration::ValidationExecution::default(),
+            aspose_calculator: None,
             #[cfg(windows)]
             pywin32: None,
             #[cfg(target_os = "linux")]
@@ -495,6 +503,32 @@ fn copy_template_regions(
 }
 
 impl ConversionRuntime {
+    pub(crate) fn set_validation_execution(
+        &mut self,
+        execution: crate::aspose_integration::ValidationExecution,
+    ) {
+        self.validation_execution = execution;
+    }
+
+    pub(crate) fn validation_bo_config(&self) -> crate::bo_calc::BoCalcConfig {
+        use crate::aspose_integration::ValidationCalcMode;
+        let mut config = crate::bo_calc::BoCalcConfig::load(
+            crate::config::default_config_workbook_path().as_deref(),
+        );
+        match self.validation_execution.mode {
+            ValidationCalcMode::Auto => {}
+            ValidationCalcMode::BetterOffice => {
+                config.enabled = true;
+                config.fallback_com = false;
+                config.fallback_libreoffice = false;
+            }
+            ValidationCalcMode::Com | ValidationCalcMode::Aspose => {
+                config.enabled = false;
+            }
+        }
+        config
+    }
+
     /// Run the dedicated 5-1 legacy XLS operation through Excel/WPS COM.
     /// Callers pass an isolated target candidate; the source is committed only
     /// after the worker succeeds and the caller rechecks its source snapshot.
@@ -949,6 +983,32 @@ impl ConversionRuntime {
         prepared: &PreparedValidationCopy,
         forced_fallback: Option<String>,
     ) -> Result<NamedValidationCalculation> {
+        if self.validation_execution.mode == crate::aspose_integration::ValidationCalcMode::Aspose {
+            ensure!(
+                forced_fallback.is_none(),
+                "强制 Aspose 模式不能接收其他引擎的回退请求"
+            );
+            if self.aspose_calculator.is_none() {
+                self.aspose_calculator =
+                    Some(crate::aspose_integration::AsposeCalculationSession::start(
+                        &self.validation_execution,
+                        source_copy,
+                    )?);
+            }
+            self.aspose_calculator
+                .as_mut()
+                .expect("Aspose initialized")
+                .calculate_copy(source_copy, regions)?;
+            let workbook =
+                read_workbook(source_copy).context("Aspose 重算后 Calamine 回读校验缓存失败")?;
+            return Ok(NamedValidationCalculation {
+                application: "Aspose.Cells .NET（评估模式；副本保留评估工作表）".to_owned(),
+                cells: extract_named_validation_cells(&workbook, regions)?,
+                copied_formula_cells: prepared.copied_formula_cells,
+                copied_template_sheets: prepared.copied_template_sheets.clone(),
+                dependency_copy_engine: prepared.dependency_copy_engine.clone(),
+            });
+        }
         let dependency_copy_engine = prepared.dependency_copy_engine.clone();
         let copied = ooxml_patch::CellRegionCopyReport {
             cells_with_formula: prepared.copied_formula_cells,
@@ -966,9 +1026,7 @@ impl ConversionRuntime {
             );
         }
         // 配置优先级：config.xlsx 全局配置（校验计算* 键）> 环境变量 > 默认。
-        let bo_config = crate::bo_calc::BoCalcConfig::load(
-            crate::config::default_config_workbook_path().as_deref(),
-        );
+        let bo_config = self.validation_bo_config();
         if bo_config.enabled {
             match crate::bo_calc::recalculate(source_copy, &bo_config) {
                 Ok(outcome) => {
@@ -1681,6 +1739,37 @@ pub(crate) fn named_validation_calculation_engine() -> &'static str {
     {
         "unavailable"
     }
+}
+
+pub(crate) fn ensure_aspose_validation_functions_supported(
+    workbook: &WorkbookDump,
+    regions: &[NamedValidationRegionRequest],
+) -> Result<()> {
+    for region in regions {
+        let sheet = workbook
+            .sheets
+            .iter()
+            .find(|s| s.name == region.source_sheet)
+            .context("Aspose 结果缺少校验工作表")?;
+        let bounds = parse_named_validation_region(&region.address)?;
+        for address in sheet
+            .formulas
+            .keys()
+            .filter(|a| named_validation_cell_in_bounds(a, bounds))
+        {
+            if let Some(value) = sheet.values.get(address) {
+                ensure!(
+                    !(value.get("type").and_then(serde_json::Value::as_str) == Some("error")
+                        && value.get("value").and_then(serde_json::Value::as_str)
+                            == Some("#NAME?")),
+                    "Aspose 校验区域包含未识别函数或名称：{}!{}；候选未提交，未回退其他引擎",
+                    sheet.name,
+                    address
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 fn extract_named_validation_cells(
@@ -2798,7 +2887,7 @@ pub(crate) const VALUE_TOLERANCE: f64 = 1e-14;
 /// 零附近的绝对容差（原实现要求两侧非零，0 与极小正数会被误判）。
 pub(crate) const VALUE_ZERO_TOLERANCE: f64 = 1e-12;
 
-fn cell_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+pub(crate) fn cell_values_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
     let numeric = |kind: &str| matches!(kind, "number" | "integer" | "datetime_serial");
     let left_kind = cell_kind(left);
     let right_kind = cell_kind(right);

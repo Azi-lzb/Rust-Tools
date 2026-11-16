@@ -1,0 +1,8 @@
+
+running 3 tests
+test real_aspose_main_batch_rotates_after_99_successful_files ... ok
+test real_aspose_two_files_reuses_worker_and_preserves_sources ... ok
+test real_aspose_unknown_function_cannot_be_reported_as_validation_pass ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 148.21s
+

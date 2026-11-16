@@ -1,0 +1,8 @@
+test_includes_optional_self_contained_worker_without_pdb (__main__.PackageTests.test_includes_optional_self_contained_worker_without_pdb) ... ok
+test_incomplete_worker_refused_without_archive (__main__.PackageTests.test_incomplete_worker_refused_without_archive) ... ok
+test_release_requires_acceptance_and_main (__main__.PackageTests.test_release_requires_acceptance_and_main) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 9.825s
+
+OK

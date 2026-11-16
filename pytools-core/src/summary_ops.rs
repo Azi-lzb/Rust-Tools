@@ -3,7 +3,7 @@
 use crate::conversion_engine::{
     named_validation_calculation_engine, ConversionRuntime, NamedValidationRegionRequest,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
@@ -152,9 +152,7 @@ fn run_pending_validation_calculations(
     files_processed: &mut usize,
     platform_default_engine: &str,
 ) -> Result<()> {
-    let bo_config = crate::bo_calc::BoCalcConfig::load(
-        crate::config::default_config_workbook_path().as_deref(),
-    );
+    let bo_config = runtime.validation_bo_config();
     // 只有 betteroffice 启用时才走批量；否则全部副本都交给平台引擎（保持旧行为）。
     let mut successes: BTreeMap<usize, crate::bo_calc::BoCalcOutcome> = BTreeMap::new();
     let mut refusals: BTreeMap<usize, String> = BTreeMap::new();
@@ -231,17 +229,18 @@ fn run_pending_validation_calculations(
                     .get(&index)
                     .map(|reason| format!("betteroffice 回退（{reason}）"));
                 if forced.is_some() && !bo_config.fallback_available() {
-                    bail!(
-                        "betteroffice 校验区域重算不可采用且未配置可用回退：{}",
+                    Err(anyhow::anyhow!(
+                        "betteroffice 校验区域重算不可采用且禁止回退：{}",
                         refusals.get(&index).cloned().unwrap_or_default()
-                    );
+                    ))
+                } else {
+                    runtime.compute_prepared_copy(
+                        &item.source_copy,
+                        &item.regions,
+                        &item.prepared,
+                        forced,
+                    )
                 }
-                runtime.compute_prepared_copy(
-                    &item.source_copy,
-                    &item.regions,
-                    &item.prepared,
-                    forced,
-                )
             }
         };
         let calculation = match calculation {
@@ -259,7 +258,7 @@ fn run_pending_validation_calculations(
                     progress,
                     Some(&source),
                     Some(item.validation_started.elapsed()),
-                    &["pytools-core", "pywin32", "Excel/WPS COM"],
+                    &["pytools-core"],
                     Some(platform_default_engine),
                     Some("named_validation_calculation_error"),
                 );
@@ -314,6 +313,8 @@ fn run_pending_validation_calculations(
                     "betteroffice (pure Rust)",
                     &["pytools-core", "betteroffice (pure Rust)"],
                 )
+            } else if calculation_application.starts_with("Aspose") {
+                ("Aspose.Cells .NET", &["pytools-core", "Aspose.Cells .NET"])
             } else if calculation_application.starts_with("LibreOffice") {
                 ("LibreOffice Calc", &["pytools-core", "LibreOffice Calc"])
             } else {
@@ -1289,7 +1290,33 @@ pub fn extract_named_validation_regions_with_progress<F>(
 where
     F: FnMut(SummaryRunEvent),
 {
-    extract_named_validation_regions_inner(template_path, sources, output_dir, Some(&mut on_event))
+    extract_named_validation_regions_inner(
+        template_path,
+        sources,
+        output_dir,
+        crate::aspose_integration::ValidationExecution::default(),
+        Some(&mut on_event),
+    )
+}
+
+pub fn extract_named_validation_regions_with_execution<F>(
+    template_path: &Path,
+    sources: &[PathBuf],
+    output_dir: &Path,
+    execution: crate::aspose_integration::ValidationExecution,
+    mut on_event: F,
+) -> Result<NamedValidationExtractResult>
+where
+    F: FnMut(SummaryRunEvent),
+{
+    execution.mode.preflight()?;
+    extract_named_validation_regions_inner(
+        template_path,
+        sources,
+        output_dir,
+        execution,
+        Some(&mut on_event),
+    )
 }
 
 pub fn summarize_by_comments(
@@ -2096,6 +2123,7 @@ fn extract_named_validation_regions_inner(
     template_path: &Path,
     sources: &[PathBuf],
     output_dir: &Path,
+    execution: crate::aspose_integration::ValidationExecution,
     callback: Option<&mut dyn FnMut(SummaryRunEvent)>,
 ) -> Result<NamedValidationExtractResult> {
     let started = Instant::now();
@@ -2298,6 +2326,7 @@ fn extract_named_validation_regions_inner(
     );
 
     let mut runtime = ConversionRuntime::default();
+    runtime.set_validation_execution(execution.clone());
     let mut output_rows = Vec::<NamedValidationOutputRow>::new();
     let mut skipped_sources = Vec::new();
     let mut files_seen = 0usize;
@@ -2308,7 +2337,12 @@ fn extract_named_validation_regions_inner(
     // 用 rayon 并行跑 betteroffice，只把拒绝项交给平台引擎。
     let mut pending_calculations = Vec::<PendingValidationCalculation>::new();
     // 引擎名在重算返回后才最终确定；此处只保留平台默认作为占位与日志前缀。
-    let platform_default_engine = named_validation_calculation_engine();
+    let platform_default_engine =
+        if execution.mode == crate::aspose_integration::ValidationCalcMode::Auto {
+            named_validation_calculation_engine()
+        } else {
+            execution.mode.label()
+        };
     for (input_index, source) in sources.iter().enumerate() {
         progress.current_input_index = Some(input_index + 1);
         progress.current_sheet = None;
@@ -5771,7 +5805,7 @@ fn patch_worksheet_error_cells(xml: &[u8], errors: &[PendingErrorCell]) -> Resul
                     && node.attribute("r") == Some(row_text.as_str())
             })
             .with_context(|| format!("summary output row {row_number} is missing"))?;
-        let markup = format!(
+        let mut markup = format!(
             "<{cell_tag} r=\"{}\" t=\"e\"><{value_tag}>{}</{value_tag}></{cell_tag}>",
             error.address, error.excel_value
         );
@@ -5797,6 +5831,14 @@ fn patch_worksheet_error_cells(xml: &[u8], errors: &[PendingErrorCell]) -> Resul
                     "summary error cell {} already contains a typed error",
                     error.address
                 );
+                // Converting the value type must retain the writer's style.
+                if let Some(style) = cell.attribute("s") {
+                    let index: u32 = style.parse().context("invalid error-cell style index")?;
+                    markup = format!(
+                        "<{cell_tag} r=\"{}\" s=\"{index}\" t=\"e\"><{value_tag}>{}</{value_tag}></{cell_tag}>",
+                        error.address, error.excel_value
+                    );
+                }
                 replacement = Some(cell.range());
                 break;
             }
@@ -7147,6 +7189,29 @@ fn openpyxl_unique_sheet_name(existing_names: &[String], proposed: &str) -> Stri
 #[cfg(test)]
 mod patch_error_cells_tests {
     use super::*;
+
+    #[test]
+    fn typed_error_replacement_preserves_existing_style() -> Result<()> {
+        let xml = format!(
+            r#"<worksheet xmlns="{SPREADSHEET_MAIN_NS}"><sheetData><row r="12"><c r="AA12" s="7" t="inlineStr"><is><t>#N/A</t></is></c><c r="AB12"><v>42</v></c></row></sheetData></worksheet>"#
+        );
+        let errors = [PendingErrorCell {
+            sheet_name: "Data".into(),
+            address: "AA12".into(),
+            reader_value: "NA".into(),
+            excel_value: "#N/A",
+        }];
+        let patched = patch_worksheet_error_cells(xml.as_bytes(), &errors)?;
+        let document = roxmltree::Document::parse(std::str::from_utf8(&patched)?)?;
+        let cell = document
+            .descendants()
+            .find(|n| n.attribute("r") == Some("AA12"))
+            .unwrap();
+        assert_eq!(cell.attribute("s"), Some("7"));
+        assert_eq!(cell.attribute("t"), Some("e"));
+        assert!(std::str::from_utf8(&patched)?.contains("<c r=\"AB12\"><v>42</v></c>"));
+        Ok(())
+    }
 
     #[test]
     fn failed_patch_does_not_remove_a_preexisting_output() -> Result<()> {

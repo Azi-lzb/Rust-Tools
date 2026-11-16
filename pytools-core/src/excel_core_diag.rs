@@ -22,6 +22,7 @@ pub fn engine_label(engine: EngineId) -> &'static str {
         EngineId::BetterOffice => "betteroffice",
         EngineId::OpenpyxlWorker => "openpyxl",
         EngineId::Composite => "in-memory-composite",
+        EngineId::AsposeWorker => "aspose_worker",
     }
 }
 

@@ -1,0 +1,121 @@
+{
+  "sheet_names": [
+    "Calc",
+    "Spare",
+    "Data",
+    "Data Set",
+    "O'Brien"
+  ],
+  "formulas": [
+    "SUMIF(Data!A2:A4,\"alpha\",Data!B2:B4)",
+    "SUMPRODUCT(Data!B2:B4,Data!C2:C4)",
+    "IF(AND(Data!B2>0,Data!C2>0),ROUND(Data!B2*Data!C2,2),0)",
+    "INDEX(Data!C2:C4,MATCH(\"beta\",Data!A2:A4,0))",
+    "B2",
+    "$B2",
+    "B$2",
+    "$B$2",
+    "SUM(Z99:AA100)",
+    "SUM($Z99:AA$100)",
+    "Data!B2",
+    "Data!$B2",
+    "Data!B$2",
+    "Data!$B$2",
+    "SUM(Data!Z9:AA10)",
+    "SUM(Data!$Z9:AA$10)",
+    "SUM(Data!Z$99:$AA100)",
+    "SUM(Data!$Z$99:$AA$100)",
+    "'Data Set'!B2",
+    "'Data Set'!$B2",
+    "'Data Set'!B$2",
+    "'Data Set'!$B$2",
+    "SUM('Data Set'!Z9:AA10)",
+    "SUM('Data Set'!$Z9:AA$10)",
+    "SUM('Data Set'!Z$99:$AA100)",
+    "SUM('Data Set'!$Z$99:$AA$100)",
+    "'O''Brien'!B2",
+    "'O''Brien'!$B2",
+    "'O''Brien'!B$2",
+    "'O''Brien'!$B$2",
+    "SUM('O''Brien'!Z9:AA10)",
+    "SUM('O''Brien'!$Z9:AA$10)",
+    "SUM('O''Brien'!Z$99:$AA100)",
+    "SUM('O''Brien'!$Z$99:$AA$100)",
+    "Data!Z9",
+    "Data!AA10",
+    "Data!Z99",
+    "Data!AA100",
+    "Data!B2>0",
+    "Data!B2>=0",
+    "Data!B2<0",
+    "Data!B2<=0",
+    "Data!B2=0",
+    "Data!B2<>0"
+  ],
+  "values": [
+    [
+      "A1",
+      "key"
+    ],
+    [
+      "B1",
+      "quantity"
+    ],
+    [
+      "C1",
+      "price"
+    ],
+    [
+      "A2",
+      "alpha"
+    ],
+    [
+      "B2",
+      2
+    ],
+    [
+      "C2",
+      3
+    ],
+    [
+      "A3",
+      "beta"
+    ],
+    [
+      "B3",
+      4
+    ],
+    [
+      "C3",
+      5
+    ],
+    [
+      "A4",
+      "alpha"
+    ],
+    [
+      "B4",
+      6
+    ],
+    [
+      "C4",
+      7
+    ],
+    [
+      "Z9",
+      13
+    ],
+    [
+      "AA10",
+      17
+    ],
+    [
+      "Z99",
+      19
+    ],
+    [
+      "AA100",
+      23
+    ]
+  ]
+}

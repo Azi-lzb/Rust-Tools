@@ -552,7 +552,7 @@ fn conversion_menu_batch_uses_pywin32_and_preserves_sources() -> Result<()> {
     let source_bytes = [fs::read(&first)?, fs::read(&second)?];
 
     let input = format!(
-        "4\n4\n1\n1\n{};{}\n0\n0\n",
+        "4\n4\n1\n1\n1\n{};{}\n0\n0\n",
         first.display(),
         second.display()
     );
@@ -932,7 +932,7 @@ fn sheet_rename_menu_without_capability_can_be_cancelled() -> Result<()> {
     create_source_workbook(&input, "OldSheet")?;
     let original = fs::read(&input)?;
 
-    let result = run_menu(&config, &format!("4\n5\n1\n{}\n0\n0\n", input.display()))?;
+    let result = run_menu(&config, &format!("4\n5\n1\n1\n{}\n0\n0\n", input.display()))?;
     assert!(result.status.success(), "menu failed: {}", stderr(&result));
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(stdout.contains("[已取消] 未执行改名"));
@@ -951,7 +951,10 @@ fn sheet_rename_openpyxl_does_not_require_excel_com() -> Result<()> {
     create_source_workbook(&input, "OldSheet")?;
     let mut child = menu_command(&config);
     child.env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1");
-    let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
+    let result = finish_menu(
+        child,
+        &format!("4\n5\n1\n1\n{}\ny\n0\n0\n", input.display()),
+    )?;
     assert!(result.status.success());
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(!stdout.contains("使用 openpyxl"));
@@ -1032,7 +1035,10 @@ fn sheet_rename_menu_excel_updates_cross_sheet_formula() -> Result<()> {
         "PYTOOLS_COM_PYTHON",
         manifest.parent().unwrap().join("dist/python/python.exe"),
     );
-    let result = finish_menu(child, &format!("4\n5\n1\n{}\ny\n0\n0\n", input.display()))?;
+    let result = finish_menu(
+        child,
+        &format!("4\n5\n1\n1\n{}\ny\n0\n0\n", input.display()),
+    )?;
     assert!(result.status.success(), "{}", stderr(&result));
     assert!(
         fs::read(&input)? != source_before,
@@ -1648,7 +1654,7 @@ fn run_sheet_rename_menu(
         .arg(SHEET_RENAME_PLATFORM)
         .arg("--log-view")
         .arg("user");
-    let menu_input = format!("4\n5\n1\n{}\n{confirmation}\n0\n0\n", input.display());
+    let menu_input = format!("4\n5\n1\n1\n{}\n{confirmation}\n0\n0\n", input.display());
     finish_menu(child, &menu_input)
 }
 
@@ -1656,9 +1662,9 @@ fn menu_input_for_action(action: u8, mode: u8, selected: &Path) -> String {
     let path = selected.display();
     match action {
         1 => format!("4\n1\n{mode}\n{path}\n0\n0\n"),
-        2 => format!("4\n4\n1\n1\n{path}\n0\n0\n"),
-        3 => format!("4\n4\n2\n1\n{path}\n0\n0\n"),
-        4 => format!("4\n5\n1\n{path}\n0\n0\n"),
+        2 => format!("4\n4\n1\n1\n1\n{path}\n0\n0\n"),
+        3 => format!("4\n4\n2\n1\n1\n{path}\n0\n0\n"),
+        4 => format!("4\n5\n1\n1\n{path}\n0\n0\n"),
         // 4-3 现有“添加 / 清理”二级菜单：1=添加前缀，再进入选择方式。
         5 => format!("4\n3\n1\n{mode}\n{path}\n0\n0\n"),
         8 => format!("4\n6\n{mode}\n{path}\n0\n0\n"),

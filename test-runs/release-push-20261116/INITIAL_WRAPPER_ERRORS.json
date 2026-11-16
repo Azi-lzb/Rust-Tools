@@ -1,0 +1,16 @@
+{
+  "wsl": {
+    "chunk_id": "827c29",
+    "wall_time_seconds": 0.0000141,
+    "exit_code": 1,
+    "original_token_count": 89,
+    "output": "/mnt/f/RustBuild/pytools/release-push-20261116/wsl-start.txt: line 1: 2026-11-15T23:32:13Z: command not found\n/mnt/c/Users/AZI/Desktop/VibeCode/Rust-Tools/test-runs/release-push-20261116/run-wsl.sh: line 25: label: unbound variable\n/mnt/c/Users/AZI/Desktop/VibeCode/Rust-Tools/test-runs/release-push-20261116/run-wsl.sh: line 27: label: unbound variable\n"
+  },
+  "docker": {
+    "chunk_id": "3caa06",
+    "wall_time_seconds": 0.0000141,
+    "exit_code": 1,
+    "original_token_count": 128,
+    "output": "docker.exe : /src/test-runs/release-push-20261116/run-docker.sh: line 21: label: unbound variable\r\nAt C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\test-runs\\release-push-20261116\\run-docker.ps1:15 char:1\r\n+ & docker @arguments *> (Join-Path 'F:/RustBuild/pytools/release-push- ...\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (/src/test-runs/...nbound variable:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n"
+  }
+}

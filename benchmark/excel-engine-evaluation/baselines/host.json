@@ -1,0 +1,12 @@
+{
+  "time": "2026-11-14T20:51:31.5598505+08:00",
+  "cpu": "AMD Ryzen 5 2600X Six-Core Processor           ",
+  "logical_processors": 12,
+  "os": "Microsoft Windows 11 专业版",
+  "version": "10.0.26200",
+  "total_memory_kib": 16697744,
+  "free_memory_kib": 4737408,
+  "input_drive": "C:",
+  "target_drive": "F:",
+  "background_process_count": 393
+}

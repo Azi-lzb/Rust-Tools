@@ -24,6 +24,7 @@ pub enum RouteMode {
     UmyaOnly,
     BetterOfficeOnly,
     RustNativeOnly,
+    AsposeOnly,
     Auto,
 }
 
@@ -42,6 +43,7 @@ impl RouteMode {
             Self::UmyaOnly => "UMYAOnly",
             Self::BetterOfficeOnly => "BetterOfficeOnly",
             Self::RustNativeOnly => "RustNativeOnly",
+            Self::AsposeOnly => "AsposeOnly",
             Self::Auto => "Auto",
         }
     }
@@ -53,6 +55,7 @@ impl RouteMode {
             Self::BetterOfficeOnly => "3",
             Self::RustNativeOnly => "4",
             Self::Auto => "5",
+            Self::AsposeOnly => "6",
         }
     }
 }
@@ -73,8 +76,9 @@ impl std::str::FromStr for RouteMode {
             "betterofficeonly" | "betteroffice" => Ok(Self::BetterOfficeOnly),
             "rustnativeonly" | "rustnative" | "native" => Ok(Self::RustNativeOnly),
             "auto" => Ok(Self::Auto),
+            "asposeonly" | "aspose" => Ok(Self::AsposeOnly),
             _ => bail!(
-                "invalid {ROUTE_ENV}={value:?}; expected OpenpyxlOnly, UMYAOnly, BetterOfficeOnly, RustNativeOnly, or Auto"
+                "invalid {ROUTE_ENV}={value:?}; expected OpenpyxlOnly, UMYAOnly, BetterOfficeOnly, RustNativeOnly, AsposeOnly, or Auto"
             ),
         }
     }
@@ -147,6 +151,14 @@ pub fn route_plan(plan: &ExcelEditPlan, config: &RouteConfig) -> Result<RouteSel
                 EngineId::RustNativeOoxml,
                 false,
                 "manual RustNativeOnly route",
+            )
+        }
+        RouteMode::AsposeOnly => {
+            crate::aspose_edit::ensure_supported(plan)?;
+            (
+                EngineId::AsposeWorker,
+                false,
+                "explicit Aspose Worker route",
             )
         }
         RouteMode::Auto => auto_route(plan)?,
@@ -500,7 +512,10 @@ fn execution_plan_for(
     if route_config.mode == RouteMode::Auto
         || matches!(
             engine,
-            EngineId::UmyaSpreadsheet | EngineId::BetterOffice | EngineId::Composite
+            EngineId::UmyaSpreadsheet
+                | EngineId::BetterOffice
+                | EngineId::Composite
+                | EngineId::AsposeWorker
         )
     {
         // These engines rewrite package XML instead of preserving every ZIP
@@ -518,6 +533,9 @@ fn emit_route_result(
     config: &RouteConfig,
     file_path: &Path,
 ) {
+    if execution.engine == EngineId::AsposeWorker {
+        return;
+    }
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
     eprintln!(
         "[{timestamp}] [INFO] ExcelEditPlan 路由：模式 {}，引擎 {}，文件 {}，耗时 {} ms",

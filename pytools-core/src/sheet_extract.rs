@@ -1959,10 +1959,25 @@ fn validate_staged_workbook_with_prefix(
     existing_sheet_names: &[String],
     expected_sheets: &[ExpectedSheet],
 ) -> Result<()> {
-    let actual_sheets = read_value_columns_with_iso_dates(path, EXCEL_MAX_COLUMNS)
+    let mut actual_sheets = read_value_columns_with_iso_dates(path, EXCEL_MAX_COLUMNS)
         .with_context(|| format!("reopen staged workbook {}", path.display()))?;
-    let actual_extents = read_xlsx_worksheet_extents(path)
+    let mut actual_extents = read_xlsx_worksheet_extents(path)
         .with_context(|| format!("read staged worksheet extents {}", path.display()))?;
+    if crate::aspose_edit::aspose_selected() {
+        ensure!(
+            actual_sheets
+                .last()
+                .is_some_and(|s| s.name == "Evaluation Warning")
+                && actual_extents
+                    .last()
+                    .is_some_and(|s| s.name == "Evaluation Warning"),
+            "Aspose append candidate is missing its verified evaluation marker"
+        );
+        // The full edit-plan validator has already verified business sheets
+        // and the sole appended evaluation sheet. Comparison only, no save.
+        actual_sheets.pop();
+        actual_extents.pop();
+    }
     ensure!(
         actual_sheets.len() == existing_sheet_names.len() + expected_sheets.len(),
         "staged workbook has an unexpected worksheet count"

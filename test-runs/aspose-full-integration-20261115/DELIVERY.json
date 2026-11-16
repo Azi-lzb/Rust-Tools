@@ -1,0 +1,607 @@
+{
+  "head": "34dfcd905b1157dca531908083b156b41f440a03",
+  "start_head": "34dfcd905b1157dca531908083b156b41f440a03",
+  "branch": "main",
+  "staged_diff": "",
+  "protected_sha256": {
+    "config.xlsx": "b8211c33ffbc35f12b762d6eb9a10c9e3c95377129c4c7a1177eb8c510be256f",
+    "dist/RustTools.exe": "cddd5f4c8c76e9742879b0302540483bbb0811638a6c5aa353ece3a368258254",
+    "dist/config/config.xlsx": "04b6535db132c7f0f41cf9bee6db354e126c46e5afc403934595a554e35d0cec"
+  },
+  "tests": [
+    {
+      "log": "modify-delivery.log",
+      "summaries": [
+        "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.55s"
+      ]
+    },
+    {
+      "log": "calc-delivery.log",
+      "summaries": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.72s"
+      ]
+    },
+    {
+      "log": "print-delivery.log",
+      "summaries": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.16s"
+      ]
+    },
+    {
+      "log": "fx-delivery.log",
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.52s"
+      ]
+    },
+    {
+      "log": "dedup-verified.log",
+      "summaries": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.94s"
+      ]
+    },
+    {
+      "log": "foreign-verified.log",
+      "summaries": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 4.70s"
+      ]
+    },
+    {
+      "log": "namespace-verified.log",
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "log": "existing-batch_tools_menu_cli-ce2785fe2ef7dfc7-foreign.log",
+      "superseded": true,
+      "summaries": [
+        "test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 4.40s"
+      ]
+    },
+    {
+      "log": "existing-batch_tools_menu_cli-ce2785fe2ef7dfc7-institution.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 9.07s"
+      ]
+    },
+    {
+      "log": "existing-batch_tools_menu_cli-ce2785fe2ef7dfc7-rural.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 4.20s"
+      ]
+    },
+    {
+      "log": "existing-batch_tools_menu_cli-ce2785fe2ef7dfc7-village.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 7.18s"
+      ]
+    },
+    {
+      "log": "existing-config_menu_cli-640ab7b0cddd17d7-.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.51s"
+      ]
+    },
+    {
+      "log": "existing-conversion_menu_cli-139212b543b48a2c-conversion_menu.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 20 filtered out; finished in 0.92s"
+      ]
+    },
+    {
+      "log": "existing-conversion_menu_cli-139212b543b48a2c-sheet_rename.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 3.88s"
+      ]
+    },
+    {
+      "log": "existing-dedup_menu_cli-cbd6deb01ae1665e-.log",
+      "superseded": true,
+      "summaries": [
+        "test result: FAILED. 16 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.32s"
+      ]
+    },
+    {
+      "log": "existing-print_menu_cli-bd978415a6908113-.log",
+      "superseded": true,
+      "summaries": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.76s"
+      ]
+    },
+    {
+      "log": "existing-sheet_extract_area_operation_parity-f4b3b236643ab4c3-.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 15 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 12.58s"
+      ]
+    },
+    {
+      "log": "existing-timeline_menu_cli-67321d33564270c1-wide_summary.log",
+      "superseded": false,
+      "summaries": [
+        "test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 10 filtered out; finished in 18.10s"
+      ]
+    }
+  ],
+  "performance": [
+    {
+      "group": "pure",
+      "case": "1MiB-modify",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": 553.03625,
+      "end_to_end_ms": 553.3195000000001,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-pure-final\\summary.json"
+    },
+    {
+      "group": "pure",
+      "case": "1MiB-modify",
+      "engine": "openpyxl",
+      "n": 10,
+      "processing_ms": 2496.1635,
+      "end_to_end_ms": 2496.4819500000003,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-pure-final\\summary.json"
+    },
+    {
+      "group": "pure",
+      "case": "10MiB-modify",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": 5826.0218,
+      "end_to_end_ms": 5826.3279,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-pure-final\\summary.json"
+    },
+    {
+      "group": "pure",
+      "case": "10MiB-modify",
+      "engine": "openpyxl",
+      "n": 10,
+      "processing_ms": 27731.54965,
+      "end_to_end_ms": 27731.88,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-pure-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "1-1",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1589.7622000000001,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "1-1",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1633.16425,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "7-1",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1701.9957,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "7-1",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1800.5228499999998,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-1",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1403.8234499999999,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-1",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1565.59225,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-2",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1380.08005,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-2",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1382.0453,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-3",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1324.3249,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "2-3",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1386.508,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-1",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1430.77045,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-1",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 574.7102,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-2",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1570.40175,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-2",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 670.09445,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-3",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1422.31665,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "3-3",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 563.9772499999999,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-4",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1234.56955,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-4",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 6923.8615,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-5",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1347.4347,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-5",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 731.76235,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-7",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1369.6457999999998,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "4-7",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 94.19895,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-1",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1306.19085,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-1",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1375.8629,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-2",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1370.2355,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-2",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1407.44145,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-3",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1147.81395,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-3",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1236.038,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-4",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1361.4965,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-4",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 258.24235,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-6",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1334.21735,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-6",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1420.0709000000002,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-7",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1313.8735,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-7",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1367.4829,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-4-menu",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1407.41635,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "menus",
+      "case": "5-4-menu",
+      "engine": "baseline",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 259.8507,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-menus-final\\summary.json"
+    },
+    {
+      "group": "batch",
+      "case": "batch",
+      "engine": "auto",
+      "n": 1,
+      "processing_ms": null,
+      "end_to_end_ms": 75518.435,
+      "files": 100,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-batch-final\\summary.json"
+    },
+    {
+      "group": "batch",
+      "case": "batch",
+      "engine": "aspose",
+      "n": 1,
+      "processing_ms": null,
+      "end_to_end_ms": 32533.391,
+      "files": 100,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-batch-final\\summary.json"
+    },
+    {
+      "group": "calc",
+      "case": "calc",
+      "engine": "auto",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 7286.6181,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-calc-final-fixed\\summary.json"
+    },
+    {
+      "group": "calc",
+      "case": "calc",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 1626.0774,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-calc-final-fixed\\summary.json"
+    },
+    {
+      "group": "word",
+      "case": "word",
+      "engine": "auto",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 5349.9912,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-word-verified\\summary.json"
+    },
+    {
+      "group": "word",
+      "case": "word",
+      "engine": "aspose",
+      "n": 10,
+      "processing_ms": null,
+      "end_to_end_ms": 2174.3385,
+      "files": 1,
+      "evidence": "F:\\RustBuild\\pytools\\aspose-benchmark-word-verified\\summary.json"
+    }
+  ],
+  "not_tested": [
+    "full workspace tests",
+    "Release/dist/packages",
+    "Linux/WSL/Docker/Kylin",
+    "WPS acceptance",
+    "FAT/exFAT/shared drives",
+    "real business files",
+    "licensed mode",
+    "watermark removal",
+    "XLS append (still refused)",
+    "XLSM/macro modification",
+    "shared/array formula modification"
+  ]
+}

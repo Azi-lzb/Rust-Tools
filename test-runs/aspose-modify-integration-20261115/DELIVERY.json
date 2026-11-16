@@ -1,0 +1,195 @@
+{
+  "status": "COMPLETE_TARGETED_WINDOWS",
+  "head": "34dfcd905b1157dca531908083b156b41f440a03",
+  "branch": "main",
+  "menus": [
+    "2-1 configured duplicate marking",
+    "5-2 institution normalization",
+    "5-4 header replacement"
+  ],
+  "choices": {
+    "1": "Auto retains existing routing",
+    "2": "Openpyxl explicit, XLSX only in these workflows",
+    "3": "Aspose .NET evaluation, XLSX only, no fallback"
+  },
+  "implementation": [
+    "Scoped thread-local selection before file picker; configuration inputs for 2-1; no process environment or config persistence",
+    "Shared ModifyEngine trait, resident stdio backend, protected ExcelEditPlan candidate validation and snapshot commit",
+    "Values/formulas/fills and header-only replacement; explicit unsupported types/operations reject before write",
+    "Evaluation worksheet and active-tab behavior retained, not removed",
+    "Modify restores original sheetFormatPr on original sheets only; independent Rust validator still checks defaults, dimensions and protected objects",
+    "Only evaluation comparison permits appended evaluation sheet, unchanged explicit defaults, paperSize=1 and truly empty header/footer XML nodes",
+    "Openpyxl rewrite uses existing semantic validation instead of byte-identical ZIP patch validation"
+  ],
+  "tests": [
+    {
+      "log": "modify-complete.log",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "router-unit.stdout.log",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "scope-unit.stdout.log",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "header-after-preservation.stdout.log",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "duplicates-existing.stdout.log",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "duplicates-menu-existing.stdout.log",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "institution-existing.stdout.log",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "calc-after-preservation.stdout.log",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "log": "protocol-after-preservation.stdout.log",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "calc-real-two-after-preservation.stdout.log",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "distinct_targeted_rust_protocol_tests_passed": 50,
+  "real_menu_cases": [
+    {
+      "menu": "5-2",
+      "status": "PASS",
+      "watermark_retained": true,
+      "configuration_unchanged": true
+    },
+    {
+      "menu": "5-4",
+      "status": "PASS",
+      "watermark_retained": true,
+      "configuration_unchanged": true
+    }
+  ],
+  "checks": {
+    "dotnet_build": "PASS 0 warnings 0 errors, --no-restore, external F drive output",
+    "scoped_format": "PASS verified against per-file before snapshots",
+    "workspace_cargo_fmt_check": "FAIL_PRE_EXISTING: excel-editor/src/lib.rs, plan.rs; pytools-core/src/edit_plan.rs, inplace_edit.rs, lib.rs",
+    "python_ast": "PASS",
+    "automatic_route_body": "UNCHANGED byte-for-byte relative to start",
+    "config_and_dist_hashes": "UNCHANGED",
+    "git_diff_check": "PASS"
+  },
+  "scope_ownership": "current-task-files.json plus prior/ and diff/ separate this round from previous dirty files; raw Git HEAD diff includes earlier calculation integration/dependencies",
+  "intermediate_failures": [
+    {
+      "issue": "Worker header replacement also touched footer",
+      "resolution": "Fixed to ordinary/even/first headers only; real menu asserts all three headers and unchanged footer"
+    },
+    {
+      "issue": "Aspose changes implicit default column width of Openpyxl-produced XLSX",
+      "resolution": "Source sheetFormatPr restored for nonstructural Modify only; Rust dimension-default equality remains mandatory; initially failed untouched source retained"
+    },
+    {
+      "issue": "Equivalent explicit default row height / paperSize and omitted empty footer elements rejected",
+      "resolution": "Narrow comparison-only normalization, actual height change still rejected; no watermark/package cleanup"
+    },
+    {
+      "issue": "Openpyxl mode rejected docProps/core.xml rewrite due to precise OOXML patch validator",
+      "resolution": "Retain strong semantic validation for rewrite engine; original auto OOXML patch unchanged"
+    },
+    {
+      "issue": "Test helper API return value, report schema/view, cell-value wrapper, CRLF record mismatch",
+      "resolution": "Corrected fixture/harness expectations; original failure records retained; no removal of failure protection assertions"
+    }
+  ],
+  "not_tested": [
+    "Full test suite",
+    "New Linux/WSL/Docker/Kylin/WPS integration",
+    "Actual Windows COM legacy XLS workflows this round",
+    "Real business files / user manual acceptance",
+    "XLS or XLSM through selected Aspose modification route (not enabled)",
+    "Structural delete/copy/Sheet rename through Aspose menu (not enabled)",
+    "Licensed mode, watermark removal, active-tab restoration",
+    "100-file live modification rotation; prior shared host lifecycle tests rerun, prior calculation 100-file evidence not promoted to new modification acceptance",
+    "Remaining ignored live calc tests: 100-file rotation and unknown-function rejection were not rerun this round"
+  ],
+  "limitations": [
+    "Already present Evaluation Warning has ambiguous ownership; reject source safely, use clean synthetic/backed-up inputs",
+    "Decimal/exponent numeric text, date/error writes currently explicitly unsupported; integer writes <=15 digits only",
+    "Unverified sensitive workbook structures or preservation failures reject candidate; no silent fallback",
+    "Existing xlwt BIFF serialized-style refusal retained; no claim XLS append was restored"
+  ],
+  "manual_steps": [
+    "Use F:/RustBuild/pytools/debug/RustTools.exe with portable SDK/Worker environment from docs/ASPOSE_CALC_INTEGRATION.md, not dist old EXE",
+    "5 -> 2 -> 3 then clean synthetic/backed-up XLSX; check mapped content, original non-target content and retained evaluation sheet",
+    "5 -> 4 -> 3 then copied XLSX with odd/even/first headers; verify all requested header substitutions and unchanged footer",
+    "2 -> 1 -> 3 with synthetic configured duplicates; verify red marking and no data deletion",
+    "Use Auto to compare original route on separate fresh copies; keep Linux/WPS/real business acceptance separate"
+  ],
+  "constraints": {
+    "existing_modifications_preserved": true,
+    "feature_test_worktrees_accessed": false,
+    "production_linux_route_changed": false,
+    "committed": false,
+    "pushed": false,
+    "dist_updated": false,
+    "system_software_installed": false,
+    "full_tests_run": false
+  },
+  "source_sha256": {
+    "docs/ASPOSE_CALC_INTEGRATION.md": "5a5ab0d0e98af79774e5c85412193ab024c87cfae7ad28abfd4b35c2c52ef77d",
+    "crates/excel-aspose/src/lib.rs": "cf8e2405187a06d86053c688527b772ebb318daf7e61c499301671a715e67c81",
+    "crates/excel-editor/src/openpyxl_backend.rs": "a5fdc0b68f2ce5a15e36400fe6cf96f4cb8c46a3876176eab7f9d996c6f81e86",
+    "crates/excel-editor/src/plan.rs": "131b1c01e068e53d9b4f27b0e0e9eca63cf536d534a405873273754d45b9b520",
+    "pytools-core/src/aspose_integration.rs": "babafda15583992a5750aea4e4f34cc6542665d3e6c9fea8a617626a5c12ed66",
+    "pytools-core/src/dedup_ops.rs": "7867ba7c59e848ff44765d06aaae512ea16a9851f171957913322c991763aa40",
+    "pytools-core/src/edit_plan.rs": "9ff87c3fbe6ef8c255d140e22a5aa13ba2083d0a1e6174c3e84dc682215828a6",
+    "pytools-core/src/excel_core_diag.rs": "1ffe046d16e89bfb0925f6865f972b0d8aac9d714665214c4ec84f9c93320e1c",
+    "pytools-core/src/excel_edit_router.rs": "4af25df8ae6f712b438cd1b1dc3457ed753b6db683ca853931af9f0b557649f2",
+    "pytools-core/src/inplace_edit.rs": "6d0fbe990b900726af92689bf046077057283c7a080927a3491540a32817ac2d",
+    "pytools-core/src/institution_normalize.rs": "69be5ec8efe7c04d21faec669fc11b03a0398a9b22b39b8a8005625af470546e",
+    "pytools-core/src/lib.rs": "6b4d2e10f618639a1810ff43c9ebc074475d30a4c5d3dd738cb542d505e84d55",
+    "pytools-core/tests/batch_tools_menu_cli.rs": "761a1b212f92c8040d00008fdf08afe8bafb64bb3bce01ec064a1edc64c571a0",
+    "pytools-core/tests/dedup_menu_cli.rs": "6866965178188a027d979b811da179dee5f150df4a59a77df1fdf992f1e9ba1f",
+    "pytools-core/tests/fx_header_menu_cli.rs": "073058423e09bafa3662733fee59a1204654be40c09d028b3c761946523551a3",
+    "pytools-core/tests/xls_com_routes.rs": "e4d29df0683a40dde20460f0d5d47c7798626e6ad27130392575dc9484d12188",
+    "pytools-core/src/bin/RustTools.rs": "fdea0eb1f4b7b771e8825d94b50a9aa9a0c4d93225a961a97b63e8730f85033b",
+    "tools/AsposeWorker/ResidentWorker.cs": "f2000d50af54437e9fecee4c31cc0b994addf972da86e4ae06236e4683b368d7",
+    "pytools-core/src/aspose_edit.rs": "22b8ed142dba7821cb895a50612b32a9a978c8cfc6effda837b0acc4dd799f56",
+    "pytools-core/tests/aspose_modify_cli.rs": "f329cf4b33184c75f5691e57ca7e8b7e860e54b53021d0f91fa5adb2d123f164",
+    "pytools-core/tests/fixtures/aspose_modify_fault_worker.py": "91f285d88d6f30fd60e2fc5ba39c655c7e602c45a14c7ccba8d7eddd8c8c1a9a",
+    "tools/AsposeWorker/WorksheetDefaults.cs": "fbe6198b1a1932842b3a77ffd9830fd8a4f51a21cba29c57feb4f3795f6ebd33"
+  },
+  "format_audit": "format-audit.json",
+  "safety_audit": "safety-verification.json",
+  "developer_log_samples": "developer-logs/",
+  "terminal_capture": "menu-e2e-final/{2,4}/{stdout,stderr}.txt"
+}

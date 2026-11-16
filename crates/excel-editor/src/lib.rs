@@ -3,24 +3,24 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-mod ooxml_header_backend;
 mod native_ooxml_backend;
+mod ooxml_header_backend;
 mod openpyxl_backend;
 mod plan;
 mod umya_backend;
 mod workbook_profile;
 mod worker_process;
 
+pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
 pub use ooxml_header_backend::{OoxmlHeaderTextBackend, OoxmlHeaderTextValidator};
 pub use openpyxl_backend::{OpenpyxlWorkerConfig, OpenpyxlXlsxBackend, OpenpyxlXlsxValidator};
-pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
 pub use plan::{
     BackendAttempt, BackendAttemptOutcome, BackendCapability, BackendErrorKind, BackendFailure,
     BackendRouteDecision, CapabilityEvidence, CapabilityStatus, CellValue, EditBackend,
     EditExecutionReport, EditOperation, EditOperationKind, EngineId, ExcelEditPlan, ExcelModifier,
     ExcelModifierError, ExcelModifierErrorKind, OutputValidator, PageMargins, PageOrientation,
-    PageSettings,
-    PreservationRequirement, RangeStyleMode, WorkbookFeature, WorkbookFormat, WorkbookProfile,
+    PageSettings, PreservationRequirement, RangeStyleMode, WorkbookFeature, WorkbookFormat,
+    WorkbookProfile,
 };
 pub use umya_backend::{apply_umya_append_operations, UmyaXlsxBackend, UmyaXlsxValidator};
 pub use umya_spreadsheet::{BorderStyleValues, Cell, Workbook};

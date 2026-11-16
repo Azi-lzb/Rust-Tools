@@ -233,6 +233,15 @@ fn run_batch_sheet_rename_impl(
             continue;
         }
         let input_is_xls = is_xls(&input);
+        if input_is_xls && crate::aspose_edit::xlsx_only_selection() {
+            report.skip += 1;
+            report.files.push(skipped_file_result(
+                input,
+                "所选修改引擎仅支持 XLSX，未调用 COM",
+                file_started.elapsed().as_millis(),
+            ));
+            continue;
+        }
         if !is_xlsx(&input) && !input_is_xls {
             report.skip += 1;
             report.files.push(skipped_file_result(
@@ -326,10 +335,11 @@ fn run_batch_sheet_rename_impl(
             }
             let (execution, engine) = if let (Some(plan), true) = (
                 plan.as_ref(),
-                std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some(),
+                crate::aspose_edit::route_override().is_some() || std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some(),
             ) {
                 candidate_owned = true;
-                let route_config = crate::excel_edit_router::RouteConfig::from_environment()?;
+                let route_config = crate::aspose_edit::route_override().map(Ok)
+                    .unwrap_or_else(crate::excel_edit_router::RouteConfig::from_environment)?;
                 let execution = crate::excel_edit_router::execute_candidate_with_route_config(
                     plan,
                     &route_config,

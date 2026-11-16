@@ -73,6 +73,7 @@ struct StaticPrintMerge {
     boolean: Option<bool>,
     /// 锚点单元格样式（若源单元格带样式）。
     format: Option<rust_xlsxwriter::Format>,
+    error: Option<String>,
 }
 
 static NEXT_STATIC_PRINT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -544,7 +545,6 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
         }
         let mut created = BTreeSet::<String>::new();
         let mut next_row = BTreeMap::<String, usize>::new();
-        let mut seen_target_sheets = BTreeSet::<String>::new();
         let mut max_columns = BTreeMap::<String, usize>::new();
         let mut range_count = 0usize;
         let mut matching_sheets = BTreeSet::<String>::new();
@@ -572,12 +572,6 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                         source.display()
                     )
                 })?;
-            // 重复目标 Sheet 对齐 Openpyxl 实际行为：清空重写（后写任务覆盖先写
-            // 任务的行）。reset 按 task 粒度，同一 task 内的多区域正常堆叠。
-            if seen_target_sheets.contains(&task.target_ws) {
-                next_row.insert(task.target_ws.clone(), 1);
-            }
-            seen_target_sheets.insert(task.target_ws.clone());
             let ranges = if task.source_ranges.trim().is_empty() {
                 // 空区域 = openpyxl 的 used_range（calculate_dimension）语义：
                 // 有值/公式单元格 **和空样式格**（边框/填充/数字格式）都计入
@@ -638,7 +632,8 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             } else {
                 task.target_ws.trim().chars().take(31).collect::<String>()
             };
-            if !created.contains(&target_sheet) {
+            let replacing_sheet = created.contains(&target_sheet);
+            if !replacing_sheet {
                 operations.push(EditOperation::CreateSheet {
                     name: target_sheet.clone(),
                 });
@@ -649,8 +644,16 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                 next_row.insert(target_sheet.clone(), 1);
                 max_columns.insert(target_sheet.clone(), 1);
             }
-            let mut block_end_row = 1usize;
-            let mut block_width = 1usize;
+            // Each configuration row replaces the target Sheet; ranges within
+            // that row still stack. Compare the resolved, normalized name.
+            if replacing_sheet {
+                operations.retain(|op| !matches!(op,
+                    EditOperation::ImportRange { target_sheet: sheet, .. } if sheet == &target_sheet));
+                operations.retain(|op| !matches!(op,
+                    EditOperation::SetRowHeight { sheet, .. } | EditOperation::SetColumnWidth { sheet, .. } if sheet == &target_sheet));
+                next_row.insert(target_sheet.clone(), 1);
+                max_columns.insert(target_sheet.clone(), 1);
+            }
             for (r1, c1, r2, c2) in ranges.iter().copied() {
                 let start_row = *next_row.get(&target_sheet).unwrap_or(&1);
                 let source_range =
@@ -669,7 +672,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                     copy_values: true,
                     copy_formulas: false,
                     style_mode,
-                    copy_comments: false,
+                    copy_comments: task.mode != 3 && !task.drop_comments,
                     copy_merges: true,
                     copy_row_heights: task.mode == 1,
                     copy_column_widths: task.mode == 1 || task.mode == 2,
@@ -683,56 +686,13 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
                 });
                 let rows = r2 - r1 + 1;
                 let columns = c2 - c1 + 1;
-                if task.mode == 2 {
-                    operations.push(EditOperation::SetRowHeight {
-                        sheet: target_sheet.clone(),
-                        row_index: start_row as u32,
-                        height: 15.0,
-                    });
-                    for row in start_row + 1..start_row + rows {
-                        operations.push(EditOperation::SetRowHeight {
-                            sheet: target_sheet.clone(),
-                            row_index: row as u32,
-                            height: 15.0,
-                        });
-                    }
-                    for offset in 0..columns {
-                        let source_column = c1 + offset;
-                        let max_len = (r1..=r2)
-                            .map(|row| {
-                                let address = format!("{}{}", column_letters(source_column), row);
-                                sheet
-                                    .values
-                                    .get(&address)
-                                    .map(|value| static_print_display_length(value, task.hide_zero))
-                                    .unwrap_or_default()
-                            })
-                            .max()
-                            .unwrap_or(0);
-                        if max_len > 0 {
-                            let width = (max_len as f64 * 0.95 + 1.2).clamp(6.5, 18.0);
-                            operations.push(EditOperation::SetColumnWidth {
-                                sheet: target_sheet.clone(),
-                                column_index: (offset + 1) as u32,
-                                width,
-                            });
-                        }
-                    }
-                }
-                block_end_row = start_row + rows - 1;
-                block_width = block_width.max(columns);
                 *next_row.entry(target_sheet.clone()).or_insert(1) = start_row + rows + 1;
                 let width_entry = max_columns.entry(target_sheet.clone()).or_insert(1);
                 *width_entry = (*width_entry).max(columns);
                 range_count += 1;
             }
-            let orientation = parse_orientation(&task.orientation).unwrap_or_else(|| {
-                if block_width > block_end_row {
-                    PageOrientation::Landscape
-                } else {
-                    PageOrientation::Portrait
-                }
-            });
+            let orientation =
+                parse_orientation(&task.orientation).unwrap_or(PageOrientation::Portrait);
             let fit_wide = u16::try_from(task.fit_wide.max(1))
                 .context("FitToPagesWide exceeds XLSX setting range")?;
             let fit_tall = u16::try_from(task.fit_tall.max(0))
@@ -890,7 +850,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut worksheet_names = Vec::new();
     let mut cells_by_sheet = BTreeMap::<String, Vec<StaticPrintCell>>::new();
     let mut merges_by_sheet = BTreeMap::<String, Vec<StaticPrintMerge>>::new();
-    let mut comments_by_sheet = BTreeMap::<String, Vec<(String, String)>>::new();
+    let mut comments_by_sheet = BTreeMap::<String, Vec<(String, String, Option<String>)>>::new();
     // mode 1 源行高/列宽（OOXML 窄读补充）：目标行/列 -> 值，后写覆盖（对齐
     // openpyxl 引擎逐块赋值语义）。在计划自带的 Set 行高列宽操作之前应用。
     let mut layout_row_heights = BTreeMap::<String, BTreeMap<u32, f64>>::new();
@@ -898,9 +858,9 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut source_layouts =
         HashMap::<(PathBuf, String), std::sync::Arc<crate::ooxml_cell_styles::SheetLayout>>::new();
     // 目标 sheet -> 源表 defaultRowHeight（输出表默认行高带源值）。
-    let mut plan_sheet_default_row_heights = BTreeMap::<String, f64>::new();
     let mut imported_ranges = 0usize;
     let mut formulas_materialized = 0usize;
+    let mut comment_records = HashMap::new();
 
     for operation in &plan.operations {
         match operation {
@@ -1010,9 +970,6 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         .clone();
                     // 目标表默认行高带源值（多任务同目标时后写覆盖，与
                     // openpyxl 引擎逐任务建 sheet 的最终态一致）。
-                    if let Some(default_height) = layout.default_row_height {
-                        plan_sheet_default_row_heights.insert(target_sheet.clone(), default_height);
-                    }
                     if *copy_row_heights {
                         for (row, height) in &layout.row_heights {
                             if *row < source_first.0 as u32 || *row > source_last.0 as u32 {
@@ -1171,6 +1128,10 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         text: text.to_owned(),
                         numeric: anchor_number,
                         boolean: anchor_boolean,
+                        error: anchor_value
+                            .filter(|v| v["type"] == "error")
+                            .and_then(|v| v["value"].as_str())
+                            .map(str::to_owned),
                         format: format_of(&source_top_left, &mut format_cache),
                     });
                 }
@@ -1197,7 +1158,19 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         comments_by_sheet
                             .entry(target_sheet.clone())
                             .or_default()
-                            .push((target_address, text.clone()));
+                            .push((target_address, text.clone(), {
+                                if !comment_records.contains_key(source_workbook) {
+                                    comment_records.insert(
+                                        source_workbook.clone(),
+                                        excel_reader::read_ooxml_comments(source_workbook)?,
+                                    );
+                                }
+                                comment_records
+                                    .get(source_workbook)
+                                    .and_then(|b| b.get(source_sheet))
+                                    .and_then(|s| s.get(address))
+                                    .and_then(|c| c.author.clone())
+                            }));
                     }
                 }
                 let extract_started = std::time::Instant::now();
@@ -1348,12 +1321,6 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let target_write_started = std::time::Instant::now();
     for name in &worksheet_names {
         let worksheet = workbook.worksheet_from_name(name)?;
-        // 输出表默认行高带源值：rust_xlsxwriter 对等于其默认（15.0）的
-        // 显式行高会省略 ht，先把默认改成源表 sheetFormatPr 的值
-        // （如 13.5），显式行高（15.0）即可正常落盘。
-        if let Some(default_height) = plan_sheet_default_row_heights.get(name) {
-            worksheet.set_default_row_height(*default_height);
-        }
         if let Some(merges) = merges_by_sheet.get(name) {
             let default_format = Format::new();
             for merge in merges {
@@ -1398,19 +1365,22 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
             }
         }
         if let Some(comments) = comments_by_sheet.get(name) {
-            for (address, text) in comments {
+            for (address, text, author) in comments {
                 let Some((row, column)) = parse_a1(address) else {
                     continue;
                 };
-                let note = rust_xlsxwriter::Note::new(text.as_str());
-                worksheet.insert_note(to_row(row)?, to_column(column)?, &note)?;
+                let mut note = rust_xlsxwriter::Note::new(text.as_str()).add_author_prefix(false);
+                if let Some(author) = author {
+                    note = note.set_author(author);
+                }
+                worksheet.insert_note(to_row(row - 1)?, to_column(column - 1)?, &note)?;
             }
         }
     }
     let target_write_ms = target_write_started.elapsed();
     let page_settings_started = std::time::Instant::now();
-    // 先应用 mode 1 源行高列宽（逐块收集，后写覆盖），再应用计划显式
-    // Set 行高列宽（mode 2 自适应等），与 openpyxl 引擎的执行顺序一致。
+    // 先应用导入的尺寸（mode 1 行高；mode 1/2 列宽），再应用计划显式
+    // Set 行高列宽。配置打印 mode 2 不再产生自适应尺寸操作。
     for (sheet, heights) in &layout_row_heights {
         let worksheet = workbook.worksheet_from_name(sheet)?;
         for (row, height) in heights {
@@ -1430,6 +1400,10 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 row_index,
                 height,
             } => {
+                layout_row_heights
+                    .entry(sheet.clone())
+                    .or_default()
+                    .insert(*row_index, *height);
                 workbook
                     .worksheet_from_name(sheet)?
                     .set_row_height(row_index.saturating_sub(1), *height)?;
@@ -1439,6 +1413,10 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 column_index,
                 width,
             } => {
+                layout_column_widths
+                    .entry(sheet.clone())
+                    .or_default()
+                    .insert(*column_index, *width);
                 set_column_width_exact(
                     workbook.worksheet_from_name(sheet)?,
                     *column_index,
@@ -1465,7 +1443,40 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
             output_parent.display()
         )
     })?;
-    save_new_workbook_without_overwrite(&mut workbook, &plan.output)?;
+    let mut error_cells = Vec::new();
+    for (sheet, cells) in &cells_by_sheet {
+        for cell in cells.iter().filter(|c| c.value["type"] == "error") {
+            let text = cell.value["value"]
+                .as_str()
+                .context("invalid static print error")?;
+            error_cells.push(crate::summary_ops::PendingErrorCell {
+                sheet_name: sheet.clone(),
+                address: a1_address(cell.row + 1, cell.column + 1),
+                reader_value: text.to_owned(),
+                excel_value: crate::summary_ops::excel_error_value(text)?,
+            });
+        }
+    }
+    for (sheet, merges) in &merges_by_sheet {
+        for merge in merges {
+            if let Some(text) = &merge.error {
+                error_cells.push(crate::summary_ops::PendingErrorCell {
+                    sheet_name: sheet.clone(),
+                    address: a1_address(merge.first_row + 1, merge.first_column + 1),
+                    reader_value: text.clone(),
+                    excel_value: crate::summary_ops::excel_error_value(text)?,
+                });
+            }
+        }
+    }
+    save_new_workbook_without_overwrite(
+        &mut workbook,
+        &plan.output,
+        &error_cells,
+        &worksheet_names,
+        &layout_row_heights,
+        &layout_column_widths,
+    )?;
     let stage_timings = serde_json::json!({
         "output": plan.output.file_name().map(|name| name.to_string_lossy().into_owned()),
         // 目标 §14.4 的 12 项阶段细分（按 Rust 实现的可测边界映射）。
@@ -1487,7 +1498,15 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         worksheet_count: worksheet_names.len(),
         imported_ranges,
         formulas_materialized,
-        comments_dropped: true,
+        comments_dropped: !plan.operations.iter().any(|op| {
+            matches!(
+                op,
+                EditOperation::ImportRange {
+                    copy_comments: true,
+                    ..
+                }
+            )
+        }),
         stage_timings,
         diagnostics,
     })
@@ -1497,6 +1516,7 @@ fn apply_static_print_page_settings(
     worksheet: &mut Worksheet,
     settings: &PageSettings,
 ) -> Result<()> {
+    worksheet.set_margins(0.75, 0.75, 1.0, 1.0, 0.5, 0.5);
     if let Some(orientation) = settings.orientation {
         match orientation {
             PageOrientation::Landscape => {
@@ -1715,6 +1735,10 @@ fn build_writer_format(
                 mut format: rust_xlsxwriter::Format,
                 edge: &Option<(Option<String>, Option<String>)>,
                 setter: fn(rust_xlsxwriter::Format, FormatBorder) -> rust_xlsxwriter::Format,
+                color_setter: fn(
+                    rust_xlsxwriter::Format,
+                    rust_xlsxwriter::Color,
+                ) -> rust_xlsxwriter::Format,
             ) -> rust_xlsxwriter::Format {
                 let Some((style, color)) = edge else {
                     return format;
@@ -1735,23 +1759,35 @@ fn build_writer_format(
                     Some("slantDashDot") => FormatBorder::SlantDashDot,
                     _ => return format,
                 };
-                setter(format, border_kind)
+                format = setter(format, border_kind);
+                if let Some(rgb) = color.as_deref().and_then(writer_rgb6) {
+                    format = color_setter(format, rust_xlsxwriter::Color::from(rgb.as_str()));
+                }
+                format
             }
             format = apply_edge(
                 format,
                 &border.left,
                 rust_xlsxwriter::Format::set_border_left,
+                rust_xlsxwriter::Format::set_border_left_color,
             );
             format = apply_edge(
                 format,
                 &border.right,
                 rust_xlsxwriter::Format::set_border_right,
+                rust_xlsxwriter::Format::set_border_right_color,
             );
-            format = apply_edge(format, &border.top, rust_xlsxwriter::Format::set_border_top);
+            format = apply_edge(
+                format,
+                &border.top,
+                rust_xlsxwriter::Format::set_border_top,
+                rust_xlsxwriter::Format::set_border_top_color,
+            );
             format = apply_edge(
                 format,
                 &border.bottom,
                 rust_xlsxwriter::Format::set_border_bottom,
+                rust_xlsxwriter::Format::set_border_bottom_color,
             );
         }
     }
@@ -1993,7 +2029,14 @@ fn to_column(column: usize) -> Result<u16> {
     u16::try_from(column).context("static print column exceeds XLSX limits")
 }
 
-fn save_new_workbook_without_overwrite(workbook: &mut Workbook, output: &Path) -> Result<()> {
+fn save_new_workbook_without_overwrite(
+    workbook: &mut Workbook,
+    output: &Path,
+    errors: &[crate::summary_ops::PendingErrorCell],
+    sheet_names: &[String],
+    heights: &BTreeMap<String, BTreeMap<u32, f64>>,
+    widths: &BTreeMap<String, BTreeMap<u32, f64>>,
+) -> Result<()> {
     anyhow::ensure!(
         fs::symlink_metadata(output)
             .map(|_| false)
@@ -2031,6 +2074,10 @@ fn save_new_workbook_without_overwrite(workbook: &mut Workbook, output: &Path) -
         })
         .context("could not allocate a temporary static print workbook path")??;
 
+    let patched_path = temp_path.with_extension("typed-errors.tmp");
+    let dimensions_path = temp_path.with_extension("exact-dimensions.tmp");
+    let mut patched_ready = false;
+    let mut dimensions_ready = false;
     let write_result = (|| -> Result<()> {
         workbook.save(&temp_path).with_context(|| {
             format!(
@@ -2038,7 +2085,22 @@ fn save_new_workbook_without_overwrite(workbook: &mut Workbook, output: &Path) -
                 temp_path.display()
             )
         })?;
-        crate::file_commit::create_target_from_candidate(&temp_path, output).with_context(
+        let candidate = if errors.is_empty() {
+            &temp_path
+        } else {
+            crate::summary_ops::patch_error_cells(&temp_path, &patched_path, errors)?;
+            patched_ready = true;
+            &patched_path
+        };
+        patch_generated_print_dimensions(
+            candidate,
+            &dimensions_path,
+            sheet_names,
+            heights,
+            widths,
+        )?;
+        dimensions_ready = true;
+        crate::file_commit::create_target_from_candidate(&dimensions_path, output).with_context(
             || {
                 format!(
                     "publish validated static print workbook without overwriting {}",
@@ -2049,7 +2111,190 @@ fn save_new_workbook_without_overwrite(workbook: &mut Workbook, output: &Path) -
         Ok(())
     })();
     let _ = fs::remove_file(&temp_path);
+    if patched_ready {
+        let _ = fs::remove_file(&patched_path);
+    }
+    if dimensions_ready {
+        let _ = fs::remove_file(&dimensions_path);
+    }
     write_result
+}
+
+/// Only for this writer's newly generated workbook: rust_xlsxwriter assigns
+/// sheetN.xml in insertion order. Restore exact configured dimensions after
+/// its pixel conversion, before publishing the candidate without overwrite.
+fn patch_generated_print_dimensions(
+    source: &Path,
+    output: &Path,
+    names: &[String],
+    heights: &BTreeMap<String, BTreeMap<u32, f64>>,
+    widths: &BTreeMap<String, BTreeMap<u32, f64>>,
+) -> Result<()> {
+    use std::io::{Read, Write};
+    use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
+    let mut created = false;
+    let result = (|| -> Result<()> {
+        let mut archive = ZipArchive::new(fs::File::open(source)?)?;
+        let mut book_xml = String::new();
+        archive
+            .by_name("xl/workbook.xml")?
+            .read_to_string(&mut book_xml)?;
+        let document = roxmltree::Document::parse(&book_xml)?;
+        let actual = document
+            .descendants()
+            .filter(|n| {
+                n.has_tag_name((
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                    "sheet",
+                ))
+            })
+            .filter_map(|n| n.attribute("name"))
+            .collect::<Vec<_>>();
+        anyhow::ensure!(
+            actual == names.iter().map(String::as_str).collect::<Vec<_>>(),
+            "generated print sheet order changed"
+        );
+        let mut replacements = BTreeMap::new();
+        let empty = BTreeMap::new();
+        for (i, name) in names.iter().enumerate() {
+            let part = format!("xl/worksheets/sheet{}.xml", i + 1);
+            let mut xml = String::new();
+            archive.by_name(&part)?.read_to_string(&mut xml)?;
+            replacements.insert(
+                part,
+                exact_print_dimensions_xml(
+                    &xml,
+                    heights.get(name).unwrap_or(&empty),
+                    widths.get(name).unwrap_or(&empty),
+                )?,
+            );
+        }
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(output)?;
+        created = true;
+        let mut writer = ZipWriter::new(file);
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i)?;
+            let name = entry.name().to_owned();
+            let mut options = SimpleFileOptions::default().compression_method(entry.compression());
+            if let Some(modified) = entry.last_modified() {
+                options = options.last_modified_time(modified);
+            }
+            if entry.is_dir() {
+                writer.add_directory(&name, options)?;
+                continue;
+            }
+            writer.start_file(&name, options)?;
+            if let Some(xml) = replacements.remove(&name) {
+                writer.write_all(xml.as_bytes())?;
+            } else {
+                std::io::copy(&mut entry, &mut writer)?;
+            }
+        }
+        anyhow::ensure!(replacements.is_empty(), "missing generated worksheet parts");
+        writer.finish()?;
+        Ok(())
+    })();
+    if result.is_err() && created {
+        let _ = fs::remove_file(output);
+    }
+    result
+}
+
+fn exact_print_dimensions_xml(
+    xml: &str,
+    heights: &BTreeMap<u32, f64>,
+    widths: &BTreeMap<u32, f64>,
+) -> Result<String> {
+    const NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    let document = roxmltree::Document::parse(xml)?;
+    let mut edits = Vec::new();
+    let mut rows_seen = BTreeSet::new();
+    let mut cols_seen = BTreeSet::new();
+    for node in document.descendants().filter(|n| n.is_element()) {
+        if node.has_tag_name((NS, "row")) {
+            let row: u32 = node
+                .attribute("r")
+                .context("generated row has no index")?
+                .parse()?;
+            if let Some(height) = heights.get(&row) {
+                anyhow::ensure!(
+                    height.is_finite() && *height >= 0.0,
+                    "invalid print row height"
+                );
+                rows_seen.insert(row);
+                if let Some(attr) = node.attributes().find(|a| a.name() == "ht") {
+                    edits.push((attr.range_value(), height.to_string()));
+                } else {
+                    // The writer omits ht when height equals its default.
+                    let offset = node.range().start + "<row".len();
+                    edits.push((
+                        offset..offset,
+                        format!(" ht=\"{height}\" customHeight=\"1\""),
+                    ));
+                }
+            }
+        } else if node.has_tag_name((NS, "col")) {
+            let min: u32 = node
+                .attribute("min")
+                .context("column min missing")?
+                .parse()?;
+            let max: u32 = node
+                .attribute("max")
+                .context("column max missing")?
+                .parse()?;
+            anyhow::ensure!(
+                min > 0 && min <= max && max <= 16384,
+                "invalid generated column range"
+            );
+            if !(min..=max).any(|c| widths.contains_key(&c)) {
+                continue;
+            }
+            // Adjacent columns may have quantized to one writer range. Split
+            // it so independently configured widths remain independent.
+            let mut replacement = String::new();
+            for column in min..=max {
+                replacement.push_str("<col");
+                for attr in node.attributes() {
+                    let value = match attr.name() {
+                        "min" | "max" => column.to_string(),
+                        "width" if widths.contains_key(&column) => {
+                            let width = widths[&column];
+                            anyhow::ensure!(
+                                width.is_finite() && (0.0..=255.0).contains(&width),
+                                "invalid print column width"
+                            );
+                            cols_seen.insert(column);
+                            width.to_string()
+                        }
+                        _ => attr.value().to_owned(),
+                    };
+                    // Attributes come only from our generated numeric cols.
+                    anyhow::ensure!(
+                        !value.contains(['&', '<', '"']),
+                        "unexpected generated column attribute"
+                    );
+                    replacement.push_str(&format!(" {}=\"{}\"", attr.name(), value));
+                }
+                replacement.push_str("/>");
+            }
+            edits.push((node.range(), replacement));
+        }
+    }
+    anyhow::ensure!(
+        heights.keys().all(|r| rows_seen.contains(r))
+            && widths.keys().all(|c| cols_seen.contains(c)),
+        "requested print dimensions missing from candidate"
+    );
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    let mut patched = xml.to_owned();
+    for (range, value) in edits {
+        patched.replace_range(range, &value);
+    }
+    roxmltree::Document::parse(&patched).context("validate exact print dimensions XML")?;
+    Ok(patched)
 }
 
 fn comment_ranges(sheet: &SheetDump) -> Vec<(usize, usize, usize, usize)> {
@@ -2301,6 +2546,37 @@ fn is_xlsx(path: &Path) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn static_print_exact_dimensions_split_quantized_columns_and_keep_cells() -> Result<()> {
+        let xml = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="26" max="27" width="23.140625" customWidth="1"/></cols><sheetData><row r="12" ht="27.75" customHeight="1"><c r="AA12" s="2"><v>42</v></c></row></sheetData></worksheet>"#;
+        let output = exact_print_dimensions_xml(
+            xml,
+            &BTreeMap::from([(12, 28.0)]),
+            &BTreeMap::from([(26, 23.12), (27, 23.125)]),
+        )?;
+        let doc = roxmltree::Document::parse(&output)?;
+        let columns = doc
+            .descendants()
+            .filter(|n| n.tag_name().name() == "col")
+            .collect::<Vec<_>>();
+        assert_eq!(columns.len(), 2);
+        assert_eq!(columns[0].attribute("width"), Some("23.12"));
+        assert_eq!(columns[1].attribute("width"), Some("23.125"));
+        assert_eq!(
+            doc.descendants()
+                .find(|n| n.attribute("r") == Some("12"))
+                .unwrap()
+                .attribute("ht"),
+            Some("28")
+        );
+        assert!(output.contains("<c r=\"AA12\" s=\"2\"><v>42</v></c>"));
+        assert!(
+            exact_print_dimensions_xml(xml, &BTreeMap::from([(99, 28.0)]), &BTreeMap::new())
+                .is_err()
+        );
+        Ok(())
+    }
 
     #[test]
     fn static_print_autofit_distinguishes_numeric_zero_from_text_zero() {

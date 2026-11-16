@@ -689,7 +689,7 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
 fn interactive_foreign_bank_menu_stops_before_file_selection_when_mapping_is_empty() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
-    let output = run_menu(&config, "5\n3\n0\n0\n")?;
+    let output = run_menu(&config, "5\n3\n1\n0\n0\n")?;
     assert!(
         output.status.success(),
         "foreign-bank menu failed: {}",
@@ -866,7 +866,7 @@ fn foreign_bank_menu_input(sources: &[&Path]) -> String {
         .map(|path| path.to_string_lossy())
         .collect::<Vec<_>>()
         .join(";");
-    format!("5\n3\n1\n{paths}\n0\n0\n")
+    format!("5\n3\n1\n1\n{paths}\n0\n0\n")
 }
 
 #[test]
@@ -889,7 +889,7 @@ fn interactive_institution_normalize_menu_updates_source_in_user_developer_and_o
         } else {
             target.display().to_string()
         };
-        let input = format!("5\n2\n1\n{input_paths}\n0\n0\n");
+        let input = format!("5\n2\n1\n1\n{input_paths}\n0\n0\n");
         let output =
             run_menu_with_arguments(&config, &input, &["--log-view".to_owned(), view.to_owned()])?;
         assert!(
@@ -992,7 +992,7 @@ fn interactive_institution_normalize_menu_recursively_creates_copies_and_skips_r
     fs::write(first_folder.join("unsupported.docx"), b"unverified format")?;
     fs::write(second_folder.join("~$locked.xlsx"), b"Excel lock file")?;
 
-    let input = format!("5\n2\n3\n{}\n0\n0\n", source_root.display());
+    let input = format!("5\n2\n1\n3\n{}\n0\n0\n", source_root.display());
     let output = run_menu(&config, &input)?;
     assert!(
         output.status.success(),
@@ -1066,7 +1066,7 @@ fn interactive_institution_normalize_menu_applies_only_with_temporary_capability
         serde_json::to_vec_pretty(&institution_normalize_capability(&plan))?,
     )?;
 
-    let input = format!("5\n2\n1\n{}\n0\n0\n", target.display());
+    let input = format!("5\n2\n1\n1\n{}\n0\n0\n", target.display());
     let output = run_menu_with_capability(
         &config,
         &input,
@@ -1606,7 +1606,7 @@ fn institution_normalize_capability(plan: &excel_editor::ExcelEditPlan) -> Backe
 fn rural_loan_menu_input(choice: u8, current: &Path, previous: &Path) -> String {
     // PT-7-7/7-8 固定使用 openpyxl，不再提示选择编辑引擎。
     format!(
-        "5\n{choice}\n{}\n{}\n0\n0\n",
+        "5\n{choice}\n1\n{}\n{}\n0\n0\n",
         current.display(),
         previous.display()
     )
@@ -1614,7 +1614,7 @@ fn rural_loan_menu_input(choice: u8, current: &Path, previous: &Path) -> String 
 
 fn village_menu_input(current: &Path, previous: &Path, target: &Path) -> String {
     format!(
-        "5\n1\n{}\n{}\n1\n{}\n0\n0\n",
+        "5\n1\n1\n{}\n{}\n1\n{}\n0\n0\n",
         current.display(),
         previous.display(),
         target.display()

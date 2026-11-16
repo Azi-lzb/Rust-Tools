@@ -1,0 +1,39 @@
+[
+  {
+    "name": "worker-plan",
+    "exit": 0,
+    "command": [
+      "C:/Users/AZI/AppData/Local/Programs/Python/Python312/python.exe",
+      "tools/AsposeWorker/test_plan_operations.py",
+      "--dotnet",
+      "F:/RustBuild/pytools/aspose-worker-sdk-10.0.404/dotnet.exe",
+      "--dll",
+      "F:/RustBuild/pytools/aspose-worker-selfcontained/publish/AsposeWorker.dll",
+      "--output",
+      "F:\\RustBuild\\pytools\\release-push-20261116\\worker-plan"
+    ]
+  },
+  {
+    "name": "worker-row-dimensions",
+    "exit": 0,
+    "command": [
+      "C:/Users/AZI/AppData/Local/Programs/Python/Python312/python.exe",
+      "tools/AsposeWorker/test_openpyxl_row_dimensions.py",
+      "--worker",
+      "C:\\Users\\AZI\\Desktop\\VibeCode\\Rust-Tools\\crates\\excel-editor\\python\\openpyxl_worker.py",
+      "--output",
+      "F:\\RustBuild\\pytools\\release-push-20261116\\worker-row-dimensions"
+    ]
+  },
+  {
+    "name": "worker-complex",
+    "exit": 0,
+    "command": [
+      "C:/Users/AZI/AppData/Local/Programs/Python/Python312/python.exe",
+      "tools/AsposeWorker/test_complex_xlsx.py",
+      "F:\\RustBuild\\pytools\\release-push-20261116\\worker-complex",
+      "F:/RustBuild/pytools/aspose-worker-sdk-10.0.404/dotnet.exe",
+      "F:/RustBuild/pytools/aspose-worker-selfcontained/publish/AsposeWorker.dll"
+    ]
+  }
+]
