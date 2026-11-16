@@ -1,0 +1,2 @@
+# Terminal captures are evidence; preserve their original bytes on every OS.
+*.log -text
