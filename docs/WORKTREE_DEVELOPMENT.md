@@ -2,6 +2,8 @@
 
 本文是 Rust-Tools 多工作树协作的唯一详细规范。根目录 `AGENTS.md` 保留通用业务安全和授权规则，并引用本文；各分支不得维护互相冲突的 Worktree 规则。Main Agent 统一维护根目录 `AGENTS.md` 和本文；Feature/Test Agent 不自行修改协作规则，调整建议提交 Main 处理。Git 分支和 Worktree 是独立工作副本，提交或修改不会自动传播到其他分支。
 
+自 2026-11-16 起，按用户决定停止并行开发，只使用主目录的 `main` 进行业务开发、修复、测试、集成和交付。其余 Worktree 退役，原分支及已核验的本地文件备份保留，见 `WORKTREE_RETIREMENT_20261116.md`。以下角色表及并行协作流程保留作历史和未来明确恢复并行时的参考；不得依据这些说明自动创建或恢复副工作树。当前仍须遵守 Main 的构建目录、业务安全及逐项执行授权约束。
+
 ## 1. 工作树职责与路径
 
 | 工作树 | 分支 | 主要职责 | Cargo target |
@@ -10,7 +12,7 @@
 | `C:\Users\AZI\Desktop\VibeCode\Rust-Tools-feature` | `feature/business-development` | Rust 业务开发、Umya/OOXML/Excel-Core、openpyxl Worker、业务 Bug 与对应测试 | `F:\RustBuild\pytools-feature` |
 | `C:\Users\AZI\Desktop\VibeCode\Rust-Tools-test` | `test/business-coverage` | 测试数据和夹具、七类菜单自动化、集成/回归测试、测试发现的 Bug 与必要的 Excel-Core 修改 | `F:\RustBuild\pytools-test` |
 
-Main 是正式集成和唯一正式发布分支，不承担日常业务开发。Feature 和 Test 的职责用于降低冲突，不限制代码写入范围：两者都可以修改 Rust 源码、业务模块、Excel-Core 和测试。
+Main 是正式集成和唯一正式发布分支。当前单工作树模式下，Main 同时承担日常业务开发和测试。若用户明确恢复并行开发，再按上表分工；Feature 和 Test 的职责用于降低冲突，不限制代码写入范围：两者都可以修改 Rust 源码、业务模块、Excel-Core 和测试。
 
 ## 2. Agent 启动前检查
 

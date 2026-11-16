@@ -2,6 +2,7 @@
 
 ## Worktree 角色与协作
 
+- 当前方式（2026-11-16）：用户已停止并行开发，后续业务开发、修复、测试和集成都在本主工作树的 `main` 进行。下表保留历史 Worktree/构建目录映射，不代表对应工作树仍存在，也不是自动重建或恢复并行开发的授权。副工作树退役与备份记录见 `docs/WORKTREE_RETIREMENT_20261116.md`。
 - 多 Agent / Worktree 的完整职责、启动检查、构建路径和集成规则见 `docs/WORKTREE_DEVELOPMENT.md`。本文件中的业务安全和授权约束仍然适用；规则更新不会自动传播到其他分支。
 - 根目录 `AGENTS.md` 和 Worktree 协作规范由 Main Agent 统一维护。Feature/Test Agent 不自行修改协作规则；调整建议提交 Main 处理并通过正常 Git 同步。
 

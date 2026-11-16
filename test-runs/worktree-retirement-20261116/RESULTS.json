@@ -1,0 +1,150 @@
+{
+  "integration_base": "01a34ce90e518eeb103abed137867c8d62218059",
+  "feature_merge": "4f1ad27618b4ae8faa271f0c64985e358222fcbd",
+  "test_product_merge": "5c1c111aa9dbe5a4b68be6e1276d821a66f65e1c",
+  "test_product_source": "8b629f086aa410ec4964de7855d1711413866d5c",
+  "test_benchmark_commits_not_merged": 8,
+  "retained_worktrees": 1,
+  "removed_checkouts": 5,
+  "physically_removed_directories": 4,
+  "empty_locked_directory": "C:/Users/AZI/Desktop/VibeCode/Rust-Tools-test",
+  "local_files_verified": 45790,
+  "worktree_logical_bytes": 27656630530,
+  "local_backup_bytes": 13734405548,
+  "backups": [
+    {
+      "name": "Rust-Tools-commbench",
+      "head": "ba8b726b22a5a0c2b56f3bfc6e1c61aca9f46595",
+      "archive": "F:\\RustBuild\\worktree-retirement-20261116\\Rust-Tools-commbench-local-files-stored.zip",
+      "archive_sha256": "7aa517a9d9682c4a973ac80d6ff2d1d9c122b10e0fca5ecf2e459f2bf9ec4ef3",
+      "archive_bytes": 4937091645,
+      "verified_files": 13224,
+      "source_bytes": 4929352270,
+      "all_entries_sha256_verified": true
+    },
+    {
+      "name": "Rust-Tools-feature",
+      "head": "2788e78aa027a74815440af887b786e45c635ff2",
+      "archive": "F:\\RustBuild\\worktree-retirement-20261116\\Rust-Tools-feature-local-files-stored.zip",
+      "archive_sha256": "d09fc1f401cf774b19be0c494ec5dd52ad6de27ecc5abf391450b1d692fccdda",
+      "archive_bytes": 48880396,
+      "verified_files": 512,
+      "source_bytes": 48616646,
+      "all_entries_sha256_verified": true
+    },
+    {
+      "name": "Rust-Tools-spire-rea",
+      "head": "0040501174cb119bd2e0a452d7983d8bb774f184",
+      "archive": "F:\\RustBuild\\worktree-retirement-20261116\\Rust-Tools-spire-rea-local-files-stored.zip",
+      "archive_sha256": "718b4d98cdd3ee1ef43b7c155cc46cb6520b9526270fdbd712199efb5953a3bb",
+      "archive_bytes": 5207525067,
+      "verified_files": 24274,
+      "source_bytes": 5190251717,
+      "all_entries_sha256_verified": true
+    },
+    {
+      "name": "Rust-Tools-test",
+      "head": "8a9557615fd07d25f5af6d3576760cba0fa895e7",
+      "archive": "F:\\RustBuild\\worktree-retirement-20261116\\Rust-Tools-test-local-files-stored.zip",
+      "archive_sha256": "d850199b3fe477a9061ddd2477dc41c09143f7481609ca014e211b9cc8526559",
+      "archive_bytes": 3525490084,
+      "verified_files": 7652,
+      "source_bytes": 3520867979,
+      "all_entries_sha256_verified": true
+    },
+    {
+      "name": "Rust-Tools-xlsbench",
+      "head": "fb05ebc334cc724b9ab03533b631a1f3c7d9530c",
+      "archive": "F:\\RustBuild\\worktree-retirement-20261116\\Rust-Tools-xlsbench-local-files-stored.zip",
+      "archive_sha256": "e84e5ff4c4e764370554e758def77fc6c55082ffae623982c388636b39b23304",
+      "archive_bytes": 15418356,
+      "verified_files": 128,
+      "source_bytes": 15349395,
+      "all_entries_sha256_verified": true
+    }
+  ],
+  "checks": [
+    {
+      "name": "target-access",
+      "exit": 0,
+      "raw_log_sha256": "0c8d9e86aca506c0b63bdf7952ab429f94be1f81de27972acfe3d82a99adf5fd",
+      "result_groups": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "summary-timeline",
+      "exit": 0,
+      "raw_log_sha256": "192157f1a57eb7e2554337ae437547b537c8d00d4f6244f3231320c297c449e2",
+      "result_groups": [
+        {
+          "passed": 25,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 33,
+          "failed": 0,
+          "ignored": 2
+        }
+      ]
+    },
+    {
+      "name": "timeline-openpyxl-gates",
+      "exit": 0,
+      "raw_log_sha256": "404ff496409cad4bbe00eea524de9a8c5296d1a2a3e712ab3fe27505619ecd3d",
+      "result_groups": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "openpyxl-worker",
+      "exit": 0,
+      "raw_log_sha256": "ed3fb34567c3bb51da8cfdb4b5c920007f5a10f660a8f919d384f2e832ecabbf",
+      "result_groups": [],
+      "python_tests": 30
+    }
+  ],
+  "volume_before": [
+    {
+      "DriveLetter": "F",
+      "SizeRemaining": 60542599168
+    },
+    {
+      "DriveLetter": "C",
+      "SizeRemaining": 1494859776
+    }
+  ],
+  "volume_after": [
+    {
+      "DriveLetter": "F",
+      "SizeRemaining": 58767380480
+    },
+    {
+      "DriveLetter": "C",
+      "SizeRemaining": 28787122176
+    }
+  ],
+  "not_tested": [
+    "New merged code full workspace suites",
+    "New merged code WSL/Docker targeted suites",
+    "WPS COM/FAT/exFAT/SMB/Kylin install"
+  ],
+  "dist_updated_this_task": false,
+  "pushed_this_task": false,
+  "cargo_caches_cleaned": false,
+  "private_config_or_business_files_committed": false
+}
