@@ -491,7 +491,7 @@ pub(crate) fn execute_in_place_with_route_config(
     let (execution, commit) =
         crate::edit_plan::apply_plan_in_place(&execution_plan, &capabilities, &platform_id())?;
     let outcome = crate::inplace_edit::InPlaceOutcome {
-        target: plan.input.clone(),
+        target: commit.target.clone(),
         execution,
         commit,
     };

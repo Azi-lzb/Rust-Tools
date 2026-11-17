@@ -267,7 +267,7 @@ fn execute_in_place_with_engine(
     let capability = capability_for(&execution_plan, engine);
     let (execution, commit) = apply_plan_in_place(&execution_plan, &[capability], &platform_id())?;
     Ok(InPlaceOutcome {
-        target: plan.input.clone(),
+        target: commit.target.clone(),
         execution,
         commit,
     })

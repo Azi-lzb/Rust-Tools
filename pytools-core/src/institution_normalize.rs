@@ -1417,7 +1417,9 @@ fn build_and_optionally_apply_institution_plan(
         on_event,
         "safe_commit",
         "completed",
-        if options.in_place {
+        if let Some(notice) = commit.conflict_notice() {
+            notice
+        } else if options.in_place {
             format!(
                 "源工作簿已通过快照校验并安全就地修改：{}。",
                 output_path.display()
@@ -1444,7 +1446,7 @@ fn build_and_optionally_apply_institution_plan(
         mapped_rows: plan_result.mapped_rows,
         operation_count,
         plan_path,
-        output_path: Some(output_path),
+        output_path: Some(commit.target.clone()),
         actual_engine,
         stage_components,
         execution: execution_value,
@@ -1452,7 +1454,9 @@ fn build_and_optionally_apply_institution_plan(
         timings,
         error_stage: None,
         error_type: None,
-        user_message: if options.in_place {
+        user_message: if let Some(notice) = commit.conflict_notice() {
+            notice
+        } else if options.in_place {
             format!(
                 "完成 {index}/{total_files}：{file_name}，修改 {} 行；源工作簿已就地更新。",
                 plan_result.mapped_rows
@@ -3136,9 +3140,7 @@ fn execute_institution_normalize_xls_com(
     let output = read_workbook(candidate)
         .with_context(|| format!("read COM candidate {}", candidate.display()))?;
     validate_institution_normalize_xls_candidate(&original, &output, updates)?;
-    crate::file_commit::verify_planning_snapshot(input, Some(expected_sha256))
-        .context("source changed during COM candidate processing")?;
-    crate::file_commit::replace_target_from_candidate(candidate, input, expected_sha256)
+    crate::file_commit::commit_validated_candidate(candidate, input, expected_sha256)
         .context("safely replace the .xls source after COM validation")
 }
 

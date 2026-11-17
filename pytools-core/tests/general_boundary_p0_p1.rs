@@ -78,6 +78,7 @@ fn locked_target_commit_fails_and_preserves_both_books() -> Result<()> {
     let hash = sha256_file(&t)?;
     let lock = fs::OpenOptions::new().read(true).share_mode(1).open(&t)?;
     assert!(replace_target_from_candidate(&c, &t, &hash).is_err());
+    assert!(commit_validated_candidate(&c, &t, &hash).is_err());
     assert_eq!(fs::read(&t)?, tb);
     assert_eq!(fs::read(&c)?, cb);
     drop(lock);
@@ -99,10 +100,15 @@ fn readonly_target_commit_refuses_and_keeps_original() -> Result<()> {
     ro.set_readonly(true);
     fs::set_permissions(&t, ro)?;
     let result = replace_target_from_candidate(&c, &t, &hash);
+    let conflict_result = commit_validated_candidate(&c, &t, &hash);
     fs::set_permissions(&t, perms)?;
     assert!(
         result.is_err(),
         "read-only target must not be silently replaced"
+    );
+    assert!(
+        conflict_result.is_err(),
+        "permission failures must not be relabeled as source changes"
     );
     assert_eq!(fs::read(&t)?, tb);
     assert_eq!(fs::read(&c)?, cb);

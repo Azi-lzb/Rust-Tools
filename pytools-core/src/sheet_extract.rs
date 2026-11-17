@@ -5,7 +5,7 @@
 //! behavior independently testable.
 
 use crate::config::ExtractTask;
-use crate::file_commit::{replace_target_from_candidate, sha256_file, verify_planning_snapshot};
+use crate::file_commit::{sha256_file, verify_planning_snapshot};
 use crate::summary_ops::{
     excel_error_value, is_openpyxl_timedelta_format, iso_duration_serial, patch_error_cells,
     PendingErrorCell, SummaryProgress, SummaryRunEvent,
@@ -1509,6 +1509,12 @@ where
                 &pending.existing_sheet_names,
                 &pending.sheets,
             ) {
+                let error = crate::review_output::retain_validation_error(
+                    &pending.path,
+                    &stage_path,
+                    "sheet-extract-output",
+                    error,
+                );
                 emitter.emit(
                     "output_validation",
                     "failed",
@@ -1544,8 +1550,14 @@ where
     for workbook in &staged {
         let stage_path = &workbook.stage_path;
         let output_path = &workbook.output_path;
+        let mut published_path = output_path.clone();
+        let mut conflict_notice = None;
         let commit_elapsed = if let Some(expected_sha256) = workbook.existing_sha256.as_deref() {
-            let commit = replace_target_from_candidate(stage_path, output_path, expected_sha256);
+            let commit = crate::file_commit::commit_validated_candidate(
+                stage_path,
+                output_path,
+                expected_sha256,
+            );
             let commit = match commit {
                 Ok(commit) => commit,
                 Err(error) => {
@@ -1562,6 +1574,8 @@ where
                     });
                 }
             };
+            published_path = commit.target.clone();
+            conflict_notice = commit.conflict_notice();
             if let Err(error) = fs::remove_file(stage_path) {
                 emitter.emit(
                     "output_cleanup",
@@ -1616,12 +1630,14 @@ where
         emitter.emit(
             "output_commit",
             "succeeded",
-            if workbook.existing_sha256.is_some() {
+            if let Some(notice) = conflict_notice.as_deref() {
+                notice
+            } else if workbook.existing_sha256.is_some() {
                 "提取工作表已追加并安全替换既有输出簿"
             } else {
                 "提取结果已安全提交到目标路径"
             },
-            Some(output_path),
+            Some(&published_path),
             Some(Duration::from_millis(commit_elapsed as u64)),
             &["pytools-core", "file_commit"],
             if workbook.existing_sha256.is_some() {
@@ -1633,7 +1649,7 @@ where
         );
         result
             .paths
-            .push(output_path.to_string_lossy().into_owned());
+            .push(published_path.to_string_lossy().into_owned());
         result.output_files += 1;
     }
 

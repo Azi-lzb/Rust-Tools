@@ -950,6 +950,25 @@ pub trait OutputValidator: Send + Sync {
     }
 }
 
+/// A caller-owned review artifact. Its existence never means validation passed.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ValidationReviewOutput {
+    pub path: PathBuf,
+    pub validation_issue: String,
+    pub record_path: Option<PathBuf>,
+}
+
+/// Optional application policy, invoked only after final output validation
+/// fails and before the private candidate is cleaned. Engine routing is unchanged.
+pub trait ValidationFailureObserver: Send + Sync {
+    fn preserve_for_review(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate: &Path,
+        issue: &str,
+    ) -> Result<Option<ValidationReviewOutput>>;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EditExecutionReport {
     pub engine: EngineId,
@@ -998,6 +1017,8 @@ pub struct ExcelModifierError {
     pub message: String,
     pub route_decisions: Vec<BackendRouteDecision>,
     pub attempts: Vec<BackendAttempt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_output: Option<ValidationReviewOutput>,
 }
 
 impl std::fmt::Display for ExcelModifierError {
@@ -1021,6 +1042,7 @@ fn execution_error(
         message: message.into(),
         route_decisions: route_decisions.to_vec(),
         attempts: attempts.to_vec(),
+        review_output: None,
     }
 }
 
@@ -1030,6 +1052,7 @@ pub struct ExcelModifier {
     platform: String,
     backends: Vec<Arc<dyn EditBackend>>,
     validator: Arc<dyn OutputValidator>,
+    validation_failure_observer: Option<Arc<dyn ValidationFailureObserver>>,
 }
 
 impl ExcelModifier {
@@ -1047,7 +1070,50 @@ impl ExcelModifier {
             platform,
             backends,
             validator,
+            validation_failure_observer: None,
         })
+    }
+
+    pub fn with_validation_failure_observer(
+        mut self,
+        observer: Arc<dyn ValidationFailureObserver>,
+    ) -> Self {
+        self.validation_failure_observer = Some(observer);
+        self
+    }
+
+    fn output_validation_error(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate: &Path,
+        engine: EngineId,
+        message: String,
+        route: &[BackendRouteDecision],
+        attempts: &[BackendAttempt],
+    ) -> ExcelModifierError {
+        let mut error = execution_error(
+            ExcelModifierErrorKind::OutputValidationFailed,
+            Some(engine),
+            message,
+            route,
+            attempts,
+        );
+        if let Some(observer) = &self.validation_failure_observer {
+            match observer.preserve_for_review(plan, candidate, &error.message) {
+                Ok(Some(review)) => {
+                    error.message.push_str(&format!(
+                        "；业务校验未通过，原文件未覆盖；待核对副本：{}",
+                        review.path.display()
+                    ));
+                    error.review_output = Some(review);
+                }
+                Ok(None) => {}
+                Err(retention_error) => error
+                    .message
+                    .push_str(&format!("；待核对副本保存失败：{retention_error:#}")),
+            }
+        }
+        error
     }
 
     pub fn route(&self, plan: &ExcelEditPlan) -> Vec<BackendRouteDecision> {
@@ -1320,9 +1386,10 @@ impl ExcelModifier {
                 if openpyxl_fallback_available {
                     continue;
                 }
-                return Err(execution_error(
-                    ExcelModifierErrorKind::OutputValidationFailed,
-                    Some(engine),
+                return Err(self.output_validation_error(
+                    plan,
+                    output_candidate.path(),
+                    engine,
                     format!("backend output validation failed: {message}"),
                     &route,
                     &attempts,
@@ -1344,9 +1411,10 @@ impl ExcelModifier {
                     if openpyxl_fallback_available {
                         continue;
                     }
-                    return Err(execution_error(
-                        ExcelModifierErrorKind::OutputValidationFailed,
-                        Some(engine),
+                    return Err(self.output_validation_error(
+                        plan,
+                        output_candidate.path(),
+                        engine,
                         format!("output validation failed: {message}"),
                         &route,
                         &attempts,
@@ -1606,6 +1674,84 @@ mod tests {
     }
 
     struct RejectValidator;
+
+    #[test]
+    fn review_observer_retains_candidate_without_approving_or_publishing_it() {
+        struct Observer;
+        impl ValidationFailureObserver for Observer {
+            fn preserve_for_review(
+                &self,
+                plan: &ExcelEditPlan,
+                candidate: &Path,
+                issue: &str,
+            ) -> Result<Option<ValidationReviewOutput>> {
+                let path = plan.input.with_file_name("manual-review.bin");
+                fs::copy(candidate, &path)?;
+                Ok(Some(ValidationReviewOutput {
+                    path,
+                    validation_issue: issue.to_owned(),
+                    record_path: None,
+                }))
+            }
+        }
+        let directory = TestDir::new();
+        let plan = plan(&directory.0, vec![set_value()]);
+        let modifier = ExcelModifier::new(
+            "test-linux-x86_64",
+            vec![backend(
+                capability(EngineId::UmyaSpreadsheet, [EditOperationKind::SetCellValue]),
+                Action::Write,
+                Arc::new(Mutex::new(Vec::new())),
+            )],
+            Arc::new(RejectValidator),
+        )
+        .unwrap()
+        .with_validation_failure_observer(Arc::new(Observer));
+        let error = modifier.execute(&plan).unwrap_err();
+        assert_eq!(error.kind, ExcelModifierErrorKind::OutputValidationFailed);
+        assert_eq!(
+            error.attempts[0].outcome,
+            BackendAttemptOutcome::ValidationFailed
+        );
+        let review = error.review_output.as_ref().unwrap();
+        assert_eq!(
+            fs::read(&review.path).unwrap(),
+            b"edited:original workbook bytes"
+        );
+        assert_eq!(fs::read(&plan.input).unwrap(), b"original workbook bytes");
+        assert!(!plan.output.exists());
+        assert!(error.to_string().contains("待核对副本"));
+    }
+
+    #[test]
+    fn review_observer_is_not_invoked_when_validation_passes() {
+        struct MustNotRun;
+        impl ValidationFailureObserver for MustNotRun {
+            fn preserve_for_review(
+                &self,
+                _: &ExcelEditPlan,
+                _: &Path,
+                _: &str,
+            ) -> Result<Option<ValidationReviewOutput>> {
+                panic!("successful output needs no review artifact")
+            }
+        }
+        let directory = TestDir::new();
+        let plan = plan(&directory.0, vec![set_value()]);
+        let modifier = ExcelModifier::new(
+            "test-linux-x86_64",
+            vec![backend(
+                capability(EngineId::UmyaSpreadsheet, [EditOperationKind::SetCellValue]),
+                Action::Write,
+                Arc::new(Mutex::new(Vec::new())),
+            )],
+            Arc::new(PrefixValidator),
+        )
+        .unwrap()
+        .with_validation_failure_observer(Arc::new(MustNotRun));
+        modifier.execute(&plan).unwrap();
+        assert!(plan.output.is_file());
+    }
 
     #[test]
     fn validation_notes_are_retained_in_successful_developer_report() {

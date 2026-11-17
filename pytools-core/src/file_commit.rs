@@ -73,6 +73,57 @@ pub struct TargetCommitReport {
     pub backup_path: Option<PathBuf>,
     pub cleanup_warning: Option<String>,
     pub elapsed_ms: u128,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflict: Option<TargetConflict>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TargetConflict {
+    pub requested_target: PathBuf,
+    pub expected_sha256: String,
+    pub observed_sha256: String,
+    pub reason: String,
+    pub record_path: Option<PathBuf>,
+}
+
+impl TargetCommitReport {
+    pub fn is_conflict_copy(&self) -> bool {
+        self.conflict.is_some()
+    }
+
+    pub fn conflict_notice(&self) -> Option<String> {
+        self.conflict.as_ref().map(|conflict| {
+            format!(
+                "{} 在运行期间已被修改，保留当前文件；基于处理时数据生成的结果已另存为 {}，未合并运行中的新修改，请自行核对。",
+                conflict.requested_target.display(), self.target.display()
+            )
+        })
+    }
+}
+
+#[derive(Debug)]
+struct TargetSnapshotConflict {
+    expected: String,
+    observed: String,
+}
+
+impl std::fmt::Display for TargetSnapshotConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "configured target changed after planning or during candidate preparation; refusing to replace")
+    }
+}
+
+impl std::error::Error for TargetSnapshotConflict {}
+
+fn check_replacement_snapshot(expected: &str, observed: &str) -> Result<()> {
+    if expected != observed {
+        return Err(TargetSnapshotConflict {
+            expected: expected.to_owned(),
+            observed: observed.to_owned(),
+        }
+        .into());
+    }
+    Ok(())
 }
 
 pub fn sha256_file(path: &Path) -> Result<String> {
@@ -202,6 +253,7 @@ pub(crate) fn create_target_from_candidate_with_validator(
         backup_path: None,
         cleanup_warning,
         elapsed_ms: started.elapsed().as_millis(),
+        conflict: None,
     })
 }
 
@@ -259,11 +311,7 @@ pub fn replace_target_from_candidate(
     ensure_regular_nonsymlink(target, "existing target")?;
 
     let original_hash = sha256_file(target)?;
-    ensure!(
-        original_hash == expected_sha256,
-        "configured target changed after planning; refusing to replace {}",
-        target.display()
-    );
+    check_replacement_snapshot(expected_sha256, &original_hash)?;
     let candidate_hash = sha256_file(candidate)?;
     verify_workbook_file(candidate, &candidate_hash, "candidate")
         .context("validate candidate workbook before replacement")?;
@@ -281,6 +329,9 @@ pub fn replace_target_from_candidate(
         Ok(path) => path,
         Err(error) => {
             let _ = fs::remove_file(&staging);
+            if let Ok(current) = sha256_file(target) {
+                check_replacement_snapshot(&original_hash, &current)?;
+            }
             return Err(error).context("create verified backup before target replacement");
         }
     };
@@ -302,10 +353,7 @@ pub fn replace_target_from_candidate(
     if current_hash != original_hash {
         let _ = fs::remove_file(&staging);
         let _ = fs::remove_file(&backup);
-        bail!(
-            "configured target changed during candidate preparation; refusing to replace {}",
-            target.display()
-        );
+        check_replacement_snapshot(&original_hash, &current_hash)?;
     }
 
     if let Err(error) = replace_file(&staging, target) {
@@ -356,7 +404,147 @@ pub fn replace_target_from_candidate(
         backup_path,
         cleanup_warning,
         elapsed_ms: started.elapsed().as_millis(),
+        conflict: None,
     })
+}
+
+/// Publish an already business-validated result. A changed destination is never
+/// overwritten: save a separately named result and report its actual path.
+/// Invalid candidates, permission failures and arbitrary IO errors still fail.
+/// Internal working copies must continue using the strict replacement primitive.
+pub fn commit_validated_candidate(
+    candidate: &Path,
+    target: &Path,
+    expected_sha256: &str,
+) -> Result<TargetCommitReport> {
+    let started = Instant::now();
+    match replace_target_from_candidate(candidate, target, expected_sha256) {
+        Ok(report) => Ok(report),
+        Err(error) => {
+            let Some(conflict) = error.downcast_ref::<TargetSnapshotConflict>() else {
+                return Err(error);
+            };
+            let expected = conflict.expected.clone();
+            let observed = conflict.observed.clone();
+            publish_conflict_copy(candidate, target, &expected, &observed, started)
+        }
+    }
+}
+
+fn conflict_copy_path(target: &Path, sequence: u64) -> PathBuf {
+    result_copy_path(target, "处理结果_源文件已变更", sequence)
+}
+
+pub(crate) fn next_result_copy_path(target: &Path, label: &str) -> PathBuf {
+    result_copy_path(
+        target,
+        label,
+        SIBLING_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+    )
+}
+
+fn result_copy_path(target: &Path, label: &str, sequence: u64) -> PathBuf {
+    // Bound both UTF-8 bytes (Linux) and UTF-16 units (Windows), without splitting
+    // a character. A long original basename must not make recovery impossible.
+    let raw = target.file_stem().unwrap_or_default().to_string_lossy();
+    let mut stem = String::new();
+    for c in raw.chars() {
+        if stem.len() + c.len_utf8() > 100 || stem.encode_utf16().count() + c.len_utf16() > 70 {
+            break;
+        }
+        stem.push(c);
+    }
+    if stem.is_empty() {
+        stem.push_str("workbook");
+    }
+    let extension = target.extension().unwrap_or_default().to_string_lossy();
+    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%3f");
+    target_parent(target).join(format!("{stem}_{label}_{stamp}_{sequence}.{extension}"))
+}
+
+fn publish_conflict_copy(
+    candidate: &Path,
+    target: &Path,
+    expected: &str,
+    observed: &str,
+    started: Instant,
+) -> Result<TargetCommitReport> {
+    for _ in 0..256 {
+        let copy = conflict_copy_path(target, SIBLING_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+        match fs::symlink_metadata(&copy) {
+            Ok(_) => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("inspect conflict-copy destination"),
+        }
+        let mut report =
+            match create_target_from_candidate(candidate, &copy) {
+                Ok(report) => report,
+                Err(error)
+                    if error
+                        .root_cause()
+                        .downcast_ref::<io::Error>()
+                        .is_some_and(|e| e.kind() == io::ErrorKind::AlreadyExists) =>
+                {
+                    continue
+                }
+                Err(error) => return Err(error).context(
+                    "save validated result after target conflict; current target was not replaced",
+                ),
+            };
+        report.operation = "conflict_copy_created".to_owned();
+        let record_path = copy.with_file_name(format!(
+            "{}.run.json",
+            copy.file_name().unwrap().to_string_lossy()
+        ));
+        report.conflict = Some(TargetConflict {
+            requested_target: target.to_path_buf(),
+            expected_sha256: expected.to_owned(),
+            observed_sha256: observed.to_owned(),
+            reason: "target_changed_after_planning; result_uses_processing_snapshot; new_edits_not_merged".to_owned(),
+            record_path: Some(record_path.clone()),
+        });
+        report.elapsed_ms = started.elapsed().as_millis();
+        let record = (|| -> Result<()> {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&record_path)?;
+            serde_json::to_writer_pretty(
+                &mut file,
+                &serde_json::json!({
+                    "schema_version": 1,
+                    "timestamp": chrono::Local::now().to_rfc3339(),
+                    "event_name": "target_changed_result_saved",
+                    "original_target_replaced": false,
+                    "new_edits_merged": false,
+                    "commit": &report,
+                    "message": report.conflict_notice(),
+                }),
+            )?;
+            file.flush()?;
+            file.sync_all()?;
+            sync_parent(&record_path)
+        })();
+        if let Err(error) = record {
+            report.conflict.as_mut().unwrap().record_path = None;
+            let warning = format!("结果副本已保存，但独立运行记录写入失败：{error:#}");
+            report.cleanup_warning = Some(match report.cleanup_warning.take() {
+                Some(previous) => format!("{previous}; {warning}"),
+                None => warning,
+            });
+        }
+        if let Some(notice) = report.conflict_notice() {
+            eprintln!("{notice}");
+        }
+        if let Some(warning) = &report.cleanup_warning {
+            eprintln!("{warning}");
+        }
+        return Ok(report);
+    }
+    bail!(
+        "could not reserve a unique conflict-copy path beside {}; original target was not replaced",
+        target.display()
+    )
 }
 
 fn verify_workbook_file(path: &Path, expected_hash: &str, role: &str) -> Result<()> {
@@ -404,12 +592,54 @@ fn copy_to_sibling(
     role: &str,
     expected_hash: &str,
 ) -> Result<PathBuf> {
+    copy_to_sibling_as(source, target, role, expected_hash, "xlsx")
+}
+
+pub struct InputWorkbookSnapshot {
+    path: PathBuf,
+    _review_scope: crate::review_output::ReviewOriginScope,
+}
+
+impl InputWorkbookSnapshot {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for InputWorkbookSnapshot {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+pub fn snapshot_workbook(source: &Path, expected_hash: &str) -> Result<InputWorkbookSnapshot> {
+    ensure_regular_nonsymlink(source, "processing source")?;
+    let extension = source
+        .extension()
+        .and_then(|v| v.to_str())
+        .unwrap_or("xlsx");
+    let placeholder = source.with_file_name("rusttools-snapshot.xlsx");
+    copy_to_sibling_as(source, &placeholder, "input", expected_hash, extension).map(|path| {
+        InputWorkbookSnapshot {
+            path,
+            _review_scope: crate::review_output::ReviewOriginScope::enter(source, expected_hash),
+        }
+    })
+}
+
+fn copy_to_sibling_as(
+    source: &Path,
+    target: &Path,
+    role: &str,
+    expected_hash: &str,
+    extension: &str,
+) -> Result<PathBuf> {
     let parent = target_parent(target);
     let stem = target.file_stem().unwrap_or_default().to_string_lossy();
     for _ in 0..256 {
         let sequence = SIBLING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path = parent.join(format!(
-            ".{stem}.pytools-{role}-{}-{sequence}.xlsx",
+            ".{stem}.pytools-{role}-{}-{sequence}.{extension}",
             std::process::id()
         ));
         let mut destination = match OpenOptions::new().write(true).create_new(true).open(&path) {
@@ -470,10 +700,14 @@ fn ensure_regular_nonsymlink(path: &Path, role: &str) -> Result<()> {
 
 fn ensure_target_absent(target: &Path) -> Result<()> {
     match fs::symlink_metadata(target) {
-        Ok(_) => bail!(
-            "target already exists; refusing to overwrite {}",
-            target.display()
-        ),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "target already exists; refusing to overwrite {}",
+                target.display()
+            ),
+        )
+        .into()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("inspect target {}", target.display())),
     }

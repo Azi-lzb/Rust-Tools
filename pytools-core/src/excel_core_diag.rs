@@ -79,6 +79,13 @@ pub fn events_from_modifier_error(
     let engine = error.engine.map(engine_label).unwrap_or("excel-modifier");
     let mut head = DiagEvent::new(engine, DiagStage::ModifyWorkbook, DiagOutcome::Failed)
         .with_message(format!("{:?}: {}", error.kind, error.message));
+    if let Some(review) = &error.review_output {
+        head = head.with_details(serde_json::json!({
+            "validation_passed": false,
+            "review_output": review,
+            "original_target_replaced": false,
+        }));
+    }
     if let Some(row) = row_no {
         head = head.with_row(row);
     }
@@ -219,6 +226,7 @@ mod tests {
             message: "no backend matched the plan".to_owned(),
             route_decisions: Vec::new(),
             attempts: Vec::new(),
+            review_output: None,
         };
         let events = events_from_modifier_error(&error, Some(3));
         assert_eq!(events.len(), 1);
@@ -226,6 +234,28 @@ mod tests {
         assert!(events[0].message.contains("NoEligibleBackend"));
         assert!(events[0].message.contains("no backend matched the plan"));
         assert_eq!(events[0].row_no, Some(3));
+    }
+
+    #[test]
+    fn review_artifact_is_logged_without_turning_validation_failure_into_success() {
+        let error = ExcelModifierError {
+            kind: excel_editor::ExcelModifierErrorKind::OutputValidationFailed,
+            engine: Some(EngineId::OpenpyxlWorker),
+            message: "Data!A1: validation mismatch; review copy retained".to_owned(),
+            route_decisions: Vec::new(),
+            attempts: Vec::new(),
+            review_output: Some(excel_editor::ValidationReviewOutput {
+                path: "report-review.xlsx".into(),
+                validation_issue: "Data!A1: validation mismatch".into(),
+                record_path: Some("report-review.xlsx.run.json".into()),
+            }),
+        };
+        let events = events_from_modifier_error(&error, None);
+        assert_eq!(events[0].outcome, DiagOutcome::Failed);
+        let details = events[0].details.as_ref().unwrap();
+        assert_eq!(details["validation_passed"], false);
+        assert_eq!(details["original_target_replaced"], false);
+        assert_eq!(details["review_output"]["path"], "report-review.xlsx");
     }
 
     #[test]

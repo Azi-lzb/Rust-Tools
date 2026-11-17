@@ -36,6 +36,7 @@ pub mod path_map;
 pub mod print_ops;
 pub mod quick;
 pub mod region_sum;
+pub mod review_output;
 pub mod rule_engine;
 pub mod run_logging;
 pub mod sheet_extract;

@@ -1353,10 +1353,14 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
         "目标工作簿包含无法确认的结构，未执行追加"
     );
 
-    let before = read_workbook(&plan.target).context("读取目标工作簿失败")?;
-    let before_names = read_defined_names(&plan.target).context("读取目标工作簿名称定义失败")?;
-    let before_comments = read_ooxml_comments(&plan.target).context("读取目标工作簿批注失败")?;
-    let array_results = excel_editor::ArrayFormulaResults::read(&plan.target)?;
+    let snapshot = crate::file_commit::snapshot_workbook(&plan.target, expected_hash)?;
+    let mut stable_plan = edit_plan.clone();
+    stable_plan.input = snapshot.path().to_path_buf();
+    let edit_plan = &stable_plan;
+    let before = read_workbook(snapshot.path()).context("读取目标工作簿失败")?;
+    let before_names = read_defined_names(snapshot.path()).context("读取目标工作簿名称定义失败")?;
+    let before_comments = read_ooxml_comments(snapshot.path()).context("读取目标工作簿批注失败")?;
+    let array_results = excel_editor::ArrayFormulaResults::read(snapshot.path())?;
     validate_append_scope(edit_plan, &before)?;
 
     if let Some(parent) = plan
@@ -1431,11 +1435,17 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
                 .difference(&candidate_profile.features_present)
                 .collect::<Vec<_>>()
         );
-        crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
-            .context("目标工作簿在候选生成期间发生变化，未执行追加")?;
+        // Candidate content has passed validation. Final publication checks the
+        // snapshot and saves a conflict copy if the destination changed meanwhile.
         Ok(())
     })();
     if let Err(error) = result {
+        let error = crate::review_output::retain_validation_error(
+            &plan.target,
+            &plan.candidate,
+            &edit_plan.request_id,
+            error,
+        );
         if plan.candidate.exists() {
             if let Err(cleanup_error) = fs::remove_file(&plan.candidate) {
                 return Err(error.context(format!(
@@ -3044,14 +3054,17 @@ where
                 &plan,
                 crate::inplace_edit::InPlaceEngine::Openpyxl,
             ) {
-                Ok(_) => match crate::file_commit::replace_target_from_candidate(
+                Ok(_) => match crate::file_commit::commit_validated_candidate(
                     &candidate,
                     &path,
                     &original_hash,
                 ) {
-                    Ok(_) => {
+                    Ok(commit) => {
                         changed = true;
-                        run.saved_books.push(path.to_path_buf());
+                        run.saved_books.push(commit.target.clone());
+                        if let Some(notice) = commit.conflict_notice() {
+                            run.issues.push(notice);
+                        }
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
                                 "openpyxl",
@@ -3059,7 +3072,12 @@ where
                                 crate::engine_diag::DiagOutcome::Ok,
                             )
                             .with_file(path.to_string_lossy().into_owned())
-                            .with_message(format!("已就地删除重复行 {deleted_rows} 行")),
+                            .with_details(serde_json::to_value(&commit).unwrap_or_default())
+                            .with_message(
+                                commit.conflict_notice().unwrap_or_else(|| {
+                                    format!("已就地删除重复行 {deleted_rows} 行")
+                                }),
+                            ),
                         );
                         let _ = fs::remove_file(&candidate);
                     }
@@ -3238,7 +3256,7 @@ fn handle_legacy_xls_duplicate_delete(
                 return;
             }
         };
-        let copy_result = (|| -> Result<()> {
+        let copy_result = (|| -> Result<crate::file_commit::TargetCommitReport> {
             fs::copy(path, &candidate)
                 .with_context(|| format!("复制 .xls 候选 {}", candidate.display()))?;
             crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
@@ -3248,13 +3266,29 @@ fn handle_legacy_xls_duplicate_delete(
                 result["verified"].as_bool() == Some(true),
                 "Excel/WPS COM 删行未通过校验"
             );
-            crate::file_commit::replace_target_from_candidate(&candidate, path, &original_hash)?;
-            Ok(())
+            crate::file_commit::commit_validated_candidate(&candidate, path, &original_hash)
         })();
         match copy_result {
-            Ok(()) => {
+            Ok(commit) => {
                 changed = true;
-                run.saved_books.push(path.to_path_buf());
+                run.saved_books.push(commit.target.clone());
+                if let Some(notice) = commit.conflict_notice() {
+                    run.issues.push(notice);
+                }
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "Excel/WPS COM",
+                        crate::engine_diag::DiagStage::SaveOutput,
+                        crate::engine_diag::DiagOutcome::Ok,
+                    )
+                    .with_file(commit.target.to_string_lossy().into_owned())
+                    .with_details(serde_json::to_value(&commit).unwrap_or_default())
+                    .with_message(
+                        commit
+                            .conflict_notice()
+                            .unwrap_or_else(|| "工作簿修改已提交".to_owned()),
+                    ),
+                );
             }
             Err(error) => {
                 run.task_failed += task_duplicate_rows.len() + task_failures;
@@ -3377,7 +3411,7 @@ fn handle_legacy_xls_duplicate_mark(
                 return;
             }
         };
-        let copy_result = (|| -> Result<()> {
+        let copy_result = (|| -> Result<crate::file_commit::TargetCommitReport> {
             fs::copy(path, &candidate)
                 .with_context(|| format!("复制 .xls 候选 {}", candidate.display()))?;
             crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
@@ -3388,13 +3422,29 @@ fn handle_legacy_xls_duplicate_mark(
                 "Excel/WPS COM 标记未通过校验"
             );
             applied = result["applied_count"].as_u64().unwrap_or_default() as usize;
-            crate::file_commit::replace_target_from_candidate(&candidate, path, &original_hash)?;
-            Ok(())
+            crate::file_commit::commit_validated_candidate(&candidate, path, &original_hash)
         })();
         match copy_result {
-            Ok(()) => {
+            Ok(commit) => {
                 changed = true;
-                run.saved_books.push(path.to_path_buf());
+                run.saved_books.push(commit.target.clone());
+                if let Some(notice) = commit.conflict_notice() {
+                    run.issues.push(notice);
+                }
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "Excel/WPS COM",
+                        crate::engine_diag::DiagStage::SaveOutput,
+                        crate::engine_diag::DiagOutcome::Ok,
+                    )
+                    .with_file(commit.target.to_string_lossy().into_owned())
+                    .with_details(serde_json::to_value(&commit).unwrap_or_default())
+                    .with_message(
+                        commit
+                            .conflict_notice()
+                            .unwrap_or_else(|| "工作簿修改已提交".to_owned()),
+                    ),
+                );
             }
             Err(error) => {
                 run.task_failed += task_duplicate_rows.len() + task_failures;
@@ -3785,14 +3835,17 @@ where
                 &plan,
                 crate::inplace_edit::InPlaceEngine::Openpyxl,
             ) {
-                Ok(_) => match crate::file_commit::replace_target_from_candidate(
+                Ok(_) => match crate::file_commit::commit_validated_candidate(
                     &candidate,
                     &path,
                     &original_hash,
                 ) {
-                    Ok(_) => {
+                    Ok(commit) => {
                         changed = true;
-                        run.saved_books.push(path.to_path_buf());
+                        run.saved_books.push(commit.target.clone());
+                        if let Some(notice) = commit.conflict_notice() {
+                            run.issues.push(notice);
+                        }
                         run.events.push(
                             crate::engine_diag::DiagEvent::new(
                                 mark_engine,
@@ -3800,7 +3853,12 @@ where
                                 crate::engine_diag::DiagOutcome::Ok,
                             )
                             .with_file(path.to_string_lossy().into_owned())
-                            .with_message(format!("已就地标记重复行 {marked_rows} 行")),
+                            .with_details(serde_json::to_value(&commit).unwrap_or_default())
+                            .with_message(
+                                commit.conflict_notice().unwrap_or_else(|| {
+                                    format!("已就地标记重复行 {marked_rows} 行")
+                                }),
+                            ),
                         );
                     }
                     Err(error) => {

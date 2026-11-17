@@ -130,6 +130,7 @@ Categories=Office;
 EOF
 
 cp "$WORKSPACE/$CRATE/packaging/deb/README" "$STAGING/usr/share/doc/rusttools/README"
+cp "$WORKSPACE/docs/TEST_PACKAGE_20261116.md" "$APP_ROOT/doc/TEST_PACKAGE_20261116.md"
 cat > "$STAGING/usr/share/doc/rusttools/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rusttools

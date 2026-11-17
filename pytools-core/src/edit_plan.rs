@@ -52,8 +52,8 @@ pub fn apply_plan_file(
 /// 就地执行：把 plan 的编辑结果写回目标工作簿本身。
 ///
 /// 安全语义：先在临时候选文件上执行并验证（复用 ExcelModifier 的既有校验），
-/// 再用带规划期 sha256 的替换提交覆盖目标；若目标在规划后被改动则拒绝写入。
-/// 会话中断时目标保持原样，不会出现半写状态。
+/// 再用规划期 sha256 决定覆盖目标还是另存结果副本。
+/// 已验证候选遇到源文件变化时另存冲突副本，提交报告返回实际结果路径。
 pub fn apply_plan_in_place(
     plan: &ExcelEditPlan,
     capabilities: &[BackendCapability],
@@ -61,9 +61,14 @@ pub fn apply_plan_in_place(
 ) -> Result<(EditExecutionReport, TargetCommitReport)> {
     let target = plan.input.clone();
     let original_hash = crate::file_commit::sha256_file(&target)?;
+    // Validate and edit an immutable input copy. Comparing the candidate against
+    // the user's concurrently edited live file would reject a valid old-snapshot
+    // result before the conflict-copy policy could run.
+    let snapshot = crate::file_commit::snapshot_workbook(&target, &original_hash)?;
     // 候选文件放在目标同目录，保证同卷重命名语义。
     let candidate = unique_in_place_candidate(&target)?;
     let mut candidate_plan = plan.clone();
+    candidate_plan.input = snapshot.path().to_path_buf();
     candidate_plan.output = candidate.clone();
 
     let result = apply_plan(&candidate_plan, capabilities, platform);
@@ -74,18 +79,15 @@ pub fn apply_plan_in_place(
             return Err(error);
         }
     };
-    let commit = match crate::file_commit::replace_target_from_candidate(
-        &candidate,
-        &target,
-        &original_hash,
-    ) {
-        Ok(commit) => commit,
-        Err(error) => {
-            let _ = fs::remove_file(&candidate);
-            return Err(error)
-                .with_context(|| format!("就地提交修改结果到 {} 失败", target.display()));
-        }
-    };
+    let commit =
+        match crate::file_commit::commit_validated_candidate(&candidate, &target, &original_hash) {
+            Ok(commit) => commit,
+            Err(error) => {
+                let _ = fs::remove_file(&candidate);
+                return Err(error)
+                    .with_context(|| format!("就地提交修改结果到 {} 失败", target.display()));
+            }
+        };
     let _ = fs::remove_file(&candidate);
     Ok((execution, commit))
 }
@@ -177,7 +179,8 @@ pub(crate) fn apply_plan(
     } else {
         Arc::new(PlanOutputValidator)
     };
-    let modifier = ExcelModifier::new(platform, backends, validator)?;
+    let modifier = ExcelModifier::new(platform, backends, validator)?
+        .with_validation_failure_observer(Arc::new(crate::review_output::ReviewPublisher));
     modifier.execute(plan).map_err(anyhow::Error::from)
 }
 

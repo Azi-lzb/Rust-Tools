@@ -28,8 +28,8 @@ use pytools_core::dedup_ops::{
 };
 use pytools_core::edit_plan::{apply_plan_file, apply_plan_with_capability_file};
 use pytools_core::file_commit::{
-    copy_workbook_to_new_target, create_target_from_candidate, replace_target_from_candidate,
-    sha256_file, verify_planning_snapshot,
+    commit_validated_candidate as replace_target_from_candidate, copy_workbook_to_new_target,
+    create_target_from_candidate, sha256_file, verify_planning_snapshot,
 };
 use pytools_core::file_sort_prefix::{
     run_content_prefix_rename_xlsx_candidate,
@@ -2001,8 +2001,11 @@ where
     {
         let commit_started = Instant::now();
         facts.add_component("pytools_core::config::replace_target_from_candidate");
-        let committed =
-            replace_target_from_candidate(&candidate_path, config_path, &original_sha256)?;
+        let committed = pytools_core::file_commit::replace_target_from_candidate(
+            &candidate_path,
+            config_path,
+            &original_sha256,
+        )?;
         facts.metrics["operation"] = serde_json::json!("committed");
         facts.metrics["execution_mode"] = serde_json::json!("committed");
         facts.metrics["committed"] = serde_json::json!(true);
@@ -3127,9 +3130,23 @@ where
                         pytools_core::engine_diag::DiagOutcome::Ok,
                     )
                     .with_file(plan.target.to_string_lossy().into_owned())
-                    .with_message("目标工作簿追加完成"),
+                    .with_details(execution["target_commit"].clone())
+                    .with_message(
+                        if execution["target_commit"]["operation"] == "conflict_copy_created" {
+                            "原目标已变化，追加结果已另存副本"
+                        } else {
+                            "目标工作簿追加完成"
+                        },
+                    ),
                 );
-                report[index]["execution"] = serde_json::Value::String("committed".to_owned());
+                let conflict_copy =
+                    execution["target_commit"]["operation"] == "conflict_copy_created";
+                report[index]["execution"] = serde_json::json!(if conflict_copy {
+                    "conflict_copy_created"
+                } else {
+                    "committed"
+                });
+                report[index]["output_file"] = execution["target_commit"]["target"].clone();
                 report[index]["status"] = serde_json::Value::String("succeeded".to_owned());
                 report[index]["execution_result"] = execution;
                 if log_view == "developer" {
@@ -3273,12 +3290,24 @@ where
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|item| item["status"] == "succeeded")
+        .filter(|item| item["execution"] == "committed")
         .count();
+    let conflict_copies = report
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["execution"] == "conflict_copy_created")
+        .count();
+    let conflict_copy_rows: usize = plans
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| report[*index]["execution"] == "conflict_copy_created")
+        .map(|(_, plan)| plan.appended_rows)
+        .sum();
     let committed_rows: usize = plans
         .iter()
         .enumerate()
-        .filter(|(index, _)| report[*index]["status"] == "succeeded")
+        .filter(|(index, _)| report[*index]["execution"] == "committed")
         .map(|(_, plan)| plan.appended_rows)
         .sum();
     let filtered_rows: usize = plans
@@ -3291,6 +3320,8 @@ where
         .sum();
     let skipped_tasks: usize = plans.iter().map(|plan| plan.task_skipped).sum();
     metrics["committed_appended_rows"] = serde_json::json!(committed_rows);
+    metrics["conflict_copies"] = serde_json::json!(conflict_copies);
+    metrics["conflict_copy_appended_rows"] = serde_json::json!(conflict_copy_rows);
     metrics["processed_duplicate_rows_filtered"] = serde_json::json!(filtered_rows);
     metrics["unprocessed_targets"] = serde_json::json!(unprocessed_targets);
     let mut actual_engines = vec![
@@ -3326,8 +3357,12 @@ where
             }
         }
     }
-    let run_status = if committed_targets > 0
-        && (failed || blocked_targets > 0 || unprocessed_targets > 0 || skipped_tasks > 0)
+    let run_status = if (committed_targets + conflict_copies) > 0
+        && (failed
+            || blocked_targets > 0
+            || unprocessed_targets > 0
+            || skipped_tasks > 0
+            || conflict_copies > 0)
     {
         "partial"
     } else if failed {
@@ -3340,7 +3375,9 @@ where
     let unified_status = match run_status {
         "failed" | "blocked" => pytools_core::run_logging::TaskStatus::Failed,
         "partial" => pytools_core::run_logging::TaskStatus::PartialSuccess,
-        _ if committed_targets == 0 => pytools_core::run_logging::TaskStatus::NoOp,
+        _ if committed_targets + conflict_copies == 0 => {
+            pytools_core::run_logging::TaskStatus::NoOp
+        }
         _ => pytools_core::run_logging::TaskStatus::Success,
     };
     let committed = report
@@ -3349,10 +3386,17 @@ where
         .flatten()
         .enumerate()
         .filter(|(_, item)| item["status"] == "succeeded")
-        .filter_map(|(index, _)| plans.get(index).map(|plan| plan.target.clone()))
+        .filter_map(|(index, item)| {
+            item["execution_result"]["target_commit"]["target"]
+                .as_str()
+                .map(PathBuf::from)
+                .or_else(|| plans.get(index).map(|plan| plan.target.clone()))
+        })
         .collect::<Vec<_>>();
     for (name, value) in [
         ("写入目标数", serde_json::json!(committed_targets)),
+        ("冲突另存副本数", serde_json::json!(conflict_copies)),
+        ("另存副本追加行数", serde_json::json!(conflict_copy_rows)),
         ("追加行数", serde_json::json!(committed_rows)),
         ("过滤重复行数", serde_json::json!(filtered_rows)),
         ("跳过配置数", serde_json::json!(skipped_tasks)),
@@ -4699,6 +4743,8 @@ fn dedup_menu_metrics(report: &serde_json::Value) -> serde_json::Value {
     let mut duplicate_rows_filtered = 0u64;
     let mut planned_operations = 0u64;
     let mut committed_targets = 0u64;
+    let mut conflict_copies = 0u64;
+    let mut conflict_copy_appended_rows = 0u64;
     let mut planned_only_targets = 0u64;
     let mut failed_targets = 0u64;
     let mut written_outputs = 0u64;
@@ -4717,6 +4763,10 @@ fn dedup_menu_metrics(report: &serde_json::Value) -> serde_json::Value {
             .as_array()
             .map_or(0, |operations| operations.len() as u64);
         committed_targets += u64::from(item["execution"] == "committed");
+        if item["execution"] == "conflict_copy_created" {
+            conflict_copies += 1;
+            conflict_copy_appended_rows += item["appended_rows"].as_u64().unwrap_or_default();
+        }
         planned_only_targets +=
             u64::from(item["status"] == "planned_only" || item["status"] == "cancelled");
         failed_targets += u64::from(item["status"] == "failed");
@@ -4735,6 +4785,8 @@ fn dedup_menu_metrics(report: &serde_json::Value) -> serde_json::Value {
         "duplicate_rows_filtered": duplicate_rows_filtered,
         "planned_operations": planned_operations,
         "committed_targets": committed_targets,
+        "conflict_copies": conflict_copies,
+        "conflict_copy_appended_rows": conflict_copy_appended_rows,
         "planned_only_targets": planned_only_targets,
         "failed_targets": failed_targets,
         "written_outputs": written_outputs,
@@ -7934,6 +7986,13 @@ mod audit_xls_append_guard {
     }
 }
 
+fn conflict_commit_output(commit: &Option<serde_json::Value>) -> Option<PathBuf> {
+    let commit = commit.as_ref()?;
+    (commit["operation"] == "conflict_copy_created")
+        .then(|| commit["target"].as_str().map(PathBuf::from))
+        .flatten()
+}
+
 fn run_dedup_append_direct_existing(plan: &AppendTargetPlan) -> Result<serde_json::Value> {
     let started = Instant::now();
     let expected_hash = plan
@@ -8035,6 +8094,15 @@ fn run_dedup_append_execute_report(arguments: Vec<String>) -> Result<serde_json:
         if let Some(staging) = &staging {
             let validation_started = Instant::now();
             if let Err(error) = validate_wide_target_replacement_candidate(&plan, staging.path()) {
+                let error = pytools_core::review_output::retain_validation_error(
+                    &plan.target,
+                    &plan.candidate,
+                    plan.edit_plan
+                        .as_ref()
+                        .map(|p| p.request_id.as_str())
+                        .unwrap_or("wide-target-replacement"),
+                    error,
+                );
                 if !candidate_preexisted && plan.candidate.exists() {
                     fs::remove_file(&plan.candidate).with_context(|| {
                         format!(
@@ -8952,7 +9020,6 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                         None,
                         None,
                     );
-                    verify_planning_snapshot(input, Some(&expected_target_hash))?;
                     let commit =
                         replace_target_from_candidate(&candidate, input, &expected_target_hash)
                             .context("stage=target_commit")?;
@@ -8962,7 +9029,10 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                         started,
                         "safe_commit",
                         "completed",
-                        "候选校验通过，已备份并安全替换 .xls 源工作簿",
+                        commit
+                            .conflict_notice()
+                            .as_deref()
+                            .unwrap_or("候选校验通过，已备份并安全替换 .xls 源工作簿"),
                         &progress,
                         Some(file_started),
                         &["pytools-core", "file-commit"],
@@ -8976,9 +9046,9 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 return Ok(serde_json::json!({
                     "input": input,
                     "candidate": candidate,
-                    "output_copy": null,
+                    "output_copy": conflict_commit_output(&commit),
                     "plan_file": null,
-                    "status": if commit.is_some() { "committed" } else { "no_changes" },
+                    "status": if conflict_commit_output(&commit).is_some() { "conflict_copy_created" } else if commit.is_some() { "committed" } else { "no_changes" },
                     "matched_sheets": filled_sheets,
                     "changed_cells": filled_sheets * 18,
                     "warnings": if branch_sheets == 0 { vec!["未发现名称包含“分机构”的工作表".to_owned()] } else if skipped_sheets > 0 { vec![format!("跳过 {skipped_sheets} 个无法识别或未找到村镇银行行的工作表")] } else { Vec::<String>::new() },
@@ -9129,7 +9199,10 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                     started,
                     "safe_commit",
                     "completed",
-                    "已验证候选并安全提交到目标工作簿",
+                    commit
+                        .conflict_notice()
+                        .as_deref()
+                        .unwrap_or("已验证候选并安全提交到目标工作簿"),
                     &progress,
                     Some(commit_started),
                     &["pytools-core", "file-commit"],
@@ -9149,7 +9222,9 @@ fn run_village_split_batch(arguments: Vec<String>, interactive: bool) -> Result<
                 "candidate": candidate,
                 "output_copy": output_copy,
                 "plan_file": if report.plan.is_some() && emit_plan_files && !create_copy { Some(plan_path) } else { None },
-                "status": if commit.is_some() {
+                "status": if conflict_commit_output(&commit).is_some() {
+                    "conflict_copy_created"
+                } else if commit.is_some() {
                     "committed"
                 } else if report.plan.is_none() {
                     "no_changes"
@@ -11071,12 +11146,14 @@ fn run_rural_loan_menu(
                 let expected_hash = expected_target_hash
                     .as_deref()
                     .context("missing current-period planning snapshot")?;
-                verify_planning_snapshot(current, Some(expected_hash))?;
                 let commit = replace_target_from_candidate(&candidate, current, expected_hash)
                     .context("stage=target_commit")?;
-                target_commit = Some(serde_json::to_value(commit)?);
+                if commit.is_conflict_copy() {
+                    output_copy = Some(commit.target.clone());
+                }
+                target_commit = Some(serde_json::to_value(&commit)?);
                 execution = serde_json::json!({
-                    "mode": "in_place",
+                    "mode": if commit.is_conflict_copy() { "conflict_copy" } else { "in_place" },
                     "engine": "pywin32_com",
                     "application": response["application"],
                     "changed_cells": report.changed_cells,
@@ -11089,7 +11166,10 @@ fn run_rural_loan_menu(
                         feature_id,
                         "safe_commit",
                         "completed",
-                        "COM 候选已通过快照校验，已备份并安全替换本期 .xls 工作簿",
+                        commit
+                            .conflict_notice()
+                            .as_deref()
+                            .unwrap_or("COM 候选已通过快照校验，已备份并安全替换本期 .xls 工作簿"),
                         &progress,
                         Some(phase_started.elapsed().as_millis()),
                         &["Rust", "pytools-core", "file-commit"],
@@ -11211,7 +11291,10 @@ fn run_rural_loan_menu(
                         let commit =
                             replace_target_from_candidate(&candidate, current, expected_hash)
                                 .context("stage=target_commit")?;
-                        target_commit = Some(serde_json::to_value(commit)?);
+                        if commit.is_conflict_copy() {
+                            output_copy = Some(commit.target.clone());
+                        }
+                        target_commit = Some(serde_json::to_value(&commit)?);
                         emit_rural_loan_menu_event(
                             log_view,
                             &mut events,
@@ -11220,7 +11303,10 @@ fn run_rural_loan_menu(
                                 feature_id,
                                 "safe_commit",
                                 "completed",
-                                "本期工作簿已安全更新，目标快照校验通过",
+                                commit
+                                    .conflict_notice()
+                                    .as_deref()
+                                    .unwrap_or("本期工作簿已安全更新，目标快照校验通过"),
                                 &progress,
                                 Some(phase_started.elapsed().as_millis()),
                                 &["Rust", "pytools-core"],
@@ -11433,8 +11519,14 @@ fn run_rural_loan_menu(
     }
     unified.set_existing_timing(started_at.clone(), run_started.elapsed().as_millis());
     let mut unified_outputs = output_copy.iter().cloned().collect::<Vec<_>>();
-    if target_commit.is_some() {
-        unified_outputs.push(current.to_path_buf());
+    if let Some(actual) = target_commit
+        .as_ref()
+        .and_then(|c| c["target"].as_str())
+        .map(PathBuf::from)
+    {
+        if !unified_outputs.contains(&actual) {
+            unified_outputs.push(actual);
+        }
     }
     let unified_output_stats =
         (!unified_outputs.is_empty()).then_some(pytools_core::run_logging::OutputStats {
@@ -12401,9 +12493,9 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                         )?;
                         Ok(serde_json::json!({
                             "input": input,
-                            "output_copy": null,
+                            "output_copy": if commit.is_conflict_copy() { Some(&commit.target) } else { None },
                             "plan_file": null,
-                            "status": "committed",
+                            "status": if commit.is_conflict_copy() { "conflict_copy_created" } else { "committed" },
                             "fx_sheets": com["fx_sheets"].as_u64().unwrap_or_default(),
                             "modified_sheets": com["modified_sheets"].as_u64().unwrap_or_default(),
                             "execution": {
@@ -12622,7 +12714,10 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
                     run_started,
                     "safe_commit",
                     "completed",
-                    "已验证候选并安全提交到原工作簿",
+                    commit
+                        .conflict_notice()
+                        .as_deref()
+                        .unwrap_or("已验证候选并安全提交到原工作簿"),
                     &progress,
                     Some(commit_started),
                     &["pytools-core", "file-commit", "excel-reader", "calamine"],
@@ -12637,14 +12732,16 @@ fn run_fx_header_batch(arguments: Vec<String>, interactive: bool) -> Result<()> 
             let output_copy = if create_copy {
                 execution.get("output").cloned()
             } else {
-                None
+                conflict_commit_output(&commit).map(|p| serde_json::json!(p))
             };
             Ok(serde_json::json!({
                 "input": input,
                 "candidate": if inspection.plan.is_some() && !create_copy && in_place.is_none() { Some(&candidate) } else { None },
                 "output_copy": output_copy,
                 "plan_file": plan_file,
-                "status": if commit.is_some() {
+                "status": if conflict_commit_output(&commit).is_some() {
+                    "conflict_copy_created"
+                } else if commit.is_some() {
                     "committed"
                 } else if create_copy && inspection.plan.is_some() {
                     "copy_created"
@@ -16594,7 +16691,7 @@ fn commit_wide_summary_existing_target_openpyxl(
     target: &Path,
     expected_hash: &str,
     appends: &[WideTargetSheetAppend],
-) -> Result<()> {
+) -> Result<pytools_core::file_commit::TargetCommitReport> {
     use excel_editor::{
         EditOperation, ExcelEditPlan, PreservationRequirement, RangeStyleMode, WorkbookFormat,
     };
@@ -16792,7 +16889,9 @@ fn commit_wide_summary_existing_target_openpyxl(
         .context("目标工作簿在规划期间发生变化，未执行追加")?;
 
     let candidate = wide_target_candidate_path(target)?;
+    let snapshot = pytools_core::file_commit::snapshot_workbook(target, expected_hash)?;
     let mut plan = plan;
+    plan.input = snapshot.path().to_path_buf();
     plan.output = candidate.path().to_path_buf();
     plan.validate().context("校验 1-1 目标候选路径失败")?;
     pytools_core::inplace_edit::execute_candidate(
@@ -16801,8 +16900,7 @@ fn commit_wide_summary_existing_target_openpyxl(
     )
     .context("修改引擎生成并校验目标候选文件失败")?;
     replace_target_from_candidate(candidate.path(), target, expected_hash)
-        .context("校验并安全替换目标工作簿失败")?;
-    Ok(())
+        .context("校验并安全替换目标工作簿失败")
 }
 
 fn wide_target_candidate_path(target: &Path) -> Result<TemporaryFile> {
@@ -17645,7 +17743,7 @@ fn execute_wide_summary_target_writes(
                 &specs,
             );
             match publish {
-                Ok(()) => {
+                Ok(commit) => {
                     any_ok = true;
                     for append in chunk {
                         let written_data_rows = append.spec.kept_rows.len();
@@ -17661,7 +17759,7 @@ fn execute_wide_summary_target_writes(
                         };
                         let message = format!(
                             "目标工作簿 {}：{}工作表 {:?}（输入 {} 行，批内去重 {} 行，批内去重后与目标去重键相同 {} 行，{} {} 行 / 写入 {} 个单元格）",
-                            display_path_for_user(&target),
+                            display_path_for_user(&commit.target),
                             append.mode,
                             append.spec.target_sheet,
                             append.input_rows,
@@ -17685,11 +17783,14 @@ fn execute_wide_summary_target_writes(
                             Some("openpyxl"),
                             None,
                         );
-                        event.workbook_name = Some(target.to_string_lossy().into_owned());
+                        event.workbook_name = Some(commit.target.to_string_lossy().into_owned());
                         event.worksheet_name = Some(append.spec.target_sheet.clone());
                         emit_wide_summary_event(_log_view, events, event);
                         results.push(serde_json::json!({
-                            "target": display_path_for_user(&target).to_string(),
+                            "target": display_path_for_user(&commit.target).to_string(),
+                            "requested_target": target,
+                            "target_commit": &commit,
+                            "conflict_notice": commit.conflict_notice(),
                             "sheet": append.spec.target_sheet,
                             "status": "succeeded",
                             "mode": append.mode,

@@ -3,7 +3,7 @@
 use crate::{
     conversion_engine::ConversionRuntime,
     file_commit::{
-        create_target_from_candidate, replace_target_from_candidate, sha256_file,
+        commit_validated_candidate, create_target_from_candidate, sha256_file,
         verify_planning_snapshot, TargetCommitReport,
     },
 };
@@ -390,14 +390,13 @@ fn run_batch_sheet_rename_impl(
             };
             let editing_ms = editing_started.elapsed().as_millis();
             let commit_started = Instant::now();
-            verify_planning_snapshot(&input, Some(&input_hash))?;
-            // 就地模式：目标就是源文件本身，用带规划哈希校验的替换提交，
-            // 若源在规划后被改动则拒绝写入（保持数据保护语义）。
+            // A validated result may be saved separately when the original changed.
             let mut commit = if output == input {
-                replace_target_from_candidate(&candidate, &output, &input_hash).with_context(
+                commit_validated_candidate(&candidate, &output, &input_hash).with_context(
                     || format!("safely replace renamed workbook {}", output.display()),
                 )?
             } else {
+                verify_planning_snapshot(&input, Some(&input_hash))?;
                 create_target_from_candidate(&candidate, &output).with_context(|| {
                     format!("safely publish renamed copy to {}", output.display())
                 })?
@@ -432,12 +431,12 @@ fn run_batch_sheet_rename_impl(
         report.rename_ok += changes.len();
         report.files.push(SheetRenameFileResult {
             input,
-            output: Some(output),
+            output: Some(commit.target.clone()),
             status: "renamed".to_owned(),
             engine: Some(engine),
             renamed: changes.len(),
             skipped,
-            reason: None,
+            reason: commit.conflict_notice(),
             planning_ms,
             editing_ms,
             commit_ms: commit.elapsed_ms,
