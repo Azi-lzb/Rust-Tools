@@ -15,8 +15,9 @@ use rust_xlsxwriter::Workbook;
 use serde_json::Value;
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
 struct TestDir(PathBuf);
@@ -217,6 +218,100 @@ fn target_also_used_as_source_is_rejected_without_modifying_workbook() -> Result
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("源工作簿同时是目标工作簿"));
     assert_eq!(fs::read(&source)?, source_before);
+    Ok(())
+}
+
+#[test]
+fn nonexistent_xls_target_is_rejected_before_planning_output() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let config = dir.path("config.xlsx");
+    let target = dir.path("new.XLS");
+    make_source(&source, &[("A", 10.0)])?;
+    make_config(&config, &source, &target, "1")?;
+    let original = fs::read(&source)?;
+
+    let plan_output = dir.path("blocked-plan-output");
+    let cli = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["dedup-append-plan", "--config"])
+        .arg(&config)
+        .arg("--output-dir")
+        .arg(&plan_output)
+        .output()?;
+    assert!(!cli.status.success());
+    assert!(String::from_utf8_lossy(&cli.stderr).contains("新建追加目标只支持 XLSX"));
+    assert!(!plan_output.exists());
+
+    let mut menu = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+        .args(["menu", "--log-view", "developer", "--config"])
+        .arg(&config)
+        .current_dir(&dir.0)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    menu.stdin
+        .take()
+        .context("menu stdin")?
+        .write_all(b"2\n3\n1\n0\n")?;
+    let menu = menu.wait_with_output()?;
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&menu.stdout),
+        String::from_utf8_lossy(&menu.stderr)
+    );
+    assert!(combined.contains("新建追加目标只支持 XLSX"), "{combined}");
+    assert!(!target.exists());
+    let output_dir = dir.path("output");
+    assert!(!output_dir.exists() || fs::read_dir(&output_dir)?.next().is_none());
+    assert_eq!(fs::read(&source)?, original);
+    Ok(())
+}
+
+#[test]
+fn saved_plan_cannot_create_xls_or_bypass_existing_xls_preflight() -> Result<()> {
+    let dir = TestDir::new();
+    let source = dir.path("source.xlsx");
+    let config = dir.path("config.xlsx");
+    make_source(&source, &[("A", 10.0)])?;
+    make_config(&config, &source, &dir.path("valid.xlsx"), "1")?;
+    let (_, plan_path) = plan_report(&config, &dir.path("plans"))?;
+    let mut plan: AppendTargetPlan = serde_json::from_slice(&fs::read(&plan_path)?)?;
+    plan.target = dir.path("protected.xls");
+    plan.candidate = dir.path("candidate.xlsx");
+
+    for (target_existed, message) in [
+        (false, "新建追加目标只支持 XLSX"),
+        (
+            true,
+            if cfg!(windows) {
+                "目标快照缺失"
+            } else {
+                "需要 Windows Excel/WPS COM"
+            },
+        ),
+    ] {
+        if target_existed {
+            let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/timeline/wide_summary_legacy.xls");
+            fs::copy(fixture, &plan.target)?;
+            plan.new_workbook = None;
+        }
+        plan.target_existed = target_existed;
+        let original = fs::read(&plan.target).ok();
+        fs::write(&plan_path, serde_json::to_vec_pretty(&plan)?)?;
+        let run = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+            .args(["dedup-append-execute", "--commit-target", "--plan"])
+            .arg(&plan_path)
+            .env("PYTOOLS_CONVERT_ENGINES_DISABLED", "1")
+            .output()?;
+        assert!(!run.status.success());
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        assert!(stderr.contains(message), "{stderr}");
+        assert_eq!(fs::read(&plan.target).ok(), original);
+        assert!(!plan.candidate.exists());
+        assert!(!plan.candidate.with_extension("xls").exists());
+    }
     Ok(())
 }
 

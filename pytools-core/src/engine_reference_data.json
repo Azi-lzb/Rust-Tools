@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "reference_date": "2026-11-15",
+  "reference_date": "2026-11-18",
   "platform": "Windows",
   "build_profile": "Release",
   "rounds": 1,
-  "sample": "50 small synthetic business files; 5-7 and 7-1 are 50 independent menu tasks",
+  "sample": "5 synthetic inputs per route (50 for print mode 1); 5-7 and 7-1 are independent tasks. Includes all process/worker startup.",
+  "measured_exe_sha256": "95b02a2e223b61c7a49d41112679ac3776d96d4ad0c1e80c989d2b9572d5d54c",
   "cases": [
     {
       "context": "1-1",
@@ -13,44 +14,35 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 43306.618
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3717.8982
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 20159.2206
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3452.1494
         },
         {
           "engine": "umya",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11462.9069
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1168.6655
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 43514.3349
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -61,23 +53,23 @@
         {
           "engine": "com",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 14878.786
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 7206.1684
         },
         {
           "engine": "betteroffice",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 752.6584
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 270.3693
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 8418.6775
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2873.8521
         }
       ]
     },
@@ -88,44 +80,32 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 33795.4758
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2306.6547
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11614.7537
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3150.3764
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 34503.3684
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -136,44 +116,32 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 35959.8947
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2056.1474
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 12733.7246
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3229.3127
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 37198.5018
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -184,44 +152,41 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 34449.2689
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2251.37
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 12766.0176
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3094.8887
         },
         {
           "engine": "umya",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 9517.6028
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1102.6591
         },
         {
           "engine": "betteroffice_modify",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 9584.6045
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 877.1268
         },
         {
           "engine": "rustnative",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 8827.8352
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 845.6044
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 20860.0622
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -234,21 +199,21 @@
           "status": "PASS",
           "files": 50,
           "verified_outputs": 50,
-          "total_e2e_ms": 1949.3902
+          "total_e2e_ms": 2304.3951
         },
         {
           "engine": "rust",
           "status": "PASS",
           "files": 50,
           "verified_outputs": 50,
-          "total_e2e_ms": 3939.1724
+          "total_e2e_ms": 2714.3011
         },
         {
           "engine": "aspose",
           "status": "PASS",
           "files": 50,
           "verified_outputs": 50,
-          "total_e2e_ms": 12666.1508
+          "total_e2e_ms": 21365.8896
         }
       ]
     },
@@ -259,16 +224,16 @@
         {
           "engine": "auto",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 31353.5129
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 8183.0909
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 6238.052
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2593.4259
         }
       ]
     },
@@ -278,17 +243,14 @@
       "routes": [
         {
           "engine": "aspose",
-          "status": "PREFLIGHT_FAILED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "PREFLIGHT_FAILED"
         },
         {
           "engine": "auto",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 24968.8101
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 8570.9985
         }
       ]
     },
@@ -299,16 +261,16 @@
         {
           "engine": "auto",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 40822.5717
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 7319.8068
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 10884.2507
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2948.3225
         }
       ]
     },
@@ -319,44 +281,32 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 32251.304
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2050.5124
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11006.0625
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3058.6834
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 31856.6212
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -367,16 +317,16 @@
         {
           "engine": "auto",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 366.1993
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 93.4843
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 12574.8105
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3317.1581
         }
       ]
     },
@@ -387,44 +337,38 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 31167.1554
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2095.1927
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 10154.3535
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3091.9934
         },
         {
           "engine": "umya",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 8205.7672
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 749.9262
         },
         {
           "engine": "betteroffice_modify",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 9440.7366
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 785.7664
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 10490.9811
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -435,44 +379,35 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 32339.0748
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2387.9428
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11710.1686
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3404.0346
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 10976.1666
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1443.0427
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 32144.3691
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -483,44 +418,38 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 29718.6269
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1755.7436
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 8882.6167
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2934.8163
         },
         {
           "engine": "umya",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 4691.1676
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 537.4563
         },
         {
           "engine": "betteroffice_modify",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 4718.7391
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 597.7641
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 4901.7637
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -531,51 +460,42 @@
         {
           "engine": "auto",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 5004.7108
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 664.7854
         },
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 34824.3143
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2640.3681
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11912.3098
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 3529.1136
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 8535.4216
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 871.7289
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 35835.9768
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -586,44 +506,32 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 41796.172
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 2086.4771
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 14408.703
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 4981.9637
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 32357.7305
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -634,44 +542,41 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 57514.473499999964
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 6745.418
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 54624.33519999999
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 7039.8776
         },
         {
           "engine": "umya",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 12571.6334
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1136.8261
         },
         {
           "engine": "betteroffice_modify",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 12483.401899999999
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1146.6144
         },
         {
           "engine": "rustnative",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 10053.577399999998
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 1084.2311
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 11451.7804
+          "status": "NOT_TESTED"
         }
       ]
     },
@@ -682,44 +587,32 @@
         {
           "engine": "openpyxl",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 67117.69840000002
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 7785.465700000001
         },
         {
           "engine": "aspose",
           "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 63447.7716
+          "files": 5,
+          "verified_outputs": 5,
+          "total_e2e_ms": 8381.8619
         },
         {
           "engine": "umya",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "betteroffice_modify",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "rustnative",
-          "status": "GATED",
-          "files": 0,
-          "verified_outputs": 0,
-          "total_e2e_ms": null
+          "status": "GATED"
         },
         {
           "engine": "route_auto",
-          "status": "PASS",
-          "files": 50,
-          "verified_outputs": 50,
-          "total_e2e_ms": 77691.4507
+          "status": "NOT_TESTED"
         }
       ]
     }

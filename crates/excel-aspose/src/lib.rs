@@ -1,4 +1,6 @@
 //! Optional external engine adapter. No menu or automatic routing integration.
+#[cfg(test)]
+mod archive_tests;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -95,6 +97,8 @@ pub struct EngineTimings {
     pub save_ms: f64,
     #[serde(default)]
     pub preserve_defaults_ms: f64,
+    #[serde(default)]
+    pub raw_sdk_archive_ms: Option<f64>,
     pub worker_ms: f64,
     pub end_to_end_ms: f64,
 }
@@ -102,6 +106,9 @@ pub struct EngineTimings {
 pub struct CandidateWorkbook {
     pub path: PathBuf,
     pub evaluation_output: bool,
+    /// None means an older/direct Worker did not report a Save-stage archive.
+    pub sdk_save_archive: Option<SdkSaveArchive>,
+    pub input_trace: Option<PathBuf>,
     pub source_active_index: u64,
     pub output_active_index: u64,
     pub source_sheets: Vec<String>,
@@ -110,6 +117,14 @@ pub struct CandidateWorkbook {
     pub worker_attempts: u64,
     pub draining: bool,
     pub timings: EngineTimings,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SdkSaveArchive {
+    pub path: PathBuf,
+    pub sha256: String,
+    pub manifest_path: PathBuf,
+    pub stage: String,
 }
 pub trait CalcEngine {
     fn calculate(&mut self, request: &WorkbookRequest) -> Result<CandidateWorkbook>;
@@ -258,6 +273,14 @@ impl AsposeWorkerBackend {
             .map_err(err)?;
         let mut command = Command::new(&self.config.executable);
         command.args(&self.config.arguments);
+        if self.engine_name == "Aspose.Cells" {
+            let raw_dir = self.config.diagnostics_dir.join("raw-sdk-save");
+            fs::create_dir_all(&raw_dir).map_err(err)?;
+            command.env(
+                "RUSTTOOLS_ASPOSE_RAW_ARCHIVE_DIR",
+                fs::canonicalize(raw_dir).map_err(err)?,
+            );
+        }
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -425,6 +448,22 @@ impl AsposeWorkerBackend {
             q["operations_sha256"] = json!(hash);
         }
         let expected_pid = self.session.as_ref().unwrap().child.id() as u64;
+        // Audit metadata is independent of business validation and never feeds
+        // worksheet removal decisions. This scope is deliberately not advertised
+        // as the complete set of logical business inputs.
+        let input_trace = match write_input_trace(
+            &self.config.diagnostics_dir,
+            &req.run_id,
+            &id,
+            method,
+            std::iter::once(input.as_path()).chain(import_paths.iter().map(PathBuf::as_path)),
+        ) {
+            Ok(path) => Some(path),
+            Err(error) => {
+                eprintln!("Aspose 输入追溯记录写入失败：{error}");
+                None
+            }
+        };
         let reply = self
             .session
             .as_mut()
@@ -470,6 +509,12 @@ impl AsposeWorkerBackend {
         let evaluation_output = result["evaluation_output"]
             .as_bool()
             .ok_or_else(|| err("Missing evaluation marker"))?;
+        let sdk_save_archive = verify_sdk_archive(
+            &result["sdk_save_archive"],
+            &self.config.diagnostics_dir,
+            &req.run_id,
+            &id,
+        )?;
         let source_sheets: Vec<String> =
             serde_json::from_value(result["source_sheets"].clone()).map_err(err)?;
         if input
@@ -526,20 +571,17 @@ impl AsposeWorkerBackend {
             }
         }
         if actual_sheets != output_sheets
-            || !actual_sheets.starts_with(&expected_sheets)
+            || active >= actual_sheets.len() as u64
             || active != result["output_active_index"].as_u64().unwrap_or(u64::MAX)
         {
             return Err(err("Candidate workbook metadata verification failed"));
         }
-        if actual_sheets.len() > expected_sheets.len()
-            && (!evaluation_output
-                || actual_sheets[expected_sheets.len()..] != ["Evaluation Warning"])
-        {
-            return Err(err("Unexpected added worksheet"));
-        }
+        verify_business_roster(&actual_sheets, &expected_sheets)?;
         Ok(CandidateWorkbook {
             path: req.candidate.clone(),
             evaluation_output,
+            sdk_save_archive,
+            input_trace,
             source_active_index: result["source_active_index"]
                 .as_u64()
                 .ok_or_else(|| err("Missing source active index"))?,
@@ -563,6 +605,7 @@ impl AsposeWorkerBackend {
                     .as_f64()
                     .ok_or_else(|| err("Missing save timing"))?,
                 preserve_defaults_ms: result["preserve_defaults_ms"].as_f64().unwrap_or(0.0),
+                raw_sdk_archive_ms: result["raw_sdk_archive_ms"].as_f64(),
                 worker_ms: result["processing_ms"]
                     .as_f64()
                     .ok_or_else(|| err("Missing timing"))?,
@@ -676,6 +719,7 @@ impl DocumentConverterEngine for AsposeDocumentBackend {
                 transform_ms: 0.0,
                 save_ms: number("save_ms")?,
                 preserve_defaults_ms: 0.0,
+                raw_sdk_archive_ms: None,
                 worker_ms: number("processing_ms")?,
                 end_to_end_ms: clock.elapsed().as_secs_f64() * 1000.0,
             },
@@ -712,8 +756,139 @@ impl ModifyEngine for AsposeWorkerBackend {
     }
 }
 
+fn verify_business_roster(actual: &[String], expected: &[String]) -> Result<()> {
+    if expected.is_empty() || actual != expected {
+        return Err(err("Candidate must contain exactly the planned business worksheets"));
+    }
+    Ok(())
+}
+
 fn fingerprint(path: &Path) -> Result<Vec<u8>> {
     Ok(Sha256::digest(fs::read(path).map_err(err)?).to_vec())
+}
+
+fn hex_fingerprint(path: &Path) -> Result<String> {
+    Ok(fingerprint(path)?
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+fn trace_input(path: &Path) -> Value {
+    let before = hex_fingerprint(path).ok();
+    let names = (|| -> Result<Vec<String>> {
+        let mut zip = zip::ZipArchive::new(File::open(path).map_err(err)?).map_err(err)?;
+        let mut part = zip.by_name("xl/workbook.xml").map_err(err)?;
+        if part.size() > 64 * 1024 * 1024 {
+            return Err(err("workbook metadata exceeds audit limit"));
+        }
+        let mut xml = String::new();
+        part.read_to_string(&mut xml).map_err(err)?;
+        let document = roxmltree::Document::parse(&xml).map_err(err)?;
+        let names: Vec<String> = document
+            .descendants()
+            .filter(|n| {
+                n.has_tag_name((
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                    "sheet",
+                ))
+            })
+            .map(|n| {
+                n.attribute("name")
+                    .ok_or_else(|| err("worksheet name absent"))
+                    .map(str::to_owned)
+            })
+            .collect::<Result<_>>()?;
+        if names.is_empty() {
+            return Err(err("worksheet inventory absent"));
+        }
+        Ok(names)
+    })();
+    let stable = before.is_some() && before == hex_fingerprint(path).ok();
+    match names {
+        Ok(names) if stable => {
+            json!({"path":path,"sha256":before,"sheets":names,"sheets_status":"known", "metadata_source":"OOXML workbook part before dispatch"})
+        }
+        _ => {
+            json!({"path":path,"sha256":if stable { before } else { None },"sheets":null,"sheets_status":"unknown", "unknown_reason":if stable { "not independently readable as OOXML; XLS inventory not implemented in this adapter" } else { "input unreadable or changed during metadata capture" }})
+        }
+    }
+}
+
+fn write_input_trace<'a>(
+    directory: &Path,
+    run_id: &str,
+    request_id: &str,
+    method: &str,
+    inputs: impl Iterator<Item = &'a Path>,
+) -> Result<PathBuf> {
+    let root = directory.join("input-traces");
+    fs::create_dir_all(&root).map_err(err)?;
+    let root = fs::canonicalize(root).map_err(err)?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(err)?
+        .as_nanos();
+    let path = root.join(format!("inputs-{}-{stamp}.json", std::process::id()));
+    let inventory: Vec<_> = inputs.map(trace_input).collect();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(err)?;
+    serde_json::to_writer_pretty(&mut file, &json!({
+        "schema_version":1, "event_name":"aspose_worker_inputs_captured", "run_id":run_id,
+        "request_id":request_id,"method":method,"engine":"aspose_worker",
+        "input_scope":"worker_request_primary_and_imports", "logical_business_inputs_complete":false,
+        "unknown_business_inputs_reason":"upstream business inputs serialized into operations are not visible to this adapter",
+        "inputs":inventory
+    })).map_err(err)?;
+    file.flush().and_then(|()| file.sync_all()).map_err(err)?;
+    Ok(path)
+}
+
+fn verify_sdk_archive(
+    value: &Value,
+    diagnostics: &Path,
+    run_id: &str,
+    request_id: &str,
+) -> Result<Option<SdkSaveArchive>> {
+    if value.is_null() {
+        return Ok(None);
+    } // Older Workers do not have this capability.
+    let archive: SdkSaveArchive = serde_json::from_value(value.clone()).map_err(err)?;
+    let expected_root = fs::canonicalize(diagnostics.join("raw-sdk-save")).map_err(err)?;
+    for path in [&archive.path, &archive.manifest_path] {
+        if !path.is_absolute()
+            || fs::canonicalize(path.parent().ok_or_else(|| err("archive parent absent"))?)
+                .map_err(err)?
+                != expected_root
+        {
+            return Err(err("SDK archive outside configured evidence directory"));
+        }
+        let metadata = fs::symlink_metadata(path).map_err(err)?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(err("SDK archive is not a regular file"));
+        }
+    }
+    let hash = hex_fingerprint(&archive.path)?;
+    if archive.stage != "sdk_save_before_worker_preservation"
+        || !hash.eq_ignore_ascii_case(&archive.sha256)
+    {
+        return Err(err("SDK archive stage or hash mismatch"));
+    }
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(&archive.manifest_path).map_err(err)?).map_err(err)?;
+    if manifest["stage"] != archive.stage
+        || manifest["run_id"] != run_id
+        || manifest["request_id"] != request_id
+        || manifest["archive_sha256"]
+            .as_str()
+            .is_none_or(|s| !hash.eq_ignore_ascii_case(s))
+    {
+        return Err(err("SDK archive manifest identity mismatch"));
+    }
+    Ok(Some(archive))
 }
 fn inspect_candidate(path: &Path) -> Result<(Vec<String>, u64)> {
     let mut zip = zip::ZipArchive::new(File::open(path).map_err(err)?).map_err(err)?;

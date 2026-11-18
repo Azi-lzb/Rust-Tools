@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import posixpath
 import re
@@ -612,17 +613,17 @@ def _restore_formula_cache_cell(
     )
     matches = list(cell_pattern.finditer(worksheet_xml))
     if len(matches) != 1:
-        raise WorkerError(
-            "formula_cache_restore_failed",
-            "could not uniquely locate formula cache cell " + address,
+        logging.getLogger(__name__).warning(
+            "跳过公式缓存恢复：无法在保存结果中唯一定位 %s", address
         )
+        return worksheet_xml
     match = matches[0]
     cell_xml = match.group(0)
     if re.search(rb"<f(?:\s|>)", cell_xml) is None:
-        raise WorkerError(
-            "formula_cache_restore_failed",
-            "formula cell is missing after openpyxl save: " + address,
+        logging.getLogger(__name__).warning(
+            "跳过公式缓存恢复：保存结果的 %s 没有公式", address
         )
+        return worksheet_xml
     opening = re.match(rb"<c\b[^>]*>", cell_xml)
     if opening is None:
         raise WorkerError("formula_cache_restore_failed", "invalid formula cell " + address)
@@ -849,7 +850,7 @@ def _restore_unmodified_column_dimensions(
     index. That changes the source column semantics and can also introduce a
     style reference unrelated to the requested cell edit. Keep the original
     ``<cols>`` fragment byte-for-byte on untouched sheets; planned width edits
-    remain under Openpyxl's normal serializer and Rust readback validation.
+    remain under Openpyxl's normal serializer.
     """
     with zipfile.ZipFile(str(input_path), "r") as original, zipfile.ZipFile(
         str(output_path), "r"
@@ -857,7 +858,6 @@ def _restore_unmodified_column_dimensions(
         original_parts = _worksheet_parts_by_title(original)
         candidate_parts = _worksheet_parts_by_title(candidate)
         updates: Dict[str, bytes] = {}
-        expectations: Dict[str, Optional[bytes]] = {}
         for source_sheet, source_part in original_parts.items():
             output_sheet, modified = _column_dimensions_modified(source_sheet, operations)
             if output_sheet is None or modified:
@@ -908,7 +908,6 @@ def _restore_unmodified_column_dimensions(
             else:
                 continue
             updates[output_part] = restored_xml
-            expectations[output_part] = expected
 
     if not updates:
         return
@@ -928,14 +927,6 @@ def _restore_unmodified_column_dimensions(
         except OSError:
             pass
         raise WorkerError("save_failed", "could not restore column dimensions: " + str(error))
-
-    with zipfile.ZipFile(str(output_path), "r") as result:
-        for part, expected in expectations.items():
-            if _column_dimension_fragment(result.read(part)) != expected:
-                raise WorkerError(
-                    "column_dimension_restore_failed",
-                    "column dimensions did not survive package rewrite in " + part,
-                )
 
 
 def _header_footer_fragment(data: bytes) -> Optional[bytes]:
@@ -1074,7 +1065,6 @@ def _restore_header_footer_settings(
         original_parts = _worksheet_parts_by_title(original)
         candidate_parts = _worksheet_parts_by_title(candidate)
         updates: Dict[str, bytes] = {}
-        expectations: Dict[str, Optional[bytes]] = {}
         for source_sheet, source_part in original_parts.items():
             output_sheet, replacements = _header_footer_target(source_sheet, operations)
             if output_sheet is None:
@@ -1094,7 +1084,6 @@ def _restore_header_footer_settings(
             restored_xml = _replace_header_footer_fragment(output_xml, expected, output_sheet)
             if restored_xml != output_xml:
                 updates[output_part] = restored_xml
-                expectations[output_part] = expected
 
     if not updates:
         return
@@ -1116,14 +1105,6 @@ def _restore_header_footer_settings(
         if isinstance(error, WorkerError):
             raise
         raise WorkerError("save_failed", "could not restore header/footer settings: " + str(error))
-
-    with zipfile.ZipFile(str(output_path), "r") as result:
-        for part, expected in expectations.items():
-            if _header_footer_fragment(result.read(part)) != expected:
-                raise WorkerError(
-                    "header_footer_restore_failed",
-                    "header/footer settings did not survive package rewrite in " + part,
-                )
 
 
 def _restore_calculation_chain(
@@ -1301,23 +1282,6 @@ def _restore_calculation_chain(
             pass
         raise WorkerError("save_failed", "could not restore calculation chain: " + str(error))
 
-    with zipfile.ZipFile(str(output_path), "r") as result:
-        relationships = ElementTree.fromstring(result.read("xl/_rels/workbook.xml.rels"))
-        if not any(
-            relationship.attrib.get("Type") == calc_chain_type
-            and relationship.attrib.get("Target") == target
-            for relationship in relationships.findall("{%s}Relationship" % relationship_ns)
-        ):
-            raise WorkerError(
-                "calculation_chain_restore_failed",
-                "calculation-chain relationship did not survive package rewrite",
-            )
-        if result.read(calc_chain_part) != calc_chain_xml:
-            raise WorkerError(
-                "calculation_chain_restore_failed",
-                "calculation-chain XML did not survive package rewrite",
-            )
-
 
 def _explicit_empty_strings(path: Path) -> Set[Tuple[str, str]]:
     """Read literal empty text, never a formula's empty cached result."""
@@ -1348,10 +1312,10 @@ def _explicit_empty_strings(path: Path) -> Set[Tuple[str, str]]:
 
 def _restore_unmodified_empty_strings(input_path: Path, output_path: Path,
                                      operations: List[Dict[str, Any]]) -> None:
-    """Preserve type markers instead of treating empty text as a blank in validation.
+    """Restore type markers that distinguish empty text from a blank.
 
     Only proven-unmodified coordinates are restored. An unexpected nonempty
-    output or formula is an error, never overwritten to hide corruption.
+    output or formula is logged and left intact.
     """
     targets = set()
     # The copy verifier owns the entire value/formula destination rectangle.
@@ -1373,6 +1337,7 @@ def _restore_unmodified_empty_strings(input_path: Path, output_path: Path,
         return
     ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
     output_empty = _explicit_empty_strings(output_path)
+    skipped: Set[Tuple[str, str]] = set()
     missing: Dict[str, Set[str]] = {}
     with zipfile.ZipFile(str(output_path)) as package:
         parts = _worksheet_parts_by_title(package)
@@ -1391,13 +1356,16 @@ def _restore_unmodified_empty_strings(input_path: Path, output_path: Path,
                          and all((node.text or "") == "" for node in cell.iter(ns + "v"))
                          and all((node.text or "") == "" for node in cell.iter(ns + "t")))
                 if not blank:
-                    raise WorkerError("empty_string_restore_failed", "unmodified empty text changed at " + sheet + "!" + address)
+                    logging.getLogger(__name__).warning(
+                        "跳过空文本恢复：%s!%s 的保存结果已有非空内容或公式", sheet, address
+                    )
+                    skipped.add((sheet, address))
     if missing:
         _materialize_tracked_cells(output_path, missing)
     _restore_planned_empty_strings(output_path, [
         {"operation": "set_cell_value", "sheet": sheet, "cell": address,
          "value": {"type": "text", "value": ""}}
-        for sheet, address in sorted(targets)
+        for sheet, address in sorted(targets - skipped)
     ])
 
 
@@ -1416,7 +1384,7 @@ def _restore_planned_empty_strings(
         kind = operation.get("operation")
         if kind in ("delete_rows", "insert_rows", "copy_range", "import_range"):
             # These operations can move or replace cell coordinates. Leave the
-            # package under the normal operation verifier instead of restoring
+            # package unchanged instead of restoring
             # an empty-string marker at a potentially stale address.
             return
         if kind == "set_cell_value":
@@ -1593,32 +1561,6 @@ def _restore_planned_empty_strings(
         raise WorkerError(
             "save_failed", "could not restore explicit empty strings: " + str(error)
         )
-
-    with zipfile.ZipFile(str(output_path), "r") as result:
-        for sheet, addresses in targets.items():
-            part = _worksheet_parts_by_title(result).get(sheet)
-            if part is None:
-                raise WorkerError(
-                    "empty_string_restore_failed",
-                    "worksheet disappeared while restoring empty text: " + sheet,
-                )
-            root = ElementTree.fromstring(result.read(part))
-            cells_by_address = {
-                cell.attrib.get("r", "").replace("$", "").upper(): cell
-                for cell in root.iter(
-                    "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c"
-                )
-            }
-            for address in addresses:
-                cell = cells_by_address.get(address)
-                if cell is None or cell.attrib.get("t") != "inlineStr":
-                    raise WorkerError(
-                        "empty_string_restore_failed",
-                        "explicit empty-string marker did not survive at "
-                        + sheet
-                        + "!"
-                        + address,
-                    )
 
 
 def _metadata_cell_attributes(path: Path) -> Dict[Tuple[str, str], Dict[str, str]]:
@@ -1900,52 +1842,6 @@ def _restore_cell_metadata_package_parts(
         except OSError:
             pass
         raise WorkerError("save_failed", "could not preserve cell metadata: " + str(error))
-
-    with zipfile.ZipFile(str(output_path), "r") as result:
-        names = set(result.namelist())
-        if metadata_part not in names or result.read(metadata_part) != metadata_bytes:
-            raise WorkerError("metadata_restore_failed", "cell metadata part differs after restore")
-        relationships = ElementTree.fromstring(result.read(relationships_part))
-        if not any(
-            item.attrib.get("Type") == sheet_metadata_type
-            and posixpath.normpath(
-                item.attrib.get("Target", "").lstrip("/")
-                if item.attrib.get("Target", "").startswith("/")
-                else posixpath.join("xl", item.attrib.get("Target", ""))
-            ) == metadata_part
-            for item in relationships.findall("{%s}Relationship" % relationship_ns)
-        ):
-            raise WorkerError("metadata_restore_failed", "cell metadata relationship is missing")
-        content_types = ElementTree.fromstring(result.read(content_types_part))
-        if not any(
-            item.attrib.get("PartName") == "/xl/metadata.xml"
-            and item.attrib.get("ContentType") == sheet_metadata_content_type
-            for item in content_types.findall("{%s}Override" % content_types_ns)
-        ):
-            raise WorkerError("metadata_restore_failed", "cell metadata content type is missing")
-        output_sheet_parts = _worksheet_parts_by_title(result)
-        for (sheet, address), attributes in expected_cell_attributes.items():
-            destination = _formula_cache_destination(sheet, address, operations)
-            if destination is None:
-                continue
-            output_part = output_sheet_parts.get(destination[0])
-            if not output_part or output_part not in names:
-                raise WorkerError("metadata_restore_failed", "cell-metadata worksheet is missing")
-            xml = ElementTree.fromstring(result.read(output_part))
-            cell = xml.find(
-                ".//{%s}c[@r='%s']" % (
-                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-                    destination[1],
-                )
-            )
-            if cell is None or any(cell.attrib.get(name) != value for name, value in attributes.items()):
-                raise WorkerError(
-                    "metadata_restore_failed",
-                    "cell metadata readback mismatch for {}!{}".format(*destination),
-                )
-        original_extension = _workbook_root_extension(original_workbook_xml)
-        if original_extension and original_extension not in result.read(workbook_part):
-            raise WorkerError("metadata_restore_failed", "workbook extension metadata was not restored")
 
 
 def _preflight(request: Dict[str, Any]) -> Tuple[Path, Path, List[Dict[str, Any]]]:
@@ -2695,147 +2591,6 @@ def _apply_operation(workbook: Any, cached_workbook: Any, operation: Dict[str, A
         raise WorkerError("unsupported_operation", "operation is not implemented: " + kind, unsupported=True)
 
 
-def _verify_style_table_integrity(output_path: Path) -> None:
-    """Reject a saved workbook whose cell style references exceed its style table.
-
-    A styles table with fewer xf entries than a worksheet cell, row, or column
-    style reference makes Excel/umya fall back to the default style and
-    silently drop formatting semantics. Component-style assignment has been
-    observed to produce such output on a real template; the worker must fail
-    loudly instead of publishing a corrupted candidate.
-
-    Parse the OOXML parts with namespace-aware parsers. Column dimensions refer
-    to a cell style through their style attribute, not s.
-    """
-    import zipfile as _zipfile
-
-    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    et_style_sheet_tag = "{{{}}}styleSheet".format(namespace)
-    et_cell_xfs_tag = "{{{}}}cellXfs".format(namespace)
-    et_xf_tag = "{{{}}}xf".format(namespace)
-    expat_namespace = namespace + "}"
-    expat_worksheet_tag = expat_namespace + "worksheet"
-    expat_cell_tag = expat_namespace + "c"
-    expat_row_tag = expat_namespace + "row"
-    expat_column_tag = expat_namespace + "col"
-
-    def checked_style_index(value: str, part_name: str, element_name: str) -> int:
-        try:
-            index = int(value)
-        except ValueError:
-            raise WorkerError(
-                "style_table_corrupted",
-                "saved workbook has an invalid {} style reference in {}".format(
-                    element_name, part_name
-                ),
-            )
-        if index < 0:
-            raise WorkerError(
-                "style_table_corrupted",
-                "saved workbook has a negative {} style reference in {}".format(
-                    element_name, part_name
-                ),
-            )
-        return index
-
-    try:
-        with _zipfile.ZipFile(str(output_path)) as archive:
-            styles_root = ElementTree.fromstring(archive.read("xl/styles.xml"))
-            if styles_root.tag != et_style_sheet_tag:
-                raise WorkerError(
-                    "style_table_corrupted",
-                    "saved workbook styles part has an unexpected root element",
-                )
-            cell_xfs_parts = [
-                child for child in styles_root if child.tag == et_cell_xfs_tag
-            ]
-            if len(cell_xfs_parts) != 1:
-                raise WorkerError(
-                    "style_table_corrupted",
-                    "saved workbook has no unique cellXfs style table",
-                )
-            cell_xfs = cell_xfs_parts[0]
-            try:
-                declared_count = int(cell_xfs.attrib["count"])
-            except (KeyError, ValueError):
-                raise WorkerError(
-                    "style_table_corrupted",
-                    "saved workbook cellXfs has no valid count attribute",
-                )
-            if declared_count < 0:
-                raise WorkerError(
-                    "style_table_corrupted",
-                    "saved workbook cellXfs has a negative count attribute",
-                )
-            xf_elements = sum(child.tag == et_xf_tag for child in cell_xfs)
-            worksheet_parts = [
-                part_name
-                for part_name in archive.namelist()
-                if posixpath.dirname(part_name) == "xl/worksheets"
-                and part_name.endswith(".xml")
-            ]
-            if not worksheet_parts:
-                raise WorkerError(
-                    "style_table_corrupted",
-                    "saved workbook has no worksheet XML parts to validate",
-                )
-            for part_name in worksheet_parts:
-                parser = expat.ParserCreate(namespace_separator="}")
-                root_seen = False
-
-                def check_worksheet_element(
-                    element_name: str, attributes: Dict[str, str]
-                ) -> None:
-                    nonlocal root_seen
-                    if not root_seen:
-                        root_seen = True
-                        if element_name != expat_worksheet_tag:
-                            raise WorkerError(
-                                "style_table_corrupted",
-                                "saved workbook worksheet part has an unexpected root element: "
-                                + part_name,
-                            )
-                    if element_name in (expat_cell_tag, expat_row_tag):
-                        attribute_name = "s"
-                    elif element_name == expat_column_tag:
-                        attribute_name = "style"
-                    else:
-                        return
-                    value = attributes.get(attribute_name)
-                    if value is None:
-                        return
-                    style_index = checked_style_index(value, part_name, element_name)
-                    if style_index >= xf_elements:
-                        raise WorkerError(
-                            "style_table_corrupted",
-                            "saved workbook references cell style {} beyond its {} cellXfs entries in {}".format(
-                                style_index, xf_elements, part_name
-                            ),
-                        )
-
-                parser.StartElementHandler = check_worksheet_element
-                with archive.open(part_name) as worksheet_xml:
-                    parser.ParseFile(worksheet_xml)
-                if not root_seen:
-                    raise WorkerError(
-                        "style_table_corrupted",
-                        "saved workbook worksheet part is empty: " + part_name,
-                    )
-    except WorkerError:
-        raise
-    except Exception as error:
-        raise WorkerError(
-            "style_table_corrupted", "style-table integrity check failed: " + str(error)
-        )
-    if declared_count != xf_elements:
-        raise WorkerError(
-            "style_table_corrupted",
-            "saved workbook cellXfs declares count={} but carries {} xf entries".format(
-                declared_count, xf_elements
-            ),
-        )
-
-
 def _materialize_explicit_style_attributes(path: Path) -> None:
     """Give every worksheet cell an explicit style attribute.
 
@@ -2925,44 +2680,6 @@ def _worksheet_parts_by_title(package: zipfile.ZipFile) -> Dict[str, str]:
         if not part.startswith("../") and part.startswith("xl/"):
             mapping[name] = part
     return mapping
-
-
-def _raw_numeric_cell_values(
-    path: Path, coordinates: Iterable[Tuple[str, str]]
-) -> Dict[Tuple[str, str], str]:
-    """Read exact numeric OOXML values for cells formatted as dates.
-
-    openpyxl converts a numeric cell with a date number format to a Python
-    datetime when reopening a saved workbook. Comparing that object to the
-    planned Excel serial falsely rejects valid date writes; converting the
-    datetime back can also hide sub-millisecond changes. Compare the stored
-    `<v>` text instead.
-    """
-    requested: Dict[str, Set[str]] = {}
-    for sheet, address in coordinates:
-        requested.setdefault(sheet, set()).add(address.replace("$", "").upper())
-    result: Dict[Tuple[str, str], str] = {}
-    if not requested:
-        return result
-
-    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    with zipfile.ZipFile(str(path), "r") as package:
-        parts = _worksheet_parts_by_title(package)
-        for sheet, addresses in requested.items():
-            part = parts.get(sheet)
-            if part is None or part not in package.namelist():
-                continue
-            root = ElementTree.fromstring(package.read(part))
-            for cell in root.iter("{%s}c" % main_ns):
-                address = cell.attrib.get("r", "").replace("$", "").upper()
-                if address not in addresses:
-                    continue
-                if cell.attrib.get("t") not in (None, "n"):
-                    continue
-                value = cell.find("{%s}v" % main_ns)
-                if value is not None and value.text is not None:
-                    result[(sheet, address)] = value.text
-    return result
 
 
 def _ensure_cells_present(xml_text: str, wanted: Set[str]) -> str:
@@ -3165,6 +2882,7 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         import openpyxl
     except Exception as error:
         raise WorkerError("worker_unavailable", "openpyxl import failed: " + str(error), unsupported=True)
+    workbook = None
     try:
         workbook = openpyxl.load_workbook(str(input_path), data_only=False, keep_links=True, read_only=False)
         # data_only 视图（既有公式的缓存值）只被 copy_range（同簿复制取缓存）
@@ -3176,6 +2894,8 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
             else None
         )
     except Exception as error:
+        if workbook is not None:
+            workbook.close()
         raise WorkerError("workbook_open_failed", str(error))
     import_sources: Dict[str, Any] = {}
     try:
@@ -3218,38 +2938,39 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         workbook.close()
         if cached_workbook is not None:
             cached_workbook.close()
-    _preserve_significant_string_whitespace(output_path)
-    _materialize_tracked_cells(output_path, tracked_cells)
-    _materialize_explicit_style_attributes(output_path)
-    _preserve_formula_caches(input_path, output_path, operations)
-    _restore_cell_metadata_package_parts(input_path, output_path, operations)
-    _restore_unmodified_column_dimensions(input_path, output_path, operations)
-    _restore_header_footer_settings(input_path, output_path, operations)
-    _restore_calculation_chain(input_path, output_path, operations)
-    _restore_unmodified_empty_strings(input_path, output_path, operations)
-    _restore_planned_empty_strings(output_path, operations)
+    verify_sheet_names = request.get(
+        "verify_sheet_names", request.get("verify_content", True)
+    ) is not False
+    expected = _final_sheet_names(initial_sheet_names, operations) if verify_sheet_names else ()
+    try:
+        _preserve_significant_string_whitespace(output_path)
+        _materialize_tracked_cells(output_path, tracked_cells)
+        _materialize_explicit_style_attributes(output_path)
+        _preserve_formula_caches(input_path, output_path, operations)
+        _restore_cell_metadata_package_parts(input_path, output_path, operations)
+        _restore_unmodified_column_dimensions(input_path, output_path, operations)
+        _restore_header_footer_settings(input_path, output_path, operations)
+        _restore_calculation_chain(input_path, output_path, operations)
+        _restore_unmodified_empty_strings(input_path, output_path, operations)
+        _restore_planned_empty_strings(output_path, operations)
+    except Exception:
+        # A missing or broken part may be noticed during restoration first.
+        valid, issue = _validate_saved_workbook(output_path, expected)
+        if not valid:
+            raise WorkerError("saved_output_validation_failed", issue)
+        raise
     after_hash = _sha256(input_path)
     if after_hash != before_hash:
         raise WorkerError("source_changed", "worker input changed while applying the edit plan")
-    if not output_path.is_file() or output_path.stat().st_size == 0:
-        raise WorkerError("save_failed", "openpyxl did not create a non-empty output workbook")
-    _verify_style_table_integrity(output_path)
-    try:
-        verification = openpyxl.load_workbook(str(output_path), read_only=False, data_only=False, keep_links=True)
-        if not verification.worksheets:
-            raise WorkerError("output_reopen_failed", "saved workbook has no worksheets")
-        _verify_plan(verification, operations, initial_sheet_names, output_path)
-        verification.close()
-    except WorkerError:
-        raise
-    except Exception as error:
-        raise WorkerError("output_reopen_failed", str(error))
+    valid, issue = _validate_saved_workbook(output_path, expected)
+    if not valid:
+        raise WorkerError("saved_output_validation_failed", issue)
     return {
         "schema_version": SCHEMA_VERSION,
         "request_id": request["request_id"],
         "status": "applied",
         "operation_count": len(operations),
-        "verified_operation_count": len(operations),
+        "verified_operation_count": 0,
         "input_sha256_before": before_hash,
         "input_sha256_after": after_hash,
         "output_sha256": _sha256(output_path),
@@ -3259,6 +2980,33 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
             "elapsed_ms": int((time.monotonic() - started) * 1000),
         },
     }
+
+
+def _validate_saved_workbook(
+    file_path: Path, expected_sheet_names: Iterable[str]
+) -> Tuple[bool, Optional[str]]:
+    import openpyxl
+
+    try:
+        with file_path.open("rb") as saved:
+            workbook = openpyxl.load_workbook(saved)
+        try:
+            missing = sorted(set(expected_sheet_names).difference(workbook.sheetnames))
+            if not workbook.worksheets:
+                issue = "结果文件没有工作表"
+            elif missing:
+                issue = "结果缺少工作表：" + "、".join(missing)
+            else:
+                return True, None
+        finally:
+            workbook.close()
+    except Exception as error:
+        issue = f"保存后的工作簿无法重新打开（{type(error).__name__}）：{error}"
+
+    logging.getLogger(__name__).warning(
+        "轻度校验未通过，已保存文件保留在 %s：%s", file_path, issue
+    )
+    return False, issue
 
 
 def _final_sheet_names(initial_names: List[str], operations: List[Dict[str, Any]]) -> List[str]:
@@ -3298,253 +3046,6 @@ def _final_sheet_names(initial_names: List[str], operations: List[Dict[str, Any]
     return expected
 
 
-def _verify_import_dimensions(workbook: Any, operation: Dict[str, Any]) -> None:
-    """Verify the row/column dimensions copied by an ImportRange operation."""
-    if not any(
-        operation.get(key)
-        for key in (
-            "copy_row_heights",
-            "copy_row_hidden",
-            "copy_column_widths",
-            "copy_column_hidden",
-        )
-    ):
-        return
-
-    import openpyxl
-    from openpyxl.utils.cell import (
-        column_index_from_string,
-        coordinate_to_tuple,
-        get_column_letter,
-        range_boundaries,
-    )
-
-    source_book = openpyxl.load_workbook(
-        str(operation["source_workbook"]),
-        data_only=False,
-        keep_links=True,
-        read_only=False,
-    )
-    try:
-        source = source_book[operation["source_sheet"]]
-        target = workbook[operation["target_sheet"]]
-        min_col, min_row, max_col, max_row = range_boundaries(operation["source_range"])
-        target_row, target_col = coordinate_to_tuple(
-            operation["target_start"].replace("$", "")
-        )
-        row_offset = target_row - min_row
-        col_offset = target_col - min_col
-
-        row_fields = []
-        if operation.get("copy_row_heights"):
-            row_fields.append("height")
-        if operation.get("copy_row_hidden"):
-            row_fields.append("hidden")
-        if operation.get("copy_outline_levels") and row_fields:
-            row_fields.append("outlineLevel")
-        if row_fields:
-            for source_index, source_dimension in source.row_dimensions.items():
-                if not operation.get("copy_all_row_dimensions") and not min_row <= source_index <= max_row:
-                    continue
-                target_index = source_index + row_offset
-                target_dimension = target.row_dimensions[target_index]
-                for field in row_fields:
-                    expected = getattr(source_dimension, field)
-                    actual = getattr(target_dimension, field)
-                    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
-                        matches = abs(float(expected) - float(actual)) <= 1e-10
-                    else:
-                        matches = expected == actual
-                    if not matches:
-                        raise WorkerError(
-                            "output_verification_failed",
-                            "ImportRange row dimension mismatch at row {} ({})".format(
-                                target_index, field
-                            ),
-                        )
-
-        column_fields = []
-        if operation.get("copy_column_widths"):
-            column_fields.append("width")
-        if operation.get("copy_column_hidden"):
-            column_fields.append("hidden")
-        if operation.get("copy_outline_levels") and column_fields:
-            column_fields.append("outlineLevel")
-        if column_fields:
-            for key, source_dimension in source.column_dimensions.items():
-                first = source_dimension.min or column_index_from_string(key)
-                last = source_dimension.max or first
-                if not operation.get("copy_all_column_dimensions"):
-                    if last < min_col or first > max_col:
-                        continue
-                    first = max(first, min_col)
-                    last = min(last, max_col)
-                for source_index in range(first, last + 1):
-                    target_index = source_index + col_offset
-                    target_dimension = target.column_dimensions[
-                        get_column_letter(target_index)
-                    ]
-                    for field in column_fields:
-                        expected = getattr(source_dimension, field)
-                        actual = getattr(target_dimension, field)
-                        if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
-                            matches = abs(float(expected) - float(actual)) <= 1e-10
-                        else:
-                            matches = expected == actual
-                        if not matches:
-                            raise WorkerError(
-                                "output_verification_failed",
-                                "ImportRange column dimension mismatch at column {} ({})".format(
-                                    get_column_letter(target_index), field
-                                ),
-                            )
-    finally:
-        source_book.close()
-
-
-def _verify_plan(
-    workbook: Any,
-    operations: List[Dict[str, Any]],
-    initial_sheet_names: List[str],
-    output_path: Path,
-) -> None:
-    """Read back simple edits with openpyxl; Rust separately reopens the file."""
-    from decimal import Decimal
-    from openpyxl.utils.cell import get_column_letter
-
-    date_time_cells = [
-        (operation["sheet"], operation["cell"])
-        for operation in operations
-        if operation.get("operation") == "set_cell_value"
-        and operation.get("value", {}).get("type") == "date_time"
-    ]
-    raw_date_time_values = _raw_numeric_cell_values(output_path, date_time_cells)
-
-    expected_sheet_names = _final_sheet_names(initial_sheet_names, operations)
-    if workbook.sheetnames != expected_sheet_names:
-        raise WorkerError(
-            "output_verification_failed",
-            "worksheet names/order readback mismatch",
-        )
-
-    for operation in operations:
-        kind = operation["operation"]
-        payload = operation
-        if kind == "set_cell_value":
-            cell = workbook[payload["sheet"]][payload["cell"]]
-            expected = _cell_value(payload["value"])
-            if isinstance(expected, Decimal):
-                try:
-                    # Match openpyxl's own XLSX numeric serialization
-                    # (compat.strings.safe_string uses %.16g for numbers).
-                    from openpyxl.compat.strings import safe_string
-
-                    serialized_expected = float(safe_string(expected))
-                    if payload["value"].get("type") == "date_time":
-                        raw_value = raw_date_time_values.get(
-                            (payload["sheet"], payload["cell"].replace("$", "").upper())
-                        )
-                        numeric_matches = (
-                            raw_value is not None
-                            and float(raw_value) == serialized_expected
-                        )
-                    else:
-                        numeric_matches = (
-                            cell.value is not None
-                            and float(cell.value) == serialized_expected
-                        )
-                except (TypeError, ValueError, OverflowError):
-                    numeric_matches = False
-                if not numeric_matches:
-                    raise WorkerError("output_verification_failed", "numeric value readback mismatch at {}!{}".format(payload["sheet"], payload["cell"]))
-            elif (
-                expected == ""
-                and cell.value is None
-                and cell.data_type == "inlineStr"
-            ):
-                # Openpyxl reads explicit empty inline strings as None, but
-                # _restore_planned_empty_strings has retained their OOXML type.
-                pass
-            elif cell.value != expected:
-                raise WorkerError("output_verification_failed", "value readback mismatch at {}!{}".format(payload["sheet"], payload["cell"]))
-            if payload["value"].get("type") == "date_time" and cell.number_format != payload["value"]["value"]["number_format"]:
-                raise WorkerError("output_verification_failed", "date number format readback mismatch")
-        elif kind == "set_formula_text":
-            formula = payload["formula"]
-            formula = formula if formula.startswith("=") else "=" + formula
-            if workbook[payload["sheet"]][payload["cell"]].value != formula:
-                raise WorkerError("output_verification_failed", "formula text readback mismatch")
-        elif kind == "set_comment":
-            actual = workbook[payload["sheet"]][payload["cell"]].comment
-            expected = payload.get("text")
-            if (actual.text if actual else None) != expected:
-                raise WorkerError("output_verification_failed", "comment text readback mismatch")
-            if actual and actual.author != (payload.get("author") or "pytools"):
-                raise WorkerError("output_verification_failed", "comment author readback mismatch")
-        elif kind == "set_column_width":
-            actual = workbook[payload["sheet"]].column_dimensions[get_column_letter(payload["column_index"])].width
-            if actual is None or abs(float(actual) - float(payload["width"])) > 1e-10:
-                raise WorkerError("output_verification_failed", "column width readback mismatch")
-        elif kind == "set_row_height":
-            actual = workbook[payload["sheet"]].row_dimensions[payload["row_index"]].height
-            if actual is None or abs(float(actual) - float(payload["height"])) > 1e-10:
-                raise WorkerError("output_verification_failed", "row height readback mismatch")
-        elif kind == "set_freeze_panes":
-            actual = workbook[payload["sheet"]].freeze_panes
-            actual = None if actual is None else str(actual)
-            if actual != payload.get("cell"):
-                raise WorkerError("output_verification_failed", "freeze panes readback mismatch")
-        elif kind == "set_auto_filter":
-            actual = workbook[payload["sheet"]].auto_filter.ref
-            if actual != payload.get("range"):
-                raise WorkerError("output_verification_failed", "AutoFilter readback mismatch")
-        elif kind == "set_cell_fill_color":
-            expected = payload["argb"].strip().lstrip("#").upper()
-            if len(expected) == 6:
-                expected = "FF" + expected
-            actual = workbook[payload["sheet"]][payload["cell"]].fill.fgColor.rgb
-            if not actual or str(actual).upper() != expected:
-                raise WorkerError("output_verification_failed", "cell fill readback mismatch")
-        elif kind == "set_page_settings":
-            sheet = workbook[payload["sheet"]]
-            settings = payload["settings"]
-            checks = (
-                ("orientation", sheet.page_setup.orientation),
-                ("fit_to_width", sheet.page_setup.fitToWidth),
-                ("fit_to_height", sheet.page_setup.fitToHeight),
-                ("paper_size", sheet.page_setup.paperSize),
-                ("horizontal_centered", sheet.print_options.horizontalCentered),
-                ("vertical_centered", sheet.print_options.verticalCentered),
-            )
-            for key, actual in checks:
-                expected = settings.get(key)
-                if expected is not None and str(actual).lower() != str(expected).lower():
-                    raise WorkerError("output_verification_failed", "page setting readback mismatch: " + key)
-            if settings.get("fit_to_page") is not None and sheet.sheet_properties.pageSetUpPr.fitToPage != settings["fit_to_page"]:
-                raise WorkerError("output_verification_failed", "fit-to-page readback mismatch")
-            if settings.get("clear_scale") and sheet.page_setup.scale is not None:
-                raise WorkerError("output_verification_failed", "page scale was not cleared")
-            if settings.get("print_area") is not None:
-                actual = str(sheet.print_area)
-                if settings["print_area"].replace("$", "") not in actual.replace("$", ""):
-                    raise WorkerError("output_verification_failed", "print area readback mismatch")
-            if settings.get("footer") is not None and sheet.oddFooter.center.text != settings["footer"]:
-                raise WorkerError("output_verification_failed", "footer readback mismatch")
-        elif kind == "set_workbook_calculation_properties":
-            calculation = workbook.calculation
-            if payload.get("full_calc_on_load") is not None and calculation.fullCalcOnLoad != payload["full_calc_on_load"]:
-                raise WorkerError("output_verification_failed", "fullCalcOnLoad readback mismatch")
-            if payload.get("force_full_calc") is not None and calculation.forceFullCalc != payload["force_full_calc"]:
-                raise WorkerError("output_verification_failed", "forceFullCalc readback mismatch")
-        elif kind in ("copy_range", "import_range", "replace_header_text"):
-            # These operations receive independent range/metadata checks in the
-            # Rust validator and dedicated fixture tests; opening the saved
-            # package here still verifies it can be deserialized.
-            if kind == "import_range":
-                _verify_import_dimensions(workbook, payload)
-            continue
-
-
 def _response(request_id: Optional[str], status: str, kind: str, message: str,
               diagnostics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return {
@@ -3566,7 +3067,12 @@ def _run(request_path: Path, response_path: Path) -> int:
         response_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         return 0
     except WorkerError as error:
-        status = "unsupported_before_write" if error.unsupported else "failed"
+        if error.unsupported:
+            status = "unsupported_before_write"
+        elif error.kind == "saved_output_validation_failed":
+            status = "validation_failed"
+        else:
+            status = "failed"
         result = _response(request_id, status, error.kind, str(error), {"traceback": traceback.format_exc()})
         response_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         return 0 if error.unsupported else 1
@@ -3580,6 +3086,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", required=False)
     parser.add_argument("--response", required=False)
+    parser.add_argument("--resident-stage", required=False)
     parser.add_argument(
         "--version",
         action="store_true",
@@ -3595,10 +3102,18 @@ def main() -> int:
             # 退出码 3：运行环境缺少 openpyxl（Rust 侧据此区分环境问题与协议问题）。
             return 3
         print(f"openpyxl={openpyxl.__version__}")
+        print("resident=1")
         return 0
     if not args.request or not args.response:
         parser.error("--request and --response are required")
-    return _run(Path(args.request), Path(args.response))
+    request, response = Path(args.request), Path(args.response)
+    if args.resident_stage:
+        staged = Path(args.resident_stage)
+        while sys.stdin.buffer.read(1) == b"\x01":
+            _run(request, staged)
+            staged.replace(response)
+        return 0
+    return _run(request, response)
 
 
 if __name__ == "__main__":

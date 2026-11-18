@@ -205,7 +205,8 @@ const GLOBAL_DEFAULTS: &[(&str, &str, &str)] = &[
     ("校验计算预算上限", "", "重算时全簿共享的公式求值次数上限；留空=默认1000万；算不完会自动按回退策略处理"),
     ("校验计算轮数", "2", "重算跑几轮：1~5；第2轮起跨表动态引用（INDIRECT）才收敛；保持2即可"),
     ("校验计算剥离样式空格", "否", "是=重算前删掉工作副本里只有格式没有内容的空格子（大表更快）；否=不删"),
-    ("校验计算回退策略", "auto", "betteroffice算不动时怎么办：auto=Windows回Excel/WPS、Linux回LibreOffice；com=只回Excel/WPS；libreoffice=只回LibreOffice；none=不回退直接报错"),
+    ("校验计算回退策略", "auto", "auto=Windows回Excel/WPS、Linux不回退；com=仅回Excel/WPS；libreoffice=Linux按需启用LO回退；none=不回退直接报错"),
+    (crate::result_validation::CONFIG_KEY, "是", "是（默认）=保存后检查能否打开、预期工作表是否缺失；否=只检查能否打开。原件保护和计算结果读取始终保留"),
 ];
 
 /// Create a new configuration workbook without overwriting user data. Existing

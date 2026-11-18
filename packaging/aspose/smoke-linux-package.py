@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import select
+import shutil
 import subprocess
 import sys
 import time
@@ -78,7 +79,8 @@ with (root / "cells-worker.stderr.txt").open("w", encoding="utf-8") as stderr:
         assert response["ok"], response
         wb = openpyxl.load_workbook(candidate, data_only=True)
         assert wb["外汇合成表"]["B1"].value == 9
-        assert wb.sheetnames[-1] == "Evaluation Warning"
+        assert "外汇合成表" in wb.sheetnames
+        calculation_evaluation_sheet = "Evaluation Warning" in wb.sheetnames
         assert wb["外汇合成表"]["AA12"].value == "00123"
         wb.close()
     finally:
@@ -92,24 +94,30 @@ with (root / "cells-worker.stderr.txt").open("w", encoding="utf-8") as stderr:
     assert worker.returncode == 0
 assert sha(source) == before
 
-invoke(["convert-excel", "--config", config, "--engine", "aspose",
-        "--output-dir", root / "excel-output", source], "aspose-excel")
+rejected = invoke(["convert-excel", "--config", config, "--engine", "aspose",
+                   "--output-dir", root / "excel-output", source], "aspose-xlsx-rejection", success=False)
+assert "XLS→XLSX" in rejected.stderr
 assert sha(source) == before
-wb = openpyxl.load_workbook(root / "excel-output/formula.xlsx")
-assert wb["外汇合成表"]["B1"].value == "=SUM(A1,2)"
-assert wb["外汇合成表"]["AA12"].value == "00123"
-assert wb.sheetnames[-1] == "Evaluation Warning"
+assert not (root / "excel-output/formula.xlsx").exists()
+
+fixture = (Path(__file__).resolve().parents[2]
+           / "pytools-core/tests/fixtures/timeline/wide_summary_legacy.xls")
+legacy = root / "legacy.xls"
+shutil.copyfile(fixture, legacy)
+legacy_before = sha(legacy)
+invoke(["convert-excel", "--config", config, "--engine", "aspose",
+        "--output-dir", root / "excel-output", legacy], "aspose-xls-conversion")
+assert sha(legacy) == legacy_before
+wb = openpyxl.load_workbook(root / "excel-output/legacy.xlsx")
+assert wb.sheetnames == ["Data"]
+assert wb["Data"]["A1"].value == "Installed smoke"
+assert wb["Data"]["B2"].value == 42
 wb.close()
 
-invoke(["fx-header", "--modify-engine", "aspose", "--in-place", "auto",
-        "--output-dir", root / "header-output", source], "aspose-header")
-wb = openpyxl.load_workbook(source)
-assert wb["外汇合成表"].oddHeader.right.text == "单位：万美元"
-assert wb["外汇合成表"]["AA12"].value == "00123"
-assert wb["外汇合成表"]["A1"].value == 7
-assert wb["外汇合成表"]["B1"].value == "=SUM(A1,2)"
-assert wb.sheetnames[-1] == "Evaluation Warning"
-wb.close()
+rejected = invoke(["fx-header", "--modify-engine", "aspose", "--in-place", "auto",
+                   "--output-dir", root / "header-output", source], "aspose-header-rejection", success=False)
+assert "XLS→XLSX" in rejected.stderr
+assert sha(source) == before
 
 doc = root / "synthetic.docx"
 with zipfile.ZipFile(doc, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -117,18 +125,28 @@ with zipfile.ZipFile(doc, "w", zipfile.ZIP_DEFLATED) as archive:
     archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
     archive.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Synthetic Linux packaged Aspose.Words 00123</w:t></w:r></w:p><w:sectPr/></w:body></w:document>')
 doc_before = sha(doc)
-invoke(["convert-word", "--config", config, "--engine", "aspose",
-        "--output-dir", root / "word-output", doc], "aspose-word")
+candidate = root / "word-candidate.docx"
+request = dict(protocol_version=1, request_id="package-word", run_id="linux-package-smoke",
+               method="Convert", input=str(doc), candidate=str(candidate))
+words = subprocess.run([str(bundle / "workers/aspose-words/AsposeWordsWorker"), "--stdio"],
+                       input=json.dumps(request) + "\n", env=env, cwd=root, capture_output=True,
+                       text=True, encoding="utf-8", timeout=180)
+(root / "words-worker.stderr.txt").write_text(words.stderr, encoding="utf-8")
+assert words.returncode == 0, (words.stdout, words.stderr)
+ready, response = map(json.loads, words.stdout.splitlines())
+assert ready["ready"] and response["ok"], (ready, response)
 assert sha(doc) == doc_before
-with zipfile.ZipFile(root / "word-output/synthetic.docx") as archive:
+with zipfile.ZipFile(candidate) as archive:
     document = archive.read("word/document.xml")
     assert b"Synthetic Linux packaged Aspose.Words 00123" in document
     assert any(b"Evaluation" in archive.read(name) for name in archive.namelist() if name.endswith(".xml"))
 
 result = dict(status="PASS", platform=sys.platform, packaged_discovery=True,
               external_dotnet_or_worker_overrides=False, calculation_result=9,
-              excel_source_unchanged=True,
-              header_modified=True, word_source_unchanged=True,
-              evaluation_output_retained=True, worker_startup_ms=startup_ms)
+              legacy_xls_source_unchanged=True, xlsx_rejected=True,
+              aspose_header_rejected=True, word_worker_direct=True, word_source_unchanged=True,
+              calculation_worker_evaluation_mode=True,
+              calculation_output_evaluation_sheet=calculation_evaluation_sheet,
+              word_evaluation_output_retained=True, worker_startup_ms=startup_ms)
 (root / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 print(json.dumps(result))

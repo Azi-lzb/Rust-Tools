@@ -13,8 +13,8 @@
 //!   工作副本里的纯样式空单元格剥掉（`ooxml_patch::strip_style_only_cells`），
 //!   避免"格式刷满全列"的簿把整列引用求值范围撑到内容范围之外。一次性生效，
 //!   要么剥要么不剥。
-//! - `PYTOOLS_BO_CALC_FALLBACK`：`auto`（按平台回 COM/LibreOffice）/`com`/
-//!   `libreoffice`/`none`（超限即报错，绝不静默采用受限结果）。
+//! - `PYTOOLS_BO_CALC_FALLBACK`：`auto`（Windows 回 COM）、`com`、
+//!   `libreoffice`（Linux 显式启用）或 `none`。
 
 use std::path::Path;
 use std::time::Instant;
@@ -158,7 +158,7 @@ impl BoCalcConfig {
         .trim()
         .to_ascii_lowercase();
         let fallback_com = fallback != "none" && fallback != "libreoffice";
-        let fallback_libreoffice = fallback != "none" && fallback != "com";
+        let fallback_libreoffice = fallback == "libreoffice";
         Self {
             enabled,
             max_visits,
@@ -195,6 +195,17 @@ impl BoCalcConfig {
 /// rewritten — the fallback engines recalculate everything themselves, so a
 /// partially updated copy is safe to hand them).
 pub(crate) fn recalculate(source_copy: &Path, config: &BoCalcConfig) -> Result<BoCalcOutcome> {
+    recalculate_with_validation_scope(source_copy, config, None)
+}
+
+pub(crate) fn recalculate_with_validation_scope(
+    source_copy: &Path,
+    config: &BoCalcConfig,
+    regions: Option<&[crate::conversion_engine::NamedValidationRegionRequest]>,
+) -> Result<BoCalcOutcome> {
+    let validation_bounds = regions
+        .map(crate::conversion_engine::named_validation_bounds)
+        .transpose()?;
     let extension = source_copy
         .extension()
         .and_then(|extension| extension.to_str())
@@ -262,14 +273,31 @@ pub(crate) fn recalculate(source_copy: &Path, config: &BoCalcConfig) -> Result<B
     if budget_exhausted {
         return Err(anyhow::anyhow!(BoCalcRefusal::BudgetExhausted { limited_cells }).into());
     }
-    if name_error_cells > 0 {
+    if validation_bounds.is_none() && name_error_cells > 0 {
         return Err(
             anyhow::anyhow!(BoCalcRefusal::UnsupportedFunctions { name_error_cells }).into(),
         );
     }
-    if !result.cycle_cells.is_empty() {
+    let cycles_in_scope = result
+        .cycle_cells
+        .iter()
+        .filter(|address| {
+            validation_bounds.as_ref().is_none_or(|bounds| {
+                workbook.model().sheet(address.sheet).is_some_and(|sheet| {
+                    bounds
+                        .iter()
+                        .any(|(name, (first_row, first_col, last_row, last_col))| {
+                            sheet.name == *name
+                                && (*first_row..=*last_row).contains(&(address.cell.row + 1))
+                                && (*first_col..=*last_col).contains(&(address.cell.col + 1))
+                        })
+                })
+            })
+        })
+        .count();
+    if cycles_in_scope > 0 {
         return Err(anyhow::anyhow!(BoCalcRefusal::Unusable {
-            reason: format!("存在 {} 个循环引用格", result.cycle_cells.len())
+            reason: format!("存在 {cycles_in_scope} 个循环引用格")
         })
         .into());
     }
@@ -398,7 +426,7 @@ mod tests {
         assert!(config.max_visits.is_none());
         assert_eq!(config.rounds, 2);
         assert!(!config.strip_style_cells);
-        assert!(config.fallback_com && config.fallback_libreoffice);
+        assert!(config.fallback_com && !config.fallback_libreoffice);
     }
 
     #[test]
@@ -459,6 +487,18 @@ mod tests {
         assert_eq!(config.max_visits, None, "非法预算回落默认");
         assert_eq!(config.rounds, 2, "越界轮数回落默认 2");
         assert!(!config.strip_style_cells);
-        assert!(config.fallback_com && config.fallback_libreoffice);
+        assert!(config.fallback_com && !config.fallback_libreoffice);
+    }
+
+    #[test]
+    fn libreoffice_fallback_requires_an_explicit_selection() {
+        for value in ["auto", "com", "none", "unexpected"] {
+            let values = [("PYTOOLS_BO_CALC_FALLBACK", value)];
+            let env = env_of(&values);
+            assert!(!BoCalcConfig::from_parts(None, &env).fallback_libreoffice);
+        }
+        let env = env_of(&[("PYTOOLS_BO_CALC_FALLBACK", "libreoffice")]);
+        let config = BoCalcConfig::from_parts(None, &env);
+        assert!(config.fallback_libreoffice && !config.fallback_com);
     }
 }

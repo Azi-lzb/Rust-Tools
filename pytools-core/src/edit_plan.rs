@@ -32,21 +32,11 @@ pub fn apply_plan_file(
     platform: &str,
 ) -> Result<EditExecutionReport> {
     let plan_path = plan_path.as_ref();
-    let capability_path = capability_path.as_ref();
     let plan: ExcelEditPlan = serde_json::from_slice(
         &fs::read(plan_path).with_context(|| format!("read edit plan {}", plan_path.display()))?,
     )
     .with_context(|| format!("decode edit plan {}", plan_path.display()))?;
-    let document: CapabilityDocument = serde_json::from_slice(
-        &fs::read(capability_path)
-            .with_context(|| format!("read backend capability {}", capability_path.display()))?,
-    )
-    .with_context(|| format!("decode backend capability {}", capability_path.display()))?;
-    let capabilities = match document {
-        CapabilityDocument::Many(values) => values,
-        CapabilityDocument::One(value) => vec![value],
-    };
-    apply_plan(&plan, &capabilities, platform)
+    apply_plan_with_capability_file(&plan, capability_path, platform)
 }
 
 /// 就地执行：把 plan 的编辑结果写回目标工作簿本身。
@@ -129,6 +119,13 @@ pub fn apply_plan_with_capability_file(
         CapabilityDocument::Many(values) => values,
         CapabilityDocument::One(value) => vec![value],
     };
+    anyhow::ensure!(
+        !capabilities.iter().any(|capability| matches!(
+            capability.engine,
+            EngineId::AsposeWorker | EngineId::BetterOffice | EngineId::Composite
+        )),
+        "修改能力文件不再接受 Aspose 或 BetterOffice 修改后端，请选用 OOXML、Openpyxl 或 UMYA"
+    );
     apply_plan(plan, &capabilities, platform)
 }
 
@@ -147,14 +144,18 @@ pub(crate) fn apply_plan(
             EngineId::OoxmlPatch => {
                 backends.push(Arc::new(OoxmlHeaderTextBackend::new(capability)?))
             }
-            EngineId::OpenpyxlWorker => {
-                backends.push(Arc::new(OpenpyxlXlsxBackend::for_product_binary(
+            EngineId::OpenpyxlWorker => backends.push(Arc::new(
+                OpenpyxlXlsxBackend::for_product_binary(
                     capability,
                     std::env::current_exe()
                         .context("resolve pytools executable for bundled openpyxl runtime")?,
                     "pytools",
-                )?))
-            }
+                )?
+                .with_sheet_verification(
+                    crate::result_validation::current()
+                        != crate::result_validation::ResultValidation::Off,
+                ),
+            )),
             EngineId::RustNativeOoxml => backends.push(Arc::new(
                 excel_editor::RustNativeOoxmlBackend::new(capability)?,
             )),
@@ -174,13 +175,19 @@ pub(crate) fn apply_plan(
         !aspose || capabilities.len() == 1,
         "Aspose explicit route cannot mix fallback engines"
     );
-    let validator: Arc<dyn excel_editor::OutputValidator> = if aspose {
-        Arc::new(crate::aspose_edit::AsposePlanValidator)
-    } else {
-        Arc::new(PlanOutputValidator)
-    };
-    let modifier = ExcelModifier::new(platform, backends, validator)?
+    let validator: Arc<dyn excel_editor::OutputValidator> =
+        if aspose && crate::result_validation::check_content() {
+            Arc::new(crate::aspose_edit::AsposePlanValidator)
+        } else {
+            Arc::new(PlanOutputValidator)
+        };
+    let mut modifier = ExcelModifier::new(platform, backends, validator)?
         .with_validation_failure_observer(Arc::new(crate::review_output::ReviewPublisher));
+    if !crate::result_validation::check_content() {
+        modifier = modifier
+            .without_backend_output_validation()
+            .with_failed_candidate_retention();
+    }
     modifier.execute(plan).map_err(anyhow::Error::from)
 }
 
@@ -193,19 +200,42 @@ pub(crate) fn apply_plan_with_openpyxl_config(
     config: OpenpyxlWorkerConfig,
     platform: &str,
 ) -> Result<EditExecutionReport> {
-    let backend = OpenpyxlXlsxBackend::new(capability, config)?;
-    let modifier = ExcelModifier::new(
+    let backend = OpenpyxlXlsxBackend::new(capability, config)?.with_sheet_verification(
+        crate::result_validation::current() != crate::result_validation::ResultValidation::Off,
+    );
+    let mut modifier = ExcelModifier::new(
         platform,
         vec![Arc::new(backend)],
         Arc::new(PlanOutputValidator),
     )?;
+    if !crate::result_validation::check_content() {
+        modifier = modifier
+            .without_backend_output_validation()
+            .with_failed_candidate_retention();
+    }
     modifier.execute(plan).map_err(anyhow::Error::from)
 }
 
 struct PlanOutputValidator;
 
 impl excel_editor::OutputValidator for PlanOutputValidator {
+    fn validate_for_engine(
+        &self,
+        engine: EngineId,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
+        // The worker already reopened and validated the final saved package.
+        if engine != EngineId::OpenpyxlWorker {
+            self.validate(plan, candidate_output)?;
+        }
+        Ok(Vec::new())
+    }
+
     fn validate(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
+        if !crate::result_validation::check_content() {
+            return crate::result_validation::check_edit_plan(plan, candidate_output);
+        }
         if plan
             .operations
             .iter()

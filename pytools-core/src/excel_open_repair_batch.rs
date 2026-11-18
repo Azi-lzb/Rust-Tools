@@ -8,13 +8,8 @@
 //!   修复只作用于该副本；原始报送文件永不改写。
 //! - **无嫌疑不发布**：预检未发现问题的文件不产出副本（字节不变语义），
 //!   在报告中记为 unchanged 并给出原因。
-//! - **.xls 旧格式**：可经引擎另存为 .xlsx 后再修复（Windows=Excel/WPS COM、
-//!   Linux=LibreOffice 无头转换，由调用方按平台传入 `LegacyConversionEngine`）；
-//!   未传引擎或另存失败时记为 skipped，不尝试解析。.et 等其它格式仍 skipped。
-//!
-//! LO 另存可靠性已实测（2026-11-09，wei40.xls 787 公式 + 合成共享公式样本）：
-//! 公式文本与 COM 另存零差异、值零差异（布尔缓存值除外：LO 记 1/0、COM 记
-//! TRUE/FALSE——仅缓存表示不同，公式语义一致），两个产物 Excel 均可打开。
+//! - **.xls 旧格式**：Windows 可经 Excel/WPS COM 另存为 .xlsx 后再修复。
+//!   Linux 跳过并提示先用 4-4 的 Aspose .NET 转换。
 
 use anyhow::{Context, Result};
 use ooxml_patch::repair_excel_com_open_issues;
@@ -68,7 +63,7 @@ pub struct ExcelOpenRepairRunReport {
 pub enum LegacyConversionEngine {
     /// Windows：Excel/WPS COM（与 4-4 同一条 pywin32 路由）。
     WindowsCom,
-    /// Linux：LibreOffice 无头转换（soffice --convert-to xlsx）。
+    /// 旧调用兼容。Linux 请先在 4-4 用 Aspose 转为 XLSX。
     LinuxLibreOffice,
 }
 
@@ -95,6 +90,7 @@ fn run_excel_open_repair_batch_inner(
     legacy_engine: Option<LegacyConversionEngine>,
 ) -> Result<ExcelOpenRepairRunReport> {
     let started = Instant::now();
+    let legacy_engine = legacy_engine.filter(|engine| *engine == LegacyConversionEngine::WindowsCom);
     let files = collect_inputs(inputs, recursive)?;
     let mut report = ExcelOpenRepairRunReport {
         files_scanned: files.len(),
@@ -226,8 +222,10 @@ fn run_excel_open_repair_batch_inner(
                     }
                 }
             }
-            let hint = if is_legacy_excel {
-                ".xls 需要引擎另存为 .xlsx 后才能修复；当前未启用转换引擎（Windows 需 Excel/WPS，Linux 需 LibreOffice）"
+            let hint = if is_legacy_excel && cfg!(target_os = "linux") {
+                "Linux 4-7 修复需要 XLSX/XLSM；请先用 4-4 的 Aspose .NET 将 XLS 转成 XLSX"
+            } else if is_legacy_excel {
+                ".xls 需要先另存为 .xlsx 后才能修复；请使用 4-4 转换"
             } else {
                 "仅支持 .xlsx/.xlsm（ZIP 容器）与可另存的 .xls；其它格式不在本修复范围"
             };
@@ -405,6 +403,12 @@ pub fn run_excel_open_repair_batch_aspose(
                 "Aspose 修复仅启用 XLS/XLSX 副本；未回退 COM"
             );
             let hash = crate::file_commit::sha256_file(&input)?;
+            let desired = input.with_file_name(format!(
+                "{}-Excel修复_Aspose.xlsx",
+                input.file_stem().unwrap_or_default().to_string_lossy()
+            ));
+            let _review_origin = crate::review_output::ReviewOriginScope::enter(&input, &hash);
+            let _review_destination = crate::review_output::ReviewDestinationScope::enter(&desired);
             let stamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_nanos();
@@ -459,10 +463,6 @@ pub fn run_excel_open_repair_batch_aspose(
             // Independently reopen after both the repair and the engine Save.
             excel_reader::read_workbook(&candidate)?;
             crate::file_commit::verify_planning_snapshot(&input, Some(&hash))?;
-            let desired = input.with_file_name(format!(
-                "{}-Excel修复_Aspose.xlsx",
-                input.file_stem().unwrap_or_default().to_string_lossy()
-            ));
             anyhow::ensure!(
                 !desired.exists(),
                 "Aspose 修复目标已存在，拒绝覆盖：{}",
@@ -515,7 +515,7 @@ pub fn run_excel_open_repair_batch_aspose(
 /// 把非 ZIP 的 .xls 另存为 .xlsx（目标即 `-Excel修复` 副本路径）。
 ///
 /// Windows：Excel/WPS COM（与 4-4 同一条 pywin32 路由，经 ConversionRuntime）。
-/// Linux：LibreOffice 无头转换（soffice --convert-to xlsx），soffice 缺失时报错。
+/// Linux 的旧格式由用户先通过 4-4 转换。
 /// 转换在临时文件上进行，成功后原子改名到目标，失败时清理临时文件。
 fn convert_legacy_excel(input: &Path, target: &Path, engine: LegacyConversionEngine) -> Result<()> {
     let parent = input.parent().context("输入文件没有父目录")?;
@@ -550,43 +550,7 @@ fn convert_legacy_excel(input: &Path, target: &Path, engine: LegacyConversionEng
                 }
             }
             LegacyConversionEngine::LinuxLibreOffice => {
-                #[cfg(target_os = "linux")]
-                {
-                    let soffice =
-                        std::env::var("PYTOOLS_SOFFICE").unwrap_or_else(|_| "soffice".to_owned());
-                    let output = std::process::Command::new(soffice)
-                        .args(["--headless", "--norestore", "--convert-to", "xlsx"])
-                        .arg("--outdir")
-                        .arg(parent)
-                        .arg(input)
-                        .output()
-                        .map_err(|error| {
-                            anyhow::anyhow!("启动 LibreOffice 失败（soffice 不可用？）：{error}")
-                        })?;
-                    if !output.status.success() {
-                        anyhow::bail!(
-                            "LibreOffice 转换失败：{}",
-                            String::from_utf8_lossy(&output.stderr)
-                        );
-                    }
-                    // soffice 的产物名 = <stem>.xlsx，与暂存名不同则改名。
-                    let produced = parent.join(format!(
-                        "{stem}.xlsx",
-                        stem = input
-                            .file_stem()
-                            .and_then(|stem| stem.to_str())
-                            .context("输入文件名无法解析")?
-                    ));
-                    if produced != staging {
-                        fs::rename(&produced, &staging).with_context(|| {
-                            format!("移动 LibreOffice 转换产物 {}", produced.display())
-                        })?;
-                    }
-                }
-                #[cfg(not(target_os = "linux"))]
-                {
-                    anyhow::bail!("LibreOffice 另存仅在 Linux 可用");
-                }
+                anyhow::bail!("请先用 4-4 的 Aspose .NET 将 XLS 转成 XLSX");
             }
         }
         if !staging.is_file() || fs::metadata(&staging)?.len() == 0 {

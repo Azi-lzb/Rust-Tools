@@ -272,6 +272,71 @@ fn capability(plan: &ExcelEditPlan, python_version: &str) -> BackendCapability {
     }
 }
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires isolated openpyxl; real long-path IPC, script, import and failure protection"]
+fn windows_long_paths_cover_ipc_import_and_validation_failure_protection() -> Result<()> {
+    struct Reject;
+    impl OutputValidator for Reject {
+        fn validate(&self, _: &ExcelEditPlan, _: &Path) -> Result<()> {
+            anyhow::bail!("injected business validation failure")
+        }
+    }
+    let directory = TestDir::new("windows-long-path");
+    let mut deep = directory.0.clone();
+    for _ in 0..5 {
+        deep.push("业务 Unicode space long-path-regression-0123456789");
+    }
+    fs::create_dir_all(&deep)?;
+    assert!(deep.as_os_str().len() > 280);
+    let input = deep.join("原件.xlsx");
+    let imports = deep.join("跨簿导入.xlsx");
+    let output = deep.join("result.xlsx");
+    let script = deep.join("isolated worker.py");
+    fs::copy(worker_path(), &script)?;
+    make_source(&input)?;
+    make_import_source(&imports)?;
+    let source_bytes = fs::read(&input)?;
+    let import_bytes = fs::read(&imports)?;
+    let mut edit = plan(&input, &output, &imports, inspect_xlsx_profile(&input)?);
+    let literal = r"..\业务\literal is not a file path";
+    if let EditOperation::SetCellValue { value, .. } = &mut edit.operations[0] {
+        *value = excel_editor::CellValue::Text(literal.to_owned());
+    }
+    let config = OpenpyxlWorkerConfig::new(required_python_path(), script)?;
+    let backend = OpenpyxlXlsxBackend::new(capability(&edit, "3.1.5"), config)?;
+    let backend = std::sync::Arc::new(backend);
+    let modifier = ExcelModifier::new(
+        "wsl2-x86_64-test",
+        vec![backend.clone()],
+        std::sync::Arc::new(OpenpyxlXlsxValidator),
+    )?;
+    modifier.execute(&edit).map_err(anyhow::Error::from)?;
+    let dump = excel_reader::read_workbook(&output)?;
+    let data = dump.sheets.iter().find(|s| s.name == "Data").unwrap();
+    assert_eq!(data.values["A1"]["value"], literal);
+    assert_eq!(data.values["J1"]["value"], "imported");
+    assert_eq!(data.formulas["C1"].trim_start_matches('='), "B1*2");
+    let saved = fs::read(&output)?;
+    assert!(modifier.execute(&edit).is_err());
+    assert_eq!(fs::read(&output)?, saved);
+
+    edit.output = deep.join("rejected.xlsx");
+    let rejecting = ExcelModifier::new(
+        "wsl2-x86_64-test",
+        vec![backend],
+        std::sync::Arc::new(Reject),
+    )?;
+    assert!(rejecting.execute(&edit).is_err());
+    assert!(!edit.output.exists());
+    assert_eq!(fs::read(&input)?, source_bytes);
+    assert_eq!(fs::read(&imports)?, import_bytes);
+    assert!(!fs::read_dir(&deep)?
+        .filter_map(|e| e.ok())
+        .any(|e| e.file_name().to_string_lossy().starts_with(".openpyxl-")));
+    Ok(())
+}
+
 #[test]
 #[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
 fn print_area_row_edits_keep_layout_and_reject_tampering() -> Result<()> {
@@ -459,6 +524,62 @@ fn rust_modifier_invokes_one_batch_worker_and_preserves_source() -> Result<()> {
 
 #[test]
 #[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
+fn resident_worker_reuses_one_pid_for_independent_workbooks() -> Result<()> {
+    let python = required_python_path();
+    let dir = TestDir::new("resident");
+    let wrapper = dir.path("observe.py");
+    let receipt = dir.path("requests.txt");
+    let quoted = |path: &Path| serde_json::to_string(&path.to_string_lossy());
+    fs::write(
+        &wrapper,
+        format!(
+            "import os, runpy\nfrom pathlib import Path\n\
+             module = runpy.run_path({})\n\
+             run = module['_run']\n\
+             def observe(request, response):\n\
+             \x20   with Path({}).open('a', encoding='ascii') as log:\n\
+             \x20       print(os.getpid(), file=log)\n\
+             \x20   return run(request, response)\n\
+             run.__globals__['_run'] = observe\n\
+             raise SystemExit(module['main']())\n",
+            quoted(&worker_path())?,
+            quoted(&receipt)?,
+        ),
+    )?;
+    let import = dir.path("import.xlsx");
+    make_import_source(&import)?;
+    excel_editor::with_openpyxl_worker_reuse(|| -> Result<()> {
+        for index in 0..2 {
+            let input = dir.path(&format!("source-{index}.xlsx"));
+            let output = dir.path(&format!("output-{index}.xlsx"));
+            make_source(&input)?;
+            let bytes = fs::read(&input)?;
+            let edit = plan(&input, &output, &import, inspect_xlsx_profile(&input)?);
+            // Production constructs a backend for each workbook.
+            let backend = OpenpyxlXlsxBackend::new(
+                capability(&edit, "test"),
+                OpenpyxlWorkerConfig::new(python.clone(), &wrapper)?,
+            )?;
+            let modifier = ExcelModifier::new(
+                "wsl2-x86_64-test",
+                vec![std::sync::Arc::new(backend)],
+                std::sync::Arc::new(OpenpyxlXlsxValidator),
+            )?;
+            modifier.execute(&edit)?;
+            assert_eq!(fs::read(&input)?, bytes);
+            assert!(output.is_file());
+        }
+        Ok(())
+    })?;
+    let receipts = fs::read_to_string(receipt)?;
+    let pids: Vec<_> = receipts.lines().collect();
+    assert_eq!(pids.len(), 2);
+    assert_eq!(pids[0], pids[1]);
+    Ok(())
+}
+
+#[test]
+#[ignore = "requires an isolated openpyxl test runtime; run with --ignored"]
 fn reports_end_to_end_worker_latency_for_a_fixed_xlsx_sample() -> Result<()> {
     let python = required_python_path();
     let dir = TestDir::new("e2e-performance");
@@ -519,6 +640,7 @@ fn worker_timeout_is_terminal_and_does_not_publish_output() -> Result<()> {
          if '--version' in sys.argv:\n\
          \x20   print('pytools-openpyxl-worker protocol=1')\n\
          \x20   print('openpyxl=3.1.5')\n\
+         \x20   print('resident=1')\n\
          \x20   sys.exit(0)\n\
          time.sleep(2)\n",
     )?;
@@ -542,6 +664,15 @@ fn worker_timeout_is_terminal_and_does_not_publish_output() -> Result<()> {
         excel_editor::ExcelModifierErrorKind::BackendFailed
     );
     assert!(!output.exists());
+    let original = fs::read(&input)?;
+    let error = excel_editor::with_openpyxl_worker_reuse(|| modifier.execute(&edit_plan))
+        .expect_err("resident timeout must fail");
+    assert_eq!(
+        error.kind,
+        excel_editor::ExcelModifierErrorKind::BackendFailed
+    );
+    assert!(!output.exists());
+    assert_eq!(fs::read(&input)?, original);
     Ok(())
 }
 

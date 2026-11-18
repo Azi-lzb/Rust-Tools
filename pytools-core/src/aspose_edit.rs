@@ -24,6 +24,9 @@ pub enum ModifyMode {
     Auto,
     Openpyxl,
     Aspose,
+    Umya,
+    BetterOffice,
+    RustNative,
 }
 impl ModifyMode {
     pub fn as_str(self) -> &'static str {
@@ -31,14 +34,20 @@ impl ModifyMode {
             Self::Auto => "auto",
             Self::Openpyxl => "openpyxl",
             Self::Aspose => "aspose",
+            Self::Umya => "umya",
+            Self::BetterOffice => "betteroffice",
+            Self::RustNative => "rustnative",
         }
     }
     pub fn parse(value: &str) -> Result<Self> {
         match value {
             "auto" => Ok(Self::Auto),
             "openpyxl" => Ok(Self::Openpyxl),
-            "aspose" => Ok(Self::Aspose),
-            _ => bail!("--modify-engine 仅支持 auto、openpyxl、aspose"),
+            "aspose" => bail!("Aspose 仅保留用于 XLS→XLSX 转换，请选择 auto、openpyxl、umya 或 rustnative"),
+            "umya" => Ok(Self::Umya),
+            "betteroffice" => bail!("BetterOffice 保留用于公式计算，修改请选择 auto、openpyxl、umya 或 rustnative"),
+            "rustnative" => Ok(Self::RustNative),
+            _ => bail!("--modify-engine 仅支持 auto、openpyxl、umya、rustnative"),
         }
     }
     pub fn preflight(self) -> Result<()> {
@@ -104,6 +113,9 @@ pub fn route_override() -> Option<crate::excel_edit_router::RouteConfig> {
         ModifyMode::Auto => None,
         ModifyMode::Openpyxl => Some(RouteConfig::new(RouteMode::OpenpyxlOnly)),
         ModifyMode::Aspose => Some(RouteConfig::new(RouteMode::AsposeOnly)),
+        ModifyMode::Umya => Some(RouteConfig::new(RouteMode::UmyaOnly)),
+        ModifyMode::BetterOffice => Some(RouteConfig::new(RouteMode::BetterOfficeOnly)),
+        ModifyMode::RustNative => Some(RouteConfig::new(RouteMode::RustNativeOnly)),
     })
 }
 pub fn requested_mode() -> ModifyMode {
@@ -112,9 +124,7 @@ pub fn requested_mode() -> ModifyMode {
 /// Explicit modifiers in these menus have an XLSX-only contract. Auto retains
 /// legacy per-feature COM handling; selecting Openpyxl never implies COM.
 pub fn xlsx_only_selection() -> bool {
-    aspose_selected()
-        || route_override()
-            .is_some_and(|c| c.mode == crate::excel_edit_router::RouteMode::OpenpyxlOnly)
+    aspose_selected() || route_override().is_some()
 }
 pub fn aspose_selected() -> bool {
     route_override()
@@ -304,14 +314,50 @@ impl AsposeEditBackend {
                 let (executable, arguments) = crate::aspose_integration::worker_command()?;
                 state.engine = Some(AsposeWorkerBackend::new(WorkerConfig { executable, arguments, diagnostics_dir: diagnostics.clone(), startup_timeout: Duration::from_secs(30), request_timeout: Duration::from_secs(180) }));
             }
+            // import_range 的跨簿源也是相关输入，先于请求构造收集（ops 会 move）。
+            let import_sources: Vec<PathBuf> = ops
+                .iter()
+                .filter_map(|op| {
+                    if let WorkbookOperation::EditPlanOperation { operation } = op {
+                        if operation["operation"].as_str() == Some("import_range") {
+                            return operation["source_workbook"]
+                                .as_str()
+                                .map(PathBuf::from);
+                        }
+                    }
+                    None
+                })
+                .collect();
             let request = ModifyRequest { workbook: WorkbookRequest { run_id: state.run_id.clone(), input: plan.input.clone(), candidate }, operations: ops };
             let outcome = state.engine.as_mut().unwrap().modify(&request);
             let result = outcome.as_ref().map_err(|e| anyhow::anyhow!("Aspose 修改失败：{e}"));
             fs::create_dir_all(&diagnostics)?;
-            let mut log = fs::OpenOptions::new().create(true).append(true).open(diagnostics.join("host.jsonl"))?;
-            let event = serde_json::json!({"run_id":state.run_id,"request_id":plan.request_id,"timestamp":chrono::Utc::now().to_rfc3339(),"stage":"modify_candidate","engine":"aspose_worker","input":plan.input,"output":plan.output,"result":outcome.as_ref().ok(),"error":outcome.as_ref().err().map(ToString::to_string)});
-            writeln!(log, "{event}")?;
             let result = result?;
+            // Preserve Worker output and input traces; Rust only verifies the
+            // roster. Object sanitation belongs to the isolated Worker.
+            let mut inputs = vec![crate::aspose_post::trace_input_workbook(&plan.input)];
+            for source in &import_sources {
+                inputs.push(crate::aspose_post::trace_input_workbook(source));
+            }
+            let archive = crate::aspose_post::archive_raw_candidate(&result.path, &diagnostics)?;
+            let post = crate::aspose_post::verify_sanitized_business_sheets(
+                &result.path,
+                &result.output_sheets,
+            )?;
+            if let Err(error) = crate::aspose_post::write_trace_record(
+                &archive,
+                &state.run_id,
+                &plan.request_id,
+                "aspose_worker (Aspose.Cells .NET)",
+                result.evaluation_output,
+                &inputs,
+                &post,
+            ) {
+                eprintln!("Aspose 原始输出追溯记录写入失败：{error:#}");
+            }
+            let mut log = fs::OpenOptions::new().create(true).append(true).open(diagnostics.join("host.jsonl"))?;
+            let event = serde_json::json!({"run_id":state.run_id,"request_id":plan.request_id,"timestamp":chrono::Utc::now().to_rfc3339(),"stage":"modify_candidate","engine":"aspose_worker","input":plan.input,"output":plan.output,"raw_archive":archive.path,"raw_archive_sha256":archive.sha256,"raw_archive_stage":"worker_output_after_worker_preservation","sdk_save_archive":result.sdk_save_archive,"worker_input_trace":result.input_trace,"evaluation_sheet_post_processing":post.as_str(),"result":result,"error":outcome.as_ref().err().map(ToString::to_string)});
+            writeln!(log, "{event}")?;
             // ExcelModifier owns/reserves plan.output; never ask Worker to overwrite it.
             let mut output = fs::OpenOptions::new().write(true).truncate(true).open(&plan.output)?;
             std::io::copy(&mut fs::File::open(&result.path)?, &mut output)?;
@@ -337,10 +383,10 @@ impl EditBackend for AsposeEditBackend {
 pub(crate) struct AsposePlanValidator;
 impl OutputValidator for AsposePlanValidator {
     fn validate(&self, plan: &ExcelEditPlan, output: &Path) -> Result<()> {
-        excel_editor::OpenpyxlXlsxValidator.validate_with_evaluation_sheet(plan, output)
+        excel_editor::OpenpyxlXlsxValidator.validate_sanitized_aspose(plan, output)
     }
     fn validate_with_notes(&self, plan: &ExcelEditPlan, output: &Path) -> Result<Vec<String>> {
-        excel_editor::OpenpyxlXlsxValidator.validate_with_evaluation_sheet_and_notes(plan, output)
+        excel_editor::OpenpyxlXlsxValidator.validate_sanitized_aspose_and_notes(plan, output)
     }
 }
 

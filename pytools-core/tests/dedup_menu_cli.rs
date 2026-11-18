@@ -61,7 +61,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
     assert!(!menu_text.contains("按批注"));
 
     let source_dump = read_workbook(&source)?;
-    let config_check = run_menu(&config, "2\n1\n1\n0\n")?;
+    let config_check = run_menu(&config, "2\n1\n0\n")?;
     assert!(config_check.status.success());
     let config_check_stdout = String::from_utf8_lossy(&config_check.stdout);
     assert!(
@@ -107,7 +107,7 @@ fn interactive_dedup_menu_routes_four_v2_actions_without_committing_edits() -> R
         "in-place marking must modify the source workbook"
     );
 
-    let config_delete = run_menu(&config, "2\n2\n1\n0\n")?;
+    let config_delete = run_menu(&config, "2\n2\n0\n")?;
     assert!(config_delete.status.success());
     let delete_stdout = String::from_utf8_lossy(&config_delete.stdout);
     assert!(delete_stdout.contains("执行成功"), "{delete_stdout}");
@@ -260,7 +260,7 @@ fn configured_duplicate_check_marks_formula_workbook_in_place() -> Result<()> {
     create_duplicate_source_with_formula(&source)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu(&config, "2\n1\n1\n0\n")?;
+    let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -288,7 +288,7 @@ fn configured_duplicate_check_marks_comment_workbook_in_place() -> Result<()> {
     create_duplicate_source(&source)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu(&config, "2\n1\n1\n0\n")?;
+    let output = run_menu(&config, "2\n1\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -311,7 +311,7 @@ fn configured_duplicate_delete_refuses_formula_cache_loss() -> Result<()> {
     create_duplicate_source_with_formula(&source)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu(&config, "2\n2\n1\n0\n")?;
+    let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("执行失败"), "{stdout}");
@@ -361,7 +361,7 @@ fn interactive_dedup_append_directly_creates_a_new_target() -> Result<()> {
     create_reviewed_intermediate(&source)?;
     let source_before = fs::read(&source)?;
 
-    let menu_input = "2\n3\n1\n0\n";
+    let menu_input = "2\n3\n0\n";
     let output = run_menu_with_view(&config, &menu_input, "developer")?;
     assert!(
         output.status.success(),
@@ -449,7 +449,7 @@ fn interactive_dedup_append_repeated_run_filters_existing_target_rows() -> Resul
     create_reviewed_intermediate(&source)?;
     let source_before = fs::read(&source)?;
 
-    let first = run_menu(&config, "2\n3\n1\n0\n")?;
+    let first = run_menu(&config, "2\n3\n0\n")?;
     assert!(first.status.success());
     let first_stdout = String::from_utf8_lossy(&first.stdout);
     assert!(!first_stdout.contains("确认提交上述追加"));
@@ -462,7 +462,7 @@ fn interactive_dedup_append_repeated_run_filters_existing_target_rows() -> Resul
     );
     let target_after_first = fs::read(&target)?;
 
-    let second = run_menu(&config, "2\n3\n1\n0\n")?;
+    let second = run_menu(&config, "2\n3\n0\n")?;
     assert!(second.status.success());
     let second_stdout = String::from_utf8_lossy(&second.stdout);
     assert!(!second_stdout.contains("确认提交上述追加"));
@@ -485,7 +485,7 @@ fn interactive_dedup_append_directly_updates_existing_target_without_capability(
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
 
-    let menu_input = "2\n3\n1\n0\n";
+    let menu_input = "2\n3\n0\n";
     let output = run_menu_with_view(&config, menu_input, "developer")?;
     assert!(
         output.status.success(),
@@ -554,7 +554,7 @@ fn interactive_dedup_append_direct_preserves_comments_merges_and_names() -> Resu
     let before_names = excel_reader::read_defined_names(&target)?;
     let before_comments = excel_reader::read_ooxml_comments(&target)?;
 
-    let output = run_menu_with_view(&config, "2\n3\n1\n0\n", "developer")?;
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
     assert!(output.status.success());
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "succeeded", "{report}");
@@ -598,7 +598,7 @@ fn interactive_dedup_append_preserves_formula_cache_and_rich_features() -> Resul
     let target_before = fs::read(&target)?;
     let before = read_workbook(&target)?;
 
-    let output = run_menu_with_view(&config, "2\n3\n1\n0\n", "developer")?;
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
     assert!(output.status.success());
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "succeeded", "{report}");
@@ -636,7 +636,7 @@ fn interactive_dedup_append_direct_copies_source_formula_and_summarizes() -> Res
     create_initial_target(&target)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu(&config, "2\n3\n1\n0\n")?;
+    let output = run_menu(&config, "2\n3\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("确认提交上述追加"));
@@ -674,7 +674,7 @@ fn interactive_dedup_append_creates_missing_sheet_in_existing_target() -> Result
     workbook.save(&target)?;
     let source_before = fs::read(&source)?;
 
-    let output = run_menu_with_view(&config, "2\n3\n1\n0\n", "developer")?;
+    let output = run_menu_with_view(&config, "2\n3\n0\n", "developer")?;
     assert!(output.status.success());
     let report = output_json(&output)?;
     assert_eq!(report[0]["status"], "succeeded", "{report}");
@@ -767,7 +767,7 @@ fn interactive_dedup_append_rejects_whitespace_header_mismatch() -> Result<()> {
     let source_before = fs::read(&source)?;
     let target_before = fs::read(&target)?;
 
-    let menu_input = "2\n3\n1\n0\n";
+    let menu_input = "2\n3\n0\n";
     // 运行记录只在 developer 视图产出；菜单本身不再打印 JSON。
     let output = run_menu_with_view(&config, &menu_input, "developer")?;
     assert!(
@@ -825,7 +825,7 @@ fn interactive_dedup_append_commits_existing_target_with_matching_capability() -
         serde_json::to_vec_pretty(&capability_for(edit_plan))?,
     )?;
 
-    let menu_input = "2\n3\n1\n0\n";
+    let menu_input = "2\n3\n0\n";
     let output = run_menu_with_capability(
         &config,
         menu_input,
@@ -886,7 +886,7 @@ fn interactive_dedup_append_uses_openpyxl_without_legacy_capability() -> Result<
 
     let output = run_menu_with_capability(
         &config,
-        "2\n3\n1\n0\n",
+        "2\n3\n0\n",
         &capability_path,
         "synthetic-pt-2-5-menu-test",
     )?;
@@ -913,7 +913,7 @@ fn interactive_dedup_menu_reports_in_place_marking_without_json() -> Result<()> 
     let source = root.path().join("source.xlsx");
     create_pure_data_duplicate_source(&source)?;
 
-    let developer = run_menu_with_view(&config, "2\n1\n1\n0\n", "developer")?;
+    let developer = run_menu_with_view(&config, "2\n1\n0\n", "developer")?;
     assert!(
         developer.status.success(),
         "developer menu failed: {}",
@@ -924,7 +924,7 @@ fn interactive_dedup_menu_reports_in_place_marking_without_json() -> Result<()> 
     assert!(stdout.contains("标记重复行数：1"), "{stdout}");
     assert!(!stdout.contains("\"execution\""), "{stdout}");
 
-    let off = run_menu_with_view(&config, "2\n1\n1\n0\n", "off")?;
+    let off = run_menu_with_view(&config, "2\n1\n0\n", "off")?;
     assert!(off.status.success());
     Ok(())
 }

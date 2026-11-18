@@ -264,6 +264,8 @@ fn run_batch_sheet_rename_impl(
         let planning_started = Instant::now();
         let input_hash = sha256_file(&input)?;
         let output = sheet_rename_output_path(&input)?;
+        let _review_origin = crate::review_output::ReviewOriginScope::enter(&input, &input_hash);
+        let _review_destination = crate::review_output::ReviewDestinationScope::enter(&output);
         let candidate = candidate_path(&input)?;
         let (changes, skipped, plan) = if input_is_xls {
             let dump = read_workbook(&input).with_context(|| {
@@ -317,6 +319,7 @@ fn run_batch_sheet_rename_impl(
         }
 
         let mut candidate_owned = false;
+        let mut retain_saved_candidate = false;
         let result = (|| -> Result<(Option<EditExecutionReport>, TargetCommitReport, u128, String)> {
             verify_planning_snapshot(&input, Some(&input_hash))?;
             let editing_started = Instant::now();
@@ -374,15 +377,41 @@ fn run_batch_sheet_rename_impl(
                 drop(temporary);
                 // Windows cannot replace the source while this read handle is open.
                 drop(original);
+                let mut keep_review = |error: anyhow::Error| {
+                    if error.downcast_ref::<crate::result_validation::SavedResultIssue>().is_none() {
+                        return error;
+                    }
+                    retain_saved_candidate = true;
+                    let _origin = crate::review_output::ReviewOriginScope::enter(&input, &input_hash);
+                    let _destination = crate::review_output::ReviewDestinationScope::enter(&output);
+                    let error = crate::review_output::retain_validation_error(
+                        &input,
+                        &candidate,
+                        "rename-sheets",
+                        error,
+                    );
+                    if error.downcast_ref::<crate::review_output::ReviewSaved>().is_none() {
+                        eprintln!(
+                            "{}",
+                            crate::run_logging::terminal_line(
+                                crate::run_logging::Level::Warn,
+                                &format!("原文件未覆盖，失败候选保留在 {}", candidate.display()),
+                            )
+                        );
+                    }
+                    error
+                };
                 let engine = if input_is_xls {
                     excel_runtime
                         .rename_sheets_com_in_candidate(&candidate, &changes)
+                        .map_err(&mut keep_review)
                         .with_context(|| {
                             format!("Excel/WPS COM 工作表改名失败：{}", input.display())
                         })?
                 } else {
                     excel_runtime
                         .rename_sheets_in_candidate(&candidate, &changes)
+                        .map_err(keep_review)
                         .with_context(|| format!("Openpyxl 工作表改名失败：{}", input.display()))?;
                     "openpyxl".to_owned()
                 };
@@ -404,7 +433,7 @@ fn run_batch_sheet_rename_impl(
             commit.elapsed_ms = commit_started.elapsed().as_millis();
             Ok((execution, commit, editing_ms, engine))
         })();
-        let cleanup = if candidate_owned {
+        let cleanup = if candidate_owned && !retain_saved_candidate {
             match fs::remove_file(&candidate) {
                 Ok(()) => None,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,

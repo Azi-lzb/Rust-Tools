@@ -3423,6 +3423,14 @@ pub fn validate_wide_target_replacement_candidate(
         .replacement_workbook
         .as_ref()
         .context("wide target plan has no replacement workbook payload")?;
+    if !crate::result_validation::check_content() {
+        let mut expected = Vec::new();
+        if crate::result_validation::current() == crate::result_validation::ResultValidation::Sheets {
+            expected = excel_reader::read_sheet_names(&plan.target)?;
+            expected.extend(replacements.sheets.iter().map(|sheet| sheet.name.clone()));
+        }
+        return crate::result_validation::check_saved_sheets(&expected, &plan.candidate);
+    }
     let original = read_workbook(&plan.target)
         .with_context(|| format!("reopen wide target input {}", plan.target.display()))?;
     let staged = read_workbook(staging_workbook).with_context(|| {
@@ -3431,18 +3439,8 @@ pub fn validate_wide_target_replacement_candidate(
             staging_workbook.display()
         )
     })?;
-    let mut output = read_workbook(&plan.candidate)
+    let output = read_workbook(&plan.candidate)
         .with_context(|| format!("reopen wide target candidate {}", plan.candidate.display()))?;
-    if crate::aspose_edit::aspose_selected() {
-        anyhow::ensure!(
-            output
-                .sheets
-                .last()
-                .is_some_and(|s| s.name == "Evaluation Warning"),
-            "Aspose wide-summary candidate lost its verified evaluation marker"
-        );
-        output.sheets.pop(); // Comparison only, after the full plan validator.
-    }
     let replacement_names = replacements
         .sheets
         .iter()

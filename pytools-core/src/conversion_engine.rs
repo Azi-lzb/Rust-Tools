@@ -407,9 +407,9 @@ pub(crate) fn select_fidelity_engine(engine: &str) -> &'static str {
 
 fn select_conversion_engine(
     engine: &str,
-    source_ext: &str,
-    target: &str,
-    is_windows: bool,
+    _source_ext: &str,
+    _target: &str,
+    _is_windows: bool,
 ) -> &'static str {
     if engine != "auto" {
         return match engine {
@@ -418,19 +418,7 @@ fn select_conversion_engine(
             _ => "pywin32",
         };
     }
-    // Linux：电子表格 .xls/.xlsm/.xlsb/.et/.ett → .xlsx 由 LibreOffice 另存。
-    // 2026-11-09 实测：11 个 .xls、2 个 .xlsb、4 个真实 .et（BIFF 内容）在
-    // 公式文本与值上与 COM 零差异（布尔/=NA() 缓存表示除外），详见
-    // docs/BETTEROFFICE_VENDOR_INTEGRATION.md §5.10 / §5.11.4 / §5.11.6。
-    // 原生 WPS ET（65521）在 Linux 上仍无验证样本，Rust 侧对 et/ett 只放行
-    // BIFF 内容（见 ensure_wps_source_format_verified）。Word 仍仅 Windows。
-    if !is_windows
-        && target == "xlsx"
-        && matches!(source_ext, "xls" | "xlsm" | "xlsb" | "et" | "ett")
-    {
-        return "lo";
-    }
-    // Windows：Excel/WPS 表格与 Word/WPS 文档共用批量 pywin32 worker。
+    // Linux 的 XLS→XLSX 已在转换入口分流至 Aspose。
     "pywin32"
 }
 
@@ -450,6 +438,8 @@ pub(crate) struct PreparedValidationCopy {
     pub copied_formula_cells: usize,
     pub copied_template_sheets: Vec<String>,
     pub dependency_copy_engine: String,
+    expected_formulas: std::collections::BTreeSet<(String, String)>,
+    expected_sheets: Vec<String>,
 }
 
 /// 把模板的校验区域公式（含必要的辅助工作表）复制进工作副本。
@@ -512,11 +502,18 @@ impl ConversionRuntime {
 
     pub(crate) fn validation_bo_config(&self) -> crate::bo_calc::BoCalcConfig {
         use crate::aspose_integration::ValidationCalcMode;
-        let mut config = crate::bo_calc::BoCalcConfig::load(
-            crate::config::default_config_workbook_path().as_deref(),
-        );
+        let configured_path = self
+            .validation_execution
+            .config_path
+            .clone()
+            .or_else(crate::config::default_config_workbook_path);
+        let mut config = crate::bo_calc::BoCalcConfig::load(configured_path.as_deref());
         match self.validation_execution.mode {
-            ValidationCalcMode::Auto => {}
+            ValidationCalcMode::Auto => {
+                if cfg!(target_os = "linux") {
+                    config.enabled = true;
+                }
+            }
             ValidationCalcMode::BetterOffice => {
                 config.enabled = true;
                 config.fallback_com = false;
@@ -692,6 +689,24 @@ impl ConversionRuntime {
         candidate: &Path,
         deletions: &[(String, u32, u32)],
     ) -> Result<serde_json::Value> {
+        self.request_delete_rows_com(candidate, deletions, false)
+    }
+
+    /// Return an explicit business-validation result after a completed Save.
+    pub fn delete_report_rows_com(
+        &mut self,
+        candidate: &Path,
+        deletions: &[(String, u32, u32)],
+    ) -> Result<serde_json::Value> {
+        self.request_delete_rows_com(candidate, deletions, true)
+    }
+
+    fn request_delete_rows_com(
+        &mut self,
+        candidate: &Path,
+        deletions: &[(String, u32, u32)],
+        report_validation_issue: bool,
+    ) -> Result<serde_json::Value> {
         #[cfg(windows)]
         {
             ensure!(
@@ -716,19 +731,46 @@ impl ConversionRuntime {
                     "op": "delete_rows_com",
                     "candidate": candidate,
                     "deletions": deletions,
+                    "report_validation_issue": report_validation_issue,
                 }),
                 "Excel/WPS COM 删行",
             )
         }
         #[cfg(not(windows))]
         {
-            let _ = (candidate, deletions);
+            let _ = (candidate, deletions, report_validation_issue);
             bail!("删行的 .xls 处理需要 Windows Excel/WPS COM")
         }
     }
 
     /// Apply PyCode's 5-4 COM header algorithm to an isolated legacy `.xls`
     /// candidate through Excel/WPS COM.
+    pub(crate) fn extract_static_print_layout(
+        &mut self,
+        source: &Path,
+        output: &Path,
+    ) -> Result<serde_json::Value> {
+        #[cfg(windows)]
+        {
+            if self.pywin32.is_none() {
+                self.pywin32 = Some(PythonExcelWorker::start()?);
+            }
+            self.pywin32.as_mut().expect("worker initialized").request(
+                &serde_json::json!({
+                    "op": "static_print_layout_com",
+                    "source": source,
+                    "output": output,
+                }),
+                "3-1 Excel/WPS COM 版式提取",
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (source, output);
+            bail!("静态打印 COM 版式提取需要 Windows Excel/WPS COM")
+        }
+    }
+
     pub fn fx_header_com(&mut self, candidate: &Path) -> Result<serde_json::Value> {
         #[cfg(windows)]
         {
@@ -754,14 +796,11 @@ impl ConversionRuntime {
         }
     }
 
-    /// Append typed 2-D rows to a sheet in an isolated legacy `.xls` target
-    /// candidate through Excel/WPS COM (2-3 append to .xls target).
-    pub fn append_rows_com(
+    /// Apply the validated 2-3 cell operations to an isolated BIFF8 candidate.
+    pub(crate) fn append_xls_operations(
         &mut self,
         candidate: &Path,
-        sheet: &str,
-        start_row: u32,
-        rows: &[Vec<serde_json::Value>],
+        operations: &[excel_editor::EditOperation],
     ) -> Result<serde_json::Value> {
         #[cfg(windows)]
         {
@@ -772,24 +811,22 @@ impl ConversionRuntime {
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("xls")),
                 "追加 COM 路由要求 .xls 候选"
             );
-            ensure!(!rows.is_empty(), "追加 COM 路由没有数据行");
+            ensure!(!operations.is_empty(), "追加 COM 路由没有数据行");
             if self.pywin32.is_none() {
                 self.pywin32 = Some(PythonExcelWorker::start()?);
             }
             self.pywin32.as_mut().expect("worker initialized").request(
                 &serde_json::json!({
-                    "op": "append_rows_com",
+                    "op": "append_xls_operations",
                     "candidate": candidate,
-                    "sheet": sheet,
-                    "start_row": start_row,
-                    "rows": rows,
+                    "operations": operations,
                 }),
                 "2-3 Excel/WPS COM 去重追加",
             )
         }
         #[cfg(not(windows))]
         {
-            let _ = (candidate, sheet, start_row, rows);
+            let _ = (candidate, operations);
             bail!("2-3 的 .xls 目标追加需要 Windows Excel/WPS COM")
         }
     }
@@ -807,10 +844,21 @@ impl ConversionRuntime {
             let changes = changes.iter().map(|(old_name, new_name)| {
                 serde_json::json!({"old_name": old_name, "new_name": new_name})
             }).collect::<Vec<_>>();
+            let verify_sheet_names =
+                crate::result_validation::current() != crate::result_validation::ResultValidation::Off;
             let response = self.pywin32.as_mut().expect("worker initialized").request(
-                &serde_json::json!({"op": "rename_sheets", "candidate": candidate.to_string_lossy(), "changes": changes}),
+                &serde_json::json!({
+                    "op": "rename_sheets",
+                    "candidate": candidate.to_string_lossy(),
+                    "changes": changes,
+                    "verify_sheet_names": verify_sheet_names,
+                    "verify_content": verify_sheet_names,
+                }),
                 "工作表改名",
             )?;
+            if let Some(issue) = response["validation_issue"].as_str() {
+                return Err(crate::result_validation::SavedResultIssue(issue.to_owned()).into());
+            }
             ensure!(
                 response["validation"]["verified"].as_bool() == Some(true),
                 "工作表改名未通过回读校验"
@@ -851,6 +899,9 @@ impl ConversionRuntime {
                 }),
                 "Excel/WPS COM 工作表改名",
             )?;
+            if let Some(issue) = response["validation_issue"].as_str() {
+                return Err(crate::result_validation::SavedResultIssue(issue.to_owned()).into());
+            }
             ensure!(
                 response["validation"]["verified"].as_bool() == Some(true),
                 "Excel/WPS COM 工作表改名未通过回读校验"
@@ -921,10 +972,22 @@ impl ConversionRuntime {
         // 副本口径就不一致，公式文本比对会报"重算改变公式"的假阳性。
         // 该修复也顺带处理表名引号与矛盾冻结窗格，失败不阻断计算。
         ooxml_patch::repair_excel_com_open_issues(source_copy);
+        let expected_formulas = named_validation_formula_caches(source_copy, regions)?
+            .into_keys()
+            .collect();
+        let expected_sheets = if crate::result_validation::current()
+            == crate::result_validation::ResultValidation::Sheets
+        {
+            excel_reader::read_sheet_names(source_copy)?
+        } else {
+            Vec::new()
+        };
         Ok(PreparedValidationCopy {
             copied_formula_cells: copied.cells_with_formula,
             copied_template_sheets: copied.sheets_copied,
             dependency_copy_engine,
+            expected_formulas,
+            expected_sheets,
         })
     }
 
@@ -962,9 +1025,7 @@ impl ConversionRuntime {
         prepared: &PreparedValidationCopy,
         outcome: &crate::bo_calc::BoCalcOutcome,
     ) -> Result<NamedValidationCalculation> {
-        let workbook = read_workbook(source_copy)
-            .context("betteroffice 批量重算后使用 Calamine 回读公式缓存失败")?;
-        let cells = extract_named_validation_cells(&workbook, regions)?;
+        let cells = read_named_validation_results(source_copy, regions, prepared)?;
         Ok(NamedValidationCalculation {
             application: outcome.application.to_owned(),
             cells,
@@ -999,48 +1060,35 @@ impl ConversionRuntime {
                 .as_mut()
                 .expect("Aspose initialized")
                 .calculate_copy(source_copy, regions)?;
-            let workbook =
-                read_workbook(source_copy).context("Aspose 重算后 Calamine 回读校验缓存失败")?;
             return Ok(NamedValidationCalculation {
                 application: "Aspose.Cells .NET（评估模式；副本保留评估工作表）".to_owned(),
-                cells: extract_named_validation_cells(&workbook, regions)?,
+                cells: read_named_validation_results(source_copy, regions, prepared)?,
                 copied_formula_cells: prepared.copied_formula_cells,
                 copied_template_sheets: prepared.copied_template_sheets.clone(),
                 dependency_copy_engine: prepared.dependency_copy_engine.clone(),
             });
         }
-        let dependency_copy_engine = prepared.dependency_copy_engine.clone();
-        let copied = ooxml_patch::CellRegionCopyReport {
-            cells_with_formula: prepared.copied_formula_cells,
-            sheets_copied: prepared.copied_template_sheets.clone(),
-            ..ooxml_patch::CellRegionCopyReport::default()
-        };
         if let Some(reason) = forced_fallback {
             // 批量阶段已判定 betteroffice 不可采用：直接交给平台引擎整簿重算。
             return self.recalculate_named_validation_regions_platform(
                 source_copy,
                 regions,
-                copied,
-                dependency_copy_engine,
+                prepared,
                 Some(reason),
             );
         }
         // 配置优先级：config.xlsx 全局配置（校验计算* 键）> 环境变量 > 默认。
         let bo_config = self.validation_bo_config();
         if bo_config.enabled {
-            match crate::bo_calc::recalculate(source_copy, &bo_config) {
-                Ok(outcome) => {
-                    let workbook = read_workbook(source_copy)
-                        .context("betteroffice 重算后使用 Calamine 回读公式缓存失败")?;
-                    let cells = extract_named_validation_cells(&workbook, regions)?;
-                    return Ok(NamedValidationCalculation {
-                        application: outcome.application.to_owned(),
-                        cells,
-                        copied_formula_cells: prepared.copied_formula_cells,
-                        copied_template_sheets: prepared.copied_template_sheets.clone(),
-                        dependency_copy_engine,
-                    });
-                }
+            match crate::bo_calc::recalculate_with_validation_scope(
+                source_copy,
+                &bo_config,
+                Some(regions),
+            )
+            .and_then(|outcome| {
+                Self::calculation_from_batch_success(source_copy, regions, prepared, &outcome)
+            }) {
+                Ok(calculation) => return Ok(calculation),
                 Err(refusal) => {
                     let refusal_reason = format!("{:#}", refusal);
                     if !bo_config.fallback_available() {
@@ -1051,20 +1099,13 @@ impl ConversionRuntime {
                     return self.recalculate_named_validation_regions_platform(
                         source_copy,
                         regions,
-                        copied,
-                        dependency_copy_engine,
+                        prepared,
                         Some(format!("betteroffice 回退（{refusal_reason}）")),
                     );
                 }
             }
         }
-        self.recalculate_named_validation_regions_platform(
-            source_copy,
-            regions,
-            copied,
-            dependency_copy_engine,
-            None,
-        )
+        self.recalculate_named_validation_regions_platform(source_copy, regions, prepared, None)
     }
 
     /// The platform engine branch: Excel/WPS COM on Windows, LibreOffice on
@@ -1074,8 +1115,7 @@ impl ConversionRuntime {
         &mut self,
         source_copy: &Path,
         regions: &[NamedValidationRegionRequest],
-        copied: ooxml_patch::CellRegionCopyReport,
-        dependency_copy_engine: String,
+        prepared: &PreparedValidationCopy,
         fallback_reason: Option<String>,
     ) -> Result<NamedValidationCalculation> {
         let decorate = |application: String| match &fallback_reason {
@@ -1090,23 +1130,27 @@ impl ConversionRuntime {
             if self.pywin32.is_none() {
                 self.pywin32 = Some(PythonExcelWorker::start()?);
             }
-            let calculation = self
+            let application = self
                 .pywin32
                 .as_mut()
                 .expect("pywin32 worker initialized")
                 .recalculate_named_validation_regions(source_copy, regions)?;
             Ok(NamedValidationCalculation {
-                application: decorate(calculation.application),
-                cells: calculation.cells,
-                copied_formula_cells: copied.cells_with_formula,
-                copied_template_sheets: copied.sheets_copied,
-                dependency_copy_engine,
+                application: decorate(application),
+                cells: read_named_validation_results(source_copy, regions, prepared)?,
+                copied_formula_cells: prepared.copied_formula_cells,
+                copied_template_sheets: prepared.copied_template_sheets.clone(),
+                dependency_copy_engine: prepared.dependency_copy_engine.clone(),
             })
         }
         #[cfg(not(windows))]
         {
             #[cfg(target_os = "linux")]
             {
+                ensure!(
+                    fallback_reason.is_some() && self.validation_bo_config().fallback_available(),
+                    "Linux 校验默认使用 BetterOffice；LibreOffice 需显式配置为回退"
+                );
                 if self.libreoffice_calculator.is_none() {
                     self.libreoffice_calculator = Some(LibreOfficeCalcWorker::start()?);
                 }
@@ -1114,20 +1158,18 @@ impl ConversionRuntime {
                     .as_mut()
                     .expect("LibreOffice calculator initialized")
                     .recalculate(source_copy)?;
-                let workbook = read_workbook(source_copy)
-                    .context("LibreOffice 重算后使用 Calamine 回读公式缓存失败")?;
-                let cells = extract_named_validation_cells(&workbook, regions)?;
+                let cells = read_named_validation_results(source_copy, regions, prepared)?;
                 Ok(NamedValidationCalculation {
                     application: decorate("LibreOffice Calc".to_owned()),
                     cells,
-                    copied_formula_cells: copied.cells_with_formula,
-                    copied_template_sheets: copied.sheets_copied,
-                    dependency_copy_engine,
+                    copied_formula_cells: prepared.copied_formula_cells,
+                    copied_template_sheets: prepared.copied_template_sheets.clone(),
+                    dependency_copy_engine: prepared.dependency_copy_engine.clone(),
                 })
             }
             #[cfg(not(target_os = "linux"))]
             {
-                let _ = (copied, decorate);
+                let _ = (prepared, decorate);
                 bail!("校验区域公式重算仅在 Windows（Excel/WPS COM）和 Linux（LibreOffice）提供")
             }
         }
@@ -1646,6 +1688,7 @@ pub(crate) struct NamedValidationCellResult {
     pub sheet: String,
     pub address: String,
     pub value: String,
+    pub calculation_issue: Option<&'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -1733,7 +1776,7 @@ pub(crate) fn named_validation_calculation_engine() -> &'static str {
     }
     #[cfg(target_os = "linux")]
     {
-        "LibreOffice Calc"
+        "BetterOffice"
     }
     #[cfg(not(any(windows, target_os = "linux")))]
     {
@@ -1772,58 +1815,91 @@ pub(crate) fn ensure_aspose_validation_functions_supported(
     Ok(())
 }
 
+pub(crate) fn named_validation_bounds(
+    regions: &[NamedValidationRegionRequest],
+) -> Result<Vec<(&str, (u32, u32, u32, u32))>> {
+    regions
+        .iter()
+        .map(|region| {
+            Ok((
+                region.source_sheet.as_str(),
+                parse_named_validation_region(&region.address)?,
+            ))
+        })
+        .collect()
+}
+
+fn named_validation_formula_caches(
+    path: &Path,
+    regions: &[NamedValidationRegionRequest],
+) -> Result<std::collections::BTreeMap<(String, String), ooxml_patch::FormulaCacheState>> {
+    let bounds = named_validation_bounds(regions)?;
+    let sheets = bounds.iter().map(|(name, _)| *name).collect();
+    let cached = ooxml_patch::read_formula_cache_states(path, &sheets)
+        .context("读取校验区域已保存的公式结果失败")?;
+    let mut selected = std::collections::BTreeMap::new();
+    for (name, cells) in cached {
+        for (address, state) in cells {
+            if bounds.iter().any(|(sheet, area)| {
+                *sheet == name && named_validation_cell_in_bounds(&address, *area)
+            }) {
+                selected.insert((name.clone(), address), state);
+            }
+        }
+    }
+    Ok(selected)
+}
+
+fn read_named_validation_results(
+    path: &Path,
+    regions: &[NamedValidationRegionRequest],
+    prepared: &PreparedValidationCopy,
+) -> Result<Vec<NamedValidationCellResult>> {
+    let actual = excel_reader::read_sheet_names(path).context("回读校验区域计算结果失败")?;
+    crate::result_validation::check_sheet_roster(&prepared.expected_sheets, &actual)?;
+    let cached = named_validation_formula_caches(path, regions)?;
+    extract_named_validation_cells(&cached, &prepared.expected_formulas, regions)
+}
+
 fn extract_named_validation_cells(
-    workbook: &WorkbookDump,
+    cached: &std::collections::BTreeMap<(String, String), ooxml_patch::FormulaCacheState>,
+    expected: &std::collections::BTreeSet<(String, String)>,
     regions: &[NamedValidationRegionRequest],
 ) -> Result<Vec<NamedValidationCellResult>> {
+    use ooxml_patch::FormulaCacheState;
+    let positions = cached
+        .keys()
+        .chain(expected)
+        .collect::<std::collections::BTreeSet<_>>();
     let mut matches = Vec::new();
     for region in regions {
-        let sheet = workbook
-            .sheets
-            .iter()
-            .find(|sheet| sheet.name == region.source_sheet)
-            .with_context(|| format!("LibreOffice 重算结果缺少工作表 {:?}", region.source_sheet))?;
-        ensure!(
-            sheet.formula_status == "read_by_calamine",
-            "Calamine 无法读取工作表 {:?} 的公式位置：{}",
-            region.source_sheet,
-            sheet.formula_status
-        );
-        let bounds = parse_named_validation_region(&region.address).with_context(|| {
-            format!(
-                "不支持校验区域地址 {:?}（工作表 {:?}）",
-                region.address, region.source_sheet
-            )
-        })?;
-        for (address, formula) in &sheet.formulas {
-            // Calamine's worksheet_formula API returns formula text without
-            // Excel's leading '=' (unlike our JSON fixtures). Any non-empty
-            // formula at a validation-region cell is eligible for keyword
-            // extraction once its cached value is available.
-            if formula.trim().is_empty() || !named_validation_cell_in_bounds(address, bounds) {
+        let bounds = parse_named_validation_region(&region.address)?;
+        for position in &positions {
+            let (sheet, address) = *position;
+            if sheet != &region.source_sheet || !named_validation_cell_in_bounds(address, bounds) {
                 continue;
             }
-            let Some(value) = sheet
-                .values
-                .get(address)
-                .filter(|value| {
-                    value.get("type").and_then(serde_json::Value::as_str) == Some("string")
-                })
-                .and_then(|value| value.get("value"))
-                .and_then(serde_json::Value::as_str)
-            else {
-                continue;
+            let (value, calculation_issue) = match cached.get(*position) {
+                Some(FormulaCacheState::Text(text))
+                    if ["错", "硬性", "软性", "校验失败"]
+                        .iter()
+                        .any(|keyword| text.contains(keyword)) =>
+                {
+                    (text.clone(), None)
+                }
+                Some(FormulaCacheState::Error(error)) => (error.clone(), Some("公式计算错误")),
+                Some(FormulaCacheState::Missing) => {
+                    ("该公式没有已保存的计算结果".to_owned(), Some("结果未保存"))
+                }
+                None => ("计算副本中未找到该公式".to_owned(), Some("公式缺失")),
+                _ => continue,
             };
-            if ["错", "硬性", "软性", "校验失败"]
-                .iter()
-                .any(|keyword| value.contains(keyword))
-            {
-                matches.push(NamedValidationCellResult {
-                    sheet: region.source_sheet.clone(),
-                    address: address.clone(),
-                    value: value.to_owned(),
-                });
-            }
+            matches.push(NamedValidationCellResult {
+                sheet: sheet.clone(),
+                address: address.clone(),
+                value,
+                calculation_issue,
+            });
         }
     }
     Ok(matches)
@@ -1976,7 +2052,58 @@ impl PythonExcelWorker {
         {
             bail!("pywin32 worker 已退出（状态：{status}）");
         }
-        serde_json::to_writer(&mut self.input, request)
+        let candidate = if crate::result_validation::check_content() {
+            None
+        } else {
+            match request["op"].as_str() {
+                Some(
+                    "rename_sheets_com"
+                    | "village_split_com"
+                    | "institution_normalize_com"
+                    | "duplicate_mark_com"
+                    | "delete_rows_com"
+                    | "fx_header_com"
+                    | "append_xls_operations",
+                ) => request["candidate"].as_str(),
+                Some("rural_loan_com") => request["current_candidate"].as_str(),
+                _ => None,
+            }
+            .map(PathBuf::from)
+        };
+        let expected = if let Some(candidate) = candidate.as_deref().filter(|_| {
+            crate::result_validation::current()
+                == crate::result_validation::ResultValidation::Sheets
+        }) {
+            let mut names = excel_reader::read_sheet_names(candidate)?;
+            if let Some(changes) = request["changes"].as_array() {
+                for change in changes {
+                    if let (Some(old), Some(new)) =
+                        (change["old_name"].as_str(), change["new_name"].as_str())
+                    {
+                        if let Some(name) = names.iter_mut().find(|name| name.as_str() == old) {
+                            *name = new.to_owned();
+                        }
+                    }
+                }
+            }
+            if let Some(operations) = request["operations"].as_array() {
+                names.extend(
+                    operations
+                        .iter()
+                        .filter(|operation| operation["operation"] == "create_sheet")
+                        .filter_map(|operation| operation["name"].as_str())
+                        .map(str::to_owned),
+                );
+            }
+            names
+        } else {
+            Vec::new()
+        };
+        let mut request = std::borrow::Cow::Borrowed(request);
+        if candidate.is_some() {
+            request.to_mut()["verify_content"] = serde_json::Value::Bool(false);
+        }
+        serde_json::to_writer(&mut self.input, request.as_ref())
             .with_context(|| format!("写入 {what} 请求失败"))?;
         self.input
             .write_all(b"\n")
@@ -1989,7 +2116,7 @@ impl PythonExcelWorker {
             .read_line(&mut line)
             .with_context(|| format!("读取 {what} 结果失败"))?;
         ensure!(bytes > 0, "pywin32 worker 未返回{what}结果");
-        let response: serde_json::Value =
+        let mut response: serde_json::Value =
             serde_json::from_str(&line).with_context(|| format!("{what}结果不是有效 JSON"))?;
         ensure!(
             response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
@@ -2003,6 +2130,16 @@ impl PythonExcelWorker {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("worker 未提供错误详情")
         );
+        if let Some(candidate) = candidate {
+            if let Err(error) = crate::result_validation::check_saved_sheets(&expected, &candidate)
+            {
+                response["verified"] = serde_json::Value::Bool(false);
+                if response["validation"].is_object() {
+                    response["validation"]["verified"] = serde_json::Value::Bool(false);
+                }
+                response["validation_issue"] = serde_json::Value::String(format!("{error:#}"));
+            }
+        }
         Ok(response)
     }
 
@@ -2094,83 +2231,21 @@ impl PythonExcelWorker {
         &mut self,
         source_copy: &Path,
         regions: &[NamedValidationRegionRequest],
-    ) -> Result<NamedValidationCalculation> {
-        if let Some(status) = self
-            .child
-            .try_wait()
-            .context("检查 pywin32 worker 进程状态失败")?
-        {
-            bail!("pywin32 worker 已退出（状态：{status}）");
-        }
-        let request = serde_json::json!({
-            "op": "recalculate_named_validation",
-            "source_copy": source_copy.to_string_lossy(),
-            "regions": regions,
-        });
-        serde_json::to_writer(&mut self.input, &request)
-            .context("写入校验区域 COM 重算请求失败")?;
-        self.input
-            .write_all(b"\n")
-            .and_then(|()| self.input.flush())
-            .context("发送校验区域 COM 重算请求失败")?;
-
-        let mut line = String::new();
-        let bytes = self
-            .output
-            .read_line(&mut line)
-            .context("读取校验区域 COM 重算结果失败")?;
-        ensure!(bytes > 0, "pywin32 worker 未返回校验区域重算结果");
-        let response: serde_json::Value = serde_json::from_str(&line)
-            .context("pywin32 worker 返回的校验区域结果不是有效 JSON")?;
-        ensure!(
-            response.get("ok").and_then(serde_json::Value::as_bool) == Some(true),
-            "校验区域 COM 重算失败（阶段：{}）：{}",
-            response
-                .get("stage")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("未知阶段"),
-            response
-                .get("error")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("worker 未提供错误详情")
-        );
-        let application = response
-            .get("application")
-            .and_then(serde_json::Value::as_str)
-            .context("校验区域 COM 结果未报告 Excel/WPS 应用")?
-            .to_owned();
-        let cells = response
-            .get("cells")
-            .and_then(serde_json::Value::as_array)
-            .context("校验区域 COM 结果缺少单元格数组")?
-            .iter()
-            .map(|cell| {
-                Ok(NamedValidationCellResult {
-                    sheet: cell
-                        .get("sheet")
-                        .and_then(serde_json::Value::as_str)
-                        .context("校验结果缺少工作表名")?
-                        .to_owned(),
-                    address: cell
-                        .get("address")
-                        .and_then(serde_json::Value::as_str)
-                        .context("校验结果缺少单元格地址")?
-                        .to_owned(),
-                    value: cell
-                        .get("value")
-                        .and_then(serde_json::Value::as_str)
-                        .context("校验结果缺少公式文本")?
-                        .to_owned(),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(NamedValidationCalculation {
-            application,
-            cells,
-            copied_formula_cells: 0,
-            copied_template_sheets: Vec::new(),
-            dependency_copy_engine: "由调用方报告".to_owned(),
-        })
+    ) -> Result<String> {
+        let response = self.request(
+            &serde_json::json!({
+                "op": "recalculate_named_validation",
+                "source_copy": source_copy.to_string_lossy(),
+                "regions": regions,
+                // Every engine's saved results are read through the same Rust path.
+                "collect_cells": false,
+            }),
+            "校验区域 COM 重算",
+        )?;
+        response["application"]
+            .as_str()
+            .map(str::to_owned)
+            .context("校验区域 COM 结果未报告 Excel/WPS 应用")
     }
 }
 
@@ -2307,11 +2382,9 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
         engine == "auto" || engine == "lo" || engine == "com" || engine == "pywin32",
         "engine must be auto, lo, com or pywin32"
     );
-    // LibreOffice（lo）仅用于 Linux 电子表格 .xls/.xlsm → .xlsx（2026-11-09
-    // 实测与 COM 另存一致，见 docs §5.10）；Word 与 WPS 原生格式仍仅 Windows。
     ensure!(
-        engine != "lo" || target == "xlsx",
-        "LibreOffice conversion is available for spreadsheet .xls/.xlsm -> .xlsx on Linux; Word targets require Windows pywin32"
+        engine != "lo",
+        "LibreOffice 不用于格式转换；XLS→XLSX 请使用 4-4 的 Aspose .NET"
     );
     ensure!(
         input.is_file(),
@@ -2328,9 +2401,9 @@ pub(crate) fn run_fidelity_conversion_with_runtime(
             || (target == "docx" && matches!(source_ext.as_str(), "doc" | "wps" | "wpt")),
         "unsupported conversion: .{source_ext} -> .{target}"
     );
-    if !cfg!(windows) && (engine == "pywin32" || target == "docx") {
+    if !cfg!(windows) {
         bail!(
-            "Office format conversion on Linux uses LibreOffice for spreadsheet .xls/.xlsm/.xlsb/.et/.ett -> .xlsx; Word targets require Windows pywin32"
+            "该功能需要外部引擎: Excel/Word COM conversion requires Windows with Microsoft Office or WPS installed"
         );
     }
     if let Some(parent) = output.parent() {
@@ -2954,7 +3027,7 @@ fn locate_converted(temp: &Path, target: &str) -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("conversion produced no .{target} output"))
 }
 
-fn unique_temp_dir(parent: &Path) -> Result<PathBuf> {
+pub(crate) fn unique_temp_dir(parent: &Path) -> Result<PathBuf> {
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     for i in 0..100 {
         let path = parent.join(format!(
@@ -3207,7 +3280,7 @@ fn csv_column_name(mut column: usize) -> String {
     name
 }
 
-struct TempDirGuard(PathBuf);
+pub(crate) struct TempDirGuard(pub(crate) PathBuf);
 
 impl Drop for TempDirGuard {
     fn drop(&mut self) {
@@ -3357,23 +3430,18 @@ mod tests {
         ));
     }
 
+    #[cfg(target_os = "linux")]
+    use super::parse_named_validation_region;
     use super::{
         cell_values_equal, compare_workbooks, file_uri, libreoffice_batch_request,
         libreoffice_user_installation_arg, select_conversion_engine, select_fidelity_engine,
         unique_sibling_conversion_candidate, ConversionRuntime, LibreOfficeExecutor,
         LibreOfficeRunOutcome,
     };
-    #[cfg(target_os = "linux")]
-    use super::{
-        extract_named_validation_cells, parse_named_validation_region, NamedValidationRegionRequest,
-    };
+    use super::{extract_named_validation_cells, NamedValidationRegionRequest};
     use anyhow::Result;
     use excel_editor::OpenpyxlWorkerConfig;
-    #[cfg(target_os = "linux")]
-    use excel_reader::{SheetDump, WorkbookDump};
     use ooxml_patch::{copy_cell_region, CellRegionCopyRequest};
-    #[cfg(target_os = "linux")]
-    use std::collections::BTreeMap;
     use std::fs::{self, File};
     use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
@@ -3831,61 +3899,36 @@ mod tests {
         assert!(!libreoffice_batch_request("xls", "xlsx", "auto"));
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
-    fn named_validation_result_extraction_uses_only_formula_text_in_region() -> Result<()> {
-        let workbook = WorkbookDump {
-            schema_version: 1,
-            reader: "calamine",
-            elapsed_ms: 0,
-            sheets: vec![SheetDump {
-                name: "检查表".to_owned(),
-                values: BTreeMap::from([
-                    (
-                        "B2".to_owned(),
-                        serde_json::json!({"type": "string", "value": "错|校验项|差异"}),
-                    ),
-                    (
-                        "B4".to_owned(),
-                        serde_json::json!({"type": "string", "value": "硬性|校验项|差异"}),
-                    ),
-                    (
-                        "B8".to_owned(),
-                        serde_json::json!({"type": "string", "value": "软性|超出区域"}),
-                    ),
-                    (
-                        "C3".to_owned(),
-                        serde_json::json!({"type": "string", "value": "固定说明，不是公式"}),
-                    ),
-                ]),
-                formulas: BTreeMap::from([
-                    ("B2".to_owned(), "=A2".to_owned()),
-                    ("B4".to_owned(), "=A4".to_owned()),
-                    ("B8".to_owned(), "=A8".to_owned()),
-                ]),
-                formula_status: "read_by_calamine".to_owned(),
-                merges: Vec::new(),
-                merge_status: "read_by_calamine".to_owned(),
-                comments: BTreeMap::new(),
-                comments_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
-                conditional_formatting: Vec::new(),
-                conditional_formatting_status: "read_by_namespace_aware_ooxml_supplement"
-                    .to_owned(),
-                data_validations: Vec::new(),
-                data_validations_status: "read_by_namespace_aware_ooxml_supplement".to_owned(),
-            }],
-        };
+    fn named_validation_results_report_formula_errors_and_missing_caches() -> Result<()> {
+        use ooxml_patch::FormulaCacheState;
+        use std::collections::{BTreeMap, BTreeSet};
+        let key = |address: &str| ("Data".to_owned(), address.to_owned());
+        let cached = BTreeMap::from([
+            (key("A1"), FormulaCacheState::Text("错|合成校验".to_owned())),
+            (key("A2"), FormulaCacheState::Error("#REF!".to_owned())),
+            (key("A3"), FormulaCacheState::Error("#NAME?".to_owned())),
+            (key("A4"), FormulaCacheState::Error("#DIV/0!".to_owned())),
+            (key("A5"), FormulaCacheState::Missing),
+            (key("A8"), FormulaCacheState::Text(String::new())),
+            (key("Z1"), FormulaCacheState::Error("#NAME?".to_owned())),
+        ]);
+        let expected = BTreeSet::from([key("A6")]);
         let regions = [NamedValidationRegionRequest {
-            template_sheet: "模板".to_owned(),
-            source_sheet: "检查表".to_owned(),
-            address: "$B$2:$B$4".to_owned(),
+            template_sheet: "Data".to_owned(),
+            source_sheet: "Data".to_owned(),
+            address: "$A$1:$A$8".to_owned(),
         }];
-
-        let cells = extract_named_validation_cells(&workbook, &regions)?;
-        assert_eq!(cells.len(), 2);
-        assert_eq!(cells[0].address, "B2");
-        assert!(cells.iter().all(|cell| cell.sheet == "检查表"));
-        assert!(!cells.iter().any(|cell| cell.address == "B8"));
+        let results = extract_named_validation_cells(&cached, &expected, &regions)?;
+        assert_eq!(results.len(), 6);
+        assert_eq!(results[0].value, "错|合成校验");
+        assert_eq!(results[0].calculation_issue, None);
+        for (row, error) in results[1..4].iter().zip(["#REF!", "#NAME?", "#DIV/0!"]) {
+            assert_eq!(row.calculation_issue, Some("公式计算错误"));
+            assert_eq!(row.value, error);
+        }
+        assert_eq!(results[4].calculation_issue, Some("结果未保存"));
+        assert_eq!(results[5].calculation_issue, Some("公式缺失"));
         Ok(())
     }
 
@@ -3958,25 +4001,11 @@ mod tests {
                 "auto on Windows must route .{source} through pywin32"
             );
         }
-        // Linux：电子表格 .xls/.xlsm → .xlsx 走 LibreOffice（2026-11-09 实测
-        // 与 COM 另存一致）。其余格式仍要求 Windows pywin32。
-        assert_eq!(select_conversion_engine("auto", "xls", "xlsx", false), "lo");
-        assert_eq!(
-            select_conversion_engine("auto", "xlsm", "xlsx", false),
-            "lo"
-        );
-        // 同扩展名 .xlsx 规范化与 .xlsb/.et 仍不在 Linux LO 路由内。
-        assert_eq!(
-            select_conversion_engine("auto", "xlsx", "xlsx", false),
-            "pywin32"
-        );
-        // .xlsb 已在 2026-11-09 实测后放开给 Linux LO（见 docs §5.12）。
-        assert_eq!(
-            select_conversion_engine("auto", "doc", "docx", false),
-            "pywin32"
-        );
-        // 显式 lo 在 Windows 上仍被选中（由调用方给出），显式 com 保持 pywin32。
-        assert_eq!(select_conversion_engine("lo", "xls", "xlsx", true), "lo");
+        // Linux XLS is handled before this Windows fidelity backend.
+        // None of its other automatic requests selects LibreOffice.
+        for source in ["xls", "xlsm", "xlsb", "et", "ett", "xlsx"] {
+            assert_eq!(select_conversion_engine("auto", source, "xlsx", false), "pywin32");
+        }
         // The retired Rust COM channel is only kept as a CLI alias.
         assert_eq!(
             select_conversion_engine("com", "xls", "xlsx", true),

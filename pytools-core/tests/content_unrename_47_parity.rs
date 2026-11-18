@@ -358,3 +358,31 @@ fn operation_47_cli_keeps_legacy_behavior_without_sort_config_sheet() {
     assert_eq!(result["skip"], 1);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[cfg(windows)]
+#[test]
+fn operation_47_cleans_xls_with_the_same_numeric_prefix_as_addition() {
+    let root = temporary_directory("xls");
+    let config = root.join("config.xlsx");
+    write_config(&config, &json!({"content_spec": "Data@A1;Data@B2"}), false);
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/timeline/wide_summary_legacy.xls");
+    let original = root.join("sample.XLS");
+    let prefixed = root.join("Installed smoke_42.0_sample.XLS");
+    let middle = root.join("memo_Installed smoke_42.0_sample.XLS");
+    let bytes = fs::read(fixture).unwrap();
+    fs::write(&prefixed, &bytes).unwrap();
+    fs::write(&middle, &bytes).unwrap();
+    fs::write(&original, b"occupied target").unwrap();
+
+    let report =
+        run_content_prefix_unrename_xlsx_candidate(&config, &[prefixed.clone(), middle.clone()])
+            .unwrap();
+    assert_eq!(report.ok, 1);
+    assert_eq!(report.skip, 1);
+    assert_eq!(fs::read(&original).unwrap(), b"occupied target");
+    assert_eq!(fs::read(root.join("sample_1.XLS")).unwrap(), bytes);
+    assert_eq!(fs::read(&middle).unwrap(), bytes);
+    assert!(!prefixed.exists());
+    fs::remove_dir_all(root).unwrap();
+}

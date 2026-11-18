@@ -106,6 +106,10 @@ impl WorkerProcess {
         self.child.id()
     }
 
+    pub(crate) fn stdin_mut(&mut self) -> Option<&mut std::process::ChildStdin> {
+        self.child.stdin.as_mut()
+    }
+
     pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }

@@ -28,7 +28,10 @@ pub(crate) enum BatchOutcome {
 /// 预算上限 `set_max_recalculation_visits` 是进程级全局值；本函数对所有线程
 /// 写入同一份 `config` 的同一个值，因此并发写同一值是幂等的，不会互相干扰。
 pub(crate) fn recalculate_parallel(
-    copies: &[PathBuf],
+    copies: &[(
+        PathBuf,
+        Vec<crate::conversion_engine::NamedValidationRegionRequest>,
+    )],
     config: &BoCalcConfig,
 ) -> Vec<(usize, BatchOutcome, Duration)> {
     if let Some(max_visits) = config.max_visits {
@@ -37,9 +40,13 @@ pub(crate) fn recalculate_parallel(
     copies
         .par_iter()
         .enumerate()
-        .map(|(index, path)| {
+        .map(|(index, (path, regions))| {
             let started = Instant::now();
-            let outcome = match crate::bo_calc::recalculate(path, config) {
+            let outcome = match crate::bo_calc::recalculate_with_validation_scope(
+                path,
+                config,
+                Some(regions),
+            ) {
                 Ok(outcome) => BatchOutcome::Succeeded(outcome),
                 Err(error) => BatchOutcome::Refused {
                     reason: format!("{error:#}"),
@@ -98,7 +105,7 @@ mod tests {
         for index in 0..4 {
             let path = dir.join(format!("copy{index}.xlsx"));
             write_formula_workbook(&path, 50 + index)?;
-            copies.push(path);
+            copies.push((path, Vec::new()));
         }
 
         let results = recalculate_parallel(&copies, &batch_config());
@@ -142,7 +149,11 @@ mod tests {
         std::fs::write(&broken, b"not a workbook")?;
         write_formula_workbook(&good_b, 60)?;
 
-        let copies = vec![good_a, broken, good_b];
+        let copies = vec![
+            (good_a, Vec::new()),
+            (broken, Vec::new()),
+            (good_b, Vec::new()),
+        ];
         let results = recalculate_parallel(&copies, &batch_config());
         let by_index: Vec<(usize, &BatchOutcome)> =
             results.iter().map(|(i, o, _)| (*i, o)).collect();

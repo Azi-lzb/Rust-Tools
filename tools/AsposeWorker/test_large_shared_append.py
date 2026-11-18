@@ -87,7 +87,7 @@ def main():
         path = root / f"{label}.xlsx"
         formulas = openpyxl.load_workbook(path, data_only=False)
         cached = openpyxl.load_workbook(path, data_only=True)
-        assert formulas.sheetnames == ["Data", "Keep", "Evaluation Warning"]
+        assert formulas.sheetnames == ["Data", "Keep"]
         assert formulas["Data"]["A1"].value == "original header"
         for row in range(5, 10005):
             assert formulas["Keep"].cell(row, 4).value == f"=B{row}+C{row}"
@@ -140,7 +140,7 @@ def main():
         assert run["metrics"]["committed_targets"] == 1 and run["metrics"]["committed_appended_rows"] == 100, run["metrics"]
         book = openpyxl.load_workbook(target, data_only=False)
         assert list(book["Combined"].values) == expected
-        assert book.sheetnames == ["Combined", "Keep", "Evaluation Warning"]
+        assert book.sheetnames == ["Combined", "Keep"]
         for row in range(5, 10005):
             assert book["Keep"].cell(row, 4).value == f"=B{row}+C{row}"
             assert book["Keep"].cell(row, 27).value == f"=$B{row}+C{row}"

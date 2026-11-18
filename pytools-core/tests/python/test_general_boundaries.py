@@ -43,8 +43,8 @@ class Boundaries(unittest.TestCase):
    d=Path(folder);s=d/'source.xlsx';t=d/'target.xlsx';w=openpyxl.Workbook();w.active.title='Data';w.active.append(['ID','Amount']);w.active.append(['001',10]);w.active.append(['002',20]);w.save(s);w=openpyxl.Workbook();w.active.title='Combined';w.active.append(['ID','Amount']);w.active.append(['001',99]);w.save(t);sb=digest(s);config=self.config(d,t);cb=digest(config)
    text=self.cli(config,'2\n3\n1\n0\n','xlsx-append');self.assertNotIn('执行失败',text);rows=list(openpyxl.load_workbook(t,data_only=False).active.values);self.assertEqual(rows,[('ID','Amount'),('001',99),('002',20)])
    text=self.cli(config,'2\n3\n1\n0\n','xlsx-append-repeat');self.assertNotIn('执行失败',text);self.assertEqual(list(openpyxl.load_workbook(t).active.values),rows);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb)
- @unittest.skipUnless(os.environ.get('RUSTTOOLS_TEST_COM')=='1','requires explicit COM synthetic-fixture authorization')
- def test_existing_xls_rejected_in_real_menu_with_real_biff_fixture(self):
+ @unittest.skipUnless(sys.platform=='win32' and os.environ.get('RUSTTOOLS_TEST_COM')=='1','requires explicit COM synthetic-fixture authorization')
+ def test_existing_xls_append_in_real_menu_with_real_biff_fixture(self):
   import win32com.client
   with tempfile.TemporaryDirectory() as folder:
    d=Path(folder);t=d/'target.xls';s=d/'source.xlsx';w=openpyxl.Workbook();w.active.title='Data';w.active.append(['ID','Amount']);w.active.append(['002',20]);w.save(s)
@@ -55,7 +55,9 @@ class Boundaries(unittest.TestCase):
     if book is not None:book.Close(False)
     app.Quit()
    self.assertEqual(t.read_bytes()[:8],bytes.fromhex('d0cf11e0a1b11ae1'));tb=digest(t);sb=digest(s);config=self.config(d,t);cb=digest(config)
-   text=self.cli(config,'2\n3\n1\n0\n','xls-refusal');self.assertIn('既有 XLS 去重追加已安全停用',text);self.assertEqual(digest(t),tb);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb);self.assertEqual(list(d.glob('*.xls')),[t]);self.assertFalse(any('candidate' in p.name.lower() and p.suffix.lower()=='.xls' for p in d.rglob('*')))
+   text=self.cli(config,'2\n3\n1\n0\n','xls-append');self.assertNotIn('执行失败',text);self.assertNotEqual(digest(t),tb);self.assertEqual(digest(s),sb);self.assertEqual(digest(config),cb)
+   updated=digest(t)
+   text=self.cli(config,'2\n3\n1\n0\n','xls-append-repeat');self.assertNotIn('执行失败',text);self.assertEqual(digest(t),updated)
  def test_delete_refuses_cross_sheet_formula_and_merged_duplicate_without_changes(self):
   from openpyxl.workbook.defined_name import DefinedName
   with tempfile.TemporaryDirectory() as folder:

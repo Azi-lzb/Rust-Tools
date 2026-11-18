@@ -3,6 +3,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import unittest
 
@@ -13,7 +14,7 @@ boundaries = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(boundaries)
 
 
-@unittest.skipUnless(os.environ.get("RUSTTOOLS_OFFICE_FIXTURE_DIR") and os.environ.get("RUSTTOOLS_BOUNDARY_CLI"),
+@unittest.skipUnless(sys.platform != "win32" and os.environ.get("RUSTTOOLS_OFFICE_FIXTURE_DIR") and os.environ.get("RUSTTOOLS_BOUNDARY_CLI"),
                      "requires a synthetic BIFF fixture and current CLI")
 class XlsRefusal(unittest.TestCase):
     def test_existing_biff_is_refused_without_changing_inputs(self):
@@ -28,7 +29,7 @@ class XlsRefusal(unittest.TestCase):
             config = case.config(d, target)
             before = {p: boundaries.digest(p) for p in (source, target, config)}
             text = case.cli(config, "2\n3\n1\n0\n", "replayed-xls-refusal")
-            self.assertIn("既有 XLS 去重追加已安全停用", text)
+            self.assertIn("需要 Windows Excel/WPS COM", text)
             for path, expected in before.items():
                 self.assertEqual(boundaries.digest(path), expected)
             self.assertEqual(list(d.glob("*.xls")), [target])

@@ -1,7 +1,7 @@
 //! Safe publication of validated workbook candidates to configured targets.
 
 use anyhow::{bail, ensure, Context, Result};
-use excel_reader::read_workbook;
+use excel_reader::verify_readable_workbook;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -62,6 +62,107 @@ mod target_access_tests {
         assert_eq!(fs::read(&path).unwrap(), b"probe fixture");
         fs::remove_file(&path).unwrap();
     }
+
+    struct LongFixture(PathBuf);
+    impl LongFixture {
+        fn new(label: &str) -> Self {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root =
+                std::env::temp_dir().join(format!("commit-{label}-{}-{stamp}", std::process::id()));
+            fs::create_dir_all(&root).unwrap();
+            Self(root)
+        }
+        fn directory(&self) -> PathBuf {
+            let mut path = self.0.clone();
+            for _ in 0..5 {
+                path.push("业务 Unicode space long-path-regression-0123456789");
+            }
+            fs::create_dir_all(&path).unwrap();
+            assert!(path.as_os_str().len() > 280);
+            path
+        }
+    }
+    impl Drop for LongFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    fn workbook(path: &Path, value: &str) {
+        let mut book = rust_xlsxwriter::Workbook::new();
+        book.add_worksheet().write_string(0, 0, value).unwrap();
+        book.save(path).unwrap();
+    }
+
+    #[test]
+    fn long_paths_publish_replace_and_reject_existing_or_stale_targets() {
+        let fixture = LongFixture::new("publish");
+        let directory = fixture.directory();
+        let candidate = directory.join("候选.xlsx");
+        let target = directory.join("交付.xlsx");
+        workbook(&candidate, "original");
+        let original = sha256_file(&candidate).unwrap();
+        create_target_from_candidate(&candidate, &target).unwrap();
+        assert_eq!(sha256_file(&target).unwrap(), original);
+        assert!(create_target_from_candidate(&candidate, &target).is_err());
+        let replacement = directory.join("replacement.xlsx");
+        workbook(&replacement, "changed");
+        assert!(replace_target_from_candidate(&replacement, &target, "stale snapshot").is_err());
+        assert_eq!(sha256_file(&target).unwrap(), original);
+        replace_target_from_candidate(&replacement, &target, &original).unwrap();
+        assert_eq!(
+            sha256_file(&target).unwrap(),
+            sha256_file(&replacement).unwrap()
+        );
+        assert_eq!(sha256_file(&candidate).unwrap(), original);
+
+        // Exercise the actual no-replace Win32 boundary after a target appears.
+        let source = directory.join("race-source.tmp");
+        let appeared = directory.join("race-target.tmp");
+        fs::write(&source, b"candidate").unwrap();
+        fs::write(&appeared, b"user data").unwrap();
+        assert!(publish_new_file(&source, &appeared).is_err());
+        assert_eq!(fs::read(&source).unwrap(), b"candidate");
+        assert_eq!(fs::read(&appeared).unwrap(), b"user data");
+    }
+
+    #[test]
+    fn long_paths_keep_originals_on_validation_failure_and_locked_replacement() {
+        let fixture = LongFixture::new("failure");
+        let directory = fixture.directory();
+        let candidate = directory.join("candidate.xlsx");
+        let target = directory.join("target.xlsx");
+        workbook(&candidate, "candidate");
+        let candidate_hash = sha256_file(&candidate).unwrap();
+        let rejected =
+            create_target_from_candidate_with_validator(&candidate, &target, |path, hash, role| {
+                verify_workbook_file(path, hash, role)?;
+                ensure!(
+                    role != "published target",
+                    "injected post-publication validation failure"
+                );
+                Ok(())
+            });
+        assert!(rejected.is_err());
+        assert!(!target.exists());
+        assert_eq!(sha256_file(&candidate).unwrap(), candidate_hash);
+
+        workbook(&target, "user original");
+        let original = fs::read(&target).unwrap();
+        let original_hash = sha256_file(&target).unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&target)
+            .unwrap();
+        assert!(replace_target_from_candidate(&candidate, &target, &original_hash).is_err());
+        drop(held);
+        assert_eq!(fs::read(&target).unwrap(), original);
+        assert_eq!(sha256_file(&candidate).unwrap(), candidate_hash);
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -80,6 +181,8 @@ pub struct TargetCommitReport {
 #[derive(Clone, Debug, Serialize)]
 pub struct TargetConflict {
     pub requested_target: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changed_source: Option<PathBuf>,
     pub expected_sha256: String,
     pub observed_sha256: String,
     pub reason: String,
@@ -95,7 +198,8 @@ impl TargetCommitReport {
         self.conflict.as_ref().map(|conflict| {
             format!(
                 "{} 在运行期间已被修改，保留当前文件；基于处理时数据生成的结果已另存为 {}，未合并运行中的新修改，请自行核对。",
-                conflict.requested_target.display(), self.target.display()
+                conflict.changed_source.as_ref().unwrap_or(&conflict.requested_target).display(),
+                self.target.display()
             )
         })
     }
@@ -185,7 +289,12 @@ pub fn verify_planning_snapshot(path: &Path, expected_sha256: Option<&str>) -> R
 /// which appeared after planning.
 pub fn create_target_from_candidate(candidate: &Path, target: &Path) -> Result<TargetCommitReport> {
     create_target_from_candidate_with_validator(candidate, target, |path, hash, role| {
-        verify_workbook_file(path, hash, role)
+        if role == "published target" {
+            // These are the same bytes already reopened as the candidate.
+            verify_file_bytes(path, hash, role)
+        } else {
+            verify_workbook_file(path, hash, role)
+        }
     })
 }
 
@@ -361,7 +470,7 @@ pub fn replace_target_from_candidate(
         let _ = fs::remove_file(&backup);
         return Err(error).with_context(|| format!("replace target {}", target.display()));
     }
-    let committed_hash = match verify_workbook_file(target, &candidate_hash, "published target") {
+    let committed_hash = match verify_file_bytes(target, &candidate_hash, "published target") {
         Ok(()) => candidate_hash.clone(),
         Err(error) => {
             return match rollback_if_candidate(target, &backup, &candidate_hash, &original_hash) {
@@ -426,9 +535,34 @@ pub fn commit_validated_candidate(
             };
             let expected = conflict.expected.clone();
             let observed = conflict.observed.clone();
-            publish_conflict_copy(candidate, target, &expected, &observed, started)
+            publish_conflict_copy(candidate, target, None, &expected, &observed, started)
         }
     }
+}
+
+/// Publish to a new path from the validated snapshot of a separate source.
+/// If the source was edited during processing, retain a conflict copy instead.
+pub fn create_target_from_source_snapshot(
+    candidate: &Path,
+    target: &Path,
+    source: &Path,
+    expected_source_hash: &str,
+) -> Result<TargetCommitReport> {
+    let started = Instant::now();
+    ensure_distinct_paths(source, target)?;
+    ensure_regular_nonsymlink(source, "source")?;
+    let observed = sha256_file(source)?;
+    if observed == expected_source_hash {
+        return create_target_from_candidate(candidate, target);
+    }
+    publish_conflict_copy(
+        candidate,
+        target,
+        Some(source),
+        expected_source_hash,
+        &observed,
+        started,
+    )
 }
 
 fn conflict_copy_path(target: &Path, sequence: u64) -> PathBuf {
@@ -465,6 +599,7 @@ fn result_copy_path(target: &Path, label: &str, sequence: u64) -> PathBuf {
 fn publish_conflict_copy(
     candidate: &Path,
     target: &Path,
+    changed_source: Option<&Path>,
     expected: &str,
     observed: &str,
     started: Instant,
@@ -498,9 +633,14 @@ fn publish_conflict_copy(
         ));
         report.conflict = Some(TargetConflict {
             requested_target: target.to_path_buf(),
+            changed_source: changed_source.map(Path::to_path_buf),
             expected_sha256: expected.to_owned(),
             observed_sha256: observed.to_owned(),
-            reason: "target_changed_after_planning; result_uses_processing_snapshot; new_edits_not_merged".to_owned(),
+            reason: if changed_source.is_some() {
+                "source_changed_after_planning; result_uses_processing_snapshot; new_edits_not_merged"
+            } else {
+                "target_changed_after_planning; result_uses_processing_snapshot; new_edits_not_merged"
+            }.to_owned(),
             record_path: Some(record_path.clone()),
         });
         report.elapsed_ms = started.elapsed().as_millis();
@@ -514,7 +654,7 @@ fn publish_conflict_copy(
                 &serde_json::json!({
                     "schema_version": 1,
                     "timestamp": chrono::Local::now().to_rfc3339(),
-                    "event_name": "target_changed_result_saved",
+                    "event_name": if changed_source.is_some() { "source_changed_result_saved" } else { "target_changed_result_saved" },
                     "original_target_replaced": false,
                     "new_edits_merged": false,
                     "commit": &report,
@@ -548,6 +688,13 @@ fn publish_conflict_copy(
 }
 
 fn verify_workbook_file(path: &Path, expected_hash: &str, role: &str) -> Result<()> {
+    verify_file_bytes(path, expected_hash, role)?;
+    verify_readable_workbook(path)
+        .with_context(|| format!("open {role} workbook {}", path.display()))?;
+    Ok(())
+}
+
+fn verify_file_bytes(path: &Path, expected_hash: &str, role: &str) -> Result<()> {
     ensure_regular_nonsymlink(path, role)?;
     let actual_hash = sha256_file(path)?;
     ensure!(
@@ -555,7 +702,6 @@ fn verify_workbook_file(path: &Path, expected_hash: &str, role: &str) -> Result<
         "{role} bytes do not match the expected SHA-256: {}",
         path.display()
     );
-    read_workbook(path).with_context(|| format!("open {role} workbook {}", path.display()))?;
     Ok(())
 }
 
@@ -592,7 +738,11 @@ fn copy_to_sibling(
     role: &str,
     expected_hash: &str,
 ) -> Result<PathBuf> {
-    copy_to_sibling_as(source, target, role, expected_hash, "xlsx")
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xlsx");
+    copy_to_sibling_as(source, target, role, expected_hash, extension)
 }
 
 pub struct InputWorkbookSnapshot {
@@ -770,12 +920,12 @@ fn publish_new_file(source: &Path, target: &Path) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
 
-    let source = source
+    let source = excel_editor::path_for_external_io(source)?
         .as_os_str()
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
-    let target = target
+    let target = excel_editor::path_for_external_io(target)?
         .as_os_str()
         .encode_wide()
         .chain(Some(0))
@@ -800,12 +950,12 @@ fn replace_file(source: &Path, target: &Path) -> Result<()> {
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
 
-    let source = source
+    let source = excel_editor::path_for_external_io(source)?
         .as_os_str()
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();
-    let target = target
+    let target = excel_editor::path_for_external_io(target)?
         .as_os_str()
         .encode_wide()
         .chain(Some(0))

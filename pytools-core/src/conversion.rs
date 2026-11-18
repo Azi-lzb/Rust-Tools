@@ -198,9 +198,7 @@ pub(crate) fn convert_one_with_runtime(
     );
     let xlsx_save_as_normalization = source_ext == "xlsx" && target == "xlsx";
     anyhow::ensure!(
-        source_ext != target
-            || xlsx_save_as_normalization
-            || (engine == "aspose" && target == "docx"),
+        source_ext != target || xlsx_save_as_normalization,
         "input is already in the requested format: .{target}"
     );
     anyhow::ensure!(
@@ -210,11 +208,9 @@ pub(crate) fn convert_one_with_runtime(
         ),
         "--engine must be auto, lo, com, pywin32, native or aspose"
     );
-    // LibreOffice（lo）仅用于 Linux 电子表格 .xls/.xlsm → .xlsx；Word 目标
-    // 与 Windows 默认路由仍走 pywin32（实际执行在 conversion_engine 分流）。
     anyhow::ensure!(
-        engine != "lo" || target == "xlsx",
-        "LibreOffice conversion is available for spreadsheet .xls/.xlsm -> .xlsx on Linux; Word targets require Windows pywin32"
+        engine != "lo",
+        "LibreOffice 不用于格式转换；XLS→XLSX 请使用 4-4 的 Aspose .NET"
     );
     anyhow::ensure!(
         !xlsx_save_as_normalization || engine != "native",
@@ -225,12 +221,18 @@ pub(crate) fn convert_one_with_runtime(
             || !matches!(source_ext.as_str(), "xls" | "xlsb" | "xlsm" | "xlsx" | "et" | "ett"),
         "Excel workbook format conversion requires pywin32 with Microsoft Excel or WPS COM; native value-only conversion is not allowed for workbook formats"
     );
-    if engine == "aspose" {
-        return if target == "docx" {
-            crate::aspose_documents::convert(input, output, runtime)
-        } else {
-            crate::aspose_conversion::convert(input, output, runtime)
-        };
+    if engine == "aspose"
+        || (cfg!(target_os = "linux") && engine == "auto" && source_ext == "xls" && target == "xlsx")
+    {
+        anyhow::ensure!(
+            source_ext == "xls" && target == "xlsx",
+            "Aspose 仅保留用于 XLS→XLSX 转换，其他格式请使用自动或原 Office 路径"
+        );
+        anyhow::ensure!(
+            std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none(),
+            "该功能需要外部引擎: Aspose .NET 不可用（当前环境禁用了转换引擎）"
+        );
+        return crate::aspose_conversion::convert(input, output, runtime);
     }
     if is_wps_native_spreadsheet(&source_ext) {
         anyhow::ensure!(
@@ -250,6 +252,10 @@ pub(crate) fn convert_one_with_runtime(
             is_ole_compound_file(input)?,
             "unsupported .xlsx input: file content is not an OOXML workbook or a legacy OLE/BIFF Excel workbook"
         );
+        anyhow::ensure!(
+            !cfg!(target_os = "linux"),
+            "文件后缀为 XLSX、内容为旧版 OLE；确认是 XLS 后将副本扩展名改为 .xls，再用 4-4 的 Aspose .NET 转换"
+        );
     }
     if engine == "native" {
         anyhow::ensure!(
@@ -261,6 +267,10 @@ pub(crate) fn convert_one_with_runtime(
         }
         return convert_native_excel_values(input, output, &source_ext);
     }
+    anyhow::ensure!(
+        !(cfg!(target_os = "linux") && target == "xlsx"),
+        "Linux 4-4 的工作簿转换仅支持 XLS→XLSX（Aspose .NET）；当前格式 .{source_ext} 请在 Windows 用 Excel/WPS 另存"
+    );
     let (staged_input, _staging_guard) = if renamed_legacy_xls {
         stage_input_with_extension(input, output, "xls")?
     } else {
@@ -545,6 +555,10 @@ where
         matches!(target.as_str(), "xlsx" | "docx"),
         "conversion target must be xlsx or docx"
     );
+    anyhow::ensure!(
+        engine != "lo",
+        "LibreOffice 不用于格式转换；XLS→XLSX 请使用 4-4 的 Aspose .NET"
+    );
     if let Some(output_dir) = output_dir {
         fs::create_dir_all(output_dir)?;
     }
@@ -580,30 +594,6 @@ where
         format!("已发现 {} 个待处理文件。", inputs.len()),
     );
     let mut runtime = crate::conversion_engine::ConversionRuntime::default();
-    // Keep the legacy batch hook for compatibility, but current production
-    // routing never schedules LibreOffice conversion jobs.
-    if engine != "native" && std::env::var_os("PYTOOLS_CONVERT_ENGINES_DISABLED").is_none() {
-        let requests = inputs
-            .iter()
-            .filter(|input| {
-                let Some(ext) = input.extension().and_then(|ext| ext.to_str()) else {
-                    return false;
-                };
-                let ext = ext.to_ascii_lowercase();
-                (ext != target || (ext == "xlsx" && target == "xlsx"))
-                    && crate::conversion_engine::libreoffice_batch_request(&ext, &target, engine)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if !requests.is_empty() {
-            runtime.prepare_libreoffice_batch(
-                &requests
-                    .into_iter()
-                    .map(|input| (input, target.clone()))
-                    .collect::<Vec<_>>(),
-            );
-        }
-    }
     for (index, input) in inputs.iter().enumerate() {
         let input_index = index + 1;
         let item_started = Instant::now();

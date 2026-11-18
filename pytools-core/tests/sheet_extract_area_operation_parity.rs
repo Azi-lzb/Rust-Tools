@@ -482,7 +482,7 @@ fn interactive_menu_warns_and_does_not_publish_for_invalid_area_configuration() 
     let source = fixture_path("省级月度报表_A.xlsx");
     let source_before = fs::read(&source).unwrap();
 
-    let input = format!("5\n6\n1\nn\n{}\n", source.display());
+    let input = format!("5\n6\nn\n{}\n", source.display());
     let output = run_menu_with_view(&config, &input, "user");
     assert!(
         output.status.success(),
@@ -583,15 +583,15 @@ fn interactive_menu_routes_area_extraction_matches_python_and_records_engines() 
         .iter()
         .map(|name| fixture_path(name.as_str().unwrap()))
         .collect::<Vec<_>>();
-    let unsupported = root.join("not-validated.xls");
-    fs::write(&unsupported, b"synthetic legacy workbook placeholder").unwrap();
-    sources.push(unsupported.clone());
+    let invalid_xls = root.join("not-validated.xls");
+    fs::write(&invalid_xls, b"synthetic invalid legacy workbook").unwrap();
+    sources.push(invalid_xls.clone());
     let original_inputs = sources
         .iter()
         .map(|path| (path.clone(), fs::read(path).unwrap()))
         .collect::<Vec<_>>();
     let input = format!(
-        "5\n6\n1\nn\n{}\n",
+        "5\n6\nn\n{}\n",
         sources
             .iter()
             .map(|path| path.to_string_lossy())
@@ -608,11 +608,15 @@ fn interactive_menu_routes_area_extraction_matches_python_and_records_engines() 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stdout.contains("6  工作表数据提取（普通无批注版）"));
-    assert!(stdout.contains("PT-7-6 区域提取仅接受 .xlsx/.xlsm"));
+    assert!(stdout.contains("not-validated.xls") || stderr.contains("not-validated.xls"));
     assert!(stdout.contains("\"files\": 2"));
     assert!(stdout.contains("\"extracted_sheets\": 4"));
     assert!(stdout.contains("\"output_files\": 1"));
-    assert!(stdout.contains("\"failed_files\": 1"));
+    assert!(stdout.contains(if cfg!(windows) {
+        "\"failed_files\": 2"
+    } else {
+        "\"failed_files\": 1"
+    }));
 
     let output_path = root.join("app/output/区域提取/area-result.xlsx");
     assert!(output_path.is_file());
@@ -696,7 +700,7 @@ fn interactive_menu_routes_area_extraction_matches_python_and_records_engines() 
     let history: Value = serde_json::from_slice(&history_bytes).unwrap();
     assert_eq!(history["feature_id"], "PT-7-6");
     assert_eq!(history["status"], "partial");
-    assert_eq!(history["total_inputs"], 3);
+    assert_eq!(history["total_inputs"], if cfg!(windows) { 4 } else { 3 });
     assert_eq!(history["result"]["extracted_sheets"], 4);
     let actual_engines = history["actual_engines"].as_array().unwrap();
     for engine in [
@@ -799,7 +803,7 @@ fn interactive_menu_writes_area_extraction_to_configured_target_sheet() -> anyho
         remark: String::new(),
     };
     let config = create_menu_config(&root, &[task]);
-    let input = format!("5\n6\n1\nn\n{}\n", source.display());
+    let input = format!("5\n6\nn\n{}\n", source.display());
     let output = run_menu(&config, &input);
     assert!(
         output.status.success(),
@@ -854,7 +858,7 @@ fn interactive_menu_routes_full_sheet_import_against_python_helper_baseline() ->
     tasks[0].output_folder = "整表导入".to_owned();
     tasks[0].output_name = "full-sheet-output.xlsx".to_owned();
     let config = create_menu_config(&root, &tasks);
-    let output = run_menu(&config, &format!("5\n6\n1\nn\n{}\n", source.display()));
+    let output = run_menu(&config, &format!("5\n6\nn\n{}\n", source.display()));
     assert!(
         output.status.success(),
         "full-sheet menu failed: {}",
@@ -1133,7 +1137,7 @@ fn interactive_menu_allows_full_sheet_tasks_without_capability_files() {
     let cases = cases();
     let root = temporary_directory("sheet-extract-menu-gates");
     let no_tasks_config = create_menu_config(&root.join("no-tasks"), &[]);
-    let no_tasks = run_menu(&no_tasks_config, "5\n6\n1\n");
+    let no_tasks = run_menu(&no_tasks_config, "5\n6\n");
     assert!(no_tasks.status.success());
     let no_tasks_stdout = String::from_utf8_lossy(&no_tasks.stdout);
     assert!(no_tasks_stdout.contains("配置无启用任务"));
@@ -1143,7 +1147,7 @@ fn interactive_menu_allows_full_sheet_tasks_without_capability_files() {
     let mut full_sheet_tasks = load_tasks(&cases);
     full_sheet_tasks[0].area_spec.clear();
     let full_sheet_config = create_menu_config(&root.join("full-sheet"), &full_sheet_tasks);
-    let full_sheet = run_menu(&full_sheet_config, "5\n6\n1\n");
+    let full_sheet = run_menu(&full_sheet_config, "5\n6\n");
     assert!(full_sheet.status.success());
     let full_sheet_stdout = String::from_utf8_lossy(&full_sheet.stdout);
     assert!(full_sheet_stdout.contains("已加载"));
@@ -1179,7 +1183,7 @@ fn interactive_menu_appends_after_confirmation_without_capability_files() -> any
     };
     let config = create_menu_config(&root, &[task]);
 
-    let appended = run_menu(&config, &format!("5\n6\n1\nyes\n{}\n", source.display()));
+    let appended = run_menu(&config, &format!("5\n6\nyes\n{}\n", source.display()));
     assert!(
         appended.status.success(),
         "menu append failed: {}",
@@ -1236,7 +1240,7 @@ fn interactive_menu_supports_user_and_off_log_views() {
     let user_config = create_menu_config(&user_root, &tasks);
     let user_output = run_menu_with_view(
         &user_config,
-        &format!("5\n6\n1\nn\n{}\n", input_path.display()),
+        &format!("5\n6\nn\n{}\n", input_path.display()),
         "user",
     );
     assert!(user_output.status.success());
@@ -1258,7 +1262,7 @@ fn interactive_menu_supports_user_and_off_log_views() {
     let off_config = create_menu_config(&off_root, &tasks);
     let off_output = run_menu_with_view(
         &off_config,
-        &format!("5\n6\n1\nn\n{}\n", input_path.display()),
+        &format!("5\n6\nn\n{}\n", input_path.display()),
         "off",
     );
     assert!(off_output.status.success());
@@ -1549,7 +1553,7 @@ fn interactive_menu_extracts_date_cells_as_excel_datetimes() {
     task.output_folder = "区域提取".to_owned();
     task.output_name = "date-menu-output.xlsx".to_owned();
     let config = create_menu_config(&root, &[task]);
-    let input = format!("5\n6\n1\nn\n{}\n", source.display());
+    let input = format!("5\n6\nn\n{}\n", source.display());
     let output = run_menu(&config, &input);
     assert!(
         output.status.success(),
@@ -1601,7 +1605,7 @@ fn interactive_menu_extracts_macro_enabled_xlsm_area_to_new_xlsx() {
     task.output_folder = "xlsm-area".to_owned();
     task.output_name = "xlsm-area.xlsx".to_owned();
     let config = create_menu_config(&root, &[task]);
-    let output = run_menu(&config, &format!("5\n6\n1\nn\n{}\n", source.display()));
+    let output = run_menu(&config, &format!("5\n6\nn\n{}\n", source.display()));
     assert!(
         output.status.success(),
         "XLSM area extraction menu failed: stdout={} stderr={}",
@@ -1655,7 +1659,7 @@ fn interactive_menu_preserves_excel_error_cells_during_area_extraction() {
     task.output_folder = "错误值提取".to_owned();
     task.output_name = "error-values-output.xlsx".to_owned();
     let config = create_menu_config(&root, &[task]);
-    let output = run_menu(&config, &format!("5\n6\n1\nn\n{}\n", source.display()));
+    let output = run_menu(&config, &format!("5\n6\nn\n{}\n", source.display()));
     assert!(
         output.status.success(),
         "error-cell extraction menu failed: {}",
@@ -1710,7 +1714,7 @@ fn interactive_menu_extracts_elapsed_duration_values() -> anyhow::Result<()> {
     task.output_folder = "区域提取".to_owned();
     task.output_name = "duration-menu-output.xlsx".to_owned();
     let config = create_menu_config(&root, &[task]);
-    let input = format!("5\n6\n1\nn\n{}\n", source.display());
+    let input = format!("5\n6\nn\n{}\n", source.display());
     let output = run_menu(&config, &input);
     assert!(
         output.status.success(),

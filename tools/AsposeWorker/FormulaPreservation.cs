@@ -43,7 +43,11 @@ internal static class FormulaPreservation
     {
         // String literals are opaque; INDIRECT cannot be safely renamed.
         if (Regex.IsMatch(formula, "(?i)\\bINDIRECT\\s*\\(")) throw new NotSupportedException("Dynamic sheet references cannot be safely renamed");
-        string replacement = "'" + newName.Replace("'", "''") + "'!";
+        // Match the host's render_sheet_reference so exact validation accepts
+        // the rewritten formula while preserving required quotes and escapes.
+        bool needsQuotes = newName.Length == 0 || char.IsAsciiDigit(newName[0])
+            || newName.Any(c => char.IsWhiteSpace(c) || ":\\/?*[]'".Contains(c));
+        string replacement = (needsQuotes ? "'" + newName.Replace("'", "''") + "'" : newName) + "!";
         string quoted = "'" + oldName.Replace("'", "''") + "'!";
         return Regex.Replace(formula, "\"(?:[^\"]|\"\")*\"|" + Regex.Escape(quoted) + "|(?<![A-Za-z0-9_.'\\]])" + Regex.Escape(oldName) + "!",
             m => m.Value.StartsWith('"') ? m.Value : replacement);

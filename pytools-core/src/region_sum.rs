@@ -963,9 +963,6 @@ fn save_report(
         worksheet.set_name(RESULT_SHEET)?;
         // Match the page layout produced by the PyCode Openpyxl report.
         worksheet.set_margins(0.75, 0.75, 1.0, 1.0, 0.5, 0.5);
-        // The Python baseline stores this marker as a formula with no cached
-        // value, so preserve that cache state instead of rust_xlsxwriter's 0.
-        worksheet.set_formula_result_default("");
         for (column, header) in RESULT_HEADERS.iter().enumerate() {
             worksheet.write_string_with_format(0, column as u16, *header, &header_format)?;
         }
@@ -985,7 +982,8 @@ fn save_report(
         }
         if !rows.is_empty() {
             let row = rows.len() as u32 + 1;
-            worksheet.write_formula(row, 0, "=== 统计汇总 ===")?;
+            // This label starts with '=' but is text. Excel rejects it as a formula.
+            worksheet.write_string(row, 0, "=== 统计汇总 ===")?;
             worksheet.write_string(row, 1, format!("已检查文件数: {files}"))?;
             worksheet.write_string(row, 2, format!("已检查工作表数: {sheets}"))?;
             worksheet.write_string(row, 3, format!("发现错误总数: {errors}"))?;
@@ -1014,34 +1012,7 @@ fn save_report(
         return Err(error);
     }
 
-    let committed_source = if rows.is_empty() {
-        temporary.clone()
-    } else {
-        let patched = match create_temporary_path(output_dir) {
-            Ok(path) => path,
-            Err(error) => {
-                let _ = fs::remove_file(&temporary);
-                return Err(error);
-            }
-        };
-        let formula_marker_cell = format!("A{}", rows.len() + 2);
-        if let Err(error) = ooxml_patch::clear_empty_formula_cache(
-            &temporary,
-            &patched,
-            RESULT_SHEET,
-            &formula_marker_cell,
-        ) {
-            let _ = fs::remove_file(&temporary);
-            let _ = fs::remove_file(&patched);
-            return Err(error).context("preserve empty formula cache in result marker");
-        }
-        fs::remove_file(&temporary).with_context(|| {
-            format!("remove unpatched temporary report {}", temporary.display())
-        })?;
-        patched
-    };
-
-    let committed_path = commit_without_overwrite(&committed_source, output_path)?;
+    let committed_path = commit_without_overwrite(&temporary, output_path)?;
     Ok(committed_path)
 }
 

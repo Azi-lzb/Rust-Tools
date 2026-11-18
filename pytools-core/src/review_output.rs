@@ -4,7 +4,7 @@ use excel_editor::{ExcelEditPlan, ValidationFailureObserver, ValidationReviewOut
 use std::{
     cell::RefCell,
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -16,10 +16,84 @@ struct Origin {
 
 thread_local! {
     static ORIGIN: RefCell<Option<Origin>> = const { RefCell::new(None) };
+    static DESTINATION: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Keep review artifacts beside the user-facing output, never a private seed.
+pub(crate) struct ReviewDestinationScope(
+    Option<PathBuf>,
+    std::marker::PhantomData<std::rc::Rc<()>>,
+);
+impl ReviewDestinationScope {
+    pub(crate) fn enter_if_unset(target: &Path) -> Self {
+        let target = DESTINATION
+            .with(|v| v.borrow().clone())
+            .unwrap_or_else(|| target.to_path_buf());
+        Self::enter(&target)
+    }
+    pub(crate) fn enter(target: &Path) -> Self {
+        Self(
+            DESTINATION.with(|v| v.replace(Some(target.to_path_buf()))),
+            std::marker::PhantomData,
+        )
+    }
+}
+impl Drop for ReviewDestinationScope {
+    fn drop(&mut self) {
+        DESTINATION.with(|v| {
+            v.replace(self.0.take());
+        });
+    }
+}
+
+fn is_document(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("docx"))
+}
+
+/// A readable review document is still unapproved. Never remove evaluation content.
+fn validate_readable_document(path: &Path) -> Result<()> {
+    let mut zip = zip::ZipArchive::new(fs::File::open(path)?)?;
+    for part in ["[Content_Types].xml", "_rels/.rels", "word/document.xml"] {
+        let mut xml = String::new();
+        zip.by_name(part)?.read_to_string(&mut xml)?;
+        let doc = roxmltree::Document::parse(&xml)?;
+        if part == "word/document.xml" {
+            anyhow::ensure!(
+                doc.root_element().has_tag_name((
+                    "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                    "document"
+                )) && doc.descendants().any(|n| n.has_tag_name((
+                    "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                    "body"
+                ))),
+                "DOCX candidate has no document body"
+            );
+        }
+    }
+    // Read every member (CRC included), and parse auxiliary XML too. A broken
+    // header/media member is a damaged package, not a readable review result.
+    for i in 0..zip.len() {
+        let mut part = zip.by_index(i)?;
+        if part.name().ends_with(".xml") || part.name().ends_with(".rels") {
+            let mut xml = String::new();
+            part.read_to_string(&mut xml)?;
+            roxmltree::Document::parse(&xml)?;
+        } else {
+            std::io::copy(&mut part, &mut std::io::sink())?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) struct ReviewOriginScope(Option<Origin>, std::marker::PhantomData<std::rc::Rc<()>>);
 impl ReviewOriginScope {
+    pub(crate) fn enter_if_unset(source: &Path, expected_hash: &str) -> Self {
+        match ORIGIN.with(|v| v.borrow().clone()) {
+            Some(origin) => Self::enter(&origin.path, &origin.expected_hash),
+            None => Self::enter(source, expected_hash),
+        }
+    }
     pub(crate) fn enter(source: &Path, expected_hash: &str) -> Self {
         Self(
             ORIGIN.with(|v| {
@@ -88,12 +162,20 @@ pub fn preserve_failed_candidate(
         _ => return Ok(None),
     };
     // A broken/unreadable container is not a usable review workbook.
-    if excel_reader::read_workbook(candidate).is_err() {
+    let document = is_document(candidate);
+    let readable = if document {
+        validate_readable_document(candidate)
+    } else {
+        excel_reader::verify_readable_workbook(candidate).map(|_| ())
+    };
+    if readable.is_err() {
         return Ok(None);
     }
     let issue = concise_validation_issue(issue);
     let origin = ORIGIN.with(|v| v.borrow().clone());
     let source = origin.as_ref().map_or(source, |v| v.path.as_path());
+    let destination = DESTINATION.with(|v| v.borrow().clone());
+    let target = destination.as_deref().unwrap_or(source);
     let expected_hash = origin.as_ref().map(|v| v.expected_hash.clone());
     let observed_hash = crate::file_commit::sha256_file(source).ok();
     let source_changed = expected_hash
@@ -101,9 +183,28 @@ pub fn preserve_failed_candidate(
         .zip(observed_hash.as_ref())
         .map(|(a, b)| a != b);
     for _ in 0..256 {
-        let output = crate::file_commit::next_result_copy_path(source, "待核对_业务校验不符");
-        let publication = match crate::file_commit::create_target_from_candidate(candidate, &output)
-        {
+        let mut base = target.to_path_buf();
+        // XLS→XLSX and DOC→DOCX candidates must retain their actual output format.
+        if let Some(extension) = candidate.extension() {
+            base.set_extension(extension);
+        }
+        let output = crate::file_commit::next_result_copy_path(&base, "待核对_业务校验不符");
+        let publication = if document {
+            crate::file_commit::create_target_from_candidate_with_validator(
+                candidate,
+                &output,
+                |path, expected, _| {
+                    anyhow::ensure!(
+                        crate::file_commit::sha256_file(path)? == expected,
+                        "DOCX review candidate changed during publication"
+                    );
+                    validate_readable_document(path)
+                },
+            )
+        } else {
+            crate::file_commit::create_target_from_candidate(candidate, &output)
+        };
+        let publication = match publication {
             Ok(value) => value,
             Err(error)
                 if error
@@ -137,6 +238,7 @@ pub fn preserve_failed_candidate(
                     "business_validation_passed": false,
                     "original_target_replaced": false,
                     "source": source,
+                    "planned_target": target,
                     "review_copy": output,
                     "review_copy_sha256": publication.sha256_after,
                     "expected_source_sha256": expected_hash,
@@ -167,8 +269,23 @@ pub fn preserve_failed_candidate(
     anyhow::bail!("could not reserve a non-overwriting review-copy path")
 }
 
+/// Record the real source and destination for a validated-readable but
+/// business-rejected candidate from a dedicated legacy workbook route.
+pub fn preserve_failed_candidate_at(
+    source: &Path,
+    expected_source_hash: &str,
+    destination: &Path,
+    candidate: &Path,
+    request_id: &str,
+    issue: &str,
+) -> Result<Option<ValidationReviewOutput>> {
+    let _origin = ReviewOriginScope::enter(source, expected_source_hash);
+    let _destination = ReviewDestinationScope::enter(destination);
+    preserve_failed_candidate(source, candidate, request_id, issue)
+}
+
 #[derive(Debug)]
-struct ReviewSaved(ValidationReviewOutput);
+pub(crate) struct ReviewSaved(ValidationReviewOutput);
 impl std::fmt::Display for ReviewSaved {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -198,5 +315,77 @@ pub fn retain_validation_error(
         Ok(Some(review)) => error.context(ReviewSaved(review)),
         Ok(None) => error,
         Err(retention_error) => error.context(format!("待核对副本保存失败：{retention_error:#}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn review_destination_scopes_restore_outer_destination_and_origin() -> Result<()> {
+        let root = std::env::temp_dir().join(format!(
+            "review-destination-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir_all(root.join("private"))?;
+        fs::create_dir_all(root.join("output"))?;
+        let source = root.join("original.xls");
+        fs::write(&source, b"original untouched XLS fixture placeholder")?;
+        let hash = crate::file_commit::sha256_file(&source)?;
+        let candidate = root.join("private/candidate.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        book.add_worksheet().write_string(0, 0, "review")?;
+        book.save(&candidate)?;
+        let _origin = ReviewOriginScope::enter(&source, &hash);
+        let target = root.join("output/converted.xlsx");
+        {
+            let _destination = ReviewDestinationScope::enter(&target);
+            {
+                let _nested = ReviewDestinationScope::enter_if_unset(&candidate);
+                let _nested_origin =
+                    ReviewOriginScope::enter_if_unset(&candidate, "private-seed-hash");
+                assert_eq!(
+                    DESTINATION.with(|v| v.borrow().clone()),
+                    Some(target.clone())
+                );
+                assert_eq!(
+                    ORIGIN.with(|v| v.borrow().as_ref().unwrap().path.clone()),
+                    source
+                );
+            }
+            {
+                let inner = root.join("output/inner.xlsx");
+                let _inner = ReviewDestinationScope::enter(&inner);
+                assert_eq!(DESTINATION.with(|v| v.borrow().clone()), Some(inner));
+            }
+            let review = preserve_failed_candidate(
+                &candidate,
+                &candidate,
+                "conversion",
+                "Data!A1 mismatch",
+            )?
+            .unwrap();
+            assert_eq!(review.path.parent(), target.parent());
+            assert!(review
+                .path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("converted_待核对"));
+            assert_eq!(review.path.extension().unwrap(), "xlsx");
+            let record: serde_json::Value =
+                serde_json::from_slice(&fs::read(review.record_path.unwrap())?)?;
+            assert_eq!(record["source"], source.to_string_lossy().as_ref());
+            assert_eq!(record["planned_target"], target.to_string_lossy().as_ref());
+            assert_eq!(record["source_changed"], false);
+        }
+        assert!(DESTINATION.with(|v| v.borrow().is_none()));
+        assert_eq!(crate::file_commit::sha256_file(&source)?, hash);
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 }

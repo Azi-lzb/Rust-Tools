@@ -41,8 +41,8 @@ impl AsposeConversionSession {
         ensure!(
             input
                 .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("xlsx") || e.eq_ignore_ascii_case("xls")),
-            "Aspose 转换仅启用 XLS/XLSX → XLSX；其他格式未验证"
+                .is_some_and(|e| e.eq_ignore_ascii_case("xls")),
+            "Aspose 转换仅启用 XLS→XLSX"
         );
         ensure!(!output.exists(), "拒绝覆盖转换目标");
         let hash = crate::file_commit::sha256_file(&input)?;
@@ -74,65 +74,91 @@ impl AsposeConversionSession {
             })
             .context("Aspose 转换失败，未回退其他引擎")?;
         let validation_started = Instant::now();
-        let saved = excel_reader::read_workbook(&candidate)?;
-        let array_results = if input
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
-        {
-            let original = excel_editor::ArrayFormulaResults::read(&input)?;
-            ensure!(
-                original == excel_editor::ArrayFormulaResults::read(&candidate)?,
-                "Aspose 转换改变数组公式结果范围"
-            );
-            original
-        } else {
-            excel_editor::ArrayFormulaResults::default()
-        };
-        crate::aspose_integration::validate_recalculated_workbook_with_arrays(
-            &source,
-            &saved,
-            &array_results,
-        )?;
-        if input
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
-        {
-            use excel_editor::{ExcelEditPlan, PreservationRequirement as P, WorkbookFormat};
-            // Formula caches are expected to change during conversion. Literal
-            // values/types were checked above; all other semantics retain the
-            // existing plan-aware validator, including names and structure.
-            let plan = ExcelEditPlan {
-                request_id: self.run_id.clone(),
-                input: input.clone(),
-                output: candidate.clone(),
-                format: WorkbookFormat::Xlsx,
-                workbook: excel_editor::inspect_xlsx_profile(&input)?,
-                operations: Vec::new(),
-                preserve: [
-                    P::FormulaText,
-                    P::CommentsAndPositions,
-                    P::MergedRanges,
-                    P::DefinedNames,
-                    P::PageSettings,
-                    P::HeaderFooterText,
-                    P::Relationships,
-                    P::SheetIdentityAndOrder,
-                    P::ConditionalFormatting,
-                    P::DataValidations,
-                    P::FreezePanes,
-                    P::AutoFilter,
-                ]
-                .into_iter()
-                .collect(),
-                drop_allowed: Default::default(),
-            };
-            excel_editor::OpenpyxlXlsxValidator
-                .validate_with_evaluation_sheet(&plan, &candidate)?;
+        // Archive Worker output unchanged. Rust verifies, never deletes sheets.
+        let convert_inputs = vec![crate::aspose_post::trace_input_workbook(&input)];
+        let convert_archive =
+            crate::aspose_post::archive_raw_candidate(&candidate, &self.diagnostics)?;
+        let convert_post =
+            crate::aspose_post::verify_sanitized_business_sheets(&candidate, &result.output_sheets)?;
+        if let Err(error) = crate::aspose_post::write_trace_record(
+            &convert_archive,
+            &self.run_id,
+            &self.run_id,
+            "aspose_worker (Aspose.Cells .NET, Convert)",
+            result.evaluation_output,
+            &convert_inputs,
+            &convert_post,
+        ) {
+            eprintln!("Aspose 原始输出追溯记录写入失败：{error:#}");
         }
+        let _review_origin = crate::review_output::ReviewOriginScope::enter_if_unset(&input, &hash);
+        let _review_destination =
+            crate::review_output::ReviewDestinationScope::enter_if_unset(output);
+        (|| -> Result<()> {
+            let saved = excel_reader::read_workbook(&candidate)?;
+            let array_results = if input
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+            {
+                let original = excel_editor::ArrayFormulaResults::read(&input)?;
+                ensure!(
+                    original == excel_editor::ArrayFormulaResults::read(&candidate)?,
+                    "Aspose 转换改变数组公式结果范围"
+                );
+                original
+            } else {
+                excel_editor::ArrayFormulaResults::default()
+            };
+            crate::aspose_integration::validate_recalculated_workbook_with_arrays(
+                &source,
+                &saved,
+                &array_results,
+            )?;
+            if input
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+            {
+                use excel_editor::{ExcelEditPlan, PreservationRequirement as P, WorkbookFormat};
+                // Formula caches are expected to change during conversion. Literal
+                // values/types were checked above; all other semantics retain the
+                // existing plan-aware validator, including names and structure.
+                let plan = ExcelEditPlan {
+                    request_id: self.run_id.clone(),
+                    input: input.clone(),
+                    output: candidate.clone(),
+                    format: WorkbookFormat::Xlsx,
+                    workbook: excel_editor::inspect_xlsx_profile(&input)?,
+                    operations: Vec::new(),
+                    preserve: [
+                        P::FormulaText,
+                        P::CommentsAndPositions,
+                        P::MergedRanges,
+                        P::DefinedNames,
+                        P::PageSettings,
+                        P::HeaderFooterText,
+                        P::Relationships,
+                        P::SheetIdentityAndOrder,
+                        P::ConditionalFormatting,
+                        P::DataValidations,
+                        P::FreezePanes,
+                        P::AutoFilter,
+                    ]
+                    .into_iter()
+                    .collect(),
+                    drop_allowed: Default::default(),
+                };
+                excel_editor::OpenpyxlXlsxValidator
+                    .validate_sanitized_aspose(&plan, &candidate)?;
+            }
+            Ok(())
+        })()
+        .map_err(|error| {
+            crate::review_output::retain_validation_error(&input, &candidate, &self.run_id, error)
+        })?;
         crate::file_commit::verify_planning_snapshot(&input, Some(&hash))?;
         let validation_ms = validation_started.elapsed().as_secs_f64() * 1000.0;
         let commit = crate::file_commit::create_target_from_candidate(&candidate, output)?;
-        let report = serde_json::json!({"status":"converted","engine":"aspose","run_id":self.run_id,"evaluation_output":true,"result":result,"validation":{"verified":true,"level":"source_values_types_formula_text_merges_comments_and_sheet_order","source_sha256":hash,"elapsed_ms":validation_ms},"commit":commit,"end_to_end_ms":started.elapsed().as_secs_f64()*1000.0});
+        let report = serde_json::json!({"status":"converted","engine":"aspose","run_id":self.run_id,"evaluation_output":true,"result":result,"raw_archive":convert_archive.path,"raw_archive_sha256":convert_archive.sha256,"raw_archive_stage":"worker_output_after_worker_preservation","sdk_save_archive":result.sdk_save_archive,"worker_input_trace":result.input_trace,"evaluation_sheet_post_processing":convert_post.as_str(),"validation":{"verified":true,"level":"source_values_types_formula_text_merges_comments_and_sheet_order","source_sha256":hash,"elapsed_ms":validation_ms},"commit":commit,"end_to_end_ms":started.elapsed().as_secs_f64()*1000.0});
         fs::create_dir_all(&self.diagnostics)?;
         let mut log = fs::OpenOptions::new()
             .create(true)

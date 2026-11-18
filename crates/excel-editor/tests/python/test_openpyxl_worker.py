@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -7,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
 import openpyxl
@@ -19,17 +21,28 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run_worker(plan, output):
-    request = output.with_suffix(".request.json")
-    response = output.with_suffix(".response.json")
-    request.write_text(json.dumps({
+def worker_request(plan, output):
+    return {
         "schema_version": 1,
         "request_id": plan["request_id"],
         "format": "xlsx",
         "input": plan["input"],
         "output": str(output),
         "plan": plan,
-    }), encoding="utf-8")
+    }
+
+
+def load_worker(path=WORKER):
+    spec = importlib.util.spec_from_file_location("openpyxl_worker_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_worker(plan, output):
+    request = output.with_suffix(".request.json")
+    response = output.with_suffix(".response.json")
+    request.write_text(json.dumps(worker_request(plan, output)), encoding="utf-8")
     process = subprocess.run(
         [sys.executable, "-I", str(WORKER), "--request", str(request), "--response", str(response)],
         capture_output=True,
@@ -470,7 +483,7 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         process, response = run_worker(plan, output)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(response["status"], "applied", response)
-        self.assertEqual(response["verified_operation_count"], 1)
+        self.assertEqual(response["verified_operation_count"], 0)
         self.assertEqual(digest(self.source), source_hash)
         saved = openpyxl.load_workbook(output, data_only=False)
         self.assertEqual(saved["Data"]["A1"].value, "before")
@@ -1011,15 +1024,83 @@ class OpenpyxlWorkerTests(unittest.TestCase):
 
 
 
-class StyleTableIntegrityTest(unittest.TestCase):
-    """Direct coverage for the saved-output style-table integrity assertion."""
+    def test_saved_output_allows_content_differences_and_extra_sheets(self):
+        worker = load_worker()
+        output = self.root / "drift.xlsx"
+        plan = self.base_plan(output, [
+            operation("set_cell_value", sheet="Data", cell="A1",
+                      value={"type": "text", "value": "expected"})
+        ])
+        request = output.with_suffix(".request.json")
+        response = output.with_suffix(".response.json")
+        request.write_text(json.dumps(worker_request(plan, output)), encoding="utf-8")
+
+        def modify_candidate(candidate, _operations):
+            saved = openpyxl.load_workbook(candidate)
+            saved["Data"]["A1"] = "different"
+            saved["Data"]["A1"].font = Font(bold=True)
+            saved["Data"]["C2"] = "=42"
+            saved.create_sheet("Extra", 0)
+            saved.save(candidate)
+            saved.close()
+
+        with patch.object(worker, "_restore_planned_empty_strings", modify_candidate):
+            code = worker._run(request, response)
+        self.assertEqual(code, 0, response.read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(response.read_text(encoding="utf-8"))["status"], "applied")
+        # The fixture deliberately has an uncached formula.
+        saved = openpyxl.load_workbook(output, data_only=True)
+        self.assertIsNone(saved["Data"]["C2"].value)
+        saved.close()
+
+    def test_failed_saved_output_validation_keeps_candidate_and_input(self):
+        worker = load_worker()
+        source_hash = digest(self.source)
+        for kind in ("missing_sheet", "unreadable", "missing_sheet_roster_off"):
+            with self.subTest(kind=kind):
+                output = self.root / (kind + ".xlsx")
+                plan = self.base_plan(output, [
+                    operation("set_cell_value", sheet="Data", cell="A1",
+                              value={"type": "decimal", "value": "5"})
+                ])
+                request = output.with_suffix(".request.json")
+                response = output.with_suffix(".response.json")
+                should_fail = kind != "missing_sheet_roster_off"
+                payload = worker_request(plan, output)
+                payload.update(verify_content=False, verify_sheet_names=kind == "missing_sheet")
+                request.write_text(json.dumps(payload), encoding="utf-8")
+                candidate_hash = None
+
+                def break_candidate(candidate, _operations):
+                    nonlocal candidate_hash
+                    if kind == "unreadable":
+                        candidate.write_bytes(b"damaged saved workbook")
+                    else:
+                        saved = openpyxl.load_workbook(candidate)
+                        saved.remove(saved["Notes"])
+                        saved.save(candidate)
+                        saved.close()
+                    candidate_hash = digest(candidate)
+
+                with patch.object(worker, "_restore_planned_empty_strings", break_candidate):
+                    if should_fail:
+                        with self.assertLogs(worker.__name__, level="WARNING") as messages:
+                            self.assertEqual(worker._run(request, response), 1)
+                        self.assertIn(str(output), messages.output[0])
+                    else:
+                        self.assertEqual(worker._run(request, response), 0)
+                result = json.loads(response.read_text(encoding="utf-8"))
+                self.assertEqual(result["status"], "validation_failed" if should_fail else "applied")
+                if should_fail:
+                    self.assertEqual(result["error"]["kind"], "saved_output_validation_failed")
+                self.assertEqual(digest(output), candidate_hash)
+                self.assertEqual(digest(self.source), source_hash)
+
+
+class SavedWorkbookStructureTest(unittest.TestCase):
 
     def setUp(self):
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("openpyxl_worker_module", WORKER)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.integrity = module._verify_style_table_integrity
+        self.validate = load_worker()._validate_saved_workbook
         self.root = Path(tempfile.mkdtemp(prefix="worker-style-integrity-"))
         self.addCleanup(self._cleanup)
 
@@ -1071,9 +1152,8 @@ class StyleTableIntegrityTest(unittest.TestCase):
                       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
                       '<sheetData><row r="1"><c r="A1" t="inlineStr" s="5"><is><t>x</t></is></c></row></sheetData></worksheet>',
         )
-        with self.assertRaises(Exception) as caught:
-            self.integrity(target)
-        self.assertIn("beyond its", str(caught.exception))
+        valid, _ = self.validate(target, ["Data"])
+        self.assertFalse(valid)
 
     def test_out_of_range_column_dimension_style_is_rejected(self):
         target = self.root / "column-style-oob.xlsx"
@@ -1089,11 +1169,10 @@ class StyleTableIntegrityTest(unittest.TestCase):
                 '</x:is></x:c></x:row></x:sheetData></x:worksheet>'
             ),
         )
-        with self.assertRaises(Exception) as caught:
-            self.integrity(target)
-        self.assertIn("cell style 1 beyond its 1 cellXfs entries", str(caught.exception))
+        valid, _ = self.validate(target, ["Data"])
+        self.assertFalse(valid)
 
-    def test_count_mismatch_is_rejected(self):
+    def test_count_mismatch_passes_when_openpyxl_can_load(self):
         target = self.root / "mismatch.xlsx"
         self._workbook_with_styles(
             target,
@@ -1103,9 +1182,7 @@ class StyleTableIntegrityTest(unittest.TestCase):
                       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
                       '<sheetData><row r="1"><c r="A1" t="inlineStr" s="0"><is><t>x</t></is></c></row></sheetData></worksheet>',
         )
-        with self.assertRaises(Exception) as caught:
-            self.integrity(target)
-        self.assertIn("declares count=", str(caught.exception))
+        self.assertEqual(self.validate(target, ["Data"]), (True, None))
 
     def test_consistent_table_passes(self):
         target = self.root / "consistent.xlsx"
@@ -1118,7 +1195,7 @@ class StyleTableIntegrityTest(unittest.TestCase):
                       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
                       '<sheetData><row r="1"><c r="A1" t="inlineStr" s="1"><is><t>x</t></is></c></row></sheetData></worksheet>',
         )
-        self.integrity(target)
+        self.assertEqual(self.validate(target, ["Data"]), (True, None))
 
 
 if __name__ == "__main__":

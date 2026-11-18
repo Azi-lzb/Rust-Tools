@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import logging
 import math
 import os
 import re
@@ -177,7 +178,7 @@ def _matrix(value: Any, rows: int, columns: int) -> list[list[Any]]:
 _XL_CELL_TYPE_FORMULAS = -4123
 
 
-def _formula_map(worksheet: Any, used: Any) -> dict[tuple[int, int], str]:
+def _formula_map(worksheet: Any, used: Any, notation: str = "Formula") -> dict[tuple[int, int], str]:
     """Formula text per cell, keyed by absolute (row, column).
 
     Reading `UsedRange.Formula` in one go fails on some workbooks (observed on a
@@ -186,7 +187,7 @@ def _formula_map(worksheet: Any, used: Any) -> dict[tuple[int, int], str]:
     cells only, then read each block individually.
     """
     try:
-        matrix = _matrix(used.Formula, int(used.Rows.Count), int(used.Columns.Count))
+        matrix = _matrix(getattr(used, notation), int(used.Rows.Count), int(used.Columns.Count))
         first_row = int(used.Row)
         first_column = int(used.Column)
         result: dict[tuple[int, int], str] = {}
@@ -209,7 +210,7 @@ def _formula_map(worksheet: Any, used: Any) -> dict[tuple[int, int], str]:
         columns = int(area.Columns.Count)
         first_row = int(area.Row)
         first_column = int(area.Column)
-        block = _matrix(area.Formula, rows, columns)
+        block = _matrix(getattr(area, notation), rows, columns)
         for row_offset, row in enumerate(block):
             for column_offset, formula in enumerate(row):
                 if isinstance(formula, str):
@@ -217,7 +218,7 @@ def _formula_map(worksheet: Any, used: Any) -> dict[tuple[int, int], str]:
     return result
 
 
-def _snapshot(workbook: Any) -> list[dict[str, Any]]:
+def _snapshot(workbook: Any, notation: str = "Formula") -> list[dict[str, Any]]:
     sheets: list[dict[str, Any]] = []
     for index in range(1, int(workbook.Worksheets.Count) + 1):
         worksheet = workbook.Worksheets(index)
@@ -228,7 +229,7 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
         first_column = int(used.Column)
         # `Value2` tolerates regions where the bulk `.Formula` read fails.
         values = _matrix(used.Value2, rows, columns)
-        formula_by_cell = _formula_map(worksheet, used)
+        formula_by_cell = _formula_map(worksheet, used, notation)
         formula_cells: dict[tuple[int, int], str] = {}
         formula_values: dict[tuple[int, int], Any] = {}
         value_cells: dict[tuple[int, int], Any] = {}
@@ -238,7 +239,8 @@ def _snapshot(workbook: Any) -> list[dict[str, Any]]:
                 address = (first_row + row_offset, first_column + column_offset)
                 value = values[row_offset][column_offset]
                 formula = formula_by_cell.get(address)
-                if formula is not None and formula.startswith("="):
+                if formula is not None and formula.startswith("=") and (
+                        formula != value or worksheet.Cells(*address).HasFormula):
                     formula_cells[address] = formula
                     formula_values[address] = value
                 elif value is not None:
@@ -261,6 +263,17 @@ def _column_name(column: int) -> str:
         column, remainder = divmod(column - 1, 26)
         result = chr(65 + remainder) + result
     return result
+
+
+def _cells_after_row_deletions(cells, runs):
+    for start, count in runs:
+        end = start + count
+        cells = {
+            (row if row < start else row - count, column): value
+            for (row, column), value in cells.items()
+            if row < start or row >= end
+        }
+    return cells
 
 
 def _cell_name(address: tuple[int, int]) -> str:
@@ -545,6 +558,7 @@ class ConversionSession:
         self._word_application: Any | None = None
         self._word_application_name: str | None = None
         self._word_process_id: int | None = None
+        self.verify_content = True
 
     # ProgID preference per host family. WPS-native spreadsheet formats (.et /
     # .ett) must be opened by WPS Spreadsheets (KET): Excel would open them as a
@@ -941,7 +955,7 @@ class ConversionSession:
             workbook = self._open_workbook(candidate, read_only=False, label="规范化候选工作簿")
             sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
             stage = "记录 5-2 候选原始公式、数据和合并区域"
-            before_snapshot = _snapshot(workbook)
+            before_snapshot = _snapshot(workbook) if self.verify_content else []
             applied = 0
             expected_updates: dict[tuple[str, tuple[int, int]], str] = {}
             seen: set[tuple[str, tuple[int, int]]] = set()
@@ -972,10 +986,15 @@ class ConversionSession:
             stage = "保存 5-2 COM 候选工作簿"
             workbook.Save()
             stage = "核对 5-2 COM 保存结果"
-            after_snapshot = _snapshot(workbook)
-            verification = _verify_institution_normalize_com_snapshots(
-                before_snapshot, after_snapshot, expected_updates
-            )
+            issue = None
+            verification = None
+            if self.verify_content:
+                try:
+                    verification = _verify_institution_normalize_com_snapshots(
+                        before_snapshot, _snapshot(workbook), expected_updates
+                    )
+                except ValueError as error:
+                    issue = str(error)
             workbook.Close(SaveChanges=False)
             workbook = None
             return {
@@ -985,7 +1004,9 @@ class ConversionSession:
                 "application": self._application_name,
                 "process_id": self._process_id,
                 "applied_count": applied,
-                "verified": True,
+                "verified": issue is None,
+                "validation_issue": issue,
+                "saved": True,
                 "verification": verification,
             }
         except Exception as error:
@@ -1000,6 +1021,20 @@ class ConversionSession:
                 "error": f"{type(error).__name__}: {error}",
                 "traceback": traceback.format_exc(limit=6),
             }
+
+    def _verify_saved_report_cells(self, candidate: Path, expected: dict) -> str | None:
+        workbook = self._open_workbook(candidate, read_only=True, label="专用报表候选回读")
+        try:
+            sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
+            mismatches = []
+            for (name, row, col), value in expected.items():
+                if name not in sheets or not _values_equal(sheets[name].Cells(row, col).Value, value):
+                    mismatches.append(f"{name}!{_cell_name((row, col))}")
+                    if len(mismatches) == 5:
+                        break
+            return "业务单元格与计划不符：" + "、".join(mismatches) if mismatches else None
+        finally:
+            workbook.Close(SaveChanges=False)
 
     def village_split_com(self, current_text: str, previous_text: str, candidate_text: str) -> dict[str, Any]:
         """Apply PyCode's 5-1 COM algorithm to an isolated `.xls` candidate."""
@@ -1054,6 +1089,10 @@ class ConversionSession:
                     matrix[target_row][7] = (
                         0 if current_loan == 0 else "∞"
                     ) if previous_loan == 0 else round((current_loan / previous_loan - 1) * 100, 2)
+            current_wb.Close(SaveChanges=False)
+            current_wb = None
+            previous_wb.Close(SaveChanges=False)
+            previous_wb = None
             if all(matrix[0][column] in (0, None) for column in (0, 4)):
                 return {
                     "ok": True,
@@ -1065,15 +1104,11 @@ class ConversionSession:
                     "filled_sheets": 0,
                     "skipped_sheets": 0,
                 }
-            current_wb.Close(SaveChanges=False)
-            current_wb = None
-            previous_wb.Close(SaveChanges=False)
-            previous_wb = None
-
             stage = "通过 Excel/WPS 修改目标候选工作簿"
             target_wb = self._open_workbook(candidate, read_only=False, label="目标候选工作簿")
             counts = {"branch_sheets": 0, "filled_sheets": 0, "skipped_sheets": 0}
             row_names = ("博罗长江村镇银行", "惠东惠民村镇银行")
+            expected = {}
             for sheet in target_wb.Worksheets:
                 title = str(sheet.Name)
                 if "分机构" not in title:
@@ -1105,22 +1140,28 @@ class ConversionSession:
                 sheet.Rows(village_row).Delete()
                 sheet.Rows(village_row).Insert()
                 sheet.Rows(village_row).Insert()
-                sheet.Cells(village_row, 1).Value = row_names[0]
-                sheet.Cells(village_row + 1, 1).Value = row_names[1]
-                for column in range(8):
-                    sheet.Cells(village_row, column + 2).Value = matrix[kind][column]
-                    sheet.Cells(village_row + 1, column + 2).Value = matrix[kind + 3][column]
+                for offset in range(2):
+                    row = village_row + offset
+                    for column, value in enumerate((row_names[offset], *matrix[kind + offset * 3]), 1):
+                        sheet.Cells(row, column).Value = value
+                        expected[title, row, column] = value
                 counts["filled_sheets"] += 1
             stage = "保存 5-1 COM 候选工作簿"
-            target_wb.Save()
+            if expected:
+                target_wb.Save()
             target_wb.Close(SaveChanges=False)
             target_wb = None
+            stage = "回读校验 5-1 COM 候选工作簿"
+            issue = self._verify_saved_report_cells(candidate, expected) if self.verify_content and expected else None
             return {
                 "ok": True,
                 "matrix_empty": False,
                 "application": self._application_name,
                 "process_id": self._process_id,
                 "candidate": str(candidate),
+                "verified": issue is None,
+                "validation_issue": issue,
+                "saved": bool(expected),
                 **counts,
             }
         except Exception as error:
@@ -1202,14 +1243,17 @@ class ConversionSession:
             fill_total = 0.0
             unmatched: list[str] = []
             changed_cells = 0
+            expected = {}
+            sheet_name = str(current_inst.Name)
             for name, row in current_rows.items():
                 if name in previous_values:
                     difference = current_values[name] - previous_values[name]
-                    current_inst.Cells(row, 4).Value = difference
                     fill_total += difference
                 else:
-                    current_inst.Cells(row, 4).Value = None
+                    difference = None
                     unmatched.append(name)
+                current_inst.Cells(row, 4).Value = difference
+                expected[sheet_name, row, 4] = difference
                 changed_cells += 1
             previous_only = [name for name in previous_values if name not in current_values]
 
@@ -1236,16 +1280,22 @@ class ConversionSession:
             area_total = self._legacy_number(current_area.Cells(city_row, header_col).Value)
 
             stage = "保存 5-7 COM 候选工作簿"
-            current_wb.Save()
+            if expected:
+                current_wb.Save()
             current_wb.Close(SaveChanges=False)
             current_wb = None
             previous_wb.Close(SaveChanges=False)
             previous_wb = None
+            stage = "回读校验 5-7 COM 候选工作簿"
+            issue = self._verify_saved_report_cells(current, expected) if self.verify_content and expected else None
             return {
                 "ok": True,
                 "application": self._application_name,
                 "process_id": self._process_id,
                 "changed_cells": changed_cells,
+                "verified": issue is None,
+                "validation_issue": issue,
+                "saved": bool(expected),
                 "summary": {
                     "matched": len(current_rows) - len(unmatched),
                     "fill_total": fill_total,
@@ -1302,7 +1352,7 @@ class ConversionSession:
             applied = 0
             mismatches: list[str] = []
             for sheet_name, address in verified_marks:
-                color = sheets[sheet_name].Range(address).Interior.Color
+                color = sheets[sheet_name].Range(address).Interior.Color if self.verify_content else 255
                 if color == 255:
                     applied += 1
                 else:
@@ -1334,7 +1384,8 @@ class ConversionSession:
             }
 
     def delete_rows_com(
-        self, candidate_text: str, deletions: list[dict[str, Any]]
+        self, candidate_text: str, deletions: list[dict[str, Any]],
+        report_validation_issue: bool = False,
     ) -> dict[str, Any]:
         """Delete Rust-planned whole rows on an isolated `.xls` copy (2-2/5-3)."""
         stage = "检查删行 COM 候选"
@@ -1353,47 +1404,63 @@ class ConversionSession:
             workbook = self._open_workbook(candidate, read_only=False, label="删行候选工作簿")
             sheets = {str(sheet.Name): sheet for sheet in workbook.Worksheets}
 
-            def used_rows(sheet: Any) -> int:
-                used = sheet.UsedRange
-                return int(used.Row) + int(used.Rows.Count) - 1
-
-            stage = "记录删行前行数"
-            before_rows = {name: used_rows(sheet) for name, sheet in sheets.items()}
-            expected: dict[str, int] = {}
             grouped: dict[str, list[tuple[int, int]]] = {}
             for deletion in deletions:
                 sheet_name = str(deletion.get("sheet", ""))
                 first_row = int(deletion.get("first_row", 0))
                 count = int(deletion.get("count", 0))
-                if not sheet_name or first_row < 1 or count < 1:
+                if not sheet_name or first_row < 1 or count < 1 or first_row + count > 65_537:
                     raise ValueError("删行计划缺少工作表、起始行或行数")
                 if sheet_name not in sheets:
                     raise ValueError(f"候选工作簿缺少工作表：{sheet_name}")
                 grouped.setdefault(sheet_name, []).append((first_row, count))
-            stage = "按工作表倒序删除整行"
+            stage = "记录删行前的值和公式位置"
+            expected = {}
+            for snapshot in (_snapshot(workbook) if self.verify_content else []):
+                name = snapshot["name"]
+                runs = grouped.get(name, [])
+                expected[name] = (
+                    _cells_after_row_deletions(snapshot["values"], runs),
+                    _cells_after_row_deletions(snapshot["formulas"], runs),
+                )
+            stage = "按计划顺序删除整行"
             deleted_rows = 0
             for sheet_name, runs in grouped.items():
                 sheet = sheets[sheet_name]
-                # 倒序删除，保持 Rust 计划里的原始行号语义。
-                for first_row, count in sorted(runs, key=lambda item: item[0], reverse=True):
+                # A later dedup rule sees the preceding rule's shortened sheet.
+                for first_row, count in runs:
                     sheet.Rows(f"{first_row}:{first_row + count - 1}").Delete()
                     deleted_rows += count
-                expected[sheet_name] = (
-                    before_rows[sheet_name]
-                    - sum(count for _, count in grouped[sheet_name])
-                )
             stage = "保存删行候选工作簿"
             workbook.Save()
-            stage = "核对删行后行数"
-            mismatches = []
-            for sheet_name, expect in expected.items():
-                actual = used_rows(sheets[sheet_name])
-                if actual != expect:
-                    mismatches.append(f"{sheet_name}: 行数 {actual} ≠ 预期 {expect}")
-            if mismatches:
-                raise ValueError("删行后行数校验不一致：" + "；".join(mismatches[:5]))
             workbook.Close(SaveChanges=False)
             workbook = None
+            stage = "回读删行后的业务数据和公式"
+            validation_issue = None
+            try:
+                if self.verify_content:
+                    workbook = self._open_workbook(candidate, read_only=True, label="删行候选工作簿")
+                after = _snapshot(workbook) if workbook is not None else []
+                if list(expected) != [sheet["name"] for sheet in after]:
+                    raise ValueError("工作表名称或顺序发生变化")
+                for sheet in after:
+                    name = sheet["name"]
+                    values, formulas = expected[name]
+                    for address in values.keys() | sheet["values"].keys():
+                        if (address not in values or address not in sheet["values"]
+                                or not _values_equal(values[address], sheet["values"][address])):
+                            raise ValueError(f"{name}!{_cell_name(address)} 的保留数据与删行计划不符")
+                    # Excel/WPS can rewrite references as rows move. Ensure
+                    # surviving formulas are still formulas, regardless of cache.
+                    if formulas.keys() != sheet["formulas"].keys():
+                        raise ValueError(f"{name} 的公式位置与删行计划不符")
+            except Exception as error:
+                if not report_validation_issue:
+                    raise
+                validation_issue = str(error)
+            if workbook is not None:
+                workbook.Close(SaveChanges=False)
+                workbook = None
             return {
                 "ok": True,
                 "operation": "delete_rows_com",
@@ -1401,7 +1468,9 @@ class ConversionSession:
                 "application": self._application_name,
                 "process_id": self._process_id,
                 "deleted_rows": deleted_rows,
-                "verified": True,
+                "verified": validation_issue is None,
+                "validation_issue": validation_issue,
+                "saved": True,
             }
         except Exception as error:
             if workbook is not None:
@@ -1415,6 +1484,50 @@ class ConversionSession:
                 "error": f"{type(error).__name__}: {error}",
                 "traceback": traceback.format_exc(limit=6),
             }
+
+    def static_print_layout_com(self, source_text: str, output_text: str) -> dict[str, Any]:
+        """Extract layout from a staged XLS. The Rust writer reads the original BIFF cache."""
+        source = self._legacy_xls_path(source_text, "静态打印源副本")
+        output = _absolute(output_text)
+        if output.suffix.lower() != ".xlsx" or output.exists():
+            raise ValueError(f"静态打印版式需使用新的 XLSX 临时路径：{output}")
+        self._ensure_application()
+        application = self._application
+        assert application is not None
+        seed = workbook = None
+        manual = -4135  # xlCalculationManual
+        try:
+            # The first workbook opened can reset the host's calculation mode.
+            seed = application.Workbooks.Add()
+            application.Calculation = manual
+            application.CalculateBeforeSave = False
+            if int(application.Calculation) != manual or application.CalculateBeforeSave:
+                raise RuntimeError("Excel/WPS COM 无法关闭静态打印的自动计算")
+            workbook = application.Workbooks.Open(str(source), 0, True)
+            if int(workbook.FileFormat) not in BIFF_FILE_FORMATS:
+                raise ValueError("静态打印 COM 版式仅接受实际 BIFF XLS 文件")
+            if int(application.Calculation) != manual:
+                raise RuntimeError("打开 XLS 后不再处于手动计算模式，已取消版式提取")
+            # WPS retains manual calculation on open but can restore the
+            # workbook's calculate-before-save setting. Disable it again.
+            application.CalculateBeforeSave = False
+            if application.CalculateBeforeSave:
+                raise RuntimeError("无法关闭 XLS 保存前重算，已取消版式提取")
+            workbook.SaveAs(str(output), XLSX_FILE_FORMAT)
+            return {
+                "ok": True,
+                "operation": "static_print_layout_com",
+                "application": self._application_name,
+                "calculation": "manual",
+                "calculate_before_save": False,
+            }
+        finally:
+            try:
+                if workbook is not None:
+                    workbook.Close(SaveChanges=False)
+            finally:
+                if seed is not None:
+                    seed.Close(SaveChanges=False)
 
     def fx_header_com(self, candidate_text: str) -> dict[str, Any]:
         """Apply PyCode's 5-4 COM algorithm to an isolated `.xls` copy."""
@@ -1424,34 +1537,15 @@ class ConversionSession:
         old_unit = "万元"
         new_unit = "万美元"
 
-        def replace_in_default(ps) -> bool:
-            changed = False
+        def header_slots(ps):
             for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
-                try:
-                    text = getattr(ps, attr) or ""
-                    if old_unit in text:
-                        setattr(ps, attr, text.replace(old_unit, new_unit))
-                        changed = True
-                except Exception:
-                    pass
-            return changed
-
-        def replace_in_subpage(sub_obj) -> bool:
-            changed = False
-            if sub_obj is None:
-                return False
-            for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
-                try:
-                    hf = getattr(sub_obj, attr)
-                    if hf is None:
-                        continue
-                    text = hf.Text or ""
-                    if old_unit in text:
-                        hf.Text = text.replace(old_unit, new_unit)
-                        changed = True
-                except Exception:
-                    pass
-            return changed
+                yield f"Default.{attr}", ps, attr
+            for flag, name in (("OddAndEvenPagesHeaderFooter", "EvenPage"),
+                               ("DifferentFirstPageHeaderFooter", "FirstPage")):
+                if getattr(ps, flag):
+                    page = getattr(ps, name)
+                    for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
+                        yield f"{name}.{attr}", getattr(page, attr), "Text"
 
         try:
             self._ensure_application()
@@ -1461,41 +1555,43 @@ class ConversionSession:
             workbook = self._open_workbook(candidate, read_only=False, label="外汇页眉候选工作簿")
             fx_sheets = 0
             modified_sheets = 0
+            expected = {}
             for sheet in workbook.Worksheets:
-                if "外汇" not in str(sheet.Name):
+                name = str(sheet.Name)
+                if "外汇" not in name:
                     continue
                 fx_sheets += 1
-                ps = sheet.PageSetup
-                changed = replace_in_default(ps)
-                try:
-                    if ps.OddAndEvenPagesHeaderFooter:
-                        if replace_in_subpage(ps.EvenPage):
-                            changed = True
-                except Exception:
-                    pass
-                try:
-                    if ps.DifferentFirstPageHeaderFooter:
-                        if replace_in_subpage(ps.FirstPage):
-                            changed = True
-                except Exception:
-                    pass
+                changed = False
+                for slot, obj, attr in header_slots(sheet.PageSetup):
+                    text = getattr(obj, attr) or ""
+                    after = text.replace(old_unit, new_unit)
+                    expected[name, slot] = after
+                    if after != text:
+                        setattr(obj, attr, after)
+                        changed = True
                 if changed:
                     modified_sheets += 1
             if modified_sheets:
                 stage = "保存 5-4 COM 候选工作簿"
                 workbook.Save()
+                workbook.Close(SaveChanges=False)
+                workbook = None
+                if self.verify_content:
+                    stage = "重新打开已保存的 5-4 候选工作簿"
+                    workbook = self._open_workbook(candidate, read_only=True, label="外汇页眉候选回读")
             stage = "核对 5-4 COM 页眉结果"
-            residual = []
-            for sheet in workbook.Worksheets:
+            actual = {}
+            for sheet in (workbook.Worksheets if self.verify_content else []):
                 if "外汇" not in str(sheet.Name):
                     continue
-                for attr in ("LeftHeader", "CenterHeader", "RightHeader"):
-                    text = getattr(sheet.PageSetup, attr) or ""
-                    if old_unit in text:
-                        residual.append(f"{sheet.Name}.{attr}")
-            if residual:
-                raise ValueError("外汇表页眉仍残留旧单位：" + "、".join(residual[:5]))
-            workbook.Close(SaveChanges=False)
+                for slot, obj, attr in header_slots(sheet.PageSetup):
+                    actual[str(sheet.Name), slot] = getattr(obj, attr) or ""
+            mismatches = [f"{name}.{slot}" for name, slot in sorted(expected.keys() | actual.keys())
+                          if expected.get((name, slot)) != actual.get((name, slot))]
+            if not self.verify_content:
+                mismatches = []
+            if workbook is not None:
+                workbook.Close(SaveChanges=False)
             workbook = None
             return {
                 "ok": True,
@@ -1505,7 +1601,10 @@ class ConversionSession:
                 "process_id": self._process_id,
                 "fx_sheets": fx_sheets,
                 "modified_sheets": modified_sheets,
-                "verified": True,
+                "verified": not mismatches,
+                "validation_issue": ("外汇表页眉与预期不符：" + "、".join(mismatches[:5]))
+                if mismatches else None,
+                "saved": modified_sheets > 0,
             }
         except Exception as error:
             if workbook is not None:
@@ -1520,21 +1619,162 @@ class ConversionSession:
                 "traceback": traceback.format_exc(limit=6),
             }
 
-    def append_rows_com(
-        self,
-        candidate_text: str,
-        sheet_name: str,
-        start_row: int,
-        rows: list[list[Any]],
+    def append_rows_com(self, candidate_text: str, sheet_name: str, start_row: int, rows: list[list[Any]]) -> dict[str, Any]:
+        """Reject the obsolete untyped matrix request from older clients."""
+        raise ValueError("Legacy XLS append disabled for untyped rows; use the validated cell operations")
+
+    @staticmethod
+    def _xls_append_structure(workbook: Any) -> dict[str, Any]:
+        return {
+            "sheets": [(sheet.Name, int(sheet.Visible)) for sheet in workbook.Sheets],
+            "active": workbook.ActiveSheet.Name,
+            "date_1904": bool(workbook.Date1904),
+            "names": sorted((name.Name, name.RefersTo) for name in workbook.Names),
+            "links": sorted(_excel_link_sources(workbook)),
+            "comments": {
+                sheet.Name: sorted((note.Parent.Address, note.Author, note.Text()) for note in sheet.Comments)
+                for sheet in workbook.Worksheets
+            },
+            "shape_counts": {
+                sheet.Name: int(sheet.Shapes.Count)
+                for sheet in workbook.Worksheets
+            },
+        }
+
+    def append_xls_operations(self, candidate_text: str, operations: list[dict[str, Any]]) -> dict[str, Any]:
+        """Save only the planned cells on a disposable BIFF8 target copy."""
+        candidate = self._legacy_xls_path(candidate_text, "去重追加候选")
+        if not operations:
+            raise ValueError("XLS 追加计划为空")
+        self._ensure_application()
+        workbook = None
+        stage = "打开 XLS 追加候选"
+        try:
+            workbook = self._open_workbook(candidate, read_only=False, label="XLS 追加候选")
+            if workbook.ReadOnly or int(workbook.FileFormat) != 56:
+                raise ValueError("需要可写的 BIFF8 XLS")
+            if bool(workbook.HasVBProject):
+                raise ValueError("XLS 追加暂不处理含 VBA 的工作簿")
+
+            stage = "校验 XLS 追加位置和类型"
+            before = self._xls_append_structure(workbook) if self.verify_content else {
+                "sheets": [(sheet.Name, int(sheet.Visible)) for sheet in workbook.Sheets],
+                "active": workbook.ActiveSheet.Name,
+            }
+            snapshots = _snapshot(workbook, notation="FormulaR1C1")
+            formulas = {sheet["name"]: sheet["formulas"] for sheet in snapshots}
+            formula_sites = {name: [_cell_name(address) for address in sorted(cells)]
+                             for name, cells in formulas.items()}
+            last_rows = {
+                sheet["name"]: max((row for row, _ in sheet["values"].keys() | sheet["formulas"].keys()), default=0)
+                for sheet in snapshots
+            }
+            sheets = {sheet.Name: sheet for sheet in workbook.Worksheets}
+            pending_sheets = []
+            touched = set()
+            for operation in operations:
+                kind = operation["operation"]
+                if kind == "create_sheet":
+                    name = operation["name"]
+                    existing_names = [item[0] for item in before["sheets"]] + pending_sheets
+                    if (not name.strip() or len(name) > 31 or re.search(r'[:\\/?*\[\]]', name)
+                            or any(other.casefold() == name.casefold() for other in existing_names)):
+                        raise ValueError(f"无效或重名的工作表：{name!r}")
+                    pending_sheets.append(name)
+                    continue
+                sheet_name, address = operation["sheet"], operation["cell"]
+                match = re.fullmatch(r"([A-Z]{1,2})([1-9][0-9]{0,4})", address)
+                if not match or (len(match[1]) == 2 and match[1] > "IV") or int(match[2]) > 65536:
+                    raise ValueError(f"无效的 BIFF8 单元格地址：{address!r}")
+                if (sheet_name, address) in touched:
+                    raise ValueError(f"单元格被重复写入：{sheet_name}!{address}")
+                touched.add((sheet_name, address))
+                if sheet_name in sheets:
+                    cell = sheets[sheet_name].Range(address)
+                    if (int(match[2]) <= last_rows.get(sheet_name, 0) or cell.HasFormula
+                            or cell.Value2 is not None or cell.MergeCells or cell.Comment is not None):
+                        raise ValueError(f"追加位置不为空：{sheet_name}!{address}")
+                elif sheet_name not in pending_sheets:
+                    raise ValueError(f"目标工作表不存在：{sheet_name!r}")
+                if kind == "set_cell_value":
+                    value_type = operation["value"]["type"]
+                    if value_type not in {"text", "decimal", "date_time", "boolean", "blank"}:
+                        raise ValueError(f"XLS 追加不支持类型 {value_type}：{sheet_name}!{address}")
+                elif kind != "set_formula_text":
+                    raise ValueError(f"XLS 追加不支持操作 {kind}")
+
+            stage = "写入 XLS 追加区域"
+            for name in pending_sheets:
+                sheet = workbook.Worksheets.Add(None, workbook.Sheets(workbook.Sheets.Count))
+                sheet.Name = name
+                sheets[name] = sheet
+                formulas[name] = {}
+            for operation in operations:
+                kind = operation["operation"]
+                if kind == "create_sheet":
+                    continue
+                cell = sheets[operation["sheet"]].Range(operation["cell"])
+                if kind == "set_formula_text":
+                    formula = operation["formula"]
+                    cell.Formula = "=" + formula.lstrip("=")
+                    if self.verify_content:
+                        if not cell.HasFormula:
+                            raise ValueError(f"COM 未保存公式：{operation['cell']}")
+                        formulas[operation["sheet"]][(int(cell.Row), int(cell.Column))] = cell.FormulaR1C1
+                    continue
+                typed = operation["value"]
+                value_type, value = typed["type"], typed.get("value")
+                if value_type == "blank":
+                    continue
+                if value_type == "text":
+                    cell.NumberFormat = "@"
+                elif value_type == "decimal":
+                    value = float(value)
+                elif value_type == "date_time":
+                    cell.NumberFormat = value["number_format"]
+                    value = float(value["serial"])
+                cell.Value2 = value
+                if self.verify_content and (cell.HasFormula or cell.Value2 != value):
+                    raise ValueError(f"COM 单元格类型或值回读不一致：{operation['cell']}")
+
+            stage = "保存并回读 XLS 追加候选"
+            if pending_sheets:
+                workbook.Sheets(before["active"]).Activate()
+            workbook.Save()
+            workbook.Close(SaveChanges=False)
+            workbook = None
+            if not self.verify_content:
+                return {"ok": True, "verified": True, "application": self._application_name,
+                        "process_id": self._process_id, "cells": len(touched)}
+            workbook = self._open_workbook(candidate, read_only=True, label="XLS 追加候选")
+            after = self._xls_append_structure(workbook)
+            before["sheets"] += [(name, -1) for name in pending_sheets]
+            before["comments"].update({name: [] for name in pending_sheets})
+            before["shape_counts"].update({name: 0 for name in pending_sheets})
+            observations = [key for key in ("active", "shape_counts") if after[key] != before[key]]
+            differences = [key for key in before if after[key] != before[key] and key not in observations]
+            formula_readback = {sheet["name"]: sheet["formulas"] for sheet in _snapshot(workbook, notation="FormulaR1C1")}
+            if formula_readback != formulas:
+                differences.append("公式")
+            if int(workbook.FileFormat) != 56:
+                differences.append("BIFF8")
+            return {"ok": True, "verified": not differences, "application": self._application_name,
+                    "process_id": self._process_id, "cells": len(touched),
+                    "structure_differences": differences, "observations": observations,
+                    "original_formula_sites": formula_sites}
+        except Exception as error:
+            return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}",
+                    "traceback": traceback.format_exc(limit=6)}
+        finally:
+            if workbook is not None:
+                try:
+                    workbook.Close(SaveChanges=False)
+                except Exception:
+                    pass
+
+    def rename_sheets(
+        self, candidate_text: str, changes: list[dict[str, str]], verify_sheet_names: bool = True
     ) -> dict[str, Any]:
-        """Fail closed until typed/formula and original-region validation exists.
-
-        All legacy XLS append values and operations are currently unsupported.
-        Never open or mutate the candidate, regardless of its coordinates/types.
-        """
-        raise ValueError("Legacy XLS append disabled: typed/formula and original-region preservation validation is not implemented; candidate is not opened")
-
-    def rename_sheets(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
         """复用 pytools 的 openpyxl 改名方案，并改写跨表引用与命名区域。
 
         openpyxl 的 title 赋值不会改写公式字符串，因此这里在同一遍里把
@@ -1549,7 +1789,6 @@ class ConversionSession:
         candidate = _absolute(candidate_text)
         stage = "检查改名候选工作簿"
         workbook = None
-        reloaded = None
         try:
             _validate_container(candidate, "改名候选工作簿")
             if candidate.suffix.lower() != ".xlsx" or not changes:
@@ -1603,49 +1842,48 @@ class ConversionSession:
             workbook.save(candidate)
             workbook.close()
             workbook = None
-            stage = "恢复空字符串单元格"
-            _restore_empty_string_cells(candidate, before, renames)
-            stage = "恢复公式缓存值"
-            _restore_formula_caches(candidate, formula_caches)
-            stage = "重新读取并校验"
-            reloaded = openpyxl.load_workbook(candidate)
-            after = _openpyxl_snapshot(reloaded)
-            expected_names = [
-                renames.get(name, name) for name in [sheet["name"] for sheet in before]
-            ]
-            if [sheet["name"] for sheet in after] != expected_names:
-                raise ValueError("改名后工作表顺序或名称与计划不一致")
-            for source, result in zip(before, after):
-                if set(source["formulas"]) != set(result["formulas"]):
-                    raise ValueError(f"工作表 {source['name']!r} 的公式单元格发生增删")
-                for address, formula in source["formulas"].items():
-                    expected = "=" + _rewrite_sheet_refs(formula, renames)
-                    if result["formulas"].get(address) != expected[1:]:
-                        raise ValueError(
-                            f"工作表 {source['name']!r} 公式 {address} 引用改写不一致"
-                        )
-                for address, value in source["values"].items():
-                    if not _values_equal(value, result["values"].get(address)):
-                        raise ValueError(
-                            f"工作表 {source['name']!r} 非公式单元格 {address} 发生变化"
-                        )
-            reloaded.close()
-            reloaded = None
-            if _count_ref_errors(after) > _count_ref_errors(before):
-                raise ValueError("改名后出现新的 #REF! 公式引用")
+            restoration_failure = None
+            try:
+                stage = "恢复空字符串单元格"
+                _restore_empty_string_cells(candidate, before, renames)
+                stage = "恢复公式缓存值"
+                _restore_formula_caches(candidate, formula_caches)
+            except Exception as error:
+                restoration_failure = stage, error
+            stage = "重新打开并检查工作表"
+            try:
+                with candidate.open("rb") as saved:
+                    reloaded = openpyxl.load_workbook(saved)
+                try:
+                    expected_names = {renames.get(name, name) for name in sheetnames}
+                    missing = sorted(expected_names.difference(reloaded.sheetnames))
+                    if not reloaded.worksheets:
+                        raise ValueError("结果文件没有工作表")
+                    if verify_sheet_names and missing:
+                        raise ValueError("结果缺少工作表：" + "、".join(missing))
+                finally:
+                    reloaded.close()
+            except Exception as error:
+                issue = f"{stage}失败（{type(error).__name__}）：{error}"
+                logging.getLogger(__name__).warning(
+                    "轻度校验未通过，已保存文件保留在 %s：%s", candidate, issue
+                )
+                return {"ok": True, "validation": {"verified": False}, "validation_issue": issue}
+            if restoration_failure is not None:
+                stage, error = restoration_failure
+                raise error
             validation = {
                 "verified": True,
-                "level": "openpyxl_rename_with_reference_rewrite",
+                "level": "openpyxl_rename_structure",
                 "renamed_sheets": len(renames),
             }
             return {"ok": True, "validation": validation}
         except Exception as error:
-            for opened in (reloaded, workbook):
-                if opened is not None:
-                    try:
-                        opened.close()
-                    except Exception:
-                        pass
+            if workbook is not None:
+                try:
+                    workbook.close()
+                except Exception:
+                    pass
             return {"ok": False, "stage": stage, "error": f"{type(error).__name__}: {error}"}
 
     def rename_sheets_com(self, candidate_text: str, changes: list[dict[str, str]]) -> dict[str, Any]:
@@ -1671,8 +1909,8 @@ class ConversionSession:
             self._ensure_application()
             stage = "通过 Excel/WPS 打开候选工作簿"
             workbook = self._open_workbook(candidate, read_only=False, label="改名候选工作簿")
-            before = _snapshot(workbook)
-            before_names = [sheet["name"] for sheet in before]
+            before = _snapshot(workbook) if self.verify_content else []
+            before_names = [str(sheet.Name) for sheet in workbook.Worksheets]
             current_names = set(before_names)
             renames: dict[str, str] = {}
             stage = "按配置修改工作表名称"
@@ -1698,6 +1936,9 @@ class ConversionSession:
             workbook.Save()
             workbook.Close(SaveChanges=False)
             workbook = None
+            if not self.verify_content:
+                return {"ok": True, "application": self._application_name,
+                        "process_id": self._process_id, "validation": {"verified": True}}
             stage = "重新打开并校验改名候选"
             reopened = self._open_workbook(candidate, read_only=True, label="改名候选工作簿")
             after = _snapshot(reopened)
@@ -1834,6 +2075,7 @@ class ConversionSession:
         source_copy_text: str,
         regions: list[dict[str, str]],
         template_text: str | None = None,
+        collect_cells: bool = True,
     ) -> dict[str, Any]:
         """Recalculate validation formulas in one working copy.
 
@@ -1915,7 +2157,7 @@ class ConversionSession:
 
             stage = "读取校验区域公式计算结果"
             cells: list[dict[str, str]] = []
-            for region in regions:
+            for region in regions if collect_cells else ():
                 sheet_name = str(region["source_sheet"])
                 address = str(region["address"])
                 worksheet = source_workbook.Worksheets(sheet_name)
@@ -2310,7 +2552,10 @@ def _restore_formula_caches(
             for address, (cell_type, has_value, value_text) in cell_caches:
                 cell = cells.get(address)
                 if cell is None or cell.find(f"{{{namespace}}}f") is None:
-                    raise ValueError(f"改名后公式单元格缺失：{sheet_name}!{address}")
+                    logging.getLogger(__name__).warning(
+                        "跳过公式缓存恢复：保存结果的 %s!%s 没有公式", sheet_name, address
+                    )
+                    continue
 
                 def restore(element: bytes) -> bytes:
                     opening_end = element.find(b">") + 1
@@ -2575,9 +2820,17 @@ def _restore_empty_string_cells(
             for address in addresses:
                 cell = cells.get(address)
                 if cell is None:
-                    raise ValueError(f"改名后显式空字符串单元格缺失：{part}!{address}")
-                if cell.find(f"{{{namespace}}}f") is not None:
-                    raise ValueError(f"显式空字符串单元格意外变成公式：{part}!{address}")
+                    logging.getLogger(__name__).warning(
+                        "跳过空文本恢复：保存结果中缺少 %s!%s", part, address
+                    )
+                    continue
+                if (cell.find(f"{{{namespace}}}f") is not None
+                        or any(node.text for node in cell.iter(f"{{{namespace}}}v"))
+                        or any(node.text for node in cell.iter(f"{{{namespace}}}t"))):
+                    logging.getLogger(__name__).warning(
+                        "跳过空文本恢复：%s!%s 的保存结果已有非空内容或公式", part, address
+                    )
+                    continue
                 def restore(element: bytes) -> bytes:
                     opening_end = element.find(b">") + 1
                     if opening_end == 0:
@@ -2624,11 +2877,15 @@ def _serve() -> int:
             try:
                 request = json.loads(line)
                 operation = request.get("op")
+                session.verify_content = request.get("verify_content", True) is not False
                 if operation == "shutdown":
                     _write_json({"ok": True})
                     break
                 if operation == "rename_sheets":
-                    _write_json(session.rename_sheets(str(request["candidate"]), request["changes"]))
+                    _write_json(session.rename_sheets(
+                        str(request["candidate"]), request["changes"],
+                        request.get("verify_sheet_names", request.get("verify_content", True)) is not False,
+                    ))
                     continue
                 if operation == "rename_sheets_com":
                     _write_json(
@@ -2643,6 +2900,7 @@ def _serve() -> int:
                             str(request["source_copy"]),
                             request["regions"],
                             request.get("template"),
+                            request.get("collect_cells", True) is not False,
                         )
                     )
                     continue
@@ -2676,18 +2934,22 @@ def _serve() -> int:
                     continue
                 if operation == "delete_rows_com":
                     _write_json(session.delete_rows_com(
-                        str(request["candidate"]), request["deletions"]))
+                        str(request["candidate"]), request["deletions"],
+                        request.get("report_validation_issue") is True))
                     continue
                 if operation == "fx_header_com":
                     _write_json(session.fx_header_com(str(request["candidate"])))
                     continue
+                if operation == "static_print_layout_com":
+                    _write_json(session.static_print_layout_com(
+                        str(request["source"]), str(request["output"])))
+                    continue
                 if operation == "append_rows_com":
                     _write_json(session.append_rows_com(
-                        str(request["candidate"]),
-                        str(request["sheet"]),
-                        int(request["start_row"]),
-                        request["rows"],
-                    ))
+                        str(request["candidate"]), str(request["sheet"]), int(request["start_row"]), request["rows"]))
+                    continue
+                if operation == "append_xls_operations":
+                    _write_json(session.append_xls_operations(str(request["candidate"]), request["operations"]))
                     continue
                 if operation == "convert_word":
                     _write_json(

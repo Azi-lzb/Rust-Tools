@@ -1,7 +1,4 @@
-//! 报表打印菜单（3-1 Openpyxl 生成 / 3-2 预校验）的端到端测试。
-//!
-//! 打印已改为“按配置直接生成”，不再有 y 确认步骤，也不再有仅出计划的入口；
-//! 旧 3-1（umya）与 3-2（openpyxl）已合并为同一个 openpyxl 生成入口。
+//! 报表打印菜单端到端测试，覆盖 3-1 的两种引擎和 3-3 预校验。
 
 #[path = "common/logging_evidence.rs"]
 mod logging_evidence;
@@ -66,25 +63,9 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
         menu_text.contains("1  按打印配置生成（选择执行模式）"),
         "{menu_text}"
     );
-    // 双入口（2026-11-11 用户要求）：2 = Rust，独立实现、_Rust 输出、无自动路由。
-    assert!(
-        menu_text.contains("2  按打印配置生成（Rust）"),
-        "{menu_text}"
-    );
-    assert!(menu_text.contains("打印配置预校验"), "{menu_text}");
-    let rust_entries = menu_text
-        .lines()
-        .filter(|line| line.contains("按打印配置生成（Rust）"))
-        .count();
-    assert_eq!(rust_entries, 1, "Rust entry must appear once: {menu_text}");
-    let openpyxl_entries = menu_text
-        .lines()
-        .filter(|line| line.contains("按打印配置生成（选择执行模式）"))
-        .count();
-    assert_eq!(
-        openpyxl_entries, 1,
-        "Openpyxl entry must appear once: {menu_text}"
-    );
+    assert!(!menu_text.contains("2  按打印配置生成"), "{menu_text}");
+    assert!(menu_text.contains("3  打印配置预校验"), "{menu_text}");
+    assert!(!target.exists());
     assert!(!menu_text.contains("PDF"), "PDF entry must stay removed");
     assert!(
         !menu_text.contains("按批注"),
@@ -347,9 +328,7 @@ fn print_precheck_reports_history_and_off_suppresses_progress() -> Result<()> {
 }
 
 #[test]
-fn rust_print_entry_writes_isolated_styled_output() -> Result<()> {
-    // 双入口验收（2026-11-11）：Rust 入口独立执行同一份配置，
-    // 输出追加 _Rust 后缀，不覆盖 Openpyxl 入口的输出文件。
+fn rust_print_entry_writes_configured_output_without_overwriting() -> Result<()> {
     let root = TestDirectory::new()?;
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
@@ -358,54 +337,30 @@ fn rust_print_entry_writes_isolated_styled_output() -> Result<()> {
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
-    let execution = run_menu(&config, "3\n2\n0\n0\n")?;
+    let rust_target = root.path().join("printed_Rust.xlsx");
+    let removed_entry = run_menu(&config, "3\n2\n0\n0\n")?;
+    assert!(removed_entry.status.success());
+    let removed_stdout = String::from_utf8_lossy(&removed_entry.stdout);
     assert!(
-        execution.status.success(),
-        "rust print failed: {}",
-        String::from_utf8_lossy(&execution.stderr)
+        removed_stdout.contains("仅接受 1、3 或 0"),
+        "{removed_stdout}"
     );
-    let stdout = String::from_utf8_lossy(&execution.stdout);
-    assert!(stdout.contains("（Rust"), "{stdout}");
-    let stderr = String::from_utf8_lossy(&execution.stderr);
-    for text in ["stage-timing", "source_read_ms", "静态打印阶段耗时"] {
-        assert!(
-            !stdout.contains(text) && !stderr.contains(text),
-            "{stdout}\n{stderr}"
-        );
-    }
-    let history_path = fs::read_dir(root.path().join("logs"))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .find(|path| {
-            path.file_name().is_some_and(|name| {
-                let name = name.to_string_lossy();
-                name.starts_with("3-1-Rust_") && name.ends_with(".run.json")
-            })
-        })
-        .context("Rust print run summary missing")?;
-    let history: Value = serde_json::from_slice(&fs::read(&history_path)?)?;
-    let diagnostics_path = root.path().join("logs").join(
-        history["diagnostic_log_path"]
-            .as_str()
-            .context("Rust print diagnostic path missing")?,
-    );
-    let diagnostics = fs::read_to_string(diagnostics_path)?;
-    assert!(diagnostics.contains("source_read_ms"), "{diagnostics}");
-    assert!(diagnostics.contains("rust_xlsxwriter"), "{diagnostics}");
-    // 源文件与 Openpyxl 目标路径都不得被写入。
-    assert!(
-        !target.exists(),
-        "Rust entry must not write the Openpyxl target"
-    );
+    assert!(!target.exists() && !rust_target.exists());
+    let execution = pytools_core::static_print_engines::run_configured_static_print(
+        &config,
+        pytools_core::static_print_engines::StaticPrintEngine::RustWriter,
+    )?;
+    assert_eq!(execution.outputs, vec![target.clone()]);
+    assert!(execution.events.iter().any(|event| event.engine == "rust_xlsxwriter"));
+    assert!(target.is_file());
+    assert!(!root.path().join("printed_Rust.xlsx").exists());
     assert_eq!(
         fs::read(&source)?,
         source_before,
         "source must stay unchanged"
     );
 
-    let rust_target = root.path().join("printed_Rust.xlsx");
-    assert!(rust_target.is_file(), "Rust output missing: {stdout}");
-
-    let printed = read_workbook(&rust_target)?;
+    let printed = read_workbook(&target)?;
     assert_eq!(printed.sheets.len(), 1);
     let sheet = &printed.sheets[0];
     assert_eq!(sheet.name, "Printed");
@@ -422,6 +377,33 @@ fn rust_print_entry_writes_isolated_styled_output() -> Result<()> {
         source_before,
         "source must stay unchanged after close"
     );
+    let output_before = fs::read(&target)?;
+    let repeated = run_menu(&config, "3\n1\n1\n0\n0\n")?;
+    assert!(repeated.status.success());
+    let stdout = String::from_utf8_lossy(&repeated.stdout);
+    assert!(stdout.contains("目标路径已存在，拒绝写入"), "{stdout}");
+    assert_eq!(fs::read(&target)?, output_before);
+    Ok(())
+}
+
+#[test]
+#[cfg(windows)]
+fn com_print_menu_rejects_xlsx_source_with_visible_reason() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let source = root.path().join("source.xlsx");
+    let target = root.path().join("printed.xlsx");
+    let config = create_print_config(root.path(), &source, &target)?;
+    create_print_source(&source)?;
+    let source_before = fs::read(&source)?;
+
+    for view in ["user", "developer"] {
+        let output = run_menu_with_view(&config, "3\n1\n3\n0\n0\n", view)?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{output:?}");
+        assert!(stdout.contains("COM 版式仅支持 XLS 源 → 新 XLSX 目标"), "{stdout}");
+        assert!(!target.exists());
+    }
+    assert_eq!(fs::read(&source)?, source_before);
     Ok(())
 }
 
@@ -433,13 +415,14 @@ fn rust_print_entry_refuses_xlsm_target_with_clear_message() -> Result<()> {
     let config = create_print_config(root.path(), &source, &target)?;
     create_print_source(&source)?;
 
-    let execution = run_menu(&config, "3\n2\n0\n0\n")?;
-    let stdout = String::from_utf8_lossy(&execution.stdout);
-    assert!(
-        stdout.contains("XLSM"),
-        "XLSM refusal must name the format: {stdout}"
-    );
+    let error = pytools_core::static_print_engines::run_configured_static_print(
+        &config,
+        pytools_core::static_print_engines::StaticPrintEngine::RustWriter,
+    )
+    .expect_err("Rust must reject XLSM targets");
+    assert!(error.to_string().contains("Rust 引擎暂不支持 XLSM 输出"), "{error}");
     assert!(!target.exists(), "failed print must not create a target");
+    assert!(!root.path().join("printed_Rust.xlsm").exists());
     Ok(())
 }
 

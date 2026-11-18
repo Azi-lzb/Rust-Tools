@@ -552,12 +552,9 @@ where
     Ok(report)
 }
 
-/// Execute pytools operation 4-7 for XLSX/XLSM files using the shared Calamine reader.
-///
-/// This candidate deliberately limits content-cell reads to XLSX/XLSM until the
-/// source COM paths for XLS/XLT and the remaining accepted extensions have
-/// format-specific parity evidence. It renames files only; workbook bytes are not
-/// modified. Existing targets are reserved without replacement.
+/// Clear content prefixes using Calamine. Windows also accepts legacy XLS,
+/// using the same content projection as prefix creation. Workbook bytes are
+/// preserved and existing targets are reserved without replacement.
 pub fn run_content_prefix_unrename_xlsx_candidate(
     config_path: impl AsRef<Path>,
     files: &[PathBuf],
@@ -887,14 +884,17 @@ fn content_prefix_unrename_row(
         row.status = "跳过：非文件".to_owned();
         return (row, false);
     }
-    if !matches!(
-        source
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref(),
-        Some("xlsx" | "xlsm")
-    ) {
+    let supported = match source
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("xlsx" | "xlsm") => true,
+        Some("xls") => cfg!(windows),
+        _ => false,
+    };
+    if !supported {
         row.status = "跳过：格式未验收".to_owned();
         return (row, false);
     }

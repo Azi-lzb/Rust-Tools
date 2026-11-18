@@ -1,5 +1,5 @@
 use anyhow::{bail, ensure, Context, Result};
-use calamine::{open_workbook_auto, Data, Reader, Sheets};
+use calamine::{open_workbook_auto, Data, Reader, SheetType, Sheets};
 use roxmltree::Document;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -145,10 +145,9 @@ pub struct SheetValues {
     pub max_column: usize,
 }
 
-/// Cell and merged-range bounds stored in one XLSX worksheet part. This is a
-/// small OOXML metadata projection used when Calamine's value range does not
-/// include styled blank cells or merge-only coordinates. Zero min/max values
-/// mean that the worksheet contains no stored cells and no merged ranges.
+/// Stored cell and merged-range bounds in one worksheet. This projection
+/// includes styled blanks or merge-only coordinates outside the value range.
+/// Zero min/max values mean there are no known bounds.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct WorksheetExtent {
     pub name: String,
@@ -1083,6 +1082,47 @@ pub fn read_sheet_names(path: impl AsRef<Path>) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// Verify that the workbook and its worksheet data can be parsed. Skip
+/// chartsheets' cell ranges and do not compare values or decode formula text
+/// or optional objects for publication checks.
+pub fn verify_readable_workbook(path: impl AsRef<Path>) -> Result<Vec<String>> {
+    let path = path.as_ref();
+    validate_legacy_xls_signature(path)?;
+    let mut workbook =
+        open_workbook_auto(path).with_context(|| format!("open {}", path.display()))?;
+    let sheets = workbook.sheets_metadata().to_vec();
+    ensure!(
+        !sheets.is_empty(),
+        "workbook has no sheets: {}",
+        path.display()
+    );
+    let worksheets = sheets
+        .iter()
+        .filter(|sheet| sheet.typ == SheetType::WorkSheet);
+    if matches!(workbook, Sheets::Xlsx(_)) {
+        let mut package = ZipArchive::new(fs::File::open(path)?)?;
+        let parts = ooxml_worksheet_parts(&mut package)?;
+        if parts.len() == worksheets.clone().count() {
+            for (name, part) in parts {
+                let xml = zip_read(&mut package, &part)?;
+                let document = Document::parse(&xml)
+                    .with_context(|| format!("open worksheet {name:?} ({part})"))?;
+                ensure!(
+                    document.root_element().tag_name().name() == "worksheet",
+                    "worksheet {name:?} points to an unexpected XML part ({part})"
+                );
+            }
+            return Ok(sheets.into_iter().map(|sheet| sheet.name).collect());
+        }
+    }
+    for sheet in worksheets {
+        workbook
+            .worksheet_range(&sheet.name)
+            .with_context(|| format!("open worksheet {:?} in {}", sheet.name, path.display()))?;
+    }
+    Ok(sheets.into_iter().map(|sheet| sheet.name).collect())
+}
+
 /// Return whether a workbook uses the 1904 date epoch.
 ///
 /// XLSX-family workbooks use the namespace-aware `workbookPr` metadata. BIFF8
@@ -1249,6 +1289,39 @@ pub fn read_xlsx_worksheet_extents(path: impl AsRef<Path>) -> Result<Vec<Workshe
         extents.push(extent);
     }
     Ok(extents)
+}
+
+/// Read BIFF extents without interpreting the workbook as an OOXML package.
+pub fn read_xls_worksheet_extents(path: impl AsRef<Path>) -> Result<Vec<WorksheetExtent>> {
+    let path = path.as_ref();
+    validate_legacy_xls_signature(path)?;
+    let workbook = open_workbook_auto(path).with_context(|| format!("open {}", path.display()))?;
+    let Sheets::Xls(workbook) = workbook else {
+        bail!("worksheet extent reader expected a legacy XLS workbook");
+    };
+    Ok(workbook
+        .sheet_names()
+        .into_iter()
+        .map(|name| {
+            let mut extent = WorksheetExtent {
+                name,
+                ..WorksheetExtent::default()
+            };
+            if let Some(bounds) = workbook.worksheet_used_dimensions(&extent.name) {
+                include_extent_coordinate(
+                    &mut extent,
+                    bounds.start.0 as usize + 1,
+                    bounds.start.1 as usize + 1,
+                );
+                include_extent_coordinate(
+                    &mut extent,
+                    bounds.end.0 as usize + 1,
+                    bounds.end.1 as usize + 1,
+                );
+            }
+            extent
+        })
+        .collect())
 }
 
 /// Read number-format metadata for cells with explicit cell-level styles or
@@ -2143,8 +2216,18 @@ pub fn canonicalize_formula_for_recalculation(formula: &str, sheet_names: &[&str
     // 格式上限差异（BIFF 65536 行 vs OOXML 1048576 行）先归一——Excel 另存
     // .xls→.xlsx 会把整列引用从 $1:$65536 改写成 $1:$1048576，语义相同。
     let trimmed = canonicalize_sheet_row_ceilings(trimmed);
-    let trimmed = canonicalize_formula_boolean_literals(&trimmed);
-    canonicalize_formula_sheet_reference_quoting(&trimmed, sheet_names)
+    canonicalize_formula_for_same_format(&trimmed, sheet_names)
+}
+
+/// Normalize equivalent formula spellings without changing any reference bounds.
+pub fn canonicalize_formula_for_same_format(formula: &str, sheet_names: &[&str]) -> String {
+    let formula = formula
+        .trim()
+        .strip_prefix('=')
+        .unwrap_or(formula.trim())
+        .trim_start();
+    let formula = canonicalize_formula_boolean_literals(formula);
+    canonicalize_formula_sheet_reference_quoting(&formula, sheet_names)
 }
 
 /// BIFF (`.xls`) caps a sheet at 65,536 rows while OOXML allows 1,048,576.

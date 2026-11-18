@@ -127,12 +127,39 @@ pub fn build_remove_foreign_plan(
     output: &Path,
     foreign_names: &BTreeSet<String>,
 ) -> Result<PlanBuildReport> {
+    let (matched_sheets, deletions) = find_foreign_bank_rows(input, foreign_names)?;
+    let operations = deletions
+        .into_iter()
+        .map(|(sheet, first_row, count)| EditOperation::DeleteRows {
+            sheet,
+            first_row,
+            count,
+        })
+        .collect::<Vec<_>>();
+    let changed_cells = operations.len();
+    let plan = make_plan(input, output, operations, "remove-foreign-bank")?;
+    Ok(PlanBuildReport {
+        input: input.into(),
+        output: output.into(),
+        matched_sheets,
+        changed_cells,
+        plan,
+        warnings: Vec::new(),
+    })
+}
+
+/// Match institutions in column A and return descending whole-row runs per sheet.
+/// Both the OOXML edit plan and the legacy COM worker use these coordinates.
+pub fn find_foreign_bank_rows(
+    input: &Path,
+    foreign_names: &BTreeSet<String>,
+) -> Result<(usize, Vec<(String, u32, u32)>)> {
     anyhow::ensure!(
         !foreign_names.is_empty(),
         "foreign-institution mapping is empty"
     );
     let dump = read_workbook(input)?;
-    let mut operations = Vec::new();
+    let mut deletions = Vec::new();
     let mut matched_sheets = 0;
     for sheet in dump
         .sheets
@@ -147,23 +174,10 @@ pub fn build_remove_foreign_plan(
             }
         }
         for (start, end) in descending_runs(rows) {
-            operations.push(EditOperation::DeleteRows {
-                sheet: sheet.name.clone(),
-                first_row: start as u32,
-                count: (end - start + 1) as u32,
-            });
+            deletions.push((sheet.name.clone(), start as u32, (end - start + 1) as u32));
         }
     }
-    let changed_cells = operations.len();
-    let plan = make_plan(input, output, operations, "remove-foreign-bank")?;
-    Ok(PlanBuildReport {
-        input: input.into(),
-        output: output.into(),
-        matched_sheets,
-        changed_cells,
-        plan,
-        warnings: Vec::new(),
-    })
+    Ok((matched_sheets, deletions))
 }
 
 /// Plan 7-7 for the city-level rural-loan check.
@@ -202,20 +216,20 @@ pub fn build_rural_loan_plan(
     let mut unmatched = Vec::new();
     let mut operations = Vec::new();
     for (name, row) in institution_rows_in_order(&current_rows) {
-        if let Some(previous_value) = previous_values.get(&name) {
+        let value = if let Some(previous_value) = previous_values.get(&name) {
             let difference = current_values[&name] - previous_value;
             fill_total += difference;
             matched += 1;
-            operations.push(EditOperation::SetCellValue {
-                sheet: current_inst.name.clone(),
-                cell: format!("D{row}"),
-                value: CellValue::Decimal(exact_decimal_text(difference)),
-            });
+            CellValue::Decimal(exact_decimal_text(difference))
         } else {
             unmatched.push(name);
-            // Preserve the source implementation's openpyxl behavior:
-            // assigning cell(..., value=None) does not clear an existing value.
-        }
+            CellValue::Blank
+        };
+        operations.push(EditOperation::SetCellValue {
+            sheet: current_inst.name.clone(),
+            cell: format!("D{row}"),
+            value,
+        });
     }
     let header_col = find_header_column(current_area, HEADER_TEXT)
         .context("area sheet lacks the 涉农贷款比上月 header")?;

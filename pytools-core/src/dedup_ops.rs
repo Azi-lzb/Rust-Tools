@@ -3,7 +3,7 @@
 use crate::config::DedupTask;
 use anyhow::{bail, ensure, Context, Result};
 use excel_editor::{
-    inspect_xlsx_profile, CellValue, EditOperation, ExcelEditPlan, OutputValidator,
+    inspect_xlsx_profile, CellValue, EditOperation, EngineId, ExcelEditPlan, OutputValidator,
     PreservationRequirement, WorkbookFeature, WorkbookFormat,
 };
 use excel_reader::{
@@ -73,7 +73,7 @@ pub struct AppendTargetPlan {
     /// imports these into an existing target while preserving other sheets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replacement_workbook: Option<NewAppendWorkbook>,
-    /// .xls 目标的 COM 追加操作（SetCellValue 序列化值）；
+    /// .xls 目标的 COM 追加操作（序列化的工作表和类型化单元格操作）；
     /// .xlsx 目标为 None（走 edit_plan openpyxl 路径）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xls_operations: Option<Vec<serde_json::Value>>,
@@ -936,6 +936,10 @@ pub fn build_append_by_config_plans(
         let (Some(source), Some(target)) = (&task.source_wb, &task.target_wb) else {
             continue;
         };
+        if !target.exists() {
+            ensure_new_append_target_format(target)
+                .with_context(|| format!("配置第 {} 行：新建追加目标格式无效", task.row_no))?;
+        }
         let signature = (
             source.clone(),
             task.source_ws.clone(),
@@ -1270,12 +1274,12 @@ pub fn build_append_by_config_plans(
 
         if target_existed && target_ext == "xls" && !operations.is_empty() {
             // .xls 目标：跳过 EditPlan（inspect_xlsx_profile 仅支持 .xlsx），
-            // 操作序列化后由 COM 追加（append_rows_com）执行。
+            // 操作由 Windows 专用 COM 路径执行。
             report.xls_operations = Some(
                 operations
                     .iter()
-                    .map(|op| serde_json::to_value(op).unwrap_or(serde_json::Value::Null))
-                    .collect(),
+                    .map(serde_json::to_value)
+                    .collect::<Result<_, _>>()?,
             );
         } else if target_existed && !operations.is_empty() {
             let profile = inspect_xlsx_profile(&target)?;
@@ -1358,10 +1362,7 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     stable_plan.input = snapshot.path().to_path_buf();
     let edit_plan = &stable_plan;
     let before = read_workbook(snapshot.path()).context("读取目标工作簿失败")?;
-    let before_names = read_defined_names(snapshot.path()).context("读取目标工作簿名称定义失败")?;
-    let before_comments = read_ooxml_comments(snapshot.path()).context("读取目标工作簿批注失败")?;
-    let array_results = excel_editor::ArrayFormulaResults::read(snapshot.path())?;
-    validate_append_scope(edit_plan, &before)?;
+    validate_append_scope(&edit_plan.operations, &before)?;
 
     if let Some(parent) = plan
         .candidate
@@ -1379,13 +1380,14 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
 
     let result = (|| -> Result<()> {
         let scoped_route = crate::aspose_edit::route_override();
-        if scoped_route.is_some() || std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some()
-        {
+        let routed = scoped_route.is_some()
+            || std::env::var_os(crate::excel_edit_router::ROUTE_ENV).is_some();
+        let execution = if routed {
             let route_config = scoped_route
                 .map(Ok)
                 .unwrap_or_else(crate::excel_edit_router::RouteConfig::from_environment)?;
             crate::excel_edit_router::execute_candidate_with_route_config(edit_plan, &route_config)
-                .context("按 ExcelEditPlan 路由生成目标追加候选文件失败")?;
+                .context("按 ExcelEditPlan 路由生成目标追加候选文件失败")?
         } else {
             let capability = crate::inplace_edit::openpyxl_worker_capability_for_plan(edit_plan);
             crate::edit_plan::apply_plan(
@@ -1393,22 +1395,29 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
                 &[capability],
                 &crate::inplace_edit::platform_id(),
             )
-            .context("openpyxl 修改目标候选文件失败")?;
+            .context("openpyxl 修改目标候选文件失败")?
+        };
+        if execution.engine == EngineId::OpenpyxlWorker
+            || !crate::result_validation::check_content()
+        {
+            return Ok(());
         }
-        let mut after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
-        if crate::aspose_edit::aspose_selected() {
-            // Comparison only. The full plan validator has already verified
-            // that the sole extra sheet is the appended evaluation marker.
-            anyhow::ensure!(
-                after
-                    .sheets
-                    .last()
-                    .is_some_and(|s| s.name == "Evaluation Warning"),
-                "missing evaluation sheet"
-            );
-            after.sheets.pop();
+        if routed {
+            let after = read_workbook(&plan.candidate).context("重新读取目标候选文件失败")?;
+            let array_results = excel_editor::ArrayFormulaResults::read(snapshot.path())?;
+            validate_append_candidate(
+                &edit_plan.operations,
+                &before,
+                &after,
+                &array_results,
+                edit_plan
+                    .preserve
+                    .contains(&PreservationRequirement::Styles),
+                None,
+            )?;
         }
-        validate_append_candidate(edit_plan, &before, &after, &array_results)?;
+        let before_names = read_defined_names(snapshot.path())?;
+        let before_comments = read_ooxml_comments(snapshot.path())?;
         let actual_names = read_defined_names(&plan.candidate)?;
         anyhow::ensure!(
             comparable_defined_names(&before_names)? == comparable_defined_names(&actual_names)?,
@@ -1459,9 +1468,218 @@ pub fn write_existing_append_candidate(plan: &AppendTargetPlan) -> Result<PathBu
     Ok(plan.candidate.clone())
 }
 
-fn validate_append_scope(plan: &ExcelEditPlan, before: &WorkbookDump) -> Result<()> {
+pub fn write_existing_xls_append_candidate(
+    plan: &AppendTargetPlan,
+) -> Result<(PathBuf, serde_json::Value)> {
+    ensure!(
+        cfg!(windows),
+        "2-3 追加到既有 XLS 需要 Windows Excel/WPS COM，原目标未修改"
+    );
+    ensure!(
+        plan.target_existed
+            && plan
+                .target
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"))
+            && plan.edit_plan.is_none()
+            && plan.replacement_workbook.is_none()
+            && plan.new_workbook.is_none(),
+        "既有 XLS 追加计划不一致，请重新生成"
+    );
+    let candidate = plan.candidate.with_extension("xls");
+    ensure!(
+        fs::symlink_metadata(&candidate)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
+        "拒绝覆盖已有候选文件：{}",
+        candidate.display()
+    );
+    let expected_hash = plan
+        .target_sha256
+        .as_deref()
+        .context("目标快照缺失，请重新生成追加计划")?;
+    crate::file_commit::verify_planning_snapshot(&plan.target, Some(expected_hash))
+        .context("目标工作簿在去重期间发生变化，未执行追加")?;
+    let operations = plan
+        .xls_operations
+        .as_ref()
+        .context("已有 XLS 目标缺少追加操作")?
+        .iter()
+        .cloned()
+        .map(serde_json::from_value)
+        .collect::<Result<Vec<EditOperation>, _>>()?;
+    ensure!(!operations.is_empty(), "已有 XLS 目标缺少追加操作");
+    let original = crate::file_commit::snapshot_workbook(&plan.target, expected_hash)?;
+    let before = read_workbook(original.path()).context("读取既有 XLS 目标快照失败")?;
+    validate_append_scope(&operations, &before)?;
+    validate_xls_append_scope(&operations, &before)?;
+
+    let staging = crate::file_commit::snapshot_workbook(&plan.target, expected_hash)?;
+    let mut runtime = crate::conversion_engine::ConversionRuntime::default();
+    let mut response = runtime.append_xls_operations(staging.path(), &operations)?;
+    let validate = || -> Result<()> {
+        ensure!(
+            response["verified"] == true,
+            "XLS 保存后工作簿校验未通过：{}",
+            response["validation_issue"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| response["structure_differences"].to_string())
+        );
+        let planned_cells = operations
+            .iter()
+            .filter(|operation| !matches!(operation, EditOperation::CreateSheet { .. }))
+            .count();
+        ensure!(
+            response["cells"].as_u64() == Some(planned_cells as u64),
+            "追加操作回读不一致：COM 未报告完整的单元格写入回执"
+        );
+        if !crate::result_validation::check_content() {
+            return Ok(());
+        }
+        let after = read_workbook(staging.path()).context("重新读取 XLS 候选失败")?;
+        let original_formula_sites: BTreeMap<String, HashSet<String>> =
+            serde_json::from_value(response["original_formula_sites"].clone())
+                .context("追加公式位置回读不一致：COM 未返回原有公式位置")?;
+        validate_append_candidate(
+            &operations,
+            &before,
+            &after,
+            &Default::default(),
+            false,
+            Some(&original_formula_sites),
+        )?;
+        for operation in &operations {
+            if let EditOperation::SetCellValue {
+                sheet,
+                cell,
+                value: CellValue::DateTime { .. },
+            } = operation
+            {
+                let saved = after
+                    .sheets
+                    .iter()
+                    .find(|item| item.name == *sheet)
+                    .and_then(|item| item.values.get(cell));
+                ensure!(
+                    saved.is_some_and(|value| value["type"] == "datetime_serial"),
+                    "追加日期 {sheet:?}!{cell} 回读时失去日期格式"
+                );
+            }
+        }
+        let cells = operations
+            .iter()
+            .filter_map(|operation| match operation {
+                EditOperation::SetCellValue { sheet, cell, .. }
+                | EditOperation::SetFormulaText { sheet, cell, .. } => {
+                    Some((sheet.as_str(), cell.as_str()))
+                }
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+        for sheet in &after.sheets {
+            let original_sheet = before.sheets.iter().find(|old| old.name == sheet.name);
+            for cell in sheet.values.keys() {
+                ensure!(
+                    cells.contains(&(sheet.name.as_str(), cell.as_str()))
+                        || original_formula_sites
+                            .get(&sheet.name)
+                            .is_some_and(|old| old.contains(cell))
+                        || original_sheet
+                            .is_some_and(|old| old.values.contains_key(cell)
+                                || old.formulas.contains_key(cell)),
+                    "XLS 候选出现计划外的单元格 {:?}!{cell}",
+                    sheet.name
+                );
+            }
+        }
+        Ok(())
+    };
+    validate().map_err(|error| {
+        crate::review_output::retain_validation_error(
+            &plan.target,
+            staging.path(),
+            "dedup-append-xls",
+            error,
+        )
+    })?;
+    crate::file_commit::create_target_from_candidate(staging.path(), &candidate)
+        .context("发布已校验的 XLS 追加候选失败")?;
+    if let Some(receipt) = response.as_object_mut() {
+        receipt.remove("original_formula_sites");
+    }
+    Ok((candidate, response))
+}
+
+fn validate_xls_append_scope(operations: &[EditOperation], before: &WorkbookDump) -> Result<()> {
+    let mut boundaries = BTreeMap::new();
+    for sheet in &before.sheets {
+        boundaries.insert(sheet.name.as_str(), used_row_count(sheet));
+    }
+    for operation in operations {
+        let (sheet, cell) = match operation {
+            EditOperation::CreateSheet { name } => {
+                ensure!(
+                    !boundaries
+                        .keys()
+                        .any(|other| other.to_lowercase() == name.to_lowercase()),
+                    "XLS 计划新增的工作表 {name:?} 与已有工作表重名"
+                );
+                boundaries.insert(name.as_str(), 0);
+                continue;
+            }
+            EditOperation::SetCellValue { sheet, cell, value } => {
+                match value {
+                    CellValue::Text(text) => ensure!(
+                        !text.is_empty(),
+                        "XLS 追加不支持将空字符串与空白区分：{sheet:?}!{cell}"
+                    ),
+                    CellValue::Error(_) => {
+                        bail!("XLS 追加不支持直接写入 Excel 错误值：{sheet:?}!{cell}")
+                    }
+                    CellValue::Decimal(number) | CellValue::DateTime { serial: number, .. } => {
+                        ensure!(
+                            number.parse::<f64>().is_ok_and(f64::is_finite),
+                            "XLS 追加数值无效：{sheet:?}!{cell}"
+                        );
+                    }
+                    CellValue::Blank | CellValue::Boolean(_) => {}
+                }
+                (sheet, cell)
+            }
+            EditOperation::SetFormulaText {
+                sheet,
+                cell,
+                formula,
+            } => {
+                ensure!(
+                    !formula.trim().trim_start_matches('=').trim().is_empty(),
+                    "XLS 追加公式为空：{sheet:?}!{cell}"
+                );
+                (sheet, cell)
+            }
+            _ => bail!("XLS 追加不支持操作 {:?}", operation.kind()),
+        };
+        let (row, _) = parse_a1(cell)
+            .filter(|&(row, col)| {
+                (1..=65_536).contains(&row)
+                    && (1..=256).contains(&col)
+                    && cell_address(row, col) == *cell
+            })
+            .with_context(|| format!("无效的 BIFF8 单元格地址：{sheet:?}!{cell}"))?;
+        let last_row = boundaries
+            .get(sheet.as_str())
+            .with_context(|| format!("XLS 计划引用未知工作表 {sheet:?}"))?;
+        ensure!(
+            row > *last_row,
+            "追加位置 {sheet:?}!{cell} 位于原有数据区域（第 {last_row} 行内）"
+        );
+    }
+    Ok(())
+}
+
+fn validate_append_scope(operations: &[EditOperation], before: &WorkbookDump) -> Result<()> {
     let mut touched = HashSet::new();
-    for operation in &plan.operations {
+    for operation in operations {
         let (sheet_name, cell) = match operation {
             EditOperation::CreateSheet { .. } => continue,
             EditOperation::SetCellValue { sheet, cell, .. }
@@ -1543,17 +1761,19 @@ fn comparable_defined_names(names: &[DefinedNameRecord]) -> Result<Vec<String>> 
 }
 
 fn validate_append_candidate(
-    plan: &ExcelEditPlan,
+    operations: &[EditOperation],
     before: &WorkbookDump,
     after: &WorkbookDump,
     array_results: &excel_editor::ArrayFormulaResults,
+    preserve_styles: bool,
+    com_formula_sites: Option<&BTreeMap<String, HashSet<String>>>,
 ) -> Result<()> {
     let mut expected_sheets = before
         .sheets
         .iter()
         .map(|sheet| sheet.name.clone())
         .collect::<Vec<_>>();
-    for operation in &plan.operations {
+    for operation in operations {
         if let EditOperation::CreateSheet { name } = operation {
             expected_sheets.push(name.clone());
         }
@@ -1567,9 +1787,9 @@ fn validate_append_candidate(
         expected_sheets == actual_sheets,
         "目标工作表名称或顺序发生变化"
     );
+    let names: Vec<_> = actual_sheets.iter().map(String::as_str).collect();
 
-    let touched = plan
-        .operations
+    let touched = operations
         .iter()
         .filter_map(|operation| match operation {
             EditOperation::SetCellValue { sheet, cell, .. }
@@ -1585,16 +1805,22 @@ fn validate_append_candidate(
             .iter()
             .find(|sheet| sheet.name == original.name)
             .with_context(|| format!("目标工作表 {:?} 未保留", original.name))?;
-        anyhow::ensure!(
-            original.formula_status == "read_by_calamine"
-                && saved.formula_status == "read_by_calamine",
-            "无法校验工作表 {:?} 的公式",
-            original.name
-        );
+        if com_formula_sites.is_none() {
+            anyhow::ensure!(
+                original.formula_status == "read_by_calamine"
+                    && saved.formula_status == "read_by_calamine",
+                "无法校验工作表 {:?} 的公式",
+                original.name
+            );
+        }
         for (cell, expected) in &original.values {
-            if original.formulas.contains_key(cell)
-                || array_results.contains(&original.name, cell)?
-            {
+            let is_formula = match com_formula_sites {
+                Some(sites) => sites
+                    .get(&original.name)
+                    .is_some_and(|cells| cells.contains(cell)),
+                None => original.formulas.contains_key(cell),
+            };
+            if is_formula || array_results.contains(&original.name, cell)? {
                 continue;
             }
             if touched.contains(&(original.name.as_str(), cell.as_str()))
@@ -1607,9 +1833,9 @@ fn validate_append_candidate(
                 .get(cell)
                 .with_context(|| format!("原有单元格 {:?}!{cell} 未保留", original.name))?;
             anyhow::ensure!(
-                !saved.formulas.contains_key(cell)
+                (com_formula_sites.is_some() || !saved.formulas.contains_key(cell))
                     && (same_probe_value(expected, actual)
-                        || (!plan.preserve.contains(&PreservationRequirement::Styles)
+                        || (!preserve_styles
                             && matches!(
                                 expected["type"].as_str(),
                                 Some("number" | "integer" | "datetime_serial")
@@ -1626,12 +1852,17 @@ fn validate_append_candidate(
                 original.name
             );
         }
-        for (cell, formula) in &original.formulas {
-            anyhow::ensure!(
-                saved.formulas.get(cell) == Some(formula),
-                "原有公式 {:?}!{cell} 发生变化",
-                original.name
-            );
+        if com_formula_sites.is_none() {
+            for (cell, formula) in &original.formulas {
+                anyhow::ensure!(
+                    saved.formulas.get(cell).is_some_and(|actual| {
+                        excel_reader::canonicalize_formula_for_same_format(actual, &names)
+                            == excel_reader::canonicalize_formula_for_same_format(formula, &names)
+                    }),
+                    "原有公式 {:?}!{cell} 发生变化",
+                    original.name
+                );
+            }
         }
         let mut original_merges = original.merges.clone();
         let mut saved_merges = saved.merges.clone();
@@ -1651,7 +1882,7 @@ fn validate_append_candidate(
             original.name
         );
     }
-    for operation in &plan.operations {
+    for operation in operations {
         match operation {
             EditOperation::SetCellValue { sheet, cell, value } => {
                 let saved = after
@@ -1660,7 +1891,8 @@ fn validate_append_candidate(
                     .find(|item| item.name == *sheet)
                     .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
                 anyhow::ensure!(
-                    appended_value_matches(value, saved.values.get(cell)),
+                    (com_formula_sites.is_some() || !saved.formulas.contains_key(cell))
+                        && appended_value_matches(value, saved.values.get(cell)),
                     "追加单元格 {sheet:?}!{cell} 回读不一致"
                 );
             }
@@ -1669,17 +1901,19 @@ fn validate_append_candidate(
                 cell,
                 formula,
             } => {
+                if com_formula_sites.is_some() {
+                    continue; // The same COM host verified the saved R1C1 formula.
+                }
                 let saved = after
                     .sheets
                     .iter()
                     .find(|item| item.name == *sheet)
                     .with_context(|| format!("目标工作表 {sheet:?} 不存在"))?;
                 anyhow::ensure!(
-                    saved
-                        .formulas
-                        .get(cell)
-                        .is_some_and(|actual| actual.trim().trim_start_matches('=')
-                            == formula.trim().trim_start_matches('=')),
+                    saved.formulas.get(cell).is_some_and(|actual| {
+                        excel_reader::canonicalize_formula_for_same_format(actual, &names)
+                            == excel_reader::canonicalize_formula_for_same_format(formula, &names)
+                    }),
                     "追加公式 {sheet:?}!{cell} 回读不一致"
                 );
             }
@@ -1716,6 +1950,17 @@ fn appended_value_matches(expected: &CellValue, actual: Option<&serde_json::Valu
     }
 }
 
+fn ensure_new_append_target_format(target: &Path) -> Result<()> {
+    anyhow::ensure!(
+        target
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsx")),
+        "新建追加目标只支持 XLSX，请将目标扩展名改为 .xlsx：{}",
+        target.display()
+    );
+    Ok(())
+}
+
 /// Execute a serialized append payload only when it describes a new workbook.
 /// Existing workbooks use a separate candidate-editing route.
 pub fn write_new_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
@@ -1723,6 +1968,7 @@ pub fn write_new_append_candidate(plan: &AppendTargetPlan) -> Result<PathBuf> {
         !plan.target_existed,
         "new-workbook candidate writer cannot edit an existing target"
     );
+    ensure_new_append_target_format(&plan.target)?;
     let workbook_plan = plan
         .new_workbook
         .as_ref()
@@ -2038,13 +2284,21 @@ fn append_candidate_path(target: &Path, output_dir: &Path) -> PathBuf {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     target.hash(&mut hasher);
     let path_key = hasher.finish();
+    let extension = if target
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"))
+    {
+        "xls"
+    } else {
+        "xlsx"
+    };
     let mut candidate = output_dir.join(format!(
-        "{stem}_dedup_candidate_{stamp}_{path_key:08x}.xlsx"
+        "{stem}_dedup_candidate_{stamp}_{path_key:08x}.{extension}"
     ));
     let mut suffix = 1usize;
     while candidate.exists() {
         candidate = output_dir.join(format!(
-            "{stem}_dedup_candidate_{stamp}_{path_key:08x}_{suffix}.xlsx"
+            "{stem}_dedup_candidate_{stamp}_{path_key:08x}_{suffix}.{extension}"
         ));
         suffix += 1;
     }
@@ -2572,6 +2826,13 @@ fn merged_range_extent(range: &str) -> Option<(usize, usize, usize, usize)> {
 }
 fn parse_a1(value: &str) -> Option<(usize, usize)> {
     let split = value.find(|c: char| c.is_ascii_digit())?;
+    if split == 0
+        || !value[..split]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphabetic())
+    {
+        return None;
+    }
     let col = value[..split].bytes().try_fold(0usize, |acc, byte| {
         acc.checked_mul(26)?
             .checked_add((byte.to_ascii_uppercase() - b'A' + 1) as usize)
@@ -2641,17 +2902,21 @@ mod tests {
             .collect(),
             drop_allowed: BTreeMap::new(),
         };
-        validate_append_candidate(&plan, &before, &after, &index)?;
+        validate_append_candidate(&plan.operations, &before, &after, &index, false, None)?;
         after.sheets[0].values.insert(
             "A1".into(),
             serde_json::json!({"type":"string","value":"7"}),
         );
-        assert!(validate_append_candidate(&plan, &before, &after, &index).is_err());
+        assert!(
+            validate_append_candidate(&plan.operations, &before, &after, &index, false, None).is_err()
+        );
         after.sheets[0]
             .values
             .insert("A1".into(), before.sheets[0].values["A1"].clone());
         after.sheets[0].formulas.insert("D9".into(), "A1+2".into());
-        assert!(validate_append_candidate(&plan, &before, &after, &index).is_err());
+        assert!(
+            validate_append_candidate(&plan.operations, &before, &after, &index, false, None).is_err()
+        );
         assert_eq!(fs::read(&path)?, original);
         assert!(!plan.output.exists());
         Ok(())
@@ -2747,6 +3012,8 @@ pub struct DeleteDuplicatesRun {
     pub task_skipped: usize,
     pub task_failed: usize,
     pub deleted_rows: usize,
+    pub conflict_copy_rows: usize,
+    pub conflict_copy_count: usize,
     pub saved_books: Vec<PathBuf>,
     pub issues: Vec<String>,
     pub events: Vec<crate::engine_diag::DiagEvent>,
@@ -3246,6 +3513,7 @@ fn handle_legacy_xls_duplicate_delete(
         .collect();
     let deleted_rows: usize = deletions.iter().map(|(_, _, count)| *count as usize).sum();
     let mut changed = false;
+    let mut conflict_copy = false;
     if !deletions.is_empty() {
         let candidate = match legacy_xls_candidate_path(path) {
             Ok(candidate) => candidate,
@@ -3259,18 +3527,42 @@ fn handle_legacy_xls_duplicate_delete(
         let copy_result = (|| -> Result<crate::file_commit::TargetCommitReport> {
             fs::copy(path, &candidate)
                 .with_context(|| format!("复制 .xls 候选 {}", candidate.display()))?;
+            crate::file_commit::verify_planning_snapshot(&candidate, Some(original_hash.as_str()))?;
             crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
             let mut runtime = crate::conversion_engine::ConversionRuntime::default();
-            let result = runtime.delete_rows_com(&candidate, &deletions)?;
-            ensure!(
-                result["verified"].as_bool() == Some(true),
-                "Excel/WPS COM 删行未通过校验"
-            );
+            let result = runtime.delete_report_rows_com(&candidate, &deletions)?;
+            if result["verified"] != true
+                || result["deleted_rows"].as_u64() != Some(deleted_rows as u64)
+            {
+                let error = anyhow::anyhow!(
+                    "{}",
+                    result["validation_issue"]
+                        .as_str()
+                        .unwrap_or("Excel/WPS COM 删行结果与计划不符")
+                );
+                if result["saved"] == true {
+                    let _origin =
+                        crate::review_output::ReviewOriginScope::enter(path, &original_hash);
+                    return Err(crate::review_output::retain_validation_error(
+                        path,
+                        &candidate,
+                        "dedup-delete-xls",
+                        error,
+                    ));
+                }
+                return Err(error);
+            }
             crate::file_commit::commit_validated_candidate(&candidate, path, &original_hash)
         })();
+        let _ = fs::remove_file(&candidate);
         match copy_result {
             Ok(commit) => {
-                changed = true;
+                conflict_copy = commit.is_conflict_copy();
+                changed = !conflict_copy;
+                if conflict_copy {
+                    run.conflict_copy_count += 1;
+                    run.conflict_copy_rows += deleted_rows;
+                }
                 run.saved_books.push(commit.target.clone());
                 if let Some(notice) = commit.conflict_notice() {
                     run.issues.push(notice);
@@ -3296,16 +3588,32 @@ fn handle_legacy_xls_duplicate_delete(
                     "{}：.xls COM 就地删除失败：{error:#}",
                     path.display()
                 ));
+                run.events.push(
+                    crate::engine_diag::DiagEvent::new(
+                        "Excel/WPS COM",
+                        crate::engine_diag::DiagStage::ModifyWorkbook,
+                        crate::engine_diag::DiagOutcome::Failed,
+                    )
+                    .with_file(path.to_string_lossy().into_owned())
+                    .with_message(format!("XLS 删行未写回：{error:#}")),
+                );
+                return;
             }
         }
-        let _ = fs::remove_file(&candidate);
     }
+    run.task_failed += task_failures;
     run.task_ok += task_duplicate_rows.len();
-    run.deleted_rows += deleted_rows;
+    if changed {
+        run.deleted_rows += deleted_rows;
+    }
     for (row_no, sheet, duplicate_count) in task_duplicate_rows {
         run.events.push(
             crate::engine_diag::DiagEvent::new(
-                if changed { "excel_com" } else { "calamine" },
+                if changed || conflict_copy {
+                    "excel_com"
+                } else {
+                    "calamine"
+                },
                 crate::engine_diag::DiagStage::ModifyWorkbook,
                 crate::engine_diag::DiagOutcome::Ok,
             )
@@ -3316,6 +3624,8 @@ fn handle_legacy_xls_duplicate_delete(
                 "发现重复行 {duplicate_count} 行{}",
                 if changed {
                     "，已通过 Excel/WPS COM 就地删除"
+                } else if conflict_copy {
+                    "，处理结果已另存冲突副本"
                 } else {
                     "，未修改工作簿"
                 }
@@ -3417,6 +3727,15 @@ fn handle_legacy_xls_duplicate_mark(
             crate::file_commit::verify_planning_snapshot(path, Some(original_hash.as_str()))?;
             let mut runtime = crate::conversion_engine::ConversionRuntime::default();
             let result = runtime.duplicate_mark_com(&candidate, &marks)?;
+            if let Some(issue) = result["validation_issue"].as_str() {
+                let _origin = crate::review_output::ReviewOriginScope::enter(path, &original_hash);
+                return Err(crate::review_output::retain_validation_error(
+                    path,
+                    &candidate,
+                    "dedup-mark-xls",
+                    anyhow::anyhow!("{issue}"),
+                ));
+            }
             ensure!(
                 result["verified"].as_bool() == Some(true),
                 "Excel/WPS COM 标记未通过校验"

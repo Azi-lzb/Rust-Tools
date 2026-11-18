@@ -155,33 +155,85 @@ fn calc_choice_is_before_template_and_cancel_keeps_configuration() -> Result<()>
     assert_ok(&out);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("选择本次计算模式"), "{text}");
-    assert!(
-        !text.contains("选择按模板校验区域提取校验的模板工作簿"),
-        "{text}"
-    );
+    assert!(!text.contains("选择按模板校验区域提取校验的模板工作簿"), "{text}");
     assert!(!r.join("output").exists());
     assert_eq!(before, fs::read(c)?);
     Ok(())
 }
 #[test]
-fn missing_worker_is_reported_before_file_selection() -> Result<()> {
+fn calculation_menu_uses_configured_automatic_engine() -> Result<()> {
     let r = root("missing-menu")?;
     let c = config(&r, "betteroffice")?;
-    let out = menu(&r, &c, "1\n5\n4\n0\n0\n")?;
+    let (template, sources) = fixtures(&r, 1)?;
+    let out = menu(
+        &r,
+        &c,
+        &format!("1\n5\n1\n{}\n1\n{}\n0\n0\n", template.display(), sources[0].display()),
+    )?;
     assert_ok(&out);
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("本次模式不可用"), "{text}");
-    assert!(!text.contains("选择按模板校验区域提取校验的模板工作簿"));
+    assert!(text.contains("默认 BetterOffice"), "{text}");
+    assert!(!text.contains("  4  Aspose"), "{text}");
+    assert!(history(&r).is_ok(), "{text}");
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn auto_calculation_requires_explicit_libreoffice_fallback_in_selected_config() -> Result<()> {
+    let r = root("linux-opt-in")?;
+    let (template, sources) = fixtures(&r, 1)?;
+    let before = fs::read(&sources[0])?;
+    for fallback in ["auto", "libreoffice"] {
+        let work = r.join(fallback);
+        fs::create_dir(&work)?;
+        let config = work.join("selected.xlsx");
+        let mut book = rust_xlsxwriter::Workbook::new();
+        let sheet = book.add_worksheet().set_name("全局配置")?;
+        for (row, (key, value)) in [
+            ("键", "值"),
+            ("校验计算引擎", "com"),
+            ("校验计算预算上限", "1"),
+            ("校验计算回退策略", fallback),
+        ].into_iter().enumerate() {
+            sheet.write_string(row as u32, 0, key)?;
+            sheet.write_string(row as u32, 1, value)?;
+        }
+        book.save(&config)?;
+        let missing_worker = work.join("missing-lo-worker.py");
+        let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
+            .current_dir(&work)
+            .env_remove("PYTOOLS_CONFIG_PATH")
+            .env("PYTOOLS_LO_CALC_WORKER", &missing_worker)
+            .arg("summary-named-validation")
+            .arg("--config").arg(&config)
+            .arg("--template").arg(&template)
+            .arg("--log-dir").arg(work.join("logs"))
+            .arg("--output-dir").arg(work.join("output"))
+            .args(["--log-view", "developer"])
+            .args(&sources)
+            .output()?;
+        assert!(!output.status.success(), "{output:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if fallback == "auto" {
+            assert!(stderr.contains("禁止回退"), "{stderr}");
+            assert!(!stderr.contains("missing-lo-worker"), "{stderr}");
+        } else {
+            assert!(stderr.contains("missing-lo-worker"), "{stderr}");
+        }
+        assert_eq!(fs::read(&sources[0])?, before);
+    }
     Ok(())
 }
 #[test]
-fn forced_aspose_missing_worker_never_falls_back_or_changes_source() -> Result<()> {
+fn retired_aspose_calculation_never_falls_back_or_changes_source() -> Result<()> {
     let r = root("missing-cli")?;
     let c = config(&r, "betteroffice")?;
     let (t, s) = fixtures(&r, 1)?;
     let before = fs::read(&s[0])?;
     let out = run(&r, &c, "aspose", &t, &s, true)?;
     assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("仅保留用于 XLS→XLSX"));
     assert!(!r.join("output").exists());
     assert_eq!(before, fs::read(&s[0])?);
     Ok(())

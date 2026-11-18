@@ -287,6 +287,30 @@ fn invalid_candidate_is_rejected_before_existing_target_is_changed() -> Result<(
 }
 
 #[test]
+fn opening_workbook_metadata_does_not_accept_a_missing_worksheet_part() -> Result<()> {
+    let dir = TestDir::new();
+    let target = dir.path("target.xlsx");
+    let candidate = dir.path("candidate.xlsx");
+    write_book(&target, "original")?;
+    let original_bytes = fs::read(&target)?;
+    let mut input = zip::ZipArchive::new(std::io::Cursor::new(&original_bytes))?;
+    let mut output = zip::ZipWriter::new(fs::File::create(&candidate)?);
+    for index in 0..input.len() {
+        let entry = input.by_index(index)?;
+        if entry.name() != "xl/worksheets/sheet1.xml" {
+            output.raw_copy_file(entry)?;
+        }
+    }
+    drop(output.finish()?);
+
+    assert!(excel_reader::read_sheet_names(&candidate).is_ok());
+    assert!(excel_reader::verify_readable_workbook(&candidate).is_err());
+    assert!(replace_target_from_candidate(&candidate, &target, &sha256_file(&target)?).is_err());
+    assert_eq!(fs::read(&target)?, original_bytes);
+    Ok(())
+}
+
+#[test]
 fn planning_snapshot_rejects_changed_or_new_targets() -> Result<()> {
     let dir = TestDir::new();
     let target = dir.path("target.xlsx");

@@ -893,6 +893,9 @@ pub enum BackendErrorKind {
     /// try a later backend when the route explicitly includes Openpyxl fallback;
     /// every backend receives a fresh source snapshot and isolated candidate.
     Failed,
+    /// Output was saved, but the backend could not reopen it or found a
+    /// missing worksheet. Keep the exact saved bytes for investigation.
+    SavedOutputValidationFailed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -912,6 +915,13 @@ impl BackendFailure {
     pub fn failed(message: impl Into<String>) -> Self {
         Self {
             kind: BackendErrorKind::Failed,
+            message: message.into(),
+        }
+    }
+
+    pub fn saved_output_validation_failed(message: impl Into<String>) -> Self {
+        Self {
+            kind: BackendErrorKind::SavedOutputValidationFailed,
             message: message.into(),
         }
     }
@@ -947,6 +957,15 @@ pub trait OutputValidator: Send + Sync {
     ) -> Result<Vec<String>> {
         self.validate(original_plan, candidate_output)?;
         Ok(Vec::new())
+    }
+
+    fn validate_for_engine(
+        &self,
+        _engine: EngineId,
+        original_plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
+        self.validate_with_notes(original_plan, candidate_output)
     }
 }
 
@@ -1052,6 +1071,8 @@ pub struct ExcelModifier {
     platform: String,
     backends: Vec<Arc<dyn EditBackend>>,
     validator: Arc<dyn OutputValidator>,
+    validate_backend_output: bool,
+    retain_failed_candidate: bool,
     validation_failure_observer: Option<Arc<dyn ValidationFailureObserver>>,
 }
 
@@ -1070,6 +1091,8 @@ impl ExcelModifier {
             platform,
             backends,
             validator,
+            validate_backend_output: true,
+            retain_failed_candidate: false,
             validation_failure_observer: None,
         })
     }
@@ -1082,10 +1105,22 @@ impl ExcelModifier {
         self
     }
 
+    /// Use the caller's output validator without the backend's optional
+    /// content comparison. Planning, saving and publication stay protected.
+    pub fn without_backend_output_validation(mut self) -> Self {
+        self.validate_backend_output = false;
+        self
+    }
+
+    pub fn with_failed_candidate_retention(mut self) -> Self {
+        self.retain_failed_candidate = true;
+        self
+    }
+
     fn output_validation_error(
         &self,
         plan: &ExcelEditPlan,
-        candidate: &Path,
+        candidate: &mut TempArtifact,
         engine: EngineId,
         message: String,
         route: &[BackendRouteDecision],
@@ -1098,8 +1133,15 @@ impl ExcelModifier {
             route,
             attempts,
         );
+        candidate.keep |= self.retain_failed_candidate;
+        if candidate.keep {
+            error.message.push_str(&format!(
+                "；已保存文件保留在 {}",
+                candidate.path().display()
+            ));
+        }
         if let Some(observer) = &self.validation_failure_observer {
-            match observer.preserve_for_review(plan, candidate, &error.message) {
+            match observer.preserve_for_review(plan, candidate.path(), &error.message) {
                 Ok(Some(review)) => {
                     error.message.push_str(&format!(
                         "；业务校验未通过，原文件未覆盖；待核对副本：{}",
@@ -1253,7 +1295,7 @@ impl ExcelModifier {
                     &attempts,
                 )
             })?;
-            let output_candidate = TempArtifact::new(output_parent, "candidate", extension)
+            let mut output_candidate = TempArtifact::new(output_parent, "candidate", extension)
                 .map_err(|error| {
                     execution_error(
                         ExcelModifierErrorKind::PreparationFailed,
@@ -1311,6 +1353,24 @@ impl ExcelModifier {
                         elapsed_ms: attempt_started.elapsed().as_millis(),
                     });
                     continue;
+                }
+                Err(failure) if failure.kind == BackendErrorKind::SavedOutputValidationFailed => {
+                    output_candidate.keep = true;
+                    let message = format!("轻度校验未通过；{}", failure.message);
+                    attempts.push(BackendAttempt {
+                        engine,
+                        outcome: BackendAttemptOutcome::ValidationFailed,
+                        message: message.clone(),
+                        elapsed_ms: attempt_started.elapsed().as_millis(),
+                    });
+                    return Err(self.output_validation_error(
+                        plan,
+                        &mut output_candidate,
+                        engine,
+                        message,
+                        &route,
+                        &attempts,
+                    ));
                 }
                 Err(failure) => {
                     attempts.push(BackendAttempt {
@@ -1375,7 +1435,12 @@ impl ExcelModifier {
                     &attempts,
                 ));
             }
-            if let Err(error) = backend.validate_output(plan, output_candidate.path()) {
+            let backend_validation = if self.validate_backend_output {
+                backend.validate_output(plan, output_candidate.path())
+            } else {
+                Ok(())
+            };
+            if let Err(error) = backend_validation {
                 let message = error.to_string();
                 attempts.push(BackendAttempt {
                     engine,
@@ -1388,39 +1453,40 @@ impl ExcelModifier {
                 }
                 return Err(self.output_validation_error(
                     plan,
-                    output_candidate.path(),
+                    &mut output_candidate,
                     engine,
                     format!("backend output validation failed: {message}"),
                     &route,
                     &attempts,
                 ));
             }
-            let validation_notes = match self
-                .validator
-                .validate_with_notes(plan, output_candidate.path())
-            {
-                Ok(notes) => notes,
-                Err(error) => {
-                    let message = error.to_string();
-                    attempts.push(BackendAttempt {
-                        engine,
-                        outcome: BackendAttemptOutcome::ValidationFailed,
-                        message: message.clone(),
-                        elapsed_ms: attempt_started.elapsed().as_millis(),
-                    });
-                    if openpyxl_fallback_available {
-                        continue;
+            let validation_notes =
+                match self
+                    .validator
+                    .validate_for_engine(engine, plan, output_candidate.path())
+                {
+                    Ok(notes) => notes,
+                    Err(error) => {
+                        let message = error.to_string();
+                        attempts.push(BackendAttempt {
+                            engine,
+                            outcome: BackendAttemptOutcome::ValidationFailed,
+                            message: message.clone(),
+                            elapsed_ms: attempt_started.elapsed().as_millis(),
+                        });
+                        if openpyxl_fallback_available {
+                            continue;
+                        }
+                        return Err(self.output_validation_error(
+                            plan,
+                            &mut output_candidate,
+                            engine,
+                            format!("output validation failed: {message}"),
+                            &route,
+                            &attempts,
+                        ));
                     }
-                    return Err(self.output_validation_error(
-                        plan,
-                        output_candidate.path(),
-                        engine,
-                        format!("output validation failed: {message}"),
-                        &route,
-                        &attempts,
-                    ));
-                }
-            };
+                };
             OpenOptions::new()
                 .write(true)
                 .open(output_candidate.path())
@@ -1555,7 +1621,10 @@ fn parent_or_current(path: &Path) -> &Path {
         .unwrap_or_else(|| Path::new("."))
 }
 
-struct TempArtifact(PathBuf);
+struct TempArtifact {
+    path: PathBuf,
+    keep: bool,
+}
 
 impl TempArtifact {
     fn new(parent: &Path, purpose: &str, extension: &str) -> Result<Self> {
@@ -1569,7 +1638,7 @@ impl TempArtifact {
             match OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(file) => {
                     drop(file);
-                    return Ok(Self(path));
+                    return Ok(Self { path, keep: false });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(error) => {
@@ -1581,13 +1650,15 @@ impl TempArtifact {
     }
 
     fn path(&self) -> &Path {
-        &self.0
+        &self.path
     }
 }
 
 impl Drop for TempArtifact {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        if !self.keep {
+            let _ = fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -1623,6 +1694,7 @@ mod tests {
         UnsupportedBeforeWrite,
         Write,
         Fail,
+        FailSavedOutputValidation,
     }
 
     struct FakeBackend {
@@ -1656,6 +1728,13 @@ mod tests {
                         .map_err(|error| BackendFailure::failed(error.to_string()))
                 }
                 Action::Fail => Err(BackendFailure::failed("synthetic write failure")),
+                Action::FailSavedOutputValidation => {
+                    fs::write(&plan.output, b"unreadable saved candidate")
+                        .map_err(|error| BackendFailure::failed(error.to_string()))?;
+                    Err(BackendFailure::saved_output_validation_failed(
+                        "synthetic reopen failure",
+                    ))
+                }
             }
         }
     }
@@ -2071,6 +2150,38 @@ mod tests {
         assert_eq!(observed.lock().unwrap().len(), 1);
         assert!(!plan.output.exists());
         assert_eq!(fs::read(&plan.input).unwrap(), b"original workbook bytes");
+    }
+
+    #[test]
+    fn saved_output_validation_failure_keeps_exact_candidate() {
+        let directory = TestDir::new();
+        let plan = plan(&directory.0, vec![set_value()]);
+        let modifier = ExcelModifier::new(
+            "test-linux-x86_64",
+            vec![backend(
+                capability(EngineId::OpenpyxlWorker, [EditOperationKind::SetCellValue]),
+                Action::FailSavedOutputValidation,
+                Arc::new(Mutex::new(Vec::new())),
+            )],
+            Arc::new(RejectValidator),
+        )
+        .unwrap();
+
+        let error = modifier.execute(&plan).unwrap_err();
+        assert_eq!(error.kind, ExcelModifierErrorKind::OutputValidationFailed);
+        assert_eq!(
+            error.attempts[0].outcome,
+            BackendAttemptOutcome::ValidationFailed
+        );
+        assert_eq!(fs::read(&plan.input).unwrap(), b"original workbook bytes");
+        assert!(!plan.output.exists());
+        let saved = fs::read_dir(directory.0.as_path())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path != &plan.input)
+            .expect("saved candidate was retained");
+        assert_eq!(fs::read(&saved).unwrap(), b"unreadable saved candidate");
+        assert!(error.message.contains(saved.to_str().unwrap()));
     }
 
     #[test]

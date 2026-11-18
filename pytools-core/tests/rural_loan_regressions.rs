@@ -219,6 +219,8 @@ fn planned_decimal<'a>(plan: &'a excel_editor::ExcelEditPlan, cell: &str) -> Opt
 
 #[test]
 fn rural_loan_reports_and_plan_follow_institution_row_order() -> Result<()> {
+    use excel_editor::{CellValue, EditOperation};
+
     let dir = TestDir::new();
     let current = dir.path("current.xlsx");
     let previous = dir.path("previous.xlsx");
@@ -265,11 +267,19 @@ fn rural_loan_reports_and_plan_follow_institution_row_order() -> Result<()> {
         .operations
         .iter()
         .filter_map(|operation| match operation {
-            excel_editor::EditOperation::SetCellValue { cell, .. } => Some(cell.as_str()),
+            EditOperation::SetCellValue { cell, value, .. } => Some((cell.as_str(), value)),
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(edited_cells, ["D3", "D5"]);
+    assert_eq!(
+        edited_cells,
+        [
+            ("D3", &CellValue::Decimal("5".to_owned())),
+            ("D4", &CellValue::Blank),
+            ("D5", &CellValue::Decimal("10".to_owned())),
+            ("D6", &CellValue::Blank),
+        ]
+    );
     Ok(())
 }
 

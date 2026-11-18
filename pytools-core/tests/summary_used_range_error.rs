@@ -19,11 +19,11 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
     let output_dir = unique_test_dir();
     let unsupported_dir = output_dir.join("unsupported_inputs");
     fs::create_dir_all(&unsupported_dir)?;
-    let unsupported_xls = unsupported_dir.join("ignored.xls");
+    let unsupported_csv = unsupported_dir.join("ignored.csv");
     let unsupported_xlsb = unsupported_dir.join("ignored.xlsb");
     fs::write(
-        &unsupported_xls,
-        b"not an Excel workbook; PyCode skips .xls",
+        &unsupported_csv,
+        b"not an Excel workbook; unsupported extension for this summary",
     )?;
     fs::write(
         &unsupported_xlsb,
@@ -38,7 +38,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         // 结果断言依赖 JSON 输出，显式使用 developer 视图。
         .args(["--log-view", "developer"])
         .arg(&fixture)
-        .arg(&unsupported_xls)
+        .arg(&unsupported_csv)
         .arg(&unsupported_xlsb)
         .output()
         .context("run pytools summary-used-range")?;
@@ -79,11 +79,15 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
     assert!(run_log["events"]
         .as_array()
         .is_some_and(|events| !events.is_empty()));
-    for extension in ["xls", "xlsb"] {
+    for unsupported in [&unsupported_csv, &unsupported_xlsb] {
+        let name = unsupported
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap();
         assert!(run_log["events"].as_array().unwrap().iter().any(|event| {
             event["phase"] == "input_filter"
                 && event["status"] == "skipped"
-                && event["file_name"] == format!("ignored.{extension}")
+                && event["file_name"] == name
                 && event["actual_engine"].is_null()
         }));
     }
@@ -101,7 +105,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         .arg("--log-view")
         .arg("developer")
         .arg(&fixture)
-        .arg(&unsupported_xls)
+        .arg(&unsupported_csv)
         .arg(&unsupported_xlsb)
         .output()
         .context("run pytools summary-used-range in developer log view")?;
@@ -174,7 +178,7 @@ fn summary_used_range_cli_preserves_excel_error_cells() -> Result<()> {
         .arg("--log-view")
         .arg("off")
         .arg(&fixture)
-        .arg(&unsupported_xls)
+        .arg(&unsupported_csv)
         .arg(&unsupported_xlsb)
         .output()
         .context("run pytools summary-used-range with logging disabled")?;
@@ -685,10 +689,21 @@ fn summary_used_range_cli_reports_no_reader_when_no_workbook_is_read() -> Result
 
 #[test]
 fn summary_used_range_failure_event_keeps_file_and_stage_context() -> Result<()> {
+    assert_corrupt_source_is_reported("机构甲-损坏工作簿.xlsx")
+}
+
+#[cfg(windows)]
+#[test]
+fn summary_used_range_reports_invalid_biff_as_a_read_failure() -> Result<()> {
+    assert_corrupt_source_is_reported("机构甲-损坏工作簿.XLS")
+}
+
+fn assert_corrupt_source_is_reported(file_name: &str) -> Result<()> {
     let root = unique_test_dir();
-    let source = root.join("机构甲-损坏工作簿.xlsx");
+    let source = root.join(file_name);
     let log_dir = root.join("logs");
-    fs::write(&source, b"not an OOXML workbook")?;
+    let invalid_bytes = b"not a workbook";
+    fs::write(&source, invalid_bytes)?;
 
     let output = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("summary-used-range")
@@ -703,6 +718,8 @@ fn summary_used_range_failure_event_keeps_file_and_stage_context() -> Result<()>
         !output.status.success(),
         "a corrupt workbook must fail the task"
     );
+    assert_eq!(fs::read(&source)?, invalid_bytes);
+    assert!(fs::read_dir(root.join("output"))?.next().is_none());
 
     let events_path = fs::read_dir(log_dir.join("run-events"))?
         .next()
@@ -719,7 +736,7 @@ fn summary_used_range_failure_event_keeps_file_and_stage_context() -> Result<()>
         .context("unified operation failure event was not written")?;
     assert_eq!(failure["feature_id"], "PT-6-1");
     assert_eq!(failure["file_index"], 1);
-    assert_eq!(failure["file_name"], "机构甲-损坏工作簿.xlsx");
+    assert_eq!(failure["file_name"], file_name);
     assert_eq!(failure["stage"], "extent_scan");
     assert_eq!(failure["error_code"], "EXCEL_READ_FAILED");
     assert!(

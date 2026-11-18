@@ -1,26 +1,18 @@
-//! 按配置生成静态打印报表（菜单 3-1/3-2 均通过 openpyxl worker 执行；
-//! rust_xlsxwriter 保留为内部实现，旧 umya 实现仅作历史对照，不再由菜单路由）。
-//!
-//! 三者共享同一份“打印配置”语义，差异只在复制/写出的引擎：
-//! - `umya`：umya 打开源工作簿整簿读入，在**同一包内**把源表复制到目标表
-//!   （样式表同簿引用，字体/边框/填充/数字格式/行高列宽/合并全部原样保留），
-//!   公式写入缓存值转静态。
-//! - `openpyxl`：调用本机 Python openpyxl，按原 PyTools `print_310.py`
-//!   的 `_copy_block` 语义逐属性复制样式（与旧工具最接近）。
-//! - `rust_writer`：calamine 读缓存值 + rust_xlsxwriter 新建目标（外观重置，
-//!   保留合并、列宽、页面设置、零值隐藏、批注丢弃）。
-//!
-//! 各引擎通过 `crate::engine_diag` 推送统一诊断事件（引擎/阶段/结果/上下文/
-//! 耗时/原始错误/发生时刻），由菜单层汇总显示。
-//!
-//! 共通的行为对齐原 Python：不拒绝 Excel 错误值（原工具原样输出）、
-//! 允许写入已存在的目标工作簿、段间空一行、公式取缓存值不留公式。
+//! 3-1 按配置新建静态打印工作簿，可选 Openpyxl 或 Rust。
+//! 含 XLS 源的目标使用 Calamine 和 rust_xlsxwriter，公式只取已保存的缓存。
 
 use crate::config::PrintTask;
 use crate::engine_diag::{DiagEvent, DiagOutcome, DiagStage};
+use crate::print_ops::{
+    is_xls_print_source, write_xls_static_print_group, write_xls_static_print_group_with_layouts,
+    xls_print_limitations, StaticPrintExecution, PRINT_AUTO_MAX_WIDTH, PRINT_AUTO_MIN_WIDTH,
+    PRINT_AUTO_WIDTH_PADDING, PRINT_DATE_DISPLAY_LENGTH, PRINT_WIDE_ASCII,
+};
+use crate::run_logging::BusinessIssue;
 use anyhow::{bail, ensure, Context, Result};
 use excel_reader::SheetDump;
 use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -31,6 +23,7 @@ use std::{
 pub enum StaticPrintEngine {
     RustWriter,
     Openpyxl,
+    Com,
     Aspose,
 }
 
@@ -39,6 +32,7 @@ impl StaticPrintEngine {
         match self {
             Self::RustWriter => "Rust (calamine + OOXML + rust_xlsxwriter)",
             Self::Openpyxl => "Openpyxl",
+            Self::Com => "Excel/WPS COM 补 XLS 版式，Calamine 读取已保存缓存",
             Self::Aspose => "Aspose .NET (evaluation copy)",
         }
     }
@@ -51,6 +45,7 @@ pub struct StaticPrintRun {
     pub task_failed: usize,
     pub outputs: Vec<PathBuf>,
     pub issues: Vec<String>,
+    pub format_warnings: Vec<BusinessIssue>,
     /// 统一引擎诊断事件（含各自发生时刻）；由界面层汇总显示。
     pub events: Vec<DiagEvent>,
 }
@@ -156,37 +151,13 @@ fn is_zero_like(value: &serde_json::Value) -> bool {
     }
 }
 
-/// 3-3：现有 Rust 写入路径（calamine 读值 → rust_xlsxwriter 新建目标）。
-/// Rust 入口的专用输出路径：原目标文件名追加 `_Rust` 后缀（保持目录与扩展名），
-/// 防止覆盖 Openpyxl 入口的输出文件。
-pub fn rust_output_path(target: &Path) -> PathBuf {
-    let stem = target
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    // 幂等：已带 _Rust 后缀的路径不再追加（run_configured_static_print 与
-    // run_rust_print_engine 都会调用本函数，避免叠加成 _Rust_Rust）。
-    if stem.ends_with("_Rust") {
-        return target.to_path_buf();
-    }
-    let extension = target
-        .extension()
-        .map(|ext| ext.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "xlsx".to_owned());
-    target.with_file_name(format!("{stem}_Rust.{extension}"))
-}
-
-/// 菜单 3-1 Rust 入口：与 Openpyxl 入口共用同一份「打印配置」，
-/// 但输出走独立 `_Rust` 路径，且只调用 Rust 实现（无 Openpyxl/UMYA/BetterOffice 兜底）。
-///
-/// XLSM 目标明确拒绝并提示使用 Openpyxl 入口。
+/// 3-1 的 Rust 选项沿用配置目标，只向新建 XLSX 写入。
 pub fn run_rust_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
-    let mut rust_tasks: Vec<PrintTask> = Vec::new();
-    for task in tasks.iter().filter(|task| task.enabled).cloned() {
-        let Some(target) = task.target_wb.as_ref() else {
-            rust_tasks.push(task);
-            continue;
-        };
+    for target in tasks
+        .iter()
+        .filter(|task| task.enabled)
+        .filter_map(|task| task.target_wb.as_deref())
+    {
         if target
             .extension()
             .and_then(|ext| ext.to_str())
@@ -197,11 +168,8 @@ pub fn run_rust_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                 target.display()
             );
         }
-        let mut rust_task = task.clone();
-        rust_task.target_wb = Some(rust_output_path(target));
-        rust_tasks.push(rust_task);
     }
-    run_rust_writer_engine(&rust_tasks)
+    run_rust_writer_engine(tasks)
 }
 
 pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
@@ -211,6 +179,7 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     if enabled.is_empty() {
         bail!("未找到启用的打印任务，请检查“打印配置”工作表和“是否启用”列（Y/是/1）");
     }
+    let (xls_groups, enabled) = partition_xls_print_tasks(&enabled);
     // 必须一次传入全部启用行：同一目标工作簿通常由多行配置拼装，
     // 逐行建计划会让后一行因“目标已存在”失败。
     let mut plans = Vec::new();
@@ -257,27 +226,110 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
         let write_started = Instant::now();
         let executions = write_static_print_plans(&plans)?;
         for execution in executions {
-            run.events.extend(execution.diagnostics);
-            run.events.push(
-                DiagEvent::new(
-                    "rust_xlsxwriter",
-                    DiagStage::ModifyWorkbook,
-                    DiagOutcome::Ok,
-                )
-                .with_file(execution.output.to_string_lossy().into_owned())
-                .with_details(execution.stage_timings)
-                .with_message("静态打印阶段耗时"),
-            );
-            run.task_ok += 1;
-            run.events.push(
-                DiagEvent::new("rust_xlsxwriter", DiagStage::SaveOutput, DiagOutcome::Ok)
-                    .with_file(execution.output.to_string_lossy().into_owned())
-                    .with_elapsed_ms(write_started.elapsed().as_millis()),
-            );
-            run.outputs.push(execution.output);
+            record_rust_print_output(&mut run, execution, write_started);
         }
     }
+    run_xls_print_groups(&mut run, xls_groups);
     Ok(run)
+}
+
+type XlsPrintGroups<'a> = BTreeMap<&'a Path, Vec<&'a PrintTask>>;
+
+fn partition_xls_print_tasks(tasks: &[PrintTask]) -> (XlsPrintGroups<'_>, Vec<PrintTask>) {
+    let targets: BTreeSet<_> = tasks
+        .iter()
+        .filter(|task| task.enabled && task.source_wb.as_deref().is_some_and(is_xls_print_source))
+        .filter_map(|task| task.target_wb.as_deref())
+        .collect();
+    let mut xls_groups = BTreeMap::<&Path, Vec<&PrintTask>>::new();
+    let mut remaining = Vec::new();
+    for task in tasks {
+        match task.target_wb.as_deref() {
+            Some(target) if task.enabled && targets.contains(target) => {
+                xls_groups.entry(target).or_default().push(task);
+            }
+            _ => remaining.push(task.clone()),
+        }
+    }
+    (xls_groups, remaining)
+}
+
+fn run_xls_print_groups(run: &mut StaticPrintRun, groups: XlsPrintGroups<'_>) {
+    for (target, group) in groups {
+        let started = Instant::now();
+        match write_xls_static_print_group(target, &group) {
+            Ok(execution) => {
+                run.events.push(
+                    DiagEvent::new("calamine", DiagStage::ReadSource, DiagOutcome::Ok)
+                        .with_file(target.to_string_lossy().into_owned())
+                        .with_message(
+                            "含 XLS 源的目标统一使用 Calamine 读取和 rust_xlsxwriter 新建",
+                        ),
+                );
+                for task in &group {
+                    if let Some(source) = task
+                        .source_wb
+                        .as_deref()
+                        .filter(|path| is_xls_print_source(path))
+                    {
+                        let message = xls_print_limitations(task);
+                        let mut issue = BusinessIssue::new("XLS 打印保真", &message);
+                        issue.file_name = Some(crate::run_logging::portable_file_name(source));
+                        issue.sheet_name = Some(task.source_ws.clone());
+                        issue.location = Some(format!("打印配置第 {} 行", task.row_no));
+                        run.format_warnings.push(issue);
+                        run.events.push(
+                            DiagEvent::new("calamine", DiagStage::ReadSource, DiagOutcome::Ok)
+                                .with_row(task.row_no)
+                                .with_file(source.to_string_lossy().into_owned())
+                                .with_sheet(task.source_ws.clone())
+                                .with_message(message),
+                        );
+                    }
+                }
+                record_rust_print_output(run, execution, started);
+            }
+            Err(error) => {
+                run.task_failed += group.len();
+                let message = format!("含 XLS 源的打印目标未生成：{error:#}");
+                run.issues.push(message.clone());
+                run.events.push(
+                    DiagEvent::new(
+                        "calamine + rust_xlsxwriter",
+                        DiagStage::CopySheet,
+                        DiagOutcome::Failed,
+                    )
+                    .with_file(target.to_string_lossy().into_owned())
+                    .with_message(message),
+                );
+            }
+        }
+    }
+}
+
+fn record_rust_print_output(
+    run: &mut StaticPrintRun,
+    execution: StaticPrintExecution,
+    started: Instant,
+) {
+    run.events.extend(execution.diagnostics);
+    run.events.push(
+        DiagEvent::new(
+            "rust_xlsxwriter",
+            DiagStage::ModifyWorkbook,
+            DiagOutcome::Ok,
+        )
+        .with_file(execution.output.to_string_lossy().into_owned())
+        .with_details(execution.stage_timings)
+        .with_message("静态打印阶段耗时"),
+    );
+    run.task_ok += 1;
+    run.events.push(
+        DiagEvent::new("rust_xlsxwriter", DiagStage::SaveOutput, DiagOutcome::Ok)
+            .with_file(execution.output.to_string_lossy().into_owned())
+            .with_elapsed_ms(started.elapsed().as_millis()),
+    );
+    run.outputs.push(execution.output);
 }
 
 /// 历史 umya 实现，保留供旧结果定位；菜单 3-1/3-2 不再调用此函数。
@@ -752,6 +804,13 @@ pub fn run_openpyxl_engine(tasks: &[PrintTask], python: &Path) -> Result<StaticP
         "未找到启用的打印任务，请检查“打印配置”工作表和“是否启用”列（Y/是/1）"
     );
     let plan = serde_json::json!({
+        "auto_width": {
+            "min": PRINT_AUTO_MIN_WIDTH,
+            "max": PRINT_AUTO_MAX_WIDTH,
+            "padding": PRINT_AUTO_WIDTH_PADDING,
+            "date_length": PRINT_DATE_DISPLAY_LENGTH,
+            "wide_ascii": PRINT_WIDE_ASCII,
+        },
         "tasks": enabled.iter().map(|task| serde_json::json!({
             "row_no": task.row_no,
             "mode": task.mode,
@@ -772,6 +831,7 @@ pub fn run_openpyxl_engine(tasks: &[PrintTask], python: &Path) -> Result<StaticP
     let plan_path = unique_temp_json(&plan).context("[准备] 创建 openpyxl 临时计划失败")?;
     let script = r#"
 import json, sys, copy, time, os
+from datetime import date, time as time_of_day, timedelta
 from pathlib import Path
 import openpyxl
 from openpyxl import Workbook, load_workbook
@@ -882,6 +942,37 @@ def copy_block(src_ws, dst_ws, bounds, dst_start_row, mode, value_ws, hide_zero,
                 issues.append(f"第 {row_no} 行：[复制] 合并区域 {merged} 复制失败，生成文件可能不完整：{type(e).__name__}: {e}")
     return rows_count, cols_count
 
+def fit_columns(ws, policy):
+    merged_widths = {
+        (region.min_row, region.min_col): region.max_col - region.min_col + 1
+        for region in ws.merged_cells.ranges
+    }
+    widths = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            value = cell.value
+            if value is None:
+                continue
+            if isinstance(value, (date, time_of_day, timedelta)):
+                length = policy['date_length']
+            else:
+                if isinstance(value, float) and value.is_integer():
+                    value = int(value)
+                length = max(
+                    (sum(1 if ch.isascii() and ch not in policy['wide_ascii'] else 2
+                         for ch in line.rstrip()) for line in str(value).split('\n')),
+                    default=0,
+                )
+            if length == 0:
+                continue
+            span = merged_widths.get((cell.row, cell.column), 1)
+            width = (length + policy['padding'] + span - 1) // span
+            width = max(policy['min'], min(policy['max'], width))
+            for column in range(cell.column, cell.column + span):
+                widths[column] = max(widths.get(column, 0), width)
+    for column, width in widths.items():
+        ws.column_dimensions[get_column_letter(column)].width = width
+
 def apply_setup(ws, total_rows, total_cols, fit_wide, fit_tall, orientation, center_h, center_v):
     ws.page_setup.orientation = orientation or 'portrait'
     if ws.sheet_properties.pageSetUpPr is None:
@@ -972,11 +1063,14 @@ for t in plan['tasks']:
         max_cols = 1
         issues_before_copy = len(issues)
         stage = f'复制工作表 {t["source_ws"]!r} 到 {name!r}'
+        mode = int(t.get('mode', 1))
         for rg in ranges:
-            rows, cols = copy_block(src_ws, ws, rg, out_row, int(t.get('mode', 1)), src_val_ws,
+            rows, cols = copy_block(src_ws, ws, rg, out_row, mode, src_val_ws,
                                     bool(t.get('hide_zero')), bool(t.get('drop_comments')), t['row_no'])
             out_row += rows + 1
             max_cols = max(max_cols, cols)
+        if mode == 3:
+            fit_columns(ws, plan['auto_width'])
         stage = f'设置目标工作表 {name!r} 的打印参数'
         apply_setup(ws, out_row - 1, max_cols, t.get('fit_wide'), t.get('fit_tall'),
                     parse_orientation(t.get('orientation')), t.get('center_h'), t.get('center_v'))
@@ -1082,6 +1176,7 @@ print(json.dumps(result, ensure_ascii=True))
                     .collect()
             })
             .unwrap_or_default(),
+        format_warnings: Vec::new(),
         events: Vec::new(),
     };
     // 子进程以结构化 JSON 回传诊断事件（含各自发生的 Unix 秒），此处转换为
@@ -1183,7 +1278,7 @@ pub fn run_configured_static_print_with_python(
     // 阶段计时（PYTOOLS_PRINT_STAGE_TIMING=1 时输出到 stderr，供性能分析用）。
 
     let config_read_started = std::time::Instant::now();
-    let mut tasks = crate::config::load_print_tasks(config_path).with_context(|| {
+    let tasks = crate::config::load_print_tasks(config_path).with_context(|| {
         format!(
             "[配置读取] 读取打印配置 {} 失败（读取引擎：calamine）",
             config_path.display()
@@ -1191,15 +1286,6 @@ pub fn run_configured_static_print_with_python(
     })?;
     let config_read_ms = config_read_started.elapsed().as_millis();
 
-    // Rust 入口的输出隔离：在目标校验前把目标重映射为 `_Rust` 后缀路径，
-    // 使「目标已存在」校验和后续写入都针对独立输出，绝不覆盖 Openpyxl 输出。
-    if engine == StaticPrintEngine::RustWriter {
-        for task in tasks.iter_mut().filter(|task| task.enabled) {
-            if let Some(target) = task.target_wb.as_ref() {
-                task.target_wb = Some(rust_output_path(target));
-            }
-        }
-    }
     for task in tasks.iter().filter(|task| task.enabled) {
         if let Some(target) = task.target_wb.as_deref() {
             if engine == StaticPrintEngine::RustWriter
@@ -1261,14 +1347,9 @@ pub fn run_configured_static_print_with_python(
     } else {
         match engine {
             StaticPrintEngine::RustWriter => run_rust_print_engine(&tasks),
+            StaticPrintEngine::Com => run_com_print_engine(&tasks),
             StaticPrintEngine::Aspose => run_aspose_print_engine(&tasks),
-            StaticPrintEngine::Openpyxl => {
-                let python = match python_override {
-                    Some(path) => path.to_path_buf(),
-                    None => resolve_print_python()?,
-                };
-                run_openpyxl_engine(&tasks, &python)
-            }
+            StaticPrintEngine::Openpyxl => run_openpyxl_with_xls_sources(&tasks, python_override),
         }?
     };
     run.task_failed += rejected.task_failed;
@@ -1283,6 +1364,131 @@ pub fn run_configured_static_print_with_python(
     ];
     events.append(&mut run.events);
     run.events = events;
+    Ok(run)
+}
+
+fn run_com_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
+    use crate::conversion_engine::{unique_temp_dir, ConversionRuntime, TempDirGuard};
+    use crate::file_commit::sha256_file;
+
+    ensure!(cfg!(windows), "打印 COM 版式路径仅支持 Windows");
+    let mut groups = BTreeMap::<&Path, Vec<&PrintTask>>::new();
+    for task in tasks.iter().filter(|task| task.enabled) {
+        let source = task.source_wb.as_deref().context("打印源工作簿为空")?;
+        let target = task.target_wb.as_deref().context("打印目标工作簿为空")?;
+        ensure!(
+            is_xls_print_source(source)
+                && target
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsx")),
+            "打印配置第 {} 行：COM 版式仅支持 XLS 源 → 新 XLSX 目标",
+            task.row_no
+        );
+        groups.entry(target).or_default().push(task);
+    }
+    ensure!(!groups.is_empty(), "未找到启用的打印任务");
+
+    let scratch = TempDirGuard(unique_temp_dir(&std::env::temp_dir())?);
+    let mut runtime = ConversionRuntime::default();
+    let mut layouts = HashMap::<PathBuf, (PathBuf, String)>::new();
+    let mut run = StaticPrintRun::default();
+    for (target, group) in groups {
+        let started = Instant::now();
+        let execution = (|| -> Result<StaticPrintExecution> {
+            ensure!(
+                !target.exists(),
+                "目标路径已存在，拒绝写入：{}",
+                target.display()
+            );
+            let mut group_layouts = HashMap::new();
+            for task in &group {
+                let source = task.source_wb.as_ref().context("打印源工作簿为空")?;
+                if !layouts.contains_key(source) {
+                    let job = TempDirGuard(unique_temp_dir(&scratch.0)?);
+                    let staged_input = job.0.join("source.xls");
+                    let staged_layout = job.0.join("layout.xlsx");
+                    let digest = sha256_file(source)?;
+                    fs::copy(source, &staged_input)
+                        .with_context(|| format!("备份 XLS 打印源 {}", source.display()))?;
+                    ensure!(
+                        sha256_file(&staged_input)? == digest,
+                        "打印源已变化：{}",
+                        source.display()
+                    );
+                    let detail = runtime
+                        .extract_static_print_layout(&staged_input, &staged_layout)
+                        .with_context(|| format!("COM 读取 XLS 版式失败：{}", source.display()))?;
+                    let layout = scratch.0.join(format!("layout-{}.xlsx", layouts.len()));
+                    fs::rename(&staged_layout, &layout)?;
+                    layouts.insert(source.clone(), (layout, digest));
+                    run.events.push(
+                        DiagEvent::new("Excel/WPS COM", DiagStage::ReadSource, DiagOutcome::Ok)
+                            .with_file(source.to_string_lossy().into_owned())
+                            .with_message("已从隔离副本提取版式；静态值读取原始保存缓存")
+                            .with_details(detail),
+                    );
+                }
+                let (layout, digest) = &layouts[source];
+                ensure!(
+                    sha256_file(source)? == *digest,
+                    "打印源已变化：{}",
+                    source.display()
+                );
+                group_layouts.insert(source.clone(), layout.clone());
+            }
+            write_xls_static_print_group_with_layouts(target, &group, group_layouts)
+        })();
+        match execution {
+            Ok(execution) => record_rust_print_output(&mut run, execution, started),
+            Err(error) => {
+                run.task_failed += group.len();
+                let message = format!("COM 打印目标未生成：{error:#}");
+                run.issues.push(message.clone());
+                run.events.push(
+                    DiagEvent::new("Excel/WPS COM", DiagStage::CopySheet, DiagOutcome::Failed)
+                        .with_file(target.to_string_lossy().into_owned())
+                        .with_message(message),
+                );
+            }
+        }
+    }
+    Ok(run)
+}
+
+fn run_openpyxl_with_xls_sources(
+    tasks: &[PrintTask],
+    python_override: Option<&Path>,
+) -> Result<StaticPrintRun> {
+    let (xls_groups, remaining) = partition_xls_print_tasks(tasks);
+    let run_openpyxl = || {
+        let python = match python_override {
+            Some(path) => path.to_path_buf(),
+            None => resolve_print_python()?,
+        };
+        run_openpyxl_engine(&remaining, &python)
+    };
+    if xls_groups.is_empty() {
+        return run_openpyxl();
+    }
+    let mut run = if remaining.iter().any(|task| task.enabled) {
+        match run_openpyxl() {
+            Ok(run) => run,
+            Err(error) => {
+                let mut run = StaticPrintRun::default();
+                run.task_failed = remaining.iter().filter(|task| task.enabled).count();
+                let message = format!("其余打印目标未生成：{error:#}");
+                run.issues.push(message.clone());
+                run.events.push(
+                    DiagEvent::new("openpyxl", DiagStage::CopySheet, DiagOutcome::Failed)
+                        .with_message(message),
+                );
+                run
+            }
+        }
+    } else {
+        StaticPrintRun::default()
+    };
+    run_xls_print_groups(&mut run, xls_groups);
     Ok(run)
 }
 
@@ -1562,6 +1768,11 @@ pub fn run_aspose_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
                 .collect(),
                 drop_allowed: Default::default(),
             };
+            let _review_destination = crate::review_output::ReviewDestinationScope::enter(&target);
+            let _review_origin = snapshots
+                .iter()
+                .next()
+                .map(|(source, hash)| crate::review_output::ReviewOriginScope::enter(source, hash));
             crate::inplace_edit::execute_candidate(
                 &plan,
                 crate::inplace_edit::InPlaceEngine::Aspose,

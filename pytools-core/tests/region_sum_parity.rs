@@ -75,19 +75,13 @@ fn region_sum_workflow_matches_python_values_stats_and_output_presentation() -> 
     assert_eq!(workbook.sheets.len(), 1);
     let sheet = &workbook.sheets[0];
     assert_eq!(sheet.name, baseline["output_workbook"]["sheet_name"]);
-    let actual_cells = normalize_cell_map(&serde_json::to_value(&sheet.values)?)?;
-    let expected_cells = normalize_cell_map(&baseline["output_workbook"]["cells"])?;
-    assert_eq!(actual_cells, expected_cells);
-    assert_eq!(
-        serde_json::to_value(&sheet.formulas)?,
-        normalize_openpyxl_formula_map(&baseline["output_workbook"]["formulas"])?
-    );
+    assert_report_cells(sheet, &baseline["output_workbook"])?;
 
     let layout = inspect_layout(&report_path)?;
     let expected = &baseline["output_workbook"];
     assert_eq!(layout["max_row"], expected["max_row"]);
     assert_eq!(layout["max_column"], expected["max_column"]);
-    assert_eq!(layout["styles"], expected["styles"]);
+    assert_report_styles(&layout["styles"], expected)?;
     let expected_widths = expected["column_widths"]
         .as_object()
         .context("column widths")?;
@@ -182,14 +176,7 @@ fn region_sum_cli_runs_python_baseline_workflow() -> Result<()> {
     let workbook = excel_reader::read_workbook(&report_path)?;
     let sheet = workbook.sheets.first().context("result worksheet")?;
     assert_eq!(sheet.name, baseline["output_workbook"]["sheet_name"]);
-    assert_eq!(
-        normalize_cell_map(&serde_json::to_value(&sheet.values)?)?,
-        normalize_cell_map(&baseline["output_workbook"]["cells"])?
-    );
-    assert_eq!(
-        serde_json::to_value(&sheet.formulas)?,
-        normalize_openpyxl_formula_map(&baseline["output_workbook"]["formulas"])?
-    );
+    assert_report_cells(sheet, &baseline["output_workbook"])?;
     for (path, original_bytes) in input_bytes {
         assert_eq!(
             fs::read(&path)?,
@@ -268,18 +255,11 @@ fn region_sum_cli_projects_cached_formula_totals_like_python() -> Result<()> {
     let sheet = workbook.sheets.first().context("result worksheet")?;
     let expected = &baseline["output_workbook"];
     assert_eq!(sheet.name, expected["sheet_name"]);
-    assert_eq!(
-        normalize_cell_map(&serde_json::to_value(&sheet.values)?)?,
-        normalize_cell_map(&expected["cells"])?
-    );
-    assert_eq!(
-        serde_json::to_value(&sheet.formulas)?,
-        normalize_openpyxl_formula_map(&expected["formulas"])?
-    );
+    assert_report_cells(sheet, expected)?;
     let layout = inspect_layout(&report_path)?;
     assert_eq!(layout["max_row"], expected["max_row"]);
     assert_eq!(layout["max_column"], expected["max_column"]);
-    assert_eq!(layout["styles"], expected["styles"]);
+    assert_report_styles(&layout["styles"], expected)?;
     let expected_widths = expected["column_widths"]
         .as_object()
         .context("cached formula Python baseline widths")?;
@@ -392,19 +372,12 @@ fn interactive_region_sum_menu_matches_python_baseline_workbook() -> Result<()> 
     assert_eq!(workbook.sheets.len(), 1);
     let sheet = &workbook.sheets[0];
     assert_eq!(sheet.name, baseline["output_workbook"]["sheet_name"]);
-    assert_eq!(
-        normalize_cell_map(&serde_json::to_value(&sheet.values)?)?,
-        normalize_cell_map(&baseline["output_workbook"]["cells"])?
-    );
-    assert_eq!(
-        serde_json::to_value(&sheet.formulas)?,
-        normalize_openpyxl_formula_map(&baseline["output_workbook"]["formulas"])?
-    );
+    assert_report_cells(sheet, &baseline["output_workbook"])?;
     let layout = inspect_layout(&report_path)?;
     let expected = &baseline["output_workbook"];
     assert_eq!(layout["max_row"], expected["max_row"]);
     assert_eq!(layout["max_column"], expected["max_column"]);
-    assert_eq!(layout["styles"], expected["styles"]);
+    assert_report_styles(&layout["styles"], expected)?;
     let expected_widths = expected["column_widths"]
         .as_object()
         .context("Python baseline column widths missing")?;
@@ -515,8 +488,8 @@ fn output_name_collisions_preserve_existing_files_and_input_workbook() -> Result
     let output_workbook =
         excel_reader::read_workbook(result.path.as_ref().context("output path")?)?;
     let output_sheet = output_workbook.sheets.first().context("result worksheet")?;
-    assert!(output_sheet.formulas.contains_key("A3"));
-    assert!(!output_sheet.values.contains_key("A3"));
+    assert!(!output_sheet.formulas.contains_key("A3"));
+    assert_eq!(output_sheet.values["A3"]["value"], SUMMARY_LABEL);
     assert_eq!(fs::read(existing_output)?, output_sentinel);
     assert_eq!(fs::read(existing_log)?, log_sentinel);
     assert_eq!(fs::read(input)?, input_before);
@@ -660,6 +633,51 @@ fn normalize_cell_map(value: &Value) -> Result<Value> {
         }
     }
     Ok(Value::Object(normalized))
+}
+
+const SUMMARY_LABEL: &str = "=== 统计汇总 ===";
+
+fn legacy_summary_cell(baseline: &Value) -> Result<&str> {
+    baseline["formulas"]
+        .as_object()
+        .context("formulas must be an object")?
+        .iter()
+        .find(|(_, formula)| formula.as_str() == Some(SUMMARY_LABEL))
+        .map(|(address, _)| address.as_str())
+        .context("legacy report summary label")
+}
+
+fn assert_report_cells(sheet: &excel_reader::SheetDump, baseline: &Value) -> Result<()> {
+    let summary_cell = legacy_summary_cell(baseline)?;
+    let mut expected_cells = normalize_cell_map(&baseline["cells"])?;
+    let mut formulas = baseline["formulas"]
+        .as_object()
+        .context("formulas")?
+        .clone();
+    // Preserve the baseline text, but Excel rejects its old formula encoding.
+    formulas.remove(summary_cell);
+    expected_cells[summary_cell] = json!({"type": "string", "value": SUMMARY_LABEL});
+    assert_eq!(
+        normalize_cell_map(&serde_json::to_value(&sheet.values)?)?,
+        expected_cells
+    );
+    assert_eq!(
+        serde_json::to_value(&sheet.formulas)?,
+        normalize_openpyxl_formula_map(&Value::Object(formulas))?
+    );
+    Ok(())
+}
+
+fn assert_report_styles(actual: &Value, baseline: &Value) -> Result<()> {
+    let mut expected = baseline["styles"].clone();
+    expected[legacy_summary_cell(baseline)?] = json!({
+        "bold": false,
+        "fill_color": null,
+        "font_color": null,
+        "horizontal_alignment": null,
+    });
+    assert_eq!(actual, &expected);
+    Ok(())
 }
 
 fn normalize_openpyxl_formula_map(value: &Value) -> Result<Value> {

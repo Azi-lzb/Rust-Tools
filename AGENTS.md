@@ -26,6 +26,7 @@
 
 ## 工作方式和业务安全
 
+- 正常交互及 CLI 的 Aspose 入口只保留显式 XLS→XLSX 转换。既有工作簿走通用 Auto 策略时，先按计划检查 RustNative OOXML 的定点修改，其次检查适用的 UMYA 样式或尺寸计划，其余走 Openpyxl。专用的文件修复、页眉路径与旧 XLS COM 路径继续遵守各自的保护规则。BetterOffice 保留既有计算路由，Calamine 继续读、rust_xlsxwriter 继续新建。
 - 后续以用户逐项人工测试与明确反馈为主。用户没有指定功能时，不主动扩大迁移、审计、对拍或优化；出现问题时仅修复该功能及必要依赖。既有已迁移功能优先保留，不自动重写，不得未经测试删除旧功能或以未测试的替代品移除现有业务行为。
 - 保留七类菜单、既定子功能和明确排除项，见 `DEVELOPMENT_GOAL.md`、`pytools-core/MIGRATION_PLAN.md` 和 `pytools-core/MIGRATION_INVENTORY.md`。历史文档和修改记录是参考，不是新的执行任务。
 - 保护原始 Excel 文件、业务数据、公式、必要结构和明确约定保留的对象；优先在副本上操作。涉及覆盖原文件时，必须有明确授权及备份或快照保护。不因普通字体、边框、颜色等外观差异阻塞功能交付；用户明确要求的业务格式和重要结构仍应保护。
@@ -45,8 +46,25 @@
 
 ## 编译、运行和交付
 
+- RustTools 产品版本以 `pytools-core/Cargo.toml` 的 `[package].version` 为准，变更时同步 `Cargo.lock` 中的 `pytools-core` 条目。打包前与上一交付版本比较：缺陷修复升补丁号，向后兼容的新功能升次版本，明确的破坏性发布升主版本。同一版本的重复构建沿用版本号，以构建时间和源码指纹区分。
+- 交付时核对 EXE 启动显示和构建清单使用同一产品版本，并记录版本对应的变更。TEST-main 保留测试包标记，产品版本递增不代表完成正式发布验收。
 - 实现或代码审查不等于构建授权。只有当前用户请求明确授权相应操作时，才可编译、构建、执行或安装 Rust 代码；禁止未授权的 `cargo build/check/test/run/clippy/bench/install`、`rustc` 及通过脚本间接触发这些操作。运行已有 EXE 也须有相应的明确运行授权。
 - 允许静态检查、Git diff 和 `cargo fmt`（含 `cargo fmt --check`）。未执行编译或测试必须明确记录为未验证，不能把写了测试当作通过。
 - 用户直接双击 `dist\RustTools.exe` 运行（程序自动向上探测 `config.xlsx`，无需启动脚本）；`dist` 缺少 EXE 时由构建流程补齐，不隐式调用 Cargo。Release 构建成功后只更新当前工作树的 `dist`。正式包只允许从 `main` 在明确确认验证通过后生成；Feature/Test 产物标记为测试包。打包/构建一律使用显式 Cargo 与 `packaging/` 脚本，不再使用 BAT。
 - 分别记录实现状态、单元/冒烟测试、Windows 用户或真实样本验收、Linux/deb 验证；不得把菜单入口、编译或合成样本视为人工验收通过。
 - Linux 交付要求保持为 x86_64、glibc 2.28 兼容和离线 deb；核心路径不要求用户预装 Python、Go、Office、WPS、LibreOffice 或 JVM。外部引擎仅为明确、按能力选择的可选项。
+
+## F盘归档位置与旧路径撤销（2026-11-17）
+
+- F盘旧根路径的13个兼容联接已按用户要求撤销；查找旧路径失败时，先查 `F:\RustHistory\00_目录导航_20261117.txt` 和 `F:\RustHistory\PATH_MAP_20261117.json`，使用对应的新位置。不要重建旧根目录、兼容联接或用空目录冒充原资料。
+- 正式源码仍在各自的当前项目目录；三个在用构建入口保持 `F:\RustBuild\pytools`、`F:\RustBuild\audit`、`F:\RustBuild\aspose-rea-research`，ASPOSE REA 的同族研究/证据目录也保持原位。本次归档不切换引擎，不调整 Cargo/环境变量，不授权新的编译或运行。
+- Rust-Tools 历史资料在 `F:\RustHistory\Rust-Tools`；Rust-Audit 历史资料在 `F:\RustHistory\Rust-Audit`；混合迁移产物、旧源码树、split快照及旧Cargo home在 `F:\RustHistory\Shared`。原目录名在分类目录内保留。
+- Ghidra安装ZIP（原 `F:\ResearchTools`）位于 `F:\RustHistory\Rust-Tools-Aspose-rea\ResearchTools`；它不替代当前ASPOSE REA研究树、SDK、基准或测试证据。ASPOSE/Spire研究和全部历史数据须保留，不因旧路径失效而删除、重建或覆盖。
+- 归档仅供历史参考，不恢复为当前workspace，不引入跨项目源码依赖。历史日志/报告内的旧绝对路径保持原文；需要查证时按路径映射定位。新指引优先于历史文档中的旧F盘根路径；映射目标仍不存在时明确报告缺失。
+
+## C盘旧历史与基准归档（2026-11-17）
+
+- 原 `C:\Users\AZI\Desktop\VibeCode\RustHistory` 已归档到 `F:\RustHistory\Shared\LegacyVibeCode\RustHistory`；查找历史请直接使用新位置，不重建C盘旧目录或兼容联接。
+- 原 `3.open-data-audit-benchmark` 位于 `F:\RustHistory\Rust-Audit\Benchmarks\3.open-data-audit-benchmark`；原 `excel-engine-benchmarks` 的实际资料位于 `F:\RustHistory\Shared\LegacyVibeCode\RustHistory\excel-engine-benchmarks`。两个基准完整保留，现行rules/13链接已指向F盘报告；历史报告和日志内旧路径不改写。
+- 归档内 `audit-dev`、`pytools-dev` 仍有未提交及未跟踪内容，已在Git中登记为F盘位置；其共同Git目录仍为 `C:\Users\AZI\Desktop\VibeCode\1.rust-workspace\.git`，不得当缓存删除。Git元数据完整副本和all-refs bundle位于 `F:\RustHistory\Shared\LegacyVibeCode\GitMetadataBackup-20261117`。不要用归档分支覆盖当前三个独立项目。
+- `Rust-Tools-test` 是已注销的空壳，不恢复为工作树。导航与新旧映射仍以 `F:\RustHistory\00_目录导航_20261117.txt`、`F:\RustHistory\PATH_MAP_20261117.json` 为准；本次不移动三个在用项目，不改变其构建路径，不授权编译、运行或提交。

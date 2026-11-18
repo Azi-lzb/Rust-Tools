@@ -165,12 +165,12 @@ internal static class ResidentWorker
         Emit(new { ready = true, protocol_version = 1, engine = "Aspose.Cells", sdk = CellsHelper.GetVersion(),
                    pid = Environment.ProcessId, evaluation_mode = true, max_attempts = MaxAttempts });
         int attempts = 0;
-        var ownedOutputs = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         string? line;
         while ((line = Console.ReadLine()) is not null)
         {
             string? ownedCandidate = null;
             string? id = null, runId = null;
+            string? sanitationStage = null;
             var elapsed = Stopwatch.StartNew();
             try
             {
@@ -182,7 +182,7 @@ internal static class ResidentWorker
                 string method = Text(q, "method");
                 if (method == "Ping") { Emit(new { request_id = id, ok = true, pid = Environment.ProcessId, attempts }); continue; }
                 if (method != "Calculate" && method != "Modify" && method != "Convert") throw new NotSupportedException("Unsupported method");
-                Keys(q, "protocol_version", "request_id", "run_id", "method", "input", "candidate", "operations", "operations_file", "operations_sha256");
+                Keys(q, "protocol_version", "request_id", "run_id", "method", "input", "candidate", "operations", "operations_file", "operations_sha256", "verify_content");
                 string input = Text(q, "input"), output = Text(q, "candidate");
                 if (!Path.IsPathFullyQualified(input) || !Path.IsPathFullyQualified(output)) throw new ArgumentException("Absolute paths required");
                 input = Path.GetFullPath(input); output = Path.GetFullPath(output);
@@ -203,9 +203,6 @@ internal static class ResidentWorker
                 plans.LoadImports(importPaths);
                 if (wb.HasMacro) throw new NotSupportedException("Macro preservation has not been validated");
                 var sourceSheets = wb.Worksheets.Cast<Worksheet>().Select(s => s.Name).ToArray();
-                if (sourceSheets.Contains("Evaluation Warning") &&
-                    (!ownedOutputs.TryGetValue(input, out var fingerprint) || fingerprint != Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(input)))))
-                    throw new NotSupportedException("Input contains an evaluation-like sheet with unknown ownership; refuse possible business-sheet damage");
                 int sourceActive = wb.Worksheets.ActiveSheetIndex;
                 FormulaCachePolicy.PreserveStoredStyles(wb);
                 var invalidated = method == "Modify" ? FormulaCachePolicy.Invalidated(wb, requestedOperations) : null;
@@ -231,14 +228,56 @@ internal static class ResidentWorker
                 }
                 else wb.CalculateFormula();
                 double transformMs = elapsed.Elapsed.TotalMilliseconds - loadMs;
-                // Evaluation sheets are deliberately retained. Never rename or
-                // delete a business worksheet based on an evaluation-like name.
+                // Snapshot task-owned business sheets before SDK serialization.
+                // Empty templates remain business sheets. Keep the original
+                // active sheet's identity across rename/move/delete operations.
+                sanitationStage = "output_sanitation_before_save";
+                var identities = method == "Modify" ? PlanOperations.FinalIdentities(sourceSheets, requestedOperations) : sourceSheets.ToDictionary(s => s, s => s);
+                string? preferredActive = sourceActive >= 0 && sourceActive < sourceSheets.Length && identities.TryGetValue(sourceSheets[sourceActive], out var activeName) ? activeName : null;
+                string[] expectedBusiness = OutputSanitation.BusinessRoster(sourceSheets, requestedOperations);
+                var removedBeforeSave = new List<string>();
+                foreach (var sheet in wb.Worksheets.Cast<Worksheet>().Where(s => !expectedBusiness.Contains(s.Name)).ToArray())
+                {
+                    if (sheet.Name != OutputSanitation.SystemSheet || sheet.Shapes.Count != 0 || sheet.Comments.Count != 0 ||
+                        sheet.ListObjects.Count != 0 || sheet.Hyperlinks.Count != 0 || sheet.PivotTables.Count != 0 || sheet.Validations.Count != 0)
+                        throw new InvalidDataException("Unverified pre-save system worksheet");
+                    int notices = 0;
+                    foreach (Cell cell in sheet.Cells)
+                        if (cell.IsFormula || (cell.Value is not null &&
+                            (cell.Name != "A5" || cell.Value is not string text || !OutputSanitation.IsNotice(text) || ++notices > 1)))
+                            throw new InvalidDataException("Pre-save system worksheet contains business data");
+                    foreach (Worksheet business in wb.Worksheets) foreach (Cell cell in business.Cells)
+                        if (cell.IsFormula && OutputSanitation.UnsafeReference(cell.Formula))
+                            throw new InvalidDataException("Unsafe pre-save worksheet reference");
+                    foreach (Name name in wb.Worksheets.Names)
+                        if (OutputSanitation.UnsafeReference(name.RefersTo)) throw new InvalidDataException("Unsafe pre-save defined name");
+                    removedBeforeSave.Add(sheet.Name);
+                    wb.Worksheets.RemoveAt(sheet.Name);
+                }
+                var businessSheets = wb.Worksheets.Cast<Worksheet>().ToArray();
+                if (!businessSheets.Select(s => s.Name).SequenceEqual(expectedBusiness)) throw new InvalidDataException("Pre-save business roster changed");
+                var sanitationPlan = OutputSanitation.Prepare(businessSheets.Select(s => s.Name).ToArray(), businessSheets.Select(s => s.IsVisible).ToArray(), preferredActive);
+                wb.Worksheets.ActiveSheetIndex = sanitationPlan.ActiveIndex;
+                sanitationStage = null;
                 using (var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     ownedCandidate = output;
                     wb.Save(file, SaveFormat.Xlsx);
                 }
                 double saveMs = elapsed.Elapsed.TotalMilliseconds - loadMs - transformMs;
+                // Preserve exact SDK Save bytes before the existing preservation passes.
+                var rawArchiveStart = elapsed.Elapsed.TotalMilliseconds;
+                var sdkSaveArchive = RawOutputArchive.Capture(output, input, id!, runId!, method);
+                var rawSdkArchiveMs = elapsed.Elapsed.TotalMilliseconds - rawArchiveStart;
+                sanitationStage = "output_sanitation_after_save";
+                var savedObjects = wb.Worksheets.Cast<Worksheet>().ToArray();
+                if (savedObjects.Length < businessSheets.Length || savedObjects.Length > businessSheets.Length + 1 ||
+                    businessSheets.Where((sheet, i) => !ReferenceEquals(sheet, savedObjects[i]) || sheet.Name != sanitationPlan.Sheets[i]).Any())
+                    throw new InvalidDataException("SDK Save did not preserve business worksheet identities and order");
+                string? appendedSheet = savedObjects.Length > businessSheets.Length ? savedObjects[^1].Name : null;
+                if (appendedSheet is not null && (wb.IsLicensed || businessSheets.Any(sheet => ReferenceEquals(sheet, savedObjects[^1]))))
+                    throw new InvalidDataException("SDK Save appended a worksheet without verifiable evaluation ownership");
+                sanitationStage = null;
                 var preservation = Stopwatch.StartNew();
                 int preservedDefaults = method == "Modify" ? WorksheetDefaults.Preserve(input, output, PlanOperations.FinalIdentities(sourceSheets, requestedOperations)) : 0;
                 if (method == "Modify") FormulaPreservation.Preserve(input, output, requestedOperations, invalidated: invalidated);
@@ -257,16 +296,27 @@ internal static class ResidentWorker
                     using var empty = JsonDocument.Parse("[]");
                     FontPreservation.Preserve(input, output, empty.RootElement);
                 }
+                // Save can append an SDK notice and override the active view.
+                // The exact SDK bytes above remain immutable evidence.
+                sanitationStage = "output_sanitation";
+                var sanitation = OutputSanitation.Clean(output, sanitationPlan, appendedSheet);
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { run_id = runId, request_id = id, timestamp = DateTimeOffset.UtcNow.ToString("O"),
+                    stage = "output_sanitation", status = "validated", candidate = output, removed_before_save = removedBeforeSave, details = sanitation }));
+                sanitationStage = null;
                 double preserveDefaultsMs = preservation.Elapsed.TotalMilliseconds;
                 using var zip = ZipFile.OpenRead(output);
-                if (method == "Modify") SavedStyleVerifier.Verify(zip, requestedOperations);
+                if (method == "Modify" && q.TryGetProperty("verify_content", out var verifyContent)
+                    && verifyContent.ValueKind == JsonValueKind.True)
+                    SavedStyleVerifier.Verify(zip, requestedOperations);
                 using var xmlStream = zip.GetEntry("xl/workbook.xml")!.Open();
                 var xml = XDocument.Load(xmlStream);
                 XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
                 string[] savedSheets = xml.Descendants(ns + "sheet").Select(s => (string)s.Attribute("name")!).ToArray();
                 int active = int.Parse((string?)xml.Descendants(ns + "workbookView").FirstOrDefault()?.Attribute("activeTab") ?? "0");
-                ownedOutputs[output] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(output)));
                 Emit(new { request_id = id, ok = true, candidate = output, evaluation_output = !wb.IsLicensed,
+                           output_sanitation = sanitation,
+                           sdk_save_archive = sdkSaveArchive,
+                           raw_sdk_archive_ms = rawSdkArchiveMs,
                            source_sheets = sourceSheets, source_active_index = sourceActive, output_sheets = savedSheets,
                            output_active_index = active, load_ms = loadMs, transform_ms = transformMs, save_ms = saveMs,
                            preserve_defaults_ms = preserveDefaultsMs, preserved_default_sheets = preservedDefaults,
@@ -277,6 +327,10 @@ internal static class ResidentWorker
             }
             catch (Exception ex)
             {
+                if (sanitationStage is not null)
+                    Console.Error.WriteLine(JsonSerializer.Serialize(new { run_id = runId, request_id = id,
+                        timestamp = DateTimeOffset.UtcNow.ToString("O"), stage = sanitationStage,
+                        status = "failed", error_code = "OUTPUT_SANITATION_FAILED", message = ex.Message }));
                 // A post-save preservation failure must not leave a plausible
                 // result behind. Never delete a pre-existing candidate: this
                 // path is owned only after CreateNew successfully opened it.

@@ -350,8 +350,11 @@ fn real_worker_large_instruction_batch_uses_verified_temporary_sidecar() -> Resu
     Ok(())
 }
 #[test]
-fn modifier_choice_can_cancel_before_file_picker_and_never_saves_config() -> Result<()> {
-    for sub in ["2", "4"] {
+fn modifier_menu_goes_to_file_selection_and_cancel_never_saves_config() -> Result<()> {
+    for (sub, selection) in [
+        ("2", "选择需要规范化机构名称的目标工作簿"),
+        ("4", "选择要修改外汇页眉的 Excel 文件"),
+    ] {
         let r = root("menu-cancel")?;
         let c = config(&r)?;
         let before = fs::read(&c)?;
@@ -369,7 +372,7 @@ fn modifier_choice_can_cancel_before_file_picker_and_never_saves_config() -> Res
             .stdin
             .take()
             .unwrap()
-            .write_all(format!("5\n{sub}\n3\n0\n0\n").as_bytes())?;
+            .write_all(format!("5\n{sub}\n0\n0\n").as_bytes())?;
         let out = child.wait_with_output()?;
         let text = String::from_utf8_lossy(&out.stdout);
         assert!(
@@ -377,15 +380,15 @@ fn modifier_choice_can_cancel_before_file_picker_and_never_saves_config() -> Res
             "{text} {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        assert!(text.contains("修改执行模式"), "{text}");
-        assert!(text.contains("修改模式不可用"), "{text}");
-        assert!(!text.contains("文件路径>"), "{text}");
+        assert!(!text.contains("修改执行模式"), "{text}");
+        assert!(text.contains(selection), "{text}");
+        assert!(text.contains("执行路径："), "{text}");
         assert_eq!(before, fs::read(c)?);
     }
     Ok(())
 }
 #[test]
-fn explicit_missing_worker_does_not_fallback_or_touch_source() -> Result<()> {
+fn retired_aspose_modify_does_not_fallback_or_touch_source() -> Result<()> {
     let r = root("missing")?;
     let p = r.join("input.xlsx");
     fixture(&p)?;
@@ -404,11 +407,7 @@ fn explicit_missing_worker_does_not_fallback_or_touch_source() -> Result<()> {
         .output()?;
     assert!(!o.status.success());
     let error = String::from_utf8_lossy(&o.stderr);
-    if cfg!(any(windows, target_os = "linux")) {
-        assert!(error.contains("RUSTTOOLS_ASPOSE_WORKER_EXE"), "{error}");
-    } else {
-        assert!(error.contains("Windows"), "{error}");
-    }
+    assert!(error.contains("仅保留用于 XLS→XLSX"), "{error}");
     assert!(!r.join("input.candidate.xlsx").exists());
     assert_eq!(before, fs::read(p)?);
     Ok(())
@@ -467,7 +466,33 @@ fn explicit_openpyxl_rejects_xls_before_legacy_com() -> Result<()> {
 }
 
 #[test]
-fn evaluation_allowance_is_narrow_and_normal_validator_remains_strict() -> Result<()> {
+fn sanitized_validator_preserves_blank_and_reserved_business_names_without_mutation() -> Result<()> {
+    let r = root("sanitized-business-names")?;
+    let source = r.join("source.xlsx");
+    let mut book = rust_xlsxwriter::Workbook::new();
+    for name in ["Data", "Blank", "Evaluation Warning", "evaluation warning 2"] {
+        let sheet = book.add_worksheet();
+        sheet.set_name(name)?;
+        if name != "Blank" { sheet.write_string(0, 0, "business value")?; }
+    }
+    book.save(&source)?;
+    let candidate = r.join("candidate.xlsx");
+    fs::copy(&source, &candidate)?;
+    let original = fs::read(&source)?;
+    let before = fs::read(&candidate)?;
+    let mut p = plan(&source)?;
+    p.operations = vec![EditOperation::SetCellValue {
+        sheet: "Data".into(), cell: "B10".into(), value: CellValue::Blank,
+    }];
+    p.preserve = BTreeSet::from([P::CellValuesAndTypes, P::SheetIdentityAndOrder]);
+    excel_editor::OpenpyxlXlsxValidator.validate_sanitized_aspose(&p, &candidate)?;
+    assert_eq!(fs::read(&source)?, original);
+    assert_eq!(fs::read(&candidate)?, before);
+    Ok(())
+}
+
+#[test]
+fn sanitized_aspose_validator_requires_business_roster_and_preserves_other_checks() -> Result<()> {
     use excel_editor::OutputValidator;
     let r = root("evaluation-validation")?;
     let source = r.join("source.xlsx");
@@ -496,17 +521,15 @@ fn evaluation_allowance_is_narrow_and_normal_validator_remains_strict() -> Resul
     }];
     p.preserve = BTreeSet::from([P::CellValuesAndTypes, P::SheetIdentityAndOrder]);
     let candidate = r.join("candidate.xlsx");
-    write(&candidate, &["Evaluation Warning"], false)?;
-    excel_editor::OpenpyxlXlsxValidator.validate_with_evaluation_sheet(&p, &candidate)?;
-    assert!(excel_editor::OpenpyxlXlsxValidator
-        .validate(&p, &candidate)
-        .is_err());
+    write(&candidate, &[], false)?;
+    excel_editor::OpenpyxlXlsxValidator.validate_sanitized_aspose(&p, &candidate)?;
+    excel_editor::OpenpyxlXlsxValidator.validate(&p, &candidate)?;
     p.preserve.insert(P::RowAndColumnDimensions);
     // An explicit unchanged default height is equivalent; a real height change
     // must still reject the candidate. No source or candidate is normalized on disk.
     for (height, expected_ok) in [("15", true), ("16", false)] {
         use std::io::Read;
-        write(&candidate, &["Evaluation Warning"], false)?;
+        write(&candidate, &[], false)?;
         let mut zip = zip::ZipArchive::new(fs::File::open(&candidate)?)?;
         let mut entries = Vec::new();
         for i in 0..zip.len() {
@@ -531,7 +554,7 @@ fn evaluation_allowance_is_narrow_and_normal_validator_remains_strict() -> Resul
         zip.finish()?;
         assert_eq!(
             excel_editor::OpenpyxlXlsxValidator
-                .validate_with_evaluation_sheet(&p, &candidate)
+                .validate_sanitized_aspose(&p, &candidate)
                 .is_ok(),
             expected_ok
         );
@@ -539,12 +562,12 @@ fn evaluation_allowance_is_narrow_and_normal_validator_remains_strict() -> Resul
     for (extra, changed) in [
         (vec!["wrong"], false),
         (vec!["Evaluation Warning", "another"], false),
-        (vec![], false),
+        (vec!["Evaluation Warning"], false),
         (vec!["Evaluation Warning"], true),
     ] {
         write(&candidate, &extra, changed)?;
         assert!(excel_editor::OpenpyxlXlsxValidator
-            .validate_with_evaluation_sheet(&p, &candidate)
+            .validate_sanitized_aspose(&p, &candidate)
             .is_err());
         assert_eq!(original, fs::read(&source)?);
     }
@@ -637,7 +660,7 @@ fn real_worker_modifies_value_fill_formula_and_reuses_batch_process() -> Result<
         )?;
         assert_eq!(result.execution.engine, EngineId::AsposeWorker);
         let dump = excel_reader::read_workbook(&p)?;
-        assert_eq!(dump.sheets.last().unwrap().name, "Evaluation Warning");
+        assert_eq!(dump.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["外汇数据"]);
         let wb = umya_spreadsheet::reader::xlsx::read(&p)?;
         let s = wb.get_sheet_by_name("外汇数据").unwrap();
         assert_eq!(s.get_value("AA12"), "新值");
@@ -657,6 +680,7 @@ fn real_worker_modifies_value_fill_formula_and_reuses_batch_process() -> Result<
         .map(serde_json::from_str::<serde_json::Value>)
         .collect::<std::result::Result<Vec<_>, _>>()?;
     assert_eq!(records.len(), 2);
+    assert!(records[0]["result"]["worker_pid"].as_u64().is_some_and(|pid| pid > 0));
     assert_eq!(
         records[0]["result"]["worker_pid"],
         records[1]["result"]["worker_pid"]
@@ -729,7 +753,7 @@ fn real_institution_batch_and_legacy_format_rejection() -> Result<()> {
             b.sheets[0].values["A2"]["value"],
             serde_json::json!("标准机构")
         );
-        assert_eq!(b.sheets.last().unwrap().name, "Evaluation Warning");
+        assert_eq!(b.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["示例分机构"]);
     }
     assert_eq!(
         fs::read(legacy)?,
@@ -780,10 +804,7 @@ fn real_duplicate_marking_uses_selected_aspose() -> Result<()> {
         "{run:?}"
     );
     assert_eq!(fs::read(legacy)?, b"synthetic XLS - never open COM");
-    assert_eq!(
-        excel_reader::read_workbook(&p)?.sheets.last().unwrap().name,
-        "Evaluation Warning"
-    );
+    assert_eq!(excel_reader::read_workbook(&p)?.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["数据"]);
     println!("REAL_ASPOSE_DUPLICATES={}", r.display());
     Ok(())
 }
@@ -823,7 +844,7 @@ fn forced_openpyxl_header_uses_semantic_validation_without_aspose() -> Result<()
 #[cfg(any(windows, target_os = "linux"))]
 #[test]
 #[ignore = "requires explicitly configured Aspose .NET Worker; real CLI on synthetic copies"]
-fn real_header_cli_retains_watermark_and_commits_validated_change() -> Result<()> {
+fn real_header_cli_commits_validated_clean_business_output() -> Result<()> {
     let r = root("header-cli")?;
     let p = r.join("外汇.xlsx");
     fixture(&p)?;
@@ -852,10 +873,7 @@ fn real_header_cli_retains_watermark_and_commits_validated_change() -> Result<()
         inv[0].headers.iter().any(|h| h.text.contains("万美元")),
         "{inv:?}"
     );
-    assert_eq!(
-        excel_reader::read_workbook(&p)?.sheets.last().unwrap().name,
-        "Evaluation Warning"
-    );
+    assert_eq!(excel_reader::read_workbook(&p)?.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["外汇数据"]);
     println!("REAL_ASPOSE_HEADER={}", r.display());
     Ok(())
 }

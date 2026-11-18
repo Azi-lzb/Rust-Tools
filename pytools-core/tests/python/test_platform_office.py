@@ -86,7 +86,7 @@ class OfficeValidation(unittest.TestCase):
             for path, expected in before.items():
                 self.assertEqual(digest(path), expected)
 
-    def test_real_xls_refusal_preserves_workbook(self):
+    def test_real_xls_append_preserves_existing_rows_and_formula(self):
         with tempfile.TemporaryDirectory() as folder:
             d = Path(folder)
             target = d / "target.xls"
@@ -119,11 +119,12 @@ class OfficeValidation(unittest.TestCase):
             case = boundaries.Boundaries()
             config = case.config(d, target)
             before = {p: digest(p) for p in (source, target, config)}
-            text = case.cli(config, "2\n3\n1\n0\n", "office-xls-refusal")
-            self.assertIn("既有 XLS 去重追加已安全停用", text)
+            text = case.cli(config, "2\n3\n1\n0\n", "office-xls-append")
+            self.assertNotIn("执行失败", text)
+            self.assertNotEqual(digest(target), before.pop(target))
+            updated = digest(target)
             for path, expected in before.items():
                 self.assertEqual(digest(path), expected)
-            self.assertFalse(any("candidate" in p.name.lower() for p in d.rglob("*")))
             book = self.app.Workbooks.Open(str(target), UpdateLinks=0, ReadOnly=True)
             try:
                 sheet = book.Worksheets("Combined")
@@ -131,9 +132,11 @@ class OfficeValidation(unittest.TestCase):
                 self.assertEqual(sheet.Cells(2, 1).Value, "001")
                 self.assertEqual(sheet.Cells(2, 2).Value, 99)
                 self.assertEqual(sheet.Cells(12, 27).Formula.upper(), "=B2+1")
+                self.assertEqual(sheet.Cells(13, 1).Value, "002")
+                self.assertEqual(sheet.Cells(13, 2).Value, 20)
             finally:
                 book.Close(False)
-            self.assertEqual(digest(target), before[target])
+            self.assertEqual(digest(target), updated)
 
     def test_print_modes_reopen_with_office(self):
         for mode in (1, 2, 3):

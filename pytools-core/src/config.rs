@@ -35,6 +35,7 @@ pub struct GlobalConfig {
     /// 开发期审核用的计划 JSON 等附带文件是否落盘；实际使用可在全局配置
     /// 以 `输出附带计划文件=否` 关闭，仅保留候选副本等核心输出。
     pub emit_plan_files: bool,
+    pub result_validation: crate::result_validation::ResultValidation,
     /// `--log-dir` 显式覆盖。交互菜单在启动、配置初始化与重载之间必须
     /// 保留它，否则重新加载配置会把日志目录悄悄改回配置值或用户状态目录。
     pub log_dir_override: Option<PathBuf>,
@@ -65,6 +66,7 @@ impl GlobalConfig {
             source_exts: vec![".xlsx".to_owned(), ".xlsm".to_owned(), ".csv".to_owned()],
             timeline_rule_match_mode: "all_match".to_owned(),
             emit_plan_files: true,
+            result_validation: Default::default(),
             validation_calc_engine: "betteroffice".to_owned(),
             validation_calc_max_visits: None,
             validation_calc_rounds: 2,
@@ -217,6 +219,11 @@ pub fn load_global(config_path: impl AsRef<Path>) -> Result<GlobalConfig> {
             .get("输出附带计划文件")
             .map(|value| !matches!(value.trim(), "否" | "N" | "n" | "false" | "FALSE"))
             .unwrap_or(true),
+        result_validation: crate::result_validation::ResultValidation::from_config(
+            values
+                .get(crate::result_validation::CONFIG_KEY)
+                .map(String::as_str),
+        )?,
         validation_calc_engine: values
             .get("校验计算引擎")
             .map(|value| value.trim().to_lowercase())
@@ -272,6 +279,22 @@ pub fn load_global_value(
         }
     }
     Ok(default.to_owned())
+}
+
+pub(crate) fn load_result_validation(
+    config_path: &Path,
+) -> Result<crate::result_validation::ResultValidation> {
+    let workbook = read_workbook(config_path)?;
+    let value = workbook
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == SHEET_GLOBAL)
+        .and_then(|sheet| {
+            (2..=max_row(sheet))
+                .find(|&row| cell_text(sheet, row, 1) == crate::result_validation::CONFIG_KEY)
+                .map(|row| cell_text(sheet, row, 2))
+        });
+    crate::result_validation::ResultValidation::from_config(value.as_deref())
 }
 
 /// Load enabled timeline extraction rules from the configuration workbook.

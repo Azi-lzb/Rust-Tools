@@ -44,6 +44,19 @@ impl Drop for TestDirectory {
 }
 
 #[test]
+fn removed_edit_route_menu_cannot_change_configuration() -> Result<()> {
+    let root = TestDirectory::new()?;
+    let config = root.path().join("app").join("config").join("config.xlsx");
+    let output = run_menu(&config, "7\n6\n0\n0\n", "user")?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("Excel 编辑引擎路由"), "{stdout}");
+    assert!(stdout.contains("仅接受 1、2、3、4、5 或 0"), "{stdout}");
+    assert!(!config.exists());
+    Ok(())
+}
+
+#[test]
 fn missing_configuration_bootstraps_through_menu_and_can_be_viewed() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = root.path().join("app/config/config.xlsx");
@@ -678,11 +691,6 @@ fn write_ambiguous_config(path: &Path) -> Result<()> {
 }
 
 fn run_menu(config: &Path, input: &str, log_view: &str) -> Result<Output> {
-    let input = if config.is_file() {
-        input.replacen("7\n1\n1\n", "7\n1\n1\n1\n", 1)
-    } else {
-        input.to_owned()
-    };
     let log_dir = config
         .parent()
         .and_then(Path::parent)

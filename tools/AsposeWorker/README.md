@@ -1,5 +1,38 @@
 # Optional resident Aspose engine — evaluation trial
 
+## 2026-11-17 production XLSX output sanitation
+
+The main workspace output contract is now defined by root `AGENTS.md`, section
+“主工作区输出数据净化”. It supersedes dated statements below that final Cells
+output retains the evaluation worksheet and the SDK-selected active tab. Words
+output and historical evidence retain their existing behavior.
+
+The resident Cells Worker derives the business sheet roster from the input and
+ordered operations, checks structure before Save, then sanitizes SDK additions
+in an isolated copy after the preservation passes. Only a newly added, recognized
+system worksheet with no business content or objects may be removed. Blank
+business templates remain. Unknown extra sheets, unexpected notice contents,
+unsafe/dynamic references, or a missing visible business sheet reject delivery.
+Existing inputs with the reserved warning name still reject without modification;
+names alone never authorize deleting input sheets.
+
+The final package is independently reopened without Aspose to check the sheet
+roster and active view. Sheet relationships, content types, scoped-name indices,
+selection flags and extended worksheet properties are updated as needed. The
+original active business identity survives rename/move; deletion or hiding uses
+the first visible business sheet. Raw SDK Save archives remain unchanged and
+`evaluation_output` continues to report the actual SDK mode. The structured
+`output_sanitation` result records actual deletions and view correction; diagnostic
+events include the run/request IDs without cell data.
+
+`tools/AsposeWorker.Tests` is a dependency-free .NET unit runner linking the
+production sanitation helper. `test_output_sanitation.py` exercises real SDK
+Calculate/Convert/Modify, rename/move/delete, chaining, raw-archive integrity and
+failure protection using synthetic inputs only. Run with a newly named output
+directory. The Rust host and packaged executables are not rebuilt by these tests.
+Validation results and remaining limits are recorded in
+`docs/OUTPUT_SANITATION_VALIDATION_20261117.md`.
+
 ## 2026-11-16 Linux DEB opt-in delivery
 
 The Linux TEST-main package can include self-contained linux-x64 Cells and
@@ -90,9 +123,9 @@ converted. This is not an arbitrary Aspose API/JSON execution gateway.
 - All modification instructions are checked before writing a candidate.
 - The host hashes the input before/after and verifies ZIP metadata, worksheet
   relationships and worksheet XML before accepting a candidate.
-- The worker independently checks requested styles against serialized OOXML;
-  memory-only style success is insufficient. A failed candidate can remain for
-  diagnostics but is returned as failure, never a successful result.
+- The independent style diagnostic is available on a Modify request with
+  `verify_content: true`. Normal modification requests use workbook structure
+  checks and do not run the per-cell style diagnostic.
 - Returning a verified candidate is not permission to replace a business file.
   A production caller must still use its existing final validation/commit path.
 - One worker handles one task at a time. Ping consumes no file budget. Every

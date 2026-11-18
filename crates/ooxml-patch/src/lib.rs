@@ -1002,6 +1002,77 @@ fn sheet_parts(path: &Path) -> Result<BTreeMap<String, String>> {
     Ok(strict_sheet_parts(path)?.into_iter().collect())
 }
 
+/// The on-disk result of a formula, distinct from a literal cell or an
+/// explicit empty-string result.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FormulaCacheState {
+    Stored,
+    Text(String),
+    Missing,
+    Error(String),
+}
+
+pub fn read_formula_cache_states(
+    path: &Path,
+    sheets: &BTreeSet<&str>,
+) -> Result<BTreeMap<String, BTreeMap<String, FormulaCacheState>>> {
+    let mut zip = ZipArchive::new(fs::File::open(path)?)?;
+    let mut result = BTreeMap::new();
+    let mut shared_strings = None;
+    for (name, part) in strict_sheet_parts_from_zip(&mut zip, path)? {
+        if !sheets.contains(name.as_str()) {
+            continue;
+        }
+        let xml = read_zip_part(&mut zip, &part)?;
+        let document = Document::parse(std::str::from_utf8(&xml)?)?;
+        let mut cells = BTreeMap::new();
+        for cell in document
+            .descendants()
+            .filter(|node| node.has_tag_name((MAIN_NS, "c")))
+        {
+            if !cell
+                .children()
+                .any(|node| node.has_tag_name((MAIN_NS, "f")))
+            {
+                continue;
+            }
+            let address = cell
+                .attribute("r")
+                .context("formula cell missing an address")?;
+            let cached = cell
+                .children()
+                .find(|node| node.has_tag_name((MAIN_NS, "v")));
+            let kind = cell.attribute("t");
+            let state = match (kind, cached) {
+                (Some("e"), Some(value)) => {
+                    FormulaCacheState::Error(value.text().unwrap_or_default().to_owned())
+                }
+                (Some("str"), Some(value)) => {
+                    FormulaCacheState::Text(value.text().unwrap_or_default().to_owned())
+                }
+                (Some("s"), Some(value)) => {
+                    if shared_strings.is_none() {
+                        shared_strings = Some(read_shared_strings(&mut zip)?);
+                    }
+                    value
+                        .text()
+                        .and_then(|index| index.parse::<usize>().ok())
+                        .and_then(|index| shared_strings.as_ref()?.get(index))
+                        .cloned()
+                        .map_or(FormulaCacheState::Missing, FormulaCacheState::Text)
+                }
+                (_, Some(value)) if value.text().is_some_and(|text| !text.is_empty()) => {
+                    FormulaCacheState::Stored
+                }
+                _ => FormulaCacheState::Missing,
+            };
+            cells.insert(address.to_owned(), state);
+        }
+        result.insert(name, cells);
+    }
+    Ok(result)
+}
+
 fn strict_sheet_parts(path: &Path) -> Result<Vec<(String, String)>> {
     let mut zip = ZipArchive::new(fs::File::open(path)?)?;
     strict_sheet_parts_from_zip(&mut zip, path)
@@ -3392,12 +3463,21 @@ fn apply_region_formulas(
         let (row, _column) = parse_a1_cell(reference)?;
         new_by_row.entry(row).or_default().push(reference);
     }
-    // Rows that already exist get their cells inserted at the right column
-    // position. Rows that do not exist are created together at the end of
-    // `sheetData`, in row order - inserting them one by one at the same offset
-    // would interleave and produce nested rows.
+    // Excel also requires rows to be ordered. Insert missing rows before the
+    // next existing row, grouping insertions that share a byte offset.
+    let existing_row_offsets = document
+        .descendants()
+        .find(|node| node.has_tag_name((MAIN_NS, "sheetData")))
+        .into_iter()
+        .flat_map(|sheet_data| sheet_data.children())
+        .filter(|node| node.has_tag_name((MAIN_NS, "row")))
+        .filter_map(|node| {
+            let row = node.attribute("r")?.parse::<u32>().ok()?;
+            Some((row, node.range().start))
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut appended_rows = String::new();
-    let mut cell_insertions: BTreeMap<usize, String> = BTreeMap::new();
+    let mut insertions: BTreeMap<usize, String> = BTreeMap::new();
     for (row, references) in &new_by_row {
         // Cells are inserted one at a time, each resolved against the row as it
         // existed originally. Several inserts into one row therefore all get
@@ -3420,18 +3500,22 @@ fn apply_region_formulas(
                 Some(offset) => {
                     // Cells sharing an anchor must be inserted together: separate
                     // splices at the same offset reverse their column order.
-                    cell_insertions.entry(offset).or_default().push_str(&cell);
+                    insertions.entry(offset).or_default().push_str(&cell);
                     inserted_here = true;
                 }
                 None => row_cells.push_str(&cell),
             }
         }
         if !row_cells.is_empty() && !inserted_here {
-            appended_rows.push_str(&format!("<row r=\"{row}\">{row_cells}</row>"));
+            let new_row = format!("<row r=\"{row}\">{row_cells}</row>");
+            match existing_row_offsets.range(row.saturating_add(1)..).next() {
+                Some((_, offset)) => insertions.entry(*offset).or_default().push_str(&new_row),
+                None => appended_rows.push_str(&new_row),
+            }
         }
     }
-    for (offset, cells) in cell_insertions {
-        edits.push((offset..offset, cells.into_bytes()));
+    for (offset, elements) in insertions {
+        edits.push((offset..offset, elements.into_bytes()));
     }
     if !appended_rows.is_empty() {
         // A source sheet can be almost empty (a bank that fills only the
@@ -5597,6 +5681,31 @@ mod cell_region_copy_tests {
         path::PathBuf,
     };
     use zip::{write::SimpleFileOptions, ZipWriter};
+
+    #[test]
+    fn creates_missing_formula_rows_before_later_existing_rows() -> Result<()> {
+        let sheet = format!(
+            r#"<worksheet xmlns="{MAIN_NS}"><sheetData><row r="2"><c r="A2"><v>1</v></c></row><row r="20"><c r="G20"><f>99</f><v>99</v></c></row></sheetData></worksheet>"#
+        );
+        let formulas = std::collections::BTreeMap::from([
+            ("D4".to_owned(), "1/0".to_owned()),
+            ("D5".to_owned(), "NO_SUCH_NAME".to_owned()),
+            ("D22".to_owned(), "1+2".to_owned()),
+        ]);
+        let (patched, count, _) =
+            super::apply_region_formulas(sheet.as_bytes(), "D4:D22", &formulas)?;
+        let text = std::str::from_utf8(&patched)?;
+        let doc = roxmltree::Document::parse(text)?;
+        let rows = doc
+            .descendants()
+            .filter(|node| node.has_tag_name((MAIN_NS, "row")))
+            .filter_map(|node| node.attribute("r"))
+            .collect::<Vec<_>>();
+        assert_eq!(count, 3);
+        assert_eq!(rows, ["2", "4", "5", "20", "22"]);
+        assert!(text.contains(r#"<c r="G20"><f>99</f><v>99</v></c>"#));
+        Ok(())
+    }
 
     #[test]
     fn full_width_paren_sheet_names_get_quoted() {

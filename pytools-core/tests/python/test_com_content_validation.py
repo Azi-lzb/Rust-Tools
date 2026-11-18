@@ -9,7 +9,11 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
+from unittest.mock import Mock, patch
+
+import openpyxl
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
@@ -23,6 +27,36 @@ def snapshot():
              "formula_values": {(12, 27): 1.0}, "used_cells": 324,
              "values": {(1, 1): "header", (10, 1): "old", (11, 2): "001",
                         (12, 2): 0.0, (13, 2): False}}]
+
+
+class SavedCalculation(unittest.TestCase):
+    def test_host_can_skip_com_range_read_without_skipping_calculation_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "validation-copy.xlsx"
+            fixture = openpyxl.Workbook()
+            fixture.save(path)
+            fixture.close()
+            original = path.read_bytes()
+            session = worker.ConversionSession.__new__(worker.ConversionSession)
+            session._application = Mock()
+            session._application_name = "Excel.Application"
+            session._process_id = None
+            session._ensure_application = Mock()
+            session._reset_application = Mock()
+            workbook = Mock()
+            session._open_workbook = Mock(return_value=workbook)
+            regions = [{"template_sheet": "Sheet", "source_sheet": "Sheet", "address": "A1"}]
+
+            with patch.object(worker, "_force_recalc", return_value=("CalculateFull", [])) as calc:
+                response = session.recalculate_named_validation(str(path), regions, collect_cells=False)
+
+            self.assertTrue(response["ok"], response)
+            self.assertEqual(response["cells"], [])
+            calc.assert_called_once_with(session._application)
+            workbook.Save.assert_called_once_with()
+            workbook.Close.assert_called_once_with(SaveChanges=False)
+            workbook.Worksheets.assert_not_called()
+            self.assertEqual(path.read_bytes(), original)
 
 
 class ContentValidation(unittest.TestCase):

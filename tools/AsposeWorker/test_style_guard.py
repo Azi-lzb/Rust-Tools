@@ -14,7 +14,7 @@ def main():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     worker=module.Worker([sys.argv[3],sys.argv[4],"--stdio"],root/"worker.stderr.jsonl")
     candidate=root/"rejected-candidate.xlsx"
-    request=dict(protocol_version=1,request_id="style-regression",run_id="known-style-loss",method="Modify",
+    request=dict(protocol_version=1,request_id="style-regression",run_id="known-style-loss",method="Modify",verify_content=True,
                  input=str(input_path),candidate=str(candidate),operations=[
                      dict(op="set_value",sheet="Data",cell="AA100",value=dict(type="number",value=123)),
                      dict(op="set_style",sheet="Data",cell="AA100",style=dict(bold=True,font_size=14))])

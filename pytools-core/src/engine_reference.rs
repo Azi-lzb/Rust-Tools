@@ -5,6 +5,8 @@ use std::{io::Write, sync::OnceLock};
 #[derive(Default, Deserialize)]
 struct References {
     #[serde(default)]
+    reference_date: String,
+    #[serde(default)]
     cases: Vec<Case>,
 }
 #[derive(Deserialize)]
@@ -35,8 +37,8 @@ fn data() -> &'static References {
 fn valid_time(route: &Route) -> Option<f64> {
     route.total_e2e_ms.filter(|time| {
         route.status == "PASS"
-            && route.files == 50
-            && route.verified_outputs == 50
+            && route.files > 0
+            && route.verified_outputs == route.files
             && time.is_finite()
             && *time > 0.0
     })
@@ -73,7 +75,7 @@ fn lookup(references: &References, context: &str, engine: &str) -> String {
     let Some(base) = case
         .routes
         .iter()
-        .find(|r| r.engine == case.baseline)
+        .find(|r| r.engine == case.baseline && r.files == route.files)
         .and_then(valid_time)
     else {
         return "基准未完成".into();
@@ -90,6 +92,17 @@ pub fn hint(context: &str, engine: &str) -> String {
         return "当前平台未测".into();
     }
     lookup(data(), context, engine)
+}
+
+pub fn measured_route(context: &str, engine: &str) -> bool {
+    cfg!(windows)
+        && data()
+            .cases
+            .iter()
+            .find(|case| case.context == context)
+            .and_then(|case| case.routes.iter().find(|route| route.engine == engine))
+            .and_then(valid_time)
+            .is_some()
 }
 
 pub fn conversion_hint(operation: &str, engine: &str) -> String {
@@ -135,21 +148,32 @@ pub fn modification_policy_description(mode: crate::excel_edit_router::RouteMode
         RouteMode::RustNativeOnly => "RustNative OOXML，不切换其他引擎",
         RouteMode::AsposeOnly => "Aspose .NET，保留评估水印，不切换其他引擎",
         RouteMode::Auto => {
-            "按修改计划选择 RustNative/UMYA/BetterOffice/Openpyxl；满足安全条件时才回退 Openpyxl"
+            "按修改计划选择 RustNative OOXML、UMYA 或 Openpyxl；满足安全条件时才回退 Openpyxl"
         }
     }
 }
 
 /// Display the existing per-feature path, without selecting or probing an engine.
-pub fn default_modification_hint(context: &str) -> String {
-    let xlsx = match context {
-        "1-1" => "新建 XLSX：Rust；修改既有 XLSX：Openpyxl",
-        "2-3" => "新建 XLSX：Rust；追加既有 XLSX：Openpyxl；既有 XLS 追加拒绝",
+fn xlsx_modification_hint(context: &str) -> &'static str {
+    match context {
+        "1-1" => "Calamine 读取 XLS/XLSX 源；Rust 新建 XLSX；Openpyxl 修改既有 XLSX 目标",
+        "2-3" => "新建 XLSX：Rust；追加既有 XLSX：Openpyxl；Windows 既有 XLS：Excel/WPS COM",
         "5-4" => "XLSX：OOXML 定点页眉修改；就地修改允许安全回退 Openpyxl",
         "5-6" => "新建 XLSX：Rust；追加既有目标：Openpyxl",
         _ => "XLSX 修改：Openpyxl",
-    };
-    let legacy = if matches!(context, "4-5" | "5-1" | "5-2" | "5-3" | "5-4" | "5-7") {
+    }
+}
+
+pub fn selected_xlsx_modification_hint(context: &str) -> String {
+    current_policy_hint(context).map_or_else(
+        || xlsx_modification_hint(context).to_owned(),
+        |policy| format!("按已配置的 XLSX 策略处理（{policy}）"),
+    )
+}
+
+pub fn default_modification_hint(context: &str) -> String {
+    let xlsx = selected_xlsx_modification_hint(context);
+    let legacy = if matches!(context, "2-1" | "2-2" | "4-5" | "5-1" | "5-2" | "5-3" | "5-4" | "5-7") {
         if cfg!(windows) {
             "；XLS：功能专用 Excel/WPS COM"
         } else {
@@ -164,21 +188,40 @@ pub fn default_modification_hint(context: &str) -> String {
 pub fn default_conversion_hint(operation: &str) -> &'static str {
     match (operation, cfg!(windows), cfg!(target_os = "linux")) {
         ("files.excel_open_repair", true, _) => "XLSX：OOXML 修复；XLS：Excel/WPS COM 转换后修复",
-        ("files.excel_open_repair", _, true) => "XLSX：OOXML 修复；XLS：LibreOffice 转换后修复",
+        ("files.excel_open_repair", _, true) => {
+            "XLSX/XLSM：OOXML 修复；XLS 先用 4-4 的 Aspose .NET 转换"
+        }
         ("files.excel_open_repair", _, _) => "XLSX：OOXML 修复；XLS 转换不可用",
         (_, true, _) => "Excel/WPS COM（优先 Excel，按原规则使用 WPS）",
-        ("files.office_conversion.excel", _, true) => {
-            "转 XLSX：LibreOffice + BetterOffice（按支持格式）；XLSX 同格式重存不可用"
-        }
+        ("files.office_conversion.excel", _, true) => "Aspose .NET（仅 XLS → XLSX）",
         _ => "当前平台无可用的原 Office 转换路径",
     }
 }
 
 pub fn write_note(output: &mut impl Write, context: &str) -> std::io::Result<()> {
+    let references = data();
+    let key = match context {
+        "4-4-excel" => "4-4-xlsx",
+        "4-4-word" => "4-4-word",
+        _ => context,
+    };
+    let count = references
+        .cases
+        .iter()
+        .find(|case| case.context == key)
+        .and_then(|case| {
+            case.routes
+                .iter()
+                .find(|route| route.engine == case.baseline && valid_time(route).is_some())
+        })
+        .map(|route| route.files);
+    let Some(count) = count else {
+        return writeln!(output, "当前功能没有通过校验的可比耗时基准。");
+    };
     let sample = if matches!(context, "5-7" | "7-1") {
-        "50 次独立任务"
+        format!("{count} 次独立任务")
     } else {
-        "50 文件批次"
+        format!("{count} 文件批次")
     };
     let detail = if context == "3-1" {
         "，打印 mode 1"
@@ -192,7 +235,8 @@ pub fn write_note(output: &mut impl Write, context: &str) -> std::io::Result<()>
     };
     writeln!(
         output,
-        "参考：Windows Release，{format} 小型合成样本，{sample}单轮初测{detail}；耗时比越小越快。"
+        "实测参考（{}）：Windows Release，{format} 小型合成样本，{sample}单轮{detail}。",
+        references.reference_date
     )?;
     writeln!(
         output,
@@ -205,7 +249,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_catalog_has_every_picker_and_only_completed_50_file_ratios() {
+    fn embedded_catalog_has_every_picker_and_only_completed_ratios() {
         let references: References =
             serde_json::from_str(include_str!("engine_reference_data.json")).unwrap();
         let expected = [
@@ -219,12 +263,7 @@ mod tests {
                 .iter()
                 .find(|c| c.context == context)
                 .unwrap();
-            assert!(case
-                .routes
-                .iter()
-                .find(|r| r.engine == case.baseline)
-                .and_then(valid_time)
-                .is_some());
+            assert!(case.routes.iter().any(|r| r.engine == case.baseline));
             let mut engines = std::collections::BTreeSet::new();
             for route in &case.routes {
                 assert!(engines.insert(&route.engine));
@@ -245,10 +284,11 @@ mod tests {
                 {"engine":"rust","status":"PASS","files":50,"verified_outputs":50,"total_e2e_ms":500},
                 {"engine":"aspose","status":"FAILED","files":50,"verified_outputs":50,"total_e2e_ms":10},
                 {"engine":"partial","status":"PASS","files":50,"verified_outputs":49,"total_e2e_ms":10},
+                {"engine":"different_batch","status":"PASS","files":5,"verified_outputs":5,"total_e2e_ms":10},
                 {"engine":"zero","status":"PASS","files":50,"verified_outputs":50,"total_e2e_ms":0}
             ]}]})).unwrap();
         assert_eq!(lookup(&references, "3-1", "rust"), "约 0.50×，相对Openpyxl");
-        for engine in ["aspose", "partial", "zero"] {
+        for engine in ["aspose", "partial", "different_batch", "zero"] {
             assert!(!lookup(&references, "3-1", engine).contains('×'));
         }
         assert_eq!(lookup(&references, "5-4", "rust"), "待测");

@@ -29,10 +29,9 @@ pub enum RouteMode {
 }
 
 impl RouteMode {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 4] = [
         Self::OpenpyxlOnly,
         Self::UmyaOnly,
-        Self::BetterOfficeOnly,
         Self::RustNativeOnly,
         Self::Auto,
     ];
@@ -73,12 +72,12 @@ impl std::str::FromStr for RouteMode {
         match normalized.as_str() {
             "openpyxlonly" | "openpyxl" => Ok(Self::OpenpyxlOnly),
             "umyaonly" | "umya" => Ok(Self::UmyaOnly),
-            "betterofficeonly" | "betteroffice" => Ok(Self::BetterOfficeOnly),
+            "betterofficeonly" | "betteroffice" => bail!("BetterOffice 仅保留用于计算，请重新选择 Excel 修改路由"),
             "rustnativeonly" | "rustnative" | "native" => Ok(Self::RustNativeOnly),
             "auto" => Ok(Self::Auto),
-            "asposeonly" | "aspose" => Ok(Self::AsposeOnly),
+            "asposeonly" | "aspose" => bail!("Aspose 仅保留用于 XLS→XLSX 转换，请重新选择 Excel 修改路由"),
             _ => bail!(
-                "invalid {ROUTE_ENV}={value:?}; expected OpenpyxlOnly, UMYAOnly, BetterOfficeOnly, RustNativeOnly, AsposeOnly, or Auto"
+                "invalid {ROUTE_ENV}={value:?}; expected OpenpyxlOnly, UMYAOnly, RustNativeOnly, or Auto"
             ),
         }
     }
@@ -218,19 +217,7 @@ fn auto_route(plan: &ExcelEditPlan) -> Result<(EngineId, bool, &'static str)> {
         ));
     }
 
-    if contains_umya_style_or_dimension(plan) && plan.operations.iter().all(umya_supports) {
-        return Ok((
-            EngineId::UmyaSpreadsheet,
-            true,
-            "style or dimension edits route to UMYA",
-        ));
-    }
-
-    let native_only = plan
-        .operations
-        .iter()
-        .all(|operation| native_supports(operation));
-    if native_only {
+    if ensure_native_plan(plan).is_ok() {
         return Ok((
             EngineId::RustNativeOoxml,
             true,
@@ -238,15 +225,11 @@ fn auto_route(plan: &ExcelEditPlan) -> Result<(EngineId, bool, &'static str)> {
         ));
     }
 
-    let betteroffice_only = plan
-        .operations
-        .iter()
-        .all(|operation| betteroffice_supports(operation.kind()));
-    if betteroffice_only {
+    if contains_umya_style_or_dimension(plan) && ensure_umya_plan(plan).is_ok() {
         return Ok((
-            EngineId::BetterOffice,
+            EngineId::UmyaSpreadsheet,
             true,
-            "formula or row/column structure edits route to BetterOffice",
+            "style or dimension edits route to UMYA",
         ));
     }
 
@@ -735,6 +718,24 @@ mod tests {
         let selection = route_plan(&plan, &RouteConfig::new(RouteMode::Auto)).unwrap();
         assert_eq!(selection.engine, EngineId::RustNativeOoxml);
         assert!(selection.fallback_to_openpyxl);
+    }
+
+    #[test]
+    fn auto_uses_openpyxl_for_row_insertion_instead_of_betteroffice() {
+        let plan = minimal_plan(vec![EditOperation::InsertRows {
+            sheet: "Sheet1".to_owned(),
+            first_row: 2,
+            count: 1,
+        }]);
+        let selection = route_plan(&plan, &RouteConfig::new(RouteMode::Auto)).unwrap();
+        assert_eq!(selection.engine, EngineId::OpenpyxlWorker);
+    }
+
+    #[test]
+    fn production_route_names_refuse_retired_modifiers() {
+        for mode in ["AsposeOnly", "aspose", "BetterOfficeOnly", "betteroffice"] {
+            assert!(mode.parse::<RouteMode>().is_err(), "{mode}");
+        }
     }
 
     #[test]

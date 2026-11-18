@@ -121,7 +121,11 @@ impl AsposeDocumentSession {
             input: input.clone(),
             candidate: candidate.clone(),
         })?;
-        validate_document(&result)?;
+        let _review_origin = crate::review_output::ReviewOriginScope::enter(&input, &hash);
+        let _review_destination = crate::review_output::ReviewDestinationScope::enter(output);
+        validate_document(&result).map_err(|error| {
+            crate::review_output::retain_validation_error(&input, &candidate, &self.run_id, error)
+        })?;
         crate::file_commit::verify_planning_snapshot(&input, Some(&hash))?;
         let commit = crate::file_commit::create_target_from_candidate_with_validator(
             &candidate,

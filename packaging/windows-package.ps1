@@ -14,12 +14,14 @@ param(
     [string]$StageRoot = '',
     [string]$ArchiveDirectory = '',
     [string]$WorkerDirectory = '',
+    [string]$BuildDirectory = '',
+    [string]$ConfigWorkbook = '',
     [ValidateSet('test', 'release')][string]$PackageKind = 'test',
     [switch]$ReleaseAccepted
 )
 
 $ErrorActionPreference = 'Stop'
-$dist = Join-Path $ProjectRoot 'dist'
+$dist = if ($BuildDirectory) { $BuildDirectory } else { Join-Path $ProjectRoot 'dist' }
 $exe = Join-Path $dist 'RustTools.exe'
 $pythonDir = Join-Path $dist 'python'
 $branch = (& git -C $ProjectRoot branch --show-current).Trim()
@@ -61,7 +63,13 @@ try {
 
     $stageConfig = Join-Path $stage 'config'
     New-Item -ItemType Directory -Path $stageConfig -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config.xlsx') -Destination (Join-Path $stageConfig 'config.xlsx')
+    $packagedConfig = Join-Path $stageConfig 'config.xlsx'
+    if ($ConfigWorkbook) {
+        Copy-Item -LiteralPath $ConfigWorkbook -Destination $packagedConfig
+    } else {
+        & $exe config-init --path $packagedConfig
+        if ($LASTEXITCODE -ne 0) { throw 'Could not generate the package default config' }
+    }
 
     Copy-Item -Path $pythonDir -Destination (Join-Path $stage 'python') -Recurse
 

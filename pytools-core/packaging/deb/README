@@ -5,14 +5,19 @@ RustTools（通用汇总工具，Rust 版）
 无参数启动七类交互菜单，也可以使用 summary-used-range 等子命令。
 Openpyxl 使用随包隔离 Python，无需安装系统 Python。
 
-包含 workers/aspose、workers/aspose-words 时，可在执行模式中手动选择
-Aspose.Cells / Aspose.Words .NET；两者自带 Linux x64 .NET 运行时，
+包内的 workers/aspose 和 workers/aspose-words 是独立的 .NET Worker。
+常规 Excel 菜单仅在显式 XLS 转 XLSX 时使用 Aspose.Cells。两者自带 Linux x64 .NET 运行时，
 不需要 .NET SDK，依赖包管理器声明的 ICU、OpenSSL 等系统库。
-评估水印、额外 Sheet 和活动页变化按本轮约定保留；请使用副本验收。
-自动路由不变；加入 Worker 不代表放开 XLS 追加或其他未支持格式。
-Excel/WPS COM 仅适用于 Windows。Linux 默认不提供 XLS 转换；
-显式 Aspose 转换使用独立候选、验证和安全发布路径，不调用 COM。
+XLSX 转换输出经过工作表结构校验和候选保护。请使用副本验收。
+Excel/WPS COM 仅适用于 Windows。Linux 的显式 Aspose 转换可将 XLS 转为 XLSX。
 
-config/config.xlsx 注册为 conffile，升级时由 dpkg 保护用户配置。
+配置文件位于 /opt/rusttools/config/config.xlsx，并注册为 dpkg conffile。
+首次安装使用随包的默认模板。升级遇到本地配置与新版默认模板冲突时，
+终端安装器会询问如何处理。输入 N 或直接回车保留现有配置（默认），
+输入 Y 使用新版默认模板。业务工作簿不属于软件包，不参与替换。
+如需明确看到选择提示，请在终端安装；图形安装器的交互方式取决于前端。
+重装同一版本时，如需对已经修改过的配置也显示选择，可运行：
+  sudo dpkg --force-confask -i ./rusttools_<版本>_amd64.deb
 普通打包只构建、解压和冒烟检查，不安装、修改或卸载宿主程序。
+安装包使用 xz 压缩，兼容不支持 zstd 包的旧版 dpkg。
 glibc 2.28 静态检查和隔离测试不等于麒麟 V10 实机安装验收。

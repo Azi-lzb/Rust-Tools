@@ -1,6 +1,5 @@
-//! Office conversion is temporarily restricted to pywin32 with Microsoft
-//! Excel or WPS COM. These checks ensure explicit LibreOffice requests fail
-//! before creating an output or starting an external process.
+//! LibreOffice is reserved for optional validation recalculation.
+//! Format conversion requests must fail before creating a candidate.
 
 use anyhow::Result;
 use pytools_core::conversion;
@@ -22,8 +21,6 @@ fn test_root() -> Result<PathBuf> {
 
 #[test]
 fn explicit_libreoffice_office_conversion_rejects_word_targets_without_output() -> Result<()> {
-    // 2026-11-09：Linux 的 .xls/.xlsm → .xlsx 已放开给 LibreOffice；
-    // Word 目标仍明确拒绝（未实测 LO 的 Word 保真度）。
     let root = test_root()?;
     for (extension, target) in [("doc", "docx")] {
         let input = root.join(format!("input.{extension}"));
@@ -34,7 +31,7 @@ fn explicit_libreoffice_office_conversion_rejects_word_targets_without_output() 
             .expect_err("Word targets must still reject the LO engine");
         let message = format!("{error:#}");
         assert!(
-            message.contains("Word targets require Windows pywin32"),
+            message.contains("LibreOffice 不用于格式转换"),
             "unexpected route error for .{extension} -> .{target}: {message}"
         );
         assert!(
@@ -47,20 +44,20 @@ fn explicit_libreoffice_office_conversion_rejects_word_targets_without_output() 
 }
 
 #[test]
-fn explicit_libreoffice_spreadsheet_conversion_is_routed_to_lo() -> Result<()> {
-    // 电子表格 .xls → .xlsx 现在由 LO 承接：路由阶段不得再以"paused"拒绝。
-    // 用伪造字节只验证路由放行（真正的转换由真实样本覆盖，见 docs §5.10）。
+fn explicit_libreoffice_spreadsheet_conversion_is_rejected_before_creating_output() -> Result<()> {
     let root = test_root()?;
     let input = root.join("input.xls");
     let output = root.join("output.xlsx");
-    fs::write(&input, b"not a real workbook")?;
+    let original = b"isolated route-only fixture";
+    fs::write(&input, original)?;
     let error = conversion::convert_one(&input, &output, "xlsx", "lo")
-        .expect_err("a bogus container still fails during conversion");
+        .expect_err("LibreOffice is not a spreadsheet conversion route");
     let message = format!("{error:#}");
     assert!(
-        !message.contains("LibreOffice conversion is paused"),
-        "spreadsheet xls -> xlsx must no longer be rejected as paused: {message}"
+        message.contains("LibreOffice 不用于格式转换") && message.contains("4-4 的 Aspose"),
+        "spreadsheet rejection should direct users to the supported route: {message}"
     );
+    assert_eq!(fs::read(&input)?, original);
     assert!(
         !output.exists(),
         "failed conversion must not create a candidate"

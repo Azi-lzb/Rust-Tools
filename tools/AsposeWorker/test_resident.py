@@ -1,4 +1,4 @@
-"""Real unlicensed Worker acceptance; evaluation output is explicitly accepted.
+"""Real unlicensed Worker acceptance; final XLSX contains only business sheets.
 
 Only isolated synthetic files are used. No production menu/routing is invoked.
 """
@@ -66,7 +66,7 @@ def main():
         wb = openpyxl.load_workbook(calc_path,data_only=True)
         actual=[c.value for row in wb["Calc"] for c in row]
         assert len(actual)==2048 and all(isinstance(a,(int,float)) and math.isclose(a,b,abs_tol=1e-8) for a,b in zip(actual,manifest["expected"]))
-        assert wb.sheetnames==["Data","Calc","Evaluation Warning"] and wb.active.title=="Evaluation Warning"
+        assert wb.sheetnames==["Data","Calc"] and wb.active.title=="Calc"
         wb.close()
         operations=[dict(op="set_value",sheet="Data",cell=cell,value=dict(type=kind,value=value)) for cell,kind,value in
                     [("E10","text","0012"),("E11","number",0),("E12","boolean",False),("E13","text","clear me"),("Z99","text","boundary"),("AA100","number",123)]]
@@ -127,8 +127,8 @@ def main():
         assert report["continued_in_rust"] and len(report["records"])==count
         for i,r in enumerate(report["records"]):
             wb=openpyxl.load_workbook(r["path"],data_only=i==0)
-            assert wb.sheetnames==["Data","Calc","Evaluation Warning"] and wb.active.title=="Evaluation Warning"
-            assert r["evaluation_output"] and r["source_active_index"]==1 and r["output_active_index"]==2
+            assert wb.sheetnames==["Data","Calc"] and wb.active.title=="Calc"
+            assert r["evaluation_output"] and r["source_active_index"]==1 and r["output_active_index"]==1
             if i>0:assert wb["Data"]["D12"].value==9999 and wb["Data"]["D12"].font.bold
             else:
                 values=[c.value for row in wb["Calc"] for c in row]
@@ -154,8 +154,8 @@ def main():
             print(f"BENCH {name}: {report['wall_including_rust_process_ms']:.2f} ms",flush=True)
     summary=dict(status="PASS_EVALUATION_OUTPUT_ACCEPTED",direct_tasks=len(results),boundary_tasks=100,boundary_generations=2,
                  benchmark_batches=6,tasks_per_batch=5,benchmark=[dict(fresh=f,median_total_ms=statistics.median(x["total_ms"] for x in bench if x["fresh"]==f),min_total_ms=min(x["total_ms"] for x in bench if x["fresh"]==f),max_total_ms=max(x["total_ms"] for x in bench if x["fresh"]==f)) for f in (False,True)],
-                 source_unchanged=digest(source)==before,watermark_removed=False,active_sheet_restored=False,
-                 evaluation_behavior="Explicitly accepted by user; not counted as misalignment",production_route_changed=False)
+                 source_unchanged=digest(source)==before,watermark_removed=True,active_sheet_restored=True,
+                 evaluation_behavior="SDK mode remains unchanged; final candidate sanitized under AGENTS.md",production_route_changed=False)
     assert summary["source_unchanged"]
     (root/"benchmark-rounds.json").write_text(json.dumps(bench,indent=2),"utf-8")
     (root/"RESULT.json").write_text(json.dumps(summary,indent=2),"utf-8")

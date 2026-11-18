@@ -2749,7 +2749,6 @@ fn timeline_precheck_menu_allows_missing_optional_input_directory() -> Result<()
 }
 
 fn run_menu_with_view(config: &Path, log_view: &str, input: &str) -> Result<Output> {
-    let input = input.replacen("1\n1\n", "1\n1\n1\n", 1);
     // 涉及 openpyxl 目标写入的交互流程需要隔离运行时；环境变量已设置时
     // 显式注入两个变量（严格解析要求成对出现），未设置时保持继承环境。
     let isolated_runtime = std::env::var_os("RUST_WORKSPACE_OPENPYXL_PYTHON");
@@ -2791,7 +2790,6 @@ fn run_menu_with_capabilities(
     platform: &str,
     input: &str,
 ) -> Result<Output> {
-    let input = input.replacen("1\n1\n", "1\n1\n1\n", 1);
     let mut child = Command::new(env!("CARGO_BIN_EXE_RustTools"))
         .arg("menu")
         .arg("--config")

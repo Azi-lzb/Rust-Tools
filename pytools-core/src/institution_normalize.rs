@@ -1173,6 +1173,7 @@ fn build_and_optionally_apply_institution_plan(
             candidate,
             &plan_result.com_updates,
             &expected_source_hash,
+            run_id,
             com_runtime,
         )
         .map(|commit| {
@@ -1798,7 +1799,8 @@ pub fn create_rust_new_workbook_from_cell_plan(
     }
 
     defined_names = expected_names.clone();
-    let expected_replacements = replacements.clone();
+    let expected_replacements =
+        crate::result_validation::check_content().then(|| replacements.clone());
 
     let mut workbook = NewWorkbook::new();
     for sheet in &source.sheets {
@@ -1941,13 +1943,20 @@ pub fn create_rust_new_workbook_from_cell_plan(
             candidate.display()
         )
     })?;
-    validate_institution_normalize_candidate(
-        candidate,
-        &source,
-        &expected_replacements,
-        &comments,
-        &defined_names,
-    )?;
+    let validation = if let Some(expected_replacements) = expected_replacements {
+        validate_institution_normalize_candidate(
+            candidate,
+            &source,
+            &expected_replacements,
+            &comments,
+            &defined_names,
+        )
+    } else {
+        crate::result_validation::check_same_sheet_result(input, candidate)
+    };
+    validation.map_err(|error| {
+        crate::review_output::retain_validation_error(input, candidate, &plan.request_id, error)
+    })?;
     Ok(())
 }
 
@@ -3099,6 +3108,7 @@ fn execute_institution_normalize_xls_com(
     candidate: &Path,
     updates: &[InstitutionNormalizeCellUpdate],
     expected_sha256: &str,
+    run_id: &str,
     runtime: &mut crate::conversion_engine::ConversionRuntime,
 ) -> Result<crate::file_commit::TargetCommitReport> {
     ensure!(
@@ -3116,6 +3126,7 @@ fn execute_institution_normalize_xls_com(
     let original =
         read_workbook(input).with_context(|| format!("read source {}", input.display()))?;
     copy_file_create_new(input, candidate)?;
+    crate::file_commit::verify_planning_snapshot(candidate, Some(expected_sha256))?;
     let com_updates = updates
         .iter()
         .map(|update| {
@@ -3129,17 +3140,29 @@ fn execute_institution_normalize_xls_com(
     let response = runtime
         .institution_normalize_com(candidate, &com_updates)
         .context("apply institution normalization through Excel/WPS COM")?;
-    ensure!(
-        response.get("applied_count").and_then(Value::as_u64) == Some(updates.len() as u64),
-        "COM worker applied a different number of cell updates than planned"
-    );
-    ensure!(
-        response.get("verified").and_then(Value::as_bool) == Some(true),
-        "COM worker did not verify formula, value and merge preservation"
-    );
-    let output = read_workbook(candidate)
-        .with_context(|| format!("read COM candidate {}", candidate.display()))?;
-    validate_institution_normalize_xls_candidate(&original, &output, updates)?;
+    let _review_origin = crate::review_output::ReviewOriginScope::enter(input, expected_sha256);
+    let _review_destination = crate::review_output::ReviewDestinationScope::enter(input);
+    if response["applied_count"].as_u64() != Some(updates.len() as u64)
+        || response["verified"].as_bool() != Some(true)
+    {
+        let issue = response["validation_issue"]
+            .as_str()
+            .unwrap_or("Excel/WPS COM 机构规范化结果与计划不符");
+        let error = anyhow::anyhow!("{issue}");
+        if response["saved"].as_bool() == Some(true) {
+            return Err(crate::review_output::retain_validation_error(
+                input, candidate, run_id, error,
+            ));
+        }
+        return Err(error);
+    }
+    if crate::result_validation::check_content() {
+        let output = read_workbook(candidate)
+            .with_context(|| format!("read COM candidate {}", candidate.display()))?;
+        validate_institution_normalize_xls_candidate(&original, &output, updates).map_err(|error| {
+            crate::review_output::retain_validation_error(input, candidate, run_id, error)
+        })?;
+    }
     crate::file_commit::commit_validated_candidate(candidate, input, expected_sha256)
         .context("safely replace the .xls source after COM validation")
 }

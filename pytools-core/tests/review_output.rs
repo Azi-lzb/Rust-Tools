@@ -36,6 +36,76 @@ fn book(path: &Path, text: &str) -> Result<()> {
     Ok(())
 }
 
+fn document(path: &Path, broken_header: bool) -> Result<()> {
+    use std::io::Write;
+    let mut zip = zip::ZipWriter::new(fs::File::create(path)?);
+    let options = zip::write::SimpleFileOptions::default();
+    for (name, text) in [
+        (
+            "[Content_Types].xml",
+            r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>"#,
+        ),
+        (
+            "_rels/.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>"#,
+        ),
+        (
+            "word/document.xml",
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Evaluation Only. Created with Aspose.Words.</w:t></w:r></w:p></w:body></w:document>"#,
+        ),
+        (
+            "word/header1.xml",
+            if broken_header {
+                "<broken"
+            } else {
+                "<header/>"
+            },
+        ),
+    ] {
+        zip.start_file(name, options)?;
+        zip.write_all(text.as_bytes())?;
+    }
+    zip.finish()?;
+    Ok(())
+}
+
+#[test]
+fn doc_conversion_review_preserves_bytes_and_evaluation_in_actual_docx_format() -> Result<()> {
+    let d = Dir::new()?;
+    let source = d.p("original.doc");
+    fs::write(&source, b"synthetic DOC source placeholder")?;
+    let before = fs::read(&source)?;
+    let candidate = d.p("candidate.docx");
+    document(&candidate, false)?;
+    let review =
+        preserve_failed_candidate(&source, &candidate, "words", "Word paragraph count changed")?
+            .unwrap();
+    assert_eq!(review.path.extension().unwrap(), "docx");
+    assert_eq!(fs::read(&source)?, before);
+    assert_eq!(fs::read(&review.path)?, fs::read(&candidate)?);
+    let record: serde_json::Value =
+        serde_json::from_slice(&fs::read(review.record_path.unwrap())?)?;
+    assert_eq!(record["business_validation_passed"], false);
+    assert_eq!(record["original_target_replaced"], false);
+    assert_eq!(record["validation_issue"], "Word paragraph count changed");
+    Ok(())
+}
+
+#[test]
+fn malformed_docx_auxiliary_xml_is_not_published_as_review() -> Result<()> {
+    let d = Dir::new()?;
+    let source = d.p("source.docx");
+    let candidate = d.p("candidate.docx");
+    document(&source, false)?;
+    document(&candidate, true)?;
+    assert!(
+        preserve_failed_candidate(&source, &candidate, "broken", "header cannot be read")?
+            .is_none()
+    );
+    assert_eq!(fs::read_dir(&d.0)?.count(), 2);
+    Ok(())
+}
+
 #[test]
 fn semantic_failure_keeps_both_original_and_pending_copy_with_explicit_status() -> Result<()> {
     let d = Dir::new()?;

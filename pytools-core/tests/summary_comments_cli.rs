@@ -58,7 +58,7 @@ fn summary_comments_cli_logs_actual_stages_and_preserves_output_across_views() -
         );
     }
 
-    let unsupported = root.join("ignored.xls");
+    let unsupported = root.join("ignored.xlsb");
     fs::write(&unsupported, b"unsupported input skipped by PyCode")?;
     let developer = run_cli(
         &template,
@@ -130,7 +130,7 @@ fn summary_comments_cli_logs_actual_stages_and_preserves_output_across_views() -
     assert!(developer_events.iter().any(|event| {
         event["phase"] == "input_filter"
             && event["status"] == "skipped"
-            && event["file_name"] == "ignored.xls"
+            && event["file_name"] == "ignored.xlsb"
             && event["actual_engine"].is_null()
     }));
     let save_event = developer_events

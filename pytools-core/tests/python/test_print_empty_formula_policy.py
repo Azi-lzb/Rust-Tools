@@ -16,12 +16,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--worker", help="Include the isolated Aspose route, retaining its watermark")
     parser.add_argument("--modes", nargs="+", type=int, choices=[1, 2, 3], default=[1, 2, 3])
-    parser.add_argument("--engines", nargs="+", choices=["openpyxl", "rust", "aspose"])
+    parser.add_argument("--engines", nargs="+", choices=["openpyxl", "rust"], default=["openpyxl", "rust"])
     args = parser.parse_args()
-    engines = args.engines or (["openpyxl", "rust", "aspose"] if args.worker else ["openpyxl", "rust"])
-    assert "aspose" not in engines or args.worker
     root = Path(args.output).resolve()
     root.mkdir(parents=True, exist_ok=False)
     repo = Path(__file__).resolve().parents[3]
@@ -36,17 +33,15 @@ def main():
                ("array-missing", "n", True, "17", 17)]
     ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
     for mode in args.modes:
-        for engine in engines:
+        for engine in args.engines:
             # Exercise all cache representations in mode 1; modes 2/3 reuse
             # decoding, so cover their block placement with stale/missing data.
             selected = samples if mode == 1 else [s for s in samples if s[0] in ("stale", "missing")]
             for sample, cache_type, has_cache, cache_text, expected in selected:
                 label = f"mode{mode}-{engine}-{sample}"
                 directory = root / label
-                command, keys, outputs, sources = fixture.prepare(directory, f"3-{mode}", engine == "aspose")
-                if engine == "rust":
-                    keys = "3\n2\n0\n0\n"
-                    outputs[0] = outputs[0].with_name(outputs[0].stem + "_Rust.xlsx")
+                command, _, outputs, sources = fixture.prepare(directory, f"3-{mode}", False)
+                keys = f"3\n1\n{1 if engine == 'openpyxl' else 2}\n0\n0\n"
                 source = sources[0]
                 book = openpyxl.load_workbook(source)
                 book["独立源"]["A1"] = "=1/0" if sample == "error" else "=2+2" if sample in ("stale", "shared", "array", "array-missing") else '=IF(1,"","x")'
@@ -92,8 +87,6 @@ def main():
                 env.update(PYTHONIOENCODING="utf-8", PYTOOLS_OPENPYXL_PYTHON=os.sys.executable,
                            PYTOOLS_OPENPYXL_WORKER=str(repo / "crates/excel-editor/python/openpyxl_worker.py"),
                            LOCALAPPDATA=str(directory / "state"), XDG_STATE_HOME=str(directory / "state"))
-                if args.worker:
-                    env["RUSTTOOLS_ASPOSE_WORKER_EXE"] = str(Path(args.worker).resolve())
                 proc = subprocess.run([str(Path(args.exe).resolve()), *command], input=keys, cwd=directory,
                                       env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
                 (directory / "stdout.txt").write_text(proc.stdout, encoding="utf-8")
@@ -113,8 +106,6 @@ def main():
                             follower = sheet.cell(markers[0].row + 1, markers[0].column - 1).value
                             assert follower in (None, "") if sample == "array-missing" else follower == 23, follower
                         assert all(c.data_type != "f" for row in sheet for c in row), "print output retained formulas"
-                        if engine == "aspose":
-                            assert book.sheetnames[-1] == "Evaluation Warning"
                     except AssertionError as exc:
                         error = str(exc)
                     finally:

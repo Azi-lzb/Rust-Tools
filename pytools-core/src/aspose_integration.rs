@@ -65,6 +65,7 @@ impl ValidationCalcMode {
 #[derive(Clone, Debug, Default)]
 pub struct ValidationExecution {
     pub mode: ValidationCalcMode,
+    pub config_path: Option<PathBuf>,
     pub run_id: Option<String>,
     pub diagnostic_dir: Option<PathBuf>,
 }
@@ -170,13 +171,19 @@ impl AsposeCalculationSession {
             "Aspose 校验计算暂仅支持 XLSX 副本；不会转换或丢弃 XLSM 宏"
         );
         let working_copy = fs::canonicalize(working_copy)?;
-        let source = excel_reader::read_workbook(&working_copy)?;
         let before = crate::file_commit::sha256_file(&working_copy)?;
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let candidate = working_copy.with_file_name(format!(
             ".aspose-candidate-{}-{nonce}.xlsx",
             std::process::id()
         ));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_file(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(candidate.clone());
         let result = self
             .engine
             .calculate(&WorkbookRequest {
@@ -185,18 +192,59 @@ impl AsposeCalculationSession {
                 candidate: candidate.clone(),
             })
             .context("Aspose 计算失败；未切换到其他引擎，校验副本未提交")?;
-        let output = excel_reader::read_workbook(&candidate).context("Aspose 候选缓存无法回读")?;
-        let array_results = excel_editor::ArrayFormulaResults::read(&working_copy)?;
-        ensure!(
-            array_results == excel_editor::ArrayFormulaResults::read(&candidate)?,
-            "Aspose 计算改变数组公式结果范围"
-        );
-        validate_recalculated_workbook_with_arrays(&source, &output, &array_results)?;
-        crate::conversion_engine::ensure_aspose_validation_functions_supported(&output, regions)?;
+        // Archive Worker output unchanged; no Rust-side worksheet surgery.
+        let calc_inputs = vec![crate::aspose_post::trace_input_workbook(&working_copy)];
+        let calc_archive =
+            crate::aspose_post::archive_raw_candidate(&candidate, &self.diagnostic_dir)?;
+        let calc_post =
+            crate::aspose_post::verify_sanitized_business_sheets(&candidate, &result.output_sheets)?;
+        if let Err(error) = crate::aspose_post::write_trace_record(
+            &calc_archive,
+            &self.run_id,
+            &self.run_id,
+            "aspose_worker (Aspose.Cells .NET, Calculate)",
+            result.evaluation_output,
+            &calc_inputs,
+            &calc_post,
+        ) {
+            eprintln!("Aspose 原始输出追溯记录写入失败：{error:#}");
+        }
+        let _review_origin = crate::review_output::ReviewOriginScope::enter(&working_copy, &before);
+        let _review_destination =
+            crate::review_output::ReviewDestinationScope::enter(&working_copy);
+        (|| -> Result<()> {
+            if crate::result_validation::check_content() {
+                let source = excel_reader::read_workbook(&working_copy)?;
+                let output =
+                    excel_reader::read_workbook(&candidate).context("Aspose 候选缓存无法回读")?;
+                let array_results = excel_editor::ArrayFormulaResults::read(&working_copy)?;
+                ensure!(
+                    array_results == excel_editor::ArrayFormulaResults::read(&candidate)?,
+                    "Aspose 计算改变数组公式结果范围"
+                );
+                validate_recalculated_workbook_with_arrays(&source, &output, &array_results)?;
+                crate::conversion_engine::ensure_aspose_validation_functions_supported(
+                    &output, regions,
+                )?;
+            } else if crate::result_validation::current()
+                == crate::result_validation::ResultValidation::Sheets
+            {
+                crate::result_validation::check_same_sheet_result(&working_copy, &candidate)?;
+            }
+            Ok(())
+        })()
+        .map_err(|error| {
+            crate::review_output::retain_validation_error(
+                &working_copy,
+                &candidate,
+                &self.run_id,
+                error,
+            )
+        })?;
         let commit =
             crate::file_commit::replace_target_from_candidate(&candidate, &working_copy, &before)
                 .context("Aspose 候选未通过快照检查或安全提交失败")?;
-        let diagnostic = serde_json::json!({"run_id":self.run_id,"engine":"Aspose.Cells .NET","input":working_copy,"candidate":candidate,"outcome":result,"commit":commit});
+        let diagnostic = serde_json::json!({"run_id":self.run_id,"engine":"Aspose.Cells .NET","input":working_copy,"candidate":candidate,"outcome":result,"commit":commit,"raw_archive":calc_archive.path,"raw_archive_sha256":calc_archive.sha256,"raw_archive_stage":"worker_output_after_worker_preservation","sdk_save_archive":result.sdk_save_archive,"worker_input_trace":result.input_trace,"evaluation_sheet_post_processing":calc_post.as_str()});
         // A bounded per-run file: concurrent jobs must not interleave JSONL,
         // and caller-supplied run IDs must never become filesystem paths.
         let log = self.diagnostic_dir.join(format!(
@@ -270,7 +318,7 @@ pub(crate) fn validate_recalculated_workbook_with_arrays(
 ) -> Result<()> {
     let names: Vec<&str> = source.sheets.iter().map(|s| s.name.as_str()).collect();
     ensure!(
-        output.sheets.len() >= source.sheets.len(),
+        output.sheets.len() == source.sheets.len(),
         "Aspose 计算改变了原工作表数量"
     );
     for (a, b) in source.sheets.iter().zip(&output.sheets) {
@@ -310,12 +358,6 @@ pub(crate) fn validate_recalculated_workbook_with_arrays(
             }
         }
     }
-    ensure!(
-        output.sheets[source.sheets.len()..]
-            .iter()
-            .all(|s| s.name == "Evaluation Warning"),
-        "Aspose 计算新增了非评估工作表"
-    );
     Ok(())
 }
 

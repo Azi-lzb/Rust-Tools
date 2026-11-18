@@ -75,7 +75,8 @@ def main():
             else:
                 assert response["ok"], response
                 wb = openpyxl.load_workbook(candidate)
-                assert wb.sheetnames[-1] == "Evaluation Warning", wb.sheetnames
+                assert "Evaluation Warning" not in wb.sheetnames, wb.sheetnames
+                assert response["output_sanitation"]["validated"]
                 check(wb)
                 wb.close()
             for p, digest in before.items():
@@ -94,7 +95,7 @@ def main():
                             dict(operation="rename_sheet", old_name="数据", new_name="新名称"),
                             dict(operation="move_sheet", sheet="其他", new_index=1),
                             dict(operation="delete_sheet", name="新表")],
-        lambda w: (assert_equal(w.sheetnames[:-1], ["其他", "新名称"]),
+        lambda w: (assert_equal(w.sheetnames, ["其他", "新名称"]),
                    assert_equal(w["其他"]["A1"].value, "=SUM('新名称'!A2:A3)")))
     run("layout", [dict(operation="set_column_width", sheet="数据", column_index=27, width=22),
                    dict(operation="set_row_height", sheet="数据", row_index=12, height=31),

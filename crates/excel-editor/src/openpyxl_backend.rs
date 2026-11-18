@@ -1,8 +1,7 @@
 //! Isolated Python/openpyxl adapter for batch edits to existing XLSX files.
 //!
-//! The adapter is opt-in and evidence gated. It launches one bundled Python
-//! process per workbook plan; the Python runtime and worker are never linked
-//! into the Rust process.
+//! Bundled Python runs out of process. A CLI scope can reuse a compatible
+//! worker while each plan keeps its own workbook, snapshot and validation.
 
 use crate::{
     worker_process::WorkerProcess, BackendCapability, BackendFailure, EditBackend, EditOperation,
@@ -13,6 +12,7 @@ use anyhow::{bail, Context, Result};
 use excel_reader::{read_workbook, SheetDump};
 use serde::Deserialize;
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
     io::{Read, Seek, Write},
@@ -97,7 +97,7 @@ impl OpenpyxlWorkerConfig {
     /// 保证“预检确认可用”意味着“执行使用同一运行时并通过同一握手”。
     /// 成功结果按运行时身份缓存；失败不缓存，下次调用会重新探测。
     pub fn verify_handshake(&self) -> Result<(), String> {
-        verify_handshake_cached(self)
+        verify_handshake_cached(self).map(|_| ())
     }
 }
 
@@ -298,7 +298,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 /// worker --version 探测：校验协议版本一致并确认 openpyxl 可用。
 /// 环境问题（启动失败、缺少 openpyxl、worker 过旧、探测超时）与协议问题
 /// （版本不匹配、非法版本输出）在错误文本中明确区分。
-fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<(), String> {
+fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<bool, String> {
     let expected = format!("protocol={}", OpenpyxlWorkerConfig::PROTOCOL_VERSION);
     let stdout_scratch = ScratchFile::create(&std::env::temp_dir(), "openpyxl-probe-stdout")
         .map_err(|error| format!("环境问题：无法缓存握手输出：{error:#}"))?;
@@ -308,10 +308,14 @@ fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<(), String>
         .map_err(|error| format!("环境问题：无法写入握手输出：{error}"))?;
     let stderr_handle = File::create(stderr_scratch.path())
         .map_err(|error| format!("环境问题：无法写入握手输出：{error}"))?;
-    let mut command = Command::new(&config.python_executable);
+    let python = crate::path_for_external_io(&config.python_executable)
+        .map_err(|error| format!("环境问题：Python路径无效：{error}"))?;
+    let script = crate::path_for_external_io(&config.worker_script)
+        .map_err(|error| format!("环境问题：worker路径无效：{error}"))?;
+    let mut command = Command::new(python);
     command
         .arg("-I")
-        .arg(&config.worker_script)
+        .arg(script)
         .arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout_handle))
@@ -405,7 +409,7 @@ fn run_worker_version_probe(config: &OpenpyxlWorkerConfig) -> Result<(), String>
             truncate_text(stdout.trim(), 256)
         ));
     }
-    Ok(())
+    Ok(stdout.lines().any(|line| line.trim() == "resident=1"))
 }
 
 /// 日志文本截断：保留首部内容，超长部分以省略标记结尾。
@@ -453,28 +457,24 @@ impl RuntimeIdentity {
 /// 版本握手结果缓存：按完整运行时身份缓存成功结果。
 /// 失败结果不缓存——环境问题是瞬时的可能性更高，重复探测代价可接受且
 /// 能在下一次调用中反映环境修复。
-static HANDSHAKE_CACHE: std::sync::Mutex<Option<(RuntimeIdentity, Result<(), String>)>> =
+static HANDSHAKE_CACHE: std::sync::Mutex<Option<(RuntimeIdentity, bool)>> =
     std::sync::Mutex::new(None);
 
 /// 轻量握手（带共享缓存）：验证 worker 可启动、协议版本一致、openpyxl 可用。
-fn verify_handshake_cached(config: &OpenpyxlWorkerConfig) -> Result<(), String> {
+fn verify_handshake_cached(config: &OpenpyxlWorkerConfig) -> Result<bool, String> {
     let identity = RuntimeIdentity::of(config);
     {
         let cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
         if let Some((cached_identity, cached_result)) = cached.as_ref() {
             if *cached_identity == identity {
-                return match cached_result {
-                    Ok(()) => Ok(()),
-                    // 失败不缓存；此分支仅为类型完整保留。
-                    Err(message) => Err(message.clone()),
-                };
+                return Ok(*cached_result);
             }
         }
     }
     let result = run_worker_version_probe(config);
-    if result.is_ok() {
+    if let Ok(resident) = result {
         let mut cached = HANDSHAKE_CACHE.lock().expect("handshake cache poisoned");
-        *cached = Some((identity, result.clone()));
+        *cached = Some((identity, resident));
     }
     result
 }
@@ -484,13 +484,156 @@ fn reset_handshake_cache_for_tests() {
     *HANDSHAKE_CACHE.lock().expect("handshake cache poisoned") = None;
 }
 
+const RESIDENT_REQUEST_LIMIT: usize = 64;
+
+struct ResidentSession {
+    worker: WorkerProcess,
+    identity: RuntimeIdentity,
+    request: ScratchFile,
+    response: ScratchFile,
+    _staged: ScratchFile,
+    stdout: ScratchFile,
+    stderr: ScratchFile,
+    completed: usize,
+}
+
+impl ResidentSession {
+    fn start(config: &OpenpyxlWorkerConfig, identity: RuntimeIdentity) -> Result<Self> {
+        let temp = std::env::temp_dir();
+        let request = ScratchFile::create(&temp, "openpyxl-resident-request")?;
+        let response = ScratchFile::create(&temp, "openpyxl-resident-response")?;
+        let staged = ScratchFile::create(&temp, "openpyxl-resident-stage")?;
+        let stdout = ScratchFile::create(&temp, "openpyxl-resident-stdout")?;
+        let stderr = ScratchFile::create(&temp, "openpyxl-resident-stderr")?;
+        let external = crate::path_for_external_io;
+        let mut command = Command::new(external(&config.python_executable)?);
+        command
+            .arg("-I")
+            .arg(external(&config.worker_script)?)
+            .arg("--request")
+            .arg(external(request.path())?)
+            .arg("--response")
+            .arg(external(response.path())?)
+            .arg("--resident-stage")
+            .arg(external(staged.path())?)
+            .stdin(Stdio::piped())
+            .stdout(File::create(stdout.path())?)
+            .stderr(File::create(stderr.path())?);
+        let worker = WorkerProcess::spawn(command)?;
+        Ok(Self {
+            worker,
+            identity,
+            request,
+            response,
+            _staged: staged,
+            stdout,
+            stderr,
+            completed: 0,
+        })
+    }
+
+    fn execute(&mut self, request: &[u8], response: &Path, timeout: Duration) -> Result<()> {
+        // The worker replaces the response file atomically after finishing.
+        // No next request is sent before that replacement is observed.
+        fs::write(self.request.path(), request)?;
+        fs::write(self.response.path(), [])?;
+        let started = Instant::now();
+        self.worker
+            .stdin_mut()
+            .context("missing openpyxl request pipe")?
+            .write_all(&[1])?;
+        loop {
+            if stream_over_cap(self.stdout.path(), "stdout").is_some()
+                || stream_over_cap(self.stderr.path(), "stderr").is_some()
+            {
+                bail!("openpyxl worker diagnostics exceeded the session limit");
+            }
+            let size = fs::metadata(self.response.path()).map_or(0, |meta| meta.len());
+            if size > MAX_RESPONSE_BYTES {
+                bail!("openpyxl worker response exceeds the size limit");
+            }
+            if size > 0 {
+                fs::copy(self.response.path(), response)?;
+                self.completed += 1;
+                return Ok(());
+            }
+            if let Some(status) = self.worker.try_wait()? {
+                bail!(
+                    "openpyxl worker exited before responding: {status}; {}",
+                    read_diagnostic_bounded(self.stderr.path(), DIAGNOSTIC_KEEP_BYTES)
+                );
+            }
+            if started.elapsed() >= timeout {
+                bail!("openpyxl worker timed out after {} ms", timeout.as_millis());
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+thread_local! {
+    static RESIDENT_SCOPE: RefCell<Option<Option<ResidentSession>>> = const { RefCell::new(None) };
+}
+
+/// Reuse an isolated Python process for sequential CLI edits on this thread.
+/// An older compatible worker keeps its original per-request execution.
+pub fn with_openpyxl_worker_reuse<T>(run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<Option<ResidentSession>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            RESIDENT_SCOPE.with(|scope| scope.replace(self.0.take()));
+        }
+    }
+    let _restore = Restore(RESIDENT_SCOPE.with(|scope| scope.replace(Some(None))));
+    run()
+}
+
+fn run_in_resident_scope(
+    config: &OpenpyxlWorkerConfig,
+    request: &[u8],
+    response: &Path,
+) -> Result<bool> {
+    RESIDENT_SCOPE.with(|scope| {
+        let mut scope = scope.borrow_mut();
+        let Some(slot) = scope.as_mut() else {
+            return Ok(false);
+        };
+        let identity = RuntimeIdentity::of(config);
+        if slot.as_ref().is_some_and(|session| {
+            session.identity != identity || session.completed >= RESIDENT_REQUEST_LIMIT
+        }) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(ResidentSession::start(config, identity)?);
+        }
+        if let Err(error) = slot
+            .as_mut()
+            .unwrap()
+            .execute(request, response, config.timeout)
+        {
+            // Dropping the controlled process kills and reaps its tree. An
+            // uncertain request is never replayed on a replacement process.
+            *slot = None;
+            return Err(error);
+        }
+        Ok(true)
+    })
+}
+
 pub struct OpenpyxlXlsxBackend {
     capability: BackendCapability,
     config: Option<OpenpyxlWorkerConfig>,
     unavailable_reason: Option<String>,
+    verify_sheet_names: bool,
 }
 
 impl OpenpyxlXlsxBackend {
+    pub fn with_sheet_verification(mut self, verify_sheet_names: bool) -> Self {
+        self.verify_sheet_names = verify_sheet_names;
+        self
+    }
+
     pub fn new(capability: BackendCapability, config: OpenpyxlWorkerConfig) -> Result<Self> {
         Self::build(capability, Some(config))
     }
@@ -547,9 +690,8 @@ impl OpenpyxlXlsxBackend {
         capability
             .operations
             .retain(|operation| supported_operation(*operation));
-        // The Rust validator checks these semantic contracts independently.
-        // The worker also verifies requested edits, but that does not qualify
-        // preservation requirements Rust cannot inspect here.
+        // Keep routing limited to capabilities covered by preservation evidence.
+        // Runtime validation checks that the saved package and sheets can open.
         capability.preserved.retain(|requirement| {
             matches!(
                 requirement,
@@ -585,6 +727,7 @@ impl OpenpyxlXlsxBackend {
             capability,
             config,
             unavailable_reason,
+            verify_sheet_names: true,
         })
     }
 }
@@ -691,11 +834,9 @@ impl EditBackend for OpenpyxlXlsxBackend {
 
         // 版本握手（按运行时身份缓存成功结果）：worker 协议版本不匹配或运行
         // 环境不完整时，在派发前直接判为能力不可用，而不是等到解析响应才发现。
-        if let Err(message) = verify_handshake_cached(config) {
-            return Err(BackendFailure::unsupported_before_write(format!(
-                "openpyxl worker 版本握手失败：{message}"
-            )));
-        }
+        let resident_supported = verify_handshake_cached(config).map_err(|message| {
+            BackendFailure::unsupported_before_write(format!("openpyxl worker 版本握手失败：{message}"))
+        })?;
 
         let parent = plan
             .output
@@ -734,64 +875,111 @@ impl EditBackend for OpenpyxlXlsxBackend {
                 )))
             }
         };
+        // Only filesystem fields cross the Windows extended-path boundary.
+        // Keep the original plan for validation, logging and safe publication.
+        let mut worker_plan = plan.clone();
+        let io_path = |path: &Path| crate::path_for_external_io(path)
+            .map_err(|error| BackendFailure::failed(format!("prepare openpyxl file path: {error}")));
+        worker_plan.input = io_path(&plan.input)?;
+        worker_plan.output = io_path(&plan.output)?;
+        for operation in &mut worker_plan.operations {
+            if let EditOperation::ImportRange { source_workbook, .. } = operation {
+                *source_workbook = io_path(source_workbook)?;
+            }
+        }
         let request = serde_json::json!({
             "schema_version": 1,
             "request_id": plan.request_id,
             "format": "xlsx",
-            "input": plan.input,
-            "output": plan.output,
-            "plan": plan,
+            "input": worker_plan.input,
+            "output": worker_plan.output,
+            "plan": worker_plan,
+            "verify_sheet_names": self.verify_sheet_names,
+            // Older packaged workers only recognize the legacy flag.
+            "verify_content": self.verify_sheet_names,
         });
         let request_bytes = serde_json::to_vec(&request).map_err(|error| {
             BackendFailure::failed(format!("serialize openpyxl request: {error}"))
         })?;
-        fs::write(request_file.path(), request_bytes)
+        fs::write(request_file.path(), &request_bytes)
             .map_err(|error| BackendFailure::failed(format!("write openpyxl request: {error}")))?;
 
-        let stdout = File::create(stdout_file.path()).map_err(|error| {
-            BackendFailure::failed(format!("open worker stdout capture: {error}"))
-        })?;
-        let stderr = File::create(stderr_file.path()).map_err(|error| {
-            BackendFailure::failed(format!("open worker stderr capture: {error}"))
-        })?;
-        let mut command = Command::new(&config.python_executable);
-        command
-            .arg("-I")
-            .arg(&config.worker_script)
-            .arg("--request")
-            .arg(request_file.path())
-            .arg("--response")
-            .arg(response_file.path())
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(stdout))
-            .stderr(Stdio::from(stderr));
         let started = Instant::now();
-        let mut worker = match WorkerProcess::spawn(command) {
-            Ok(worker) => worker,
-            Err(error) => {
-                return Err(BackendFailure::unsupported_before_write(format!(
-                    "启动 openpyxl worker 失败（类别=运行环境不完整）：{error}；\
-                     Python={}，worker={}。请确认发行包运行时完整，或同时设置 \
-                     PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER。",
-                    config.python_executable.display(),
-                    config.worker_script.display()
-                )));
-            }
+        let reused = if resident_supported {
+            run_in_resident_scope(config, &request_bytes, response_file.path())
+                .map_err(|error| BackendFailure::failed(format!(
+                    "openpyxl 常驻 worker 运行失败：{error:#}；候选输出不会发布。请求={}，耗时={} ms",
+                    plan.request_id,
+                    started.elapsed().as_millis()
+                )))?
+        } else {
+            false
         };
-        let mut timed_out = false;
-        let status = loop {
-            match worker.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) if started.elapsed() < config.timeout => {
-                    // 日志容量治理：轮询期间限制 stdout/stderr 的磁盘增长。
-                    if let Some(label) = stream_over_cap(stdout_file.path(), "stdout")
-                        .or_else(|| stream_over_cap(stderr_file.path(), "stderr"))
-                    {
+        let (exit_code, worker_succeeded, elapsed) = if reused {
+            (None, true, started.elapsed())
+        } else {
+            let stdout = File::create(stdout_file.path()).map_err(|error| {
+                BackendFailure::failed(format!("open worker stdout capture: {error}"))
+            })?;
+            let stderr = File::create(stderr_file.path()).map_err(|error| {
+                BackendFailure::failed(format!("open worker stderr capture: {error}"))
+            })?;
+            let mut command = Command::new(io_path(&config.python_executable)?);
+            command
+                .arg("-I")
+                .arg(io_path(&config.worker_script)?)
+                .arg("--request")
+                .arg(io_path(request_file.path())?)
+                .arg("--response")
+                .arg(io_path(response_file.path())?)
+                .stdin(Stdio::null())
+                .stdout(Stdio::from(stdout))
+                .stderr(Stdio::from(stderr));
+            let started = Instant::now();
+            let mut worker = match WorkerProcess::spawn(command) {
+                Ok(worker) => worker,
+                Err(error) => {
+                    return Err(BackendFailure::unsupported_before_write(format!(
+                        "启动 openpyxl worker 失败（类别=运行环境不完整）：{error}；\
+                         Python={}，worker={}。请确认发行包运行时完整，或同时设置 \
+                         PYTOOLS_OPENPYXL_PYTHON 与 PYTOOLS_OPENPYXL_WORKER。",
+                        config.python_executable.display(),
+                        config.worker_script.display()
+                    )));
+                }
+            };
+            let status = loop {
+                match worker.try_wait() {
+                    Ok(Some(status)) => break status,
+                    Ok(None) if started.elapsed() < config.timeout => {
+                        // 日志容量治理：轮询期间限制 stdout/stderr 的磁盘增长。
+                        if let Some(label) = stream_over_cap(stdout_file.path(), "stdout")
+                            .or_else(|| stream_over_cap(stderr_file.path(), "stderr"))
+                        {
+                            let cleanup = terminate_and_reap(&mut worker);
+                            return Err(BackendFailure::failed(format!(
+                                "openpyxl worker 的 {label} 输出超过单次运行上限 \
+                                 （{MAX_WORKER_STREAM_BYTES} 字节），已终止进程树，\
+                                 防止内存与磁盘无界增长；清理结果：{cleanup}；候选输出已废弃。{}",
+                                worker_run_diagnostics(
+                                    config,
+                                    &plan.request_id,
+                                    None,
+                                    true,
+                                    started.elapsed(),
+                                )
+                            )));
+                        }
+                        thread::sleep(Duration::from_millis(10))
+                    }
+                    Ok(None) => {
+                        // 超时清理：终止整棵受控进程树（Windows Job Object /
+                        // Unix 进程组）并回收直接子进程；候选输出废弃。
                         let cleanup = terminate_and_reap(&mut worker);
                         return Err(BackendFailure::failed(format!(
-                            "openpyxl worker 的 {label} 输出超过单次运行上限 \
-                             （{MAX_WORKER_STREAM_BYTES} 字节），已终止进程树，\
-                             防止内存与磁盘无界增长；清理结果：{cleanup}；候选输出已废弃。{}",
+                            "openpyxl worker 超时（{} ms）：已终止整棵受控进程树；\
+                             清理结果：{cleanup}；候选输出已废弃，不会发布。{}",
+                            config.timeout.as_millis(),
                             worker_run_diagnostics(
                                 config,
                                 &plan.request_id,
@@ -801,48 +989,30 @@ impl EditBackend for OpenpyxlXlsxBackend {
                             )
                         )));
                     }
-                    thread::sleep(Duration::from_millis(10))
+                    Err(error) => {
+                        let cleanup = terminate_and_reap(&mut worker);
+                        return Err(BackendFailure::failed(format!(
+                            "等待 openpyxl worker 失败：{error}；清理结果：{cleanup}。{}",
+                            worker_run_diagnostics(
+                                config,
+                                &plan.request_id,
+                                None,
+                                false,
+                                started.elapsed(),
+                            )
+                        )));
+                    }
                 }
-                Ok(None) => {
-                    // 超时清理：终止整棵受控进程树（Windows Job Object /
-                    // Unix 进程组）并回收直接子进程；候选输出废弃。
-                    let cleanup = terminate_and_reap(&mut worker);
-                    return Err(BackendFailure::failed(format!(
-                        "openpyxl worker 超时（{} ms）：已终止整棵受控进程树；\
-                         清理结果：{cleanup}；候选输出已废弃，不会发布。{}",
-                        config.timeout.as_millis(),
-                        worker_run_diagnostics(
-                            config,
-                            &plan.request_id,
-                            None,
-                            true,
-                            started.elapsed(),
-                        )
-                    )));
-                }
-                Err(error) => {
-                    let cleanup = terminate_and_reap(&mut worker);
-                    return Err(BackendFailure::failed(format!(
-                        "等待 openpyxl worker 失败：{error}；清理结果：{cleanup}。{}",
-                        worker_run_diagnostics(
-                            config,
-                            &plan.request_id,
-                            None,
-                            false,
-                            started.elapsed(),
-                        )
-                    )));
-                }
-            }
+            };
+            (status.code(), status.success(), started.elapsed())
         };
-        let elapsed = started.elapsed();
         // 响应文件容量限制：异常巨大的响应不是合法 IPC 输出。
         let response_size = fs::metadata(response_file.path()).map_or(0, |meta| meta.len());
         if response_size > MAX_RESPONSE_BYTES {
             return Err(BackendFailure::failed(format!(
                 "openpyxl worker 响应文件 {response_size} 字节，超过单次运行上限 \
                  {MAX_RESPONSE_BYTES} 字节，已拒绝解析；候选输出不会发布。{}",
-                worker_run_diagnostics(config, &plan.request_id, status.code(), timed_out, elapsed,)
+                worker_run_diagnostics(config, &plan.request_id, exit_code, false, elapsed,)
             )));
         }
         let response_bytes = fs::read(response_file.path()).unwrap_or_default();
@@ -853,12 +1023,12 @@ impl EditBackend for OpenpyxlXlsxBackend {
                     "openpyxl worker 响应解析失败（类别=IPC 输出异常）：退出码 {:?}，\
                      响应 {response_size} 字节，JSON 解析错误：{error}；\
                      输出不会发布；stderr 摘要：{diagnostic}。{}",
-                    status.code(),
+                    exit_code,
                     worker_run_diagnostics(
                         config,
                         &plan.request_id,
-                        status.code(),
-                        timed_out,
+                        exit_code,
+                        false,
                         elapsed,
                     )
                 ))
@@ -879,26 +1049,30 @@ impl EditBackend for OpenpyxlXlsxBackend {
                 worker_failure_with_diagnostics(error, &response.diagnostics),
             ));
         }
-        if response.status != "applied" || !status.success() {
+        if response.status == "validation_failed" {
+            let issue = response
+                .error
+                .map(|error| error.message)
+                .unwrap_or_else(|| "保存后的工作簿未通过轻度校验".to_owned());
+            return Err(BackendFailure::saved_output_validation_failed(
+                worker_failure_with_diagnostics(issue, &response.diagnostics),
+            ));
+        }
+        if response.status != "applied" || !worker_succeeded {
             let error = response
                 .error
                 .map(|error| worker_failure_message(&error.kind, &error.message))
-                .unwrap_or_else(|| format!("worker 异常退出（退出码 {:?}）", status.code()));
+                .unwrap_or_else(|| format!("worker 异常退出（退出码 {:?}）", exit_code));
             let error = worker_failure_with_diagnostics(error, &response.diagnostics);
             let diagnostic = read_diagnostic_bounded(stderr_file.path(), DIAGNOSTIC_KEEP_BYTES);
             return Err(BackendFailure::failed(format!(
                 "{error}；stderr 摘要：{diagnostic}。{}",
-                worker_run_diagnostics(config, &plan.request_id, status.code(), timed_out, elapsed,)
+                worker_run_diagnostics(config, &plan.request_id, exit_code, false, elapsed,)
             )));
         }
         if response.operation_count != Some(plan.operations.len()) {
             return Err(BackendFailure::failed(
                 "openpyxl worker applied-operation count mismatch",
-            ));
-        }
-        if response.verified_operation_count != Some(plan.operations.len()) {
-            return Err(BackendFailure::failed(
-                "openpyxl worker verified-operation count mismatch",
             ));
         }
         if response.input_sha256_before.is_none()
@@ -912,10 +1086,6 @@ impl EditBackend for OpenpyxlXlsxBackend {
             ));
         }
         Ok(())
-    }
-
-    fn validate_output(&self, plan: &ExcelEditPlan, candidate_output: &Path) -> Result<()> {
-        OpenpyxlXlsxValidator.validate(plan, candidate_output)
     }
 }
 
@@ -979,18 +1149,36 @@ impl OpenpyxlXlsxValidator {
         .map(|_| ())
     }
 
-    /// Comparison-only allowance for an explicitly selected evaluation engine.
-    /// The actual candidate is never rewritten and other engines stay strict.
+    /// Compatibility entry point: final Aspose candidates must already be clean.
     pub fn validate_with_evaluation_sheet(
         &self,
         plan: &ExcelEditPlan,
         candidate_output: &Path,
     ) -> Result<()> {
-        self.validate_with_evaluation_sheet_and_notes(plan, candidate_output)
+        self.validate_sanitized_aspose_and_notes(plan, candidate_output)
             .map(|_| ())
     }
 
     pub fn validate_with_evaluation_sheet_and_notes(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<Vec<String>> {
+        self.validate_sanitized_aspose_and_notes(plan, candidate_output)
+    }
+
+    /// Keep Aspose's equivalent default-style comparison, but require exactly
+    /// the business sheets produced by the plan. Never discard a sheet by name.
+    pub fn validate_sanitized_aspose(
+        &self,
+        plan: &ExcelEditPlan,
+        candidate_output: &Path,
+    ) -> Result<()> {
+        self.validate_sanitized_aspose_and_notes(plan, candidate_output)
+            .map(|_| ())
+    }
+
+    pub fn validate_sanitized_aspose_and_notes(
         &self,
         plan: &ExcelEditPlan,
         candidate_output: &Path,
@@ -1003,32 +1191,12 @@ impl OpenpyxlXlsxValidator {
         plan: &ExcelEditPlan,
         candidate_output: &Path,
         adjust_print_areas_for_row_deletions: bool,
-        allow_evaluation: bool,
+        aspose_defaults: bool,
     ) -> Result<Vec<String>> {
         let source =
             read_workbook(&plan.input).context("read source workbook for openpyxl validation")?;
-        let mut output = read_workbook(candidate_output)
+        let output = read_workbook(candidate_output)
             .context("reopen openpyxl candidate with Calamine/OOXML reader")?;
-        if allow_evaluation {
-            anyhow::ensure!(
-                !source.sheets.iter().any(|s| s.name == "Evaluation Warning"),
-                "Source contains an ambiguous evaluation-like business sheet"
-            );
-            anyhow::ensure!(
-                output
-                    .sheets
-                    .iter()
-                    .filter(|s| s.name == "Evaluation Warning")
-                    .count()
-                    == 1
-                    && output
-                        .sheets
-                        .last()
-                        .is_some_and(|s| s.name == "Evaluation Warning"),
-                "Expected exactly one appended evaluation sheet"
-            );
-            output.sheets.pop(); // In-memory comparison only; never saved.
-        }
         let profile = crate::inspect_xlsx_profile(candidate_output)?;
         anyhow::ensure!(
             profile.inventory_complete,
@@ -1107,7 +1275,7 @@ impl OpenpyxlXlsxValidator {
             candidate_output,
             plan,
             adjust_print_areas_for_row_deletions,
-            allow_evaluation,
+            aspose_defaults,
         )?;
         validate_requested_sheet_layout(plan, candidate_output)?;
         Ok(notes)
@@ -1623,7 +1791,7 @@ fn validate_preserved_ooxml_metadata_internal(
     output_path: &Path,
     plan: &ExcelEditPlan,
     adjust_print_areas_for_row_deletions: bool,
-    allow_evaluation: bool,
+    aspose_defaults: bool,
 ) -> Result<()> {
     let checked = [
         PreservationRequirement::DefinedNames,
@@ -1654,7 +1822,7 @@ fn validate_preserved_ooxml_metadata_internal(
         )
     })?;
 
-    if allow_evaluation {
+    if aspose_defaults {
         normalize_evaluation_save_defaults(input_path, &mut source)?;
         normalize_evaluation_save_defaults(output_path, &mut output)?;
         // Equal explicit defaults are safe to ignore only when the worksheet
@@ -2929,7 +3097,22 @@ fn validate_sheet_names(
     output: &[SheetDump],
     operations: &[EditOperation],
 ) -> Result<()> {
-    let mut expected: Vec<String> = source.iter().map(|sheet| sheet.name.clone()).collect();
+    let expected = expected_sheet_names_after_edit(
+        source.iter().map(|sheet| sheet.name.clone()).collect(),
+        operations,
+    )?;
+    let actual: Vec<String> = output.iter().map(|sheet| sheet.name.clone()).collect();
+    anyhow::ensure!(
+        actual == expected,
+        "sheet identity/order mismatch: expected {expected:?}, got {actual:?}"
+    );
+    Ok(())
+}
+
+pub fn expected_sheet_names_after_edit(
+    mut expected: Vec<String>,
+    operations: &[EditOperation],
+) -> Result<Vec<String>> {
     for operation in operations {
         match operation {
             EditOperation::RenameSheet { old_name, new_name } => {
@@ -2969,12 +3152,7 @@ fn validate_sheet_names(
             _ => {}
         }
     }
-    let actual: Vec<String> = output.iter().map(|sheet| sheet.name.clone()).collect();
-    anyhow::ensure!(
-        actual == expected,
-        "sheet identity/order mismatch: expected {expected:?}, got {actual:?}"
-    );
-    Ok(())
+    Ok(expected)
 }
 
 fn validate_requested_operations(
@@ -2987,13 +3165,20 @@ fn validate_requested_operations(
         .iter()
         .map(|sheet| (sheet.name.as_str(), sheet))
         .collect();
+    let names: Vec<_> = by_name.keys().copied().collect();
     for (operation_index, operation) in operations.iter().enumerate() {
         match operation {
             EditOperation::SetCellValue { sheet, cell, value } => {
                 let sheet = by_name
                     .get(sheet.as_str())
                     .with_context(|| format!("output sheet {sheet:?} missing"))?;
-                let actual = sheet.values.get(&normalize_address(cell));
+                let address = normalize_address(cell);
+                anyhow::ensure!(
+                    !sheet.formulas.contains_key(&address),
+                    "expected a literal value at {}!{cell}",
+                    sheet.name
+                );
+                let actual = sheet.values.get(&address);
                 validate_value(value, actual).with_context(|| format!("verify {cell}"))?;
             }
             EditOperation::SetFormulaText {
@@ -3008,7 +3193,8 @@ fn validate_requested_operations(
                         format!("formula {sheet}!{cell} missing after openpyxl edit")
                     })?;
                 anyhow::ensure!(
-                    actual.trim_start_matches('=').trim() == formula.trim_start_matches('=').trim(),
+                    excel_reader::canonicalize_formula_for_same_format(actual, &names)
+                        == excel_reader::canonicalize_formula_for_same_format(formula, &names),
                     "formula mismatch at {sheet}!{cell}: {actual:?}"
                 );
             }
@@ -5118,6 +5304,7 @@ fn validate_preserved_formulas(
     }
     let append_only = is_append_only(plan, source)?;
     let (renamed, deleted) = sheet_name_changes(&plan.operations);
+    let names: Vec<_> = output.iter().map(|sheet| sheet.name.as_str()).collect();
     for old_sheet in source {
         if deleted.contains(&old_sheet.name) {
             continue;
@@ -5166,7 +5353,16 @@ fn validate_preserved_formulas(
                 rewrite_formula_sheet_references(&adjusted, &renamed)
             };
             anyhow::ensure!(
-                new_sheet.formulas.get(&output_address) == Some(&expected_formula),
+                new_sheet
+                    .formulas
+                    .get(&output_address)
+                    .is_some_and(|actual| {
+                        excel_reader::canonicalize_formula_for_same_format(actual, &names)
+                            == excel_reader::canonicalize_formula_for_same_format(
+                                &expected_formula,
+                                &names,
+                            )
+                    }),
                 "unmodified formula changed at {}!{}",
                 old_sheet.name,
                 address
@@ -5753,7 +5949,6 @@ struct WorkerResponse {
     request_id: Option<String>,
     status: String,
     operation_count: Option<usize>,
-    verified_operation_count: Option<usize>,
     input_sha256_before: Option<String>,
     input_sha256_after: Option<String>,
     output_sha256: Option<String>,

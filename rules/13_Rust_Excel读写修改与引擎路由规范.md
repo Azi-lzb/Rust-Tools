@@ -212,7 +212,7 @@ Rust 业务规则、统计和结果判定始终由 Rust 承担。普通读取用
 
 ### 6.2 限定范围的性能证据（报告时间：2026-10-23）
 
-证据来源：[Direct OOXML 与 Rust Excel 引擎独立基准报告](../../excel-engine-benchmarks/20261022-ooxml-vs-rust/REPORT.md)（SHA-256：`D33A786C90D1942FB66DE33E3203A5D9A136414DA89D92A96B6935E04B84A596`）。测试环境为 Ubuntu/WSL2 x86_64、ext4、Release Rust；Rust 1.99.1、calamine 0.37.0、rust_xlsxwriter 0.101.0；Python 3.12.3、python-calamine 0.9.0、openpyxl 3.1.5。有效组合均为通过正确性检查后的至少五次串行测量。证据限定于报告中的 XLSX 输入、实现版本、规模和明确输出契约，不外推到 Windows、麒麟、统信、XLS 或 XLSB。
+证据来源：[Direct OOXML 与 Rust Excel 引擎独立基准报告](F:/RustHistory/Shared/LegacyVibeCode/RustHistory/excel-engine-benchmarks/20261022-ooxml-vs-rust/REPORT.md)（SHA-256：`D33A786C90D1942FB66DE33E3203A5D9A136414DA89D92A96B6935E04B84A596`）。测试环境为 Ubuntu/WSL2 x86_64、ext4、Release Rust；Rust 1.99.1、calamine 0.37.0、rust_xlsxwriter 0.101.0；Python 3.12.3、python-calamine 0.9.0、openpyxl 3.1.5。有效组合均为通过正确性检查后的至少五次串行测量。证据限定于报告中的 XLSX 输入、实现版本、规模和明确输出契约，不外推到 Windows、麒麟、统信、XLS 或 XLSB。
 
 本节性能证据只能按 `(data_owner, 操作/output_kind, input_format/output_format, 输出契约, 平台, 引擎版本)` 匹配。它用于候选评估，不登记为任何业务功能已通过，也不替代真实模板、目标平台或完整调用链验收。
 

@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
+mod filesystem_path;
 mod native_ooxml_backend;
 mod ooxml_header_backend;
 mod openpyxl_backend;
@@ -11,10 +12,12 @@ mod umya_backend;
 mod workbook_profile;
 mod worker_process;
 
+pub use filesystem_path::path_for_external_io;
 pub use native_ooxml_backend::{NativeOoxmlValidator, RustNativeOoxmlBackend};
 pub use ooxml_header_backend::{OoxmlHeaderTextBackend, OoxmlHeaderTextValidator};
 pub use openpyxl_backend::{
-    read_explicit_empty_formula_results, ArrayFormulaResults, OpenpyxlWorkerConfig,
+    expected_sheet_names_after_edit,
+    read_explicit_empty_formula_results, with_openpyxl_worker_reuse, ArrayFormulaResults, OpenpyxlWorkerConfig,
     OpenpyxlXlsxBackend, OpenpyxlXlsxValidator,
 };
 pub use plan::{

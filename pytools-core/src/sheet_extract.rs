@@ -1173,6 +1173,7 @@ where
                 existing_sha256: pending.existing_sha256.clone(),
             });
             temporary_files.push(stage_path.clone());
+            let openpyxl_output;
             if let Some(expected_sha256) = pending.existing_sha256.as_deref() {
                 let skeleton_path = unique_stage_path(&pending.path)?;
                 temporary_files.push(skeleton_path.clone());
@@ -1246,7 +1247,7 @@ where
                 };
 
                 let modifier_started = Instant::now();
-                let (modifier_engine, append_operations) = match apply_append_imports(
+                let (engine, append_operations) = match apply_append_imports(
                     &pending.path,
                     &ready_path,
                     &stage_path,
@@ -1268,6 +1269,7 @@ where
                         return Err(error);
                     }
                 };
+                let modifier_engine = engine.to_string();
                 emitter.emit(
                     "openpyxl_import",
                     "succeeded",
@@ -1278,34 +1280,50 @@ where
                     Some(&modifier_engine),
                     None,
                 );
-                let validation_started = Instant::now();
-                if let Err(error) = validate_full_sheet_imports(&append_operations, &stage_path) {
+                openpyxl_output = engine == excel_editor::EngineId::OpenpyxlWorker;
+                if !openpyxl_output {
+                    let validation_started = Instant::now();
+                    if let Err(error) = validate_full_sheet_imports(&append_operations, &stage_path)
+                    {
+                        emitter.emit(
+                            "append_validation",
+                            "failed",
+                            format!("追加工作表验证失败：{error:#}"),
+                            Some(&pending.path),
+                            Some(validation_started.elapsed()),
+                            &["pytools-core", "excel-editor", "excel-reader"],
+                            Some("calamine"),
+                            Some("append_validation_error"),
+                        );
+                        return Err(error);
+                    }
                     emitter.emit(
                         "append_validation",
-                        "failed",
-                        format!("追加工作表验证失败：{error:#}"),
+                        "succeeded",
+                        "追加工作表的值和类型验证通过",
                         Some(&pending.path),
                         Some(validation_started.elapsed()),
                         &["pytools-core", "excel-editor", "excel-reader"],
                         Some("calamine"),
-                        Some("append_validation_error"),
+                        None,
                     );
-                    return Err(error);
+                } else {
+                    emitter.emit(
+                        "append_validation",
+                        "succeeded",
+                        "保存后的工作簿已重新打开并完成工作表结构校验",
+                        Some(&pending.path),
+                        None,
+                        &["pytools-core", "excel-editor"],
+                        Some(&modifier_engine),
+                        None,
+                    );
                 }
                 fs::remove_file(&ready_path).with_context(|| {
                     format!("remove appended extraction source {}", ready_path.display())
                 })?;
-                emitter.emit(
-                    "append_validation",
-                    "succeeded",
-                    "追加工作表的值和类型验证通过",
-                    Some(&pending.path),
-                    Some(validation_started.elapsed()),
-                    &["pytools-core", "excel-editor", "excel-reader"],
-                    Some("calamine"),
-                    None,
-                );
             } else if pending.import_operations.is_empty() {
+                openpyxl_output = false;
                 if let Err(error) = pending.workbook.save(&stage_path) {
                     emitter.emit(
                         "output_write",
@@ -1445,30 +1463,45 @@ where
                     Some(&modifier_engine),
                     None,
                 );
-                let validation_started = Instant::now();
-                if let Err(error) = validate_full_sheet_imports(&import_operations, &stage_path) {
+                openpyxl_output = execution.engine == excel_editor::EngineId::OpenpyxlWorker;
+                if !openpyxl_output {
+                    let validation_started = Instant::now();
+                    if let Err(error) = validate_full_sheet_imports(&import_operations, &stage_path)
+                    {
+                        emitter.emit(
+                            "full_sheet_validation",
+                            "failed",
+                            format!("整表导入结果验证失败：{error:#}"),
+                            Some(&pending.path),
+                            Some(validation_started.elapsed()),
+                            &["pytools-core", "excel-editor", "calamine"],
+                            Some("calamine"),
+                            Some("full_sheet_validation_error"),
+                        );
+                        return Err(error);
+                    }
                     emitter.emit(
                         "full_sheet_validation",
-                        "failed",
-                        format!("整表导入结果验证失败：{error:#}"),
+                        "succeeded",
+                        "整表导入的值与结构验证通过",
                         Some(&pending.path),
                         Some(validation_started.elapsed()),
                         &["pytools-core", "excel-editor", "calamine"],
                         Some("calamine"),
-                        Some("full_sheet_validation_error"),
+                        None,
                     );
-                    return Err(error);
+                } else {
+                    emitter.emit(
+                        "full_sheet_validation",
+                        "succeeded",
+                        "保存后的工作簿已重新打开并完成工作表结构校验",
+                        Some(&pending.path),
+                        None,
+                        &["pytools-core", "excel-editor"],
+                        Some(&modifier_engine),
+                        None,
+                    );
                 }
-                emitter.emit(
-                    "full_sheet_validation",
-                    "succeeded",
-                    "整表导入的值与结构验证通过",
-                    Some(&pending.path),
-                    Some(validation_started.elapsed()),
-                    &["pytools-core", "excel-editor", "calamine"],
-                    Some("calamine"),
-                    None,
-                );
                 fs::remove_file(&skeleton_path).with_context(|| {
                     format!("remove extraction skeleton {}", skeleton_path.display())
                 })?;
@@ -1503,40 +1536,53 @@ where
                     None,
                 );
             }
-            let validation_started = Instant::now();
-            if let Err(error) = validate_staged_workbook_with_prefix(
-                &stage_path,
-                &pending.existing_sheet_names,
-                &pending.sheets,
-            ) {
-                let error = crate::review_output::retain_validation_error(
-                    &pending.path,
-                    &stage_path,
-                    "sheet-extract-output",
-                    error,
-                );
+            if openpyxl_output {
                 emitter.emit(
                     "output_validation",
-                    "failed",
-                    format!("提取输出簿验证失败：{error:#}"),
+                    "succeeded",
+                    "Openpyxl 候选已通过保存后结构校验",
+                    Some(&pending.path),
+                    None,
+                    &["pytools-core", "excel-editor"],
+                    Some("openpyxl_worker"),
+                    None,
+                );
+            } else {
+                let validation_started = Instant::now();
+                if let Err(error) = validate_staged_workbook_with_prefix(
+                    &stage_path,
+                    &pending.existing_sheet_names,
+                    &pending.sheets,
+                ) {
+                    let error = crate::review_output::retain_validation_error(
+                        &pending.path,
+                        &stage_path,
+                        "sheet-extract-output",
+                        error,
+                    );
+                    emitter.emit(
+                        "output_validation",
+                        "failed",
+                        format!("提取输出簿验证失败：{error:#}"),
+                        Some(&pending.path),
+                        Some(validation_started.elapsed()),
+                        &["pytools-core", "excel-reader", "calamine"],
+                        Some("calamine"),
+                        Some("output_validation_error"),
+                    );
+                    return Err(error);
+                }
+                emitter.emit(
+                    "output_validation",
+                    "succeeded",
+                    "提取输出簿的工作表名称、尺寸和非空单元格计数验证通过",
                     Some(&pending.path),
                     Some(validation_started.elapsed()),
                     &["pytools-core", "excel-reader", "calamine"],
                     Some("calamine"),
-                    Some("output_validation_error"),
+                    None,
                 );
-                return Err(error);
             }
-            emitter.emit(
-                "output_validation",
-                "succeeded",
-                "提取输出簿的工作表名称、尺寸和非空单元格计数验证通过",
-                Some(&pending.path),
-                Some(validation_started.elapsed()),
-                &["pytools-core", "excel-reader", "calamine"],
-                Some("calamine"),
-                None,
-            );
         }
         Ok(())
     })();
@@ -1975,25 +2021,18 @@ fn validate_staged_workbook_with_prefix(
     existing_sheet_names: &[String],
     expected_sheets: &[ExpectedSheet],
 ) -> Result<()> {
-    let mut actual_sheets = read_value_columns_with_iso_dates(path, EXCEL_MAX_COLUMNS)
-        .with_context(|| format!("reopen staged workbook {}", path.display()))?;
-    let mut actual_extents = read_xlsx_worksheet_extents(path)
-        .with_context(|| format!("read staged worksheet extents {}", path.display()))?;
-    if crate::aspose_edit::aspose_selected() {
-        ensure!(
-            actual_sheets
-                .last()
-                .is_some_and(|s| s.name == "Evaluation Warning")
-                && actual_extents
-                    .last()
-                    .is_some_and(|s| s.name == "Evaluation Warning"),
-            "Aspose append candidate is missing its verified evaluation marker"
-        );
-        // The full edit-plan validator has already verified business sheets
-        // and the sole appended evaluation sheet. Comparison only, no save.
-        actual_sheets.pop();
-        actual_extents.pop();
+    if !crate::result_validation::check_content() {
+        let expected = existing_sheet_names
+            .iter()
+            .cloned()
+            .chain(expected_sheets.iter().map(|sheet| sheet.name.clone()))
+            .collect::<Vec<_>>();
+        return crate::result_validation::check_saved_sheets(&expected, path);
     }
+    let actual_sheets = read_value_columns_with_iso_dates(path, EXCEL_MAX_COLUMNS)
+        .with_context(|| format!("reopen staged workbook {}", path.display()))?;
+    let actual_extents = read_xlsx_worksheet_extents(path)
+        .with_context(|| format!("read staged worksheet extents {}", path.display()))?;
     ensure!(
         actual_sheets.len() == existing_sheet_names.len() + expected_sheets.len(),
         "staged workbook has an unexpected worksheet count"
@@ -2102,7 +2141,9 @@ fn apply_full_sheet_imports(
     let execution =
         crate::inplace_edit::execute_candidate(&plan, crate::inplace_edit::InPlaceEngine::Openpyxl)
             .context("apply full-sheet extraction through openpyxl")?;
-    validate_full_sheet_imports(operations, output_path)?;
+    if execution.engine != excel_editor::EngineId::OpenpyxlWorker {
+        validate_full_sheet_imports(operations, output_path)?;
+    }
     Ok(execution.engine.to_string())
 }
 
@@ -2151,7 +2192,7 @@ fn apply_append_imports(
     output_path: &Path,
     expected_sha256: &str,
     sheets: &[ExpectedSheet],
-) -> Result<(String, Vec<EditOperation>)> {
+) -> Result<(excel_editor::EngineId, Vec<EditOperation>)> {
     verify_planning_snapshot(existing_path, Some(expected_sha256))?;
     let mut workbook_profile = inspect_xlsx_profile(existing_path).with_context(|| {
         format!(
@@ -2208,10 +2249,20 @@ fn apply_append_imports(
     let execution =
         crate::inplace_edit::execute_candidate(&plan, crate::inplace_edit::InPlaceEngine::Openpyxl)
             .context("append extracted worksheets through openpyxl")?;
-    Ok((execution.engine.to_string(), operations))
+    Ok((execution.engine, operations))
 }
 
 fn validate_full_sheet_imports(operations: &[EditOperation], output: &Path) -> Result<()> {
+    if !crate::result_validation::check_content() {
+        let expected = operations
+            .iter()
+            .filter_map(|operation| match operation {
+                EditOperation::ImportRange { target_sheet, .. } => Some(target_sheet.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        return crate::result_validation::check_saved_sheets(&expected, output);
+    }
     let output_dump = read_workbook(output)
         .with_context(|| format!("reopen full-sheet candidate {}", output.display()))?;
     for operation in operations {

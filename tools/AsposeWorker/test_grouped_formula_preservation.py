@@ -51,7 +51,8 @@ def main():
                 assert all(hashlib.sha256(p.read_bytes()).hexdigest() == digest for p, digest in hashes.items())
                 if allowed:
                     book = openpyxl.load_workbook(candidate, data_only=False)
-                    assert book.sheetnames[-1] == "Evaluation Warning"
+                    assert "Evaluation Warning" not in book.sheetnames
+                    assert response["output_sanitation"]["validated"]
                     if kind == "shared":
                         assert book["Keep"]["D5"].value == "=B5+C5"
                         assert book["Keep"]["D6"].value == "=B6+C6"

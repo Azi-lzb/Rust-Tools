@@ -23,7 +23,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CRATE="pytools-core"
-VERSION="0.1.0-$(date +%Y%m%d)"
+product_version="$(sed -n '/^\[package\][[:space:]]*$/,/^\[/s/^version[[:space:]]*=[[:space:]]*"\([0-9][0-9.]*\)".*$/\1/p' "$WORKSPACE/$CRATE/Cargo.toml")"
+[[ "$product_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "Unable to read product version from $CRATE/Cargo.toml" >&2; exit 1;
+}
+VERSION="$product_version-$(date +%Y%m%d)"
 TARGET="x86_64-unknown-linux-gnu.2.28"
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-}"
 
@@ -102,9 +106,9 @@ if [[ -n "${ASPOSE_WORKERS_SOURCE:-}" ]]; then
     aspose_depends=", libstdc++6, libgcc-s1 | libgcc1, zlib1g, libssl3 | libssl1.1, libicu72 | libicu70 | libicu67 | libicu66 | libicu63 | libicu60 | libicu74 | libicu76 | libicu77 | libicu78"
 fi
 
-# 默认配置：优先项目根的真实 config（与 Windows 包同源）；缺失时用二进制
-# 自带 config-init 生成空白模板。注册为 conffile，升级绝不覆盖用户改动。
-if [[ -f "$WORKSPACE/config.xlsx" ]]; then
+# 默认与 Windows 一样生成配置模板。只有显式传 0 才打包项目根配置。
+# 注册为 conffile 后，配置冲突由 dpkg 提供保留或替换选项。
+if [[ "${PACKAGE_USE_DEFAULT_CONFIG:-1}" == 0 && -f "$WORKSPACE/config.xlsx" ]]; then
     install -m 0644 "$WORKSPACE/config.xlsx" "$APP_ROOT/config/config.xlsx"
     echo "config source: project root config.xlsx"
 else
@@ -154,7 +158,8 @@ echo "== building deb =="
 mkdir -p "$OUT_DIR"
 deb="$OUT_DIR/rusttools_${VERSION}_amd64.deb"
 [[ ! -e "$deb" ]] || { echo "Refusing to overwrite existing DEB: $deb" >&2; exit 1; }
-dpkg-deb --build --root-owner-group "$STAGING" "$deb"
+# Older dpkg versions on glibc 2.28 systems cannot unpack zstd-compressed DEBs.
+dpkg-deb --build -Zxz -z3 --root-owner-group "$STAGING" "$deb"
 
 echo "== verifying package =="
 dpkg-deb --info "$deb"

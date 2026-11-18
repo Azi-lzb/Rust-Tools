@@ -7,10 +7,10 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use excel_reader::{
     read_defined_names, read_value_columns_with_iso_dates, read_workbook,
-    read_workbook_with_unknown_error_tokens_as_text, read_xlsx_effective_cell_number_formats,
-    read_xlsx_worksheet_extents, CellNumberFormatRequest, CellNumberFormatSource, CellValue,
-    DefinedNameParseStatus, DefinedNameRecord, EffectiveCellNumberFormatInfo, SheetDump,
-    WorkbookDump, WorksheetExtent,
+    read_workbook_with_unknown_error_tokens_as_text, read_xls_worksheet_extents,
+    read_xlsx_effective_cell_number_formats, read_xlsx_worksheet_extents, CellNumberFormatRequest,
+    CellNumberFormatSource, CellValue, DefinedNameParseStatus, DefinedNameRecord,
+    EffectiveCellNumberFormatInfo, SheetDump, WorkbookDump, WorksheetExtent,
 };
 use excel_writer::{Format, Workbook, Worksheet};
 use serde::Serialize;
@@ -158,9 +158,9 @@ fn run_pending_validation_calculations(
     let mut refusals: BTreeMap<usize, String> = BTreeMap::new();
     let batch_elapsed;
     if bo_config.enabled {
-        let copies: Vec<PathBuf> = pending
+        let copies: Vec<_> = pending
             .iter()
-            .map(|item| item.source_copy.clone())
+            .map(|item| (item.source_copy.clone(), item.regions.clone()))
             .collect();
         let started = Instant::now();
         progress.current_input_index = None;
@@ -217,13 +217,21 @@ fn run_pending_validation_calculations(
             None,
         );
         let calculation = match successes.get(&index) {
-            Some(outcome) => ConversionRuntime::calculation_from_batch_success(
+            Some(outcome) => match ConversionRuntime::calculation_from_batch_success(
                 &item.source_copy,
                 &item.regions,
                 &item.prepared,
                 outcome,
-            )
-            .with_context(|| format!("读取「{file_name}」的 betteroffice 批量重算结果")),
+            ) {
+                Err(error) if bo_config.fallback_available() => runtime.compute_prepared_copy(
+                    &item.source_copy,
+                    &item.regions,
+                    &item.prepared,
+                    Some(format!("betteroffice 回读（{error:#}）")),
+                ),
+                result => result
+                    .with_context(|| format!("读取「{file_name}」的 betteroffice 批量重算结果")),
+            },
             None => {
                 let forced = refusals
                     .get(&index)
@@ -275,6 +283,21 @@ fn run_pending_validation_calculations(
             .cells
             .iter()
             .filter_map(|cell| {
+                if let Some(issue) = cell.calculation_issue {
+                    return Some((
+                        cell,
+                        NamedValidationOutputRow {
+                            workbook: workbook_name.clone(),
+                            worksheet: cell.sheet.clone(),
+                            route: String::new(),
+                            template: String::new(),
+                            address: cell.address.clone(),
+                            error_type: issue.to_owned(),
+                            texts: [cell.value.clone(), String::new(), String::new()],
+                            numbers: Default::default(),
+                        },
+                    ));
+                }
                 parse_named_validation_result(
                     &workbook_name,
                     &cell.sheet,
@@ -508,6 +531,12 @@ fn summarize_used_ranges_inner(
             .unwrap_or_default();
         progress.current_file = Some(current_file);
         let stage_started = Instant::now();
+        let legacy_xls = is_legacy_xls(path);
+        let extent_engine = if legacy_xls {
+            "calamine"
+        } else {
+            "excel-reader::read_xlsx_worksheet_extents"
+        };
         emitter.emit(
             "extent_scan",
             "started",
@@ -519,11 +548,16 @@ fn summarize_used_ranges_inner(
             Some(path),
             None,
             &["pytools-core", "excel-reader"],
-            Some("excel-reader::read_xlsx_worksheet_extents"),
+            Some(extent_engine),
             None,
         );
         let read_started = Instant::now();
-        let extents = match read_xlsx_worksheet_extents(path) {
+        let extents = if legacy_xls {
+            read_xls_worksheet_extents(path)
+        } else {
+            read_xlsx_worksheet_extents(path)
+        };
+        let extents = match extents {
             Ok(extents) => extents,
             Err(error) => {
                 progress.failed_files += 1;
@@ -538,7 +572,7 @@ fn summarize_used_ranges_inner(
                     Some(path),
                     Some(stage_started.elapsed()),
                     &["pytools-core", "excel-reader"],
-                    Some("excel-reader::read_xlsx_worksheet_extents"),
+                    Some(extent_engine),
                     Some("extent_scan_error"),
                 );
                 return Err(error).with_context(|| {
@@ -563,7 +597,7 @@ fn summarize_used_ranges_inner(
             Some(path),
             Some(stage_started.elapsed()),
             &["pytools-core", "excel-reader"],
-            Some("excel-reader::read_xlsx_worksheet_extents"),
+            Some(extent_engine),
             None,
         );
         files += 1;
@@ -692,34 +726,37 @@ fn summarize_used_ranges_inner(
         let normalized_cell_count = read_result.normalized_cell_count;
         let mut dump = read_result.workbook;
         let compatibility_started = Instant::now();
-        let dates_normalized =
-            match normalize_unknown_datetime_formats_for_openpyxl(&path, &mut dump) {
-                Ok(normalized) => normalized,
-                Err(error) => {
-                    progress.failed_files += 1;
-                    emitter.emit(
-                        "value_type_compatibility",
-                        "failed",
-                        "无法按 PyCode 数值语义解释日期样式单元格",
-                        &progress,
-                        Some(&path),
-                        Some(compatibility_started.elapsed()),
-                        &[
-                            "pytools-core",
-                            "calamine",
-                            "namespace-aware OOXML number-format supplement",
-                        ],
-                        Some("Calamine + OOXML number-format compatibility"),
-                        Some("number_format_compatibility_error"),
-                    );
-                    return Err(error).with_context(|| {
-                        format!(
-                            "normalize used-range dates to PyCode/OpenPyXL value semantics for {}",
-                            path.display()
-                        )
-                    });
-                }
-            };
+        let dates_normalized = match if is_legacy_xls(&path) {
+            Ok(0)
+        } else {
+            normalize_unknown_datetime_formats_for_openpyxl(&path, &mut dump)
+        } {
+            Ok(normalized) => normalized,
+            Err(error) => {
+                progress.failed_files += 1;
+                emitter.emit(
+                    "value_type_compatibility",
+                    "failed",
+                    "无法按 PyCode 数值语义解释日期样式单元格",
+                    &progress,
+                    Some(&path),
+                    Some(compatibility_started.elapsed()),
+                    &[
+                        "pytools-core",
+                        "calamine",
+                        "namespace-aware OOXML number-format supplement",
+                    ],
+                    Some("Calamine + OOXML number-format compatibility"),
+                    Some("number_format_compatibility_error"),
+                );
+                return Err(error).with_context(|| {
+                    format!(
+                        "normalize used-range dates to PyCode/OpenPyXL value semantics for {}",
+                        path.display()
+                    )
+                });
+            }
+        };
         let compatibility_elapsed = compatibility_started.elapsed();
         read_elapsed_during_write += compatibility_elapsed;
         if dates_normalized > 0 {
@@ -1616,6 +1653,14 @@ fn summarize_by_comments_inner(
         let current_file = files_hit + progress.failed_files + 1;
         progress.current_file = Some(current_file);
         let source_read_started = Instant::now();
+        let (source_components, source_engine) = if is_legacy_xls(source) {
+            (USED_RANGE_READ_COMPONENTS, "calamine")
+        } else {
+            (
+                COMMENT_READ_COMPONENTS,
+                "calamine + namespace-aware OOXML supplement",
+            )
+        };
         emitter.emit(
             "source_read",
             "started",
@@ -1627,8 +1672,8 @@ fn summarize_by_comments_inner(
             &progress,
             Some(source),
             None,
-            COMMENT_READ_COMPONENTS,
-            Some("calamine + namespace-aware OOXML supplement"),
+            source_components,
+            Some(source_engine),
             None,
         );
         let read_started = Instant::now();
@@ -1647,8 +1692,8 @@ fn summarize_by_comments_inner(
                     &progress,
                     Some(source),
                     Some(source_read_started.elapsed()),
-                    COMMENT_READ_COMPONENTS,
-                    Some("calamine + namespace-aware OOXML supplement"),
+                    source_components,
+                    Some(source_engine),
                     Some("source_read_error"),
                 );
                 return Err(error)
@@ -1680,10 +1725,7 @@ fn summarize_by_comments_inner(
                 "calamine + OOXML error-token normalization",
             )
         } else {
-            (
-                COMMENT_READ_COMPONENTS,
-                "calamine + namespace-aware OOXML supplement",
-            )
+            (source_components, source_engine)
         };
         files_hit += 1;
         progress.processed_files = files_hit;
@@ -2145,7 +2187,7 @@ fn extract_named_validation_regions_inner(
         total_inputs: sources.len(),
         total_files: sources
             .iter()
-            .filter(|path| named_range_source_supported(path) && path.is_file())
+            .filter(|path| named_validation_source_supported(path) && path.is_file())
             .count(),
         ..SummaryProgress::default()
     };
@@ -2355,21 +2397,28 @@ fn extract_named_validation_regions_inner(
     for (input_index, source) in sources.iter().enumerate() {
         progress.current_input_index = Some(input_index + 1);
         progress.current_sheet = None;
-        if !named_range_source_supported(source) || !source.is_file() {
+        if !named_validation_source_supported(source) || !source.is_file() {
             let file_name = source
                 .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            let reason = if named_range_source_supported(source) {
+            let reason = if named_validation_source_supported(source) {
                 "输入文件不存在".to_owned()
+            } else if cfg!(target_os = "linux") && is_legacy_xls(source) {
+                "Linux 1-5 校验需要 XLSX/XLSM；请先用 4-4 的 Aspose .NET 将 XLS 转成 XLSX"
+                    .to_owned()
             } else {
                 let ext = source
                     .extension()
                     .and_then(|ext| ext.to_str())
                     .map(|ext| format!(".{ext}"))
                     .unwrap_or_else(|| "（无扩展名）".to_owned());
-                format!("输入格式 {ext} 不受支持；本功能支持 .xls、.xlsx、.xlsm")
+                if cfg!(target_os = "linux") {
+                    format!("输入格式 {ext} 不受支持；本功能支持 .xlsx、.xlsm")
+                } else {
+                    format!("输入格式 {ext} 不受支持；本功能支持 .xls、.xlsx、.xlsm")
+                }
             };
             skipped_sources.push(NamedRangeSourceSkip {
                 file_name: file_name.clone(),
@@ -2994,17 +3043,17 @@ fn extract_named_validation_regions_inner(
         return Err(error).with_context(|| format!("保存校验结果候选文件 {}", candidate.display()));
     }
     let publish = (|| -> Result<()> {
-        validate_named_validation_output(&candidate, &output_rows)?;
+        crate::result_validation::check_saved_sheets(&["校验结果".to_owned()], &candidate)?;
         crate::file_commit::create_target_from_candidate(&candidate, &output_path)
             .context("发布校验结果工作簿失败")?;
         Ok(())
     })();
     if let Err(error) = publish {
-        let _ = fs::remove_file(&candidate);
+        let error = error.context(format!("已保存候选保留在 {}", candidate.display()));
         emitter.emit(
             "output_save",
             "failed",
-            format!("校验结果候选校验或发布失败：{}", error.root_cause()),
+            format!("校验结果候选校验或发布失败：{error:#}"),
             &progress,
             Some(&output_path),
             Some(write_started.elapsed()),
@@ -3065,69 +3114,6 @@ fn extract_named_validation_regions_inner(
         None,
     );
     Ok(result)
-}
-
-fn validate_named_validation_output(
-    candidate: &Path,
-    rows: &[NamedValidationOutputRow],
-) -> Result<()> {
-    let saved = read_workbook(candidate).context("重新读取校验结果候选工作簿失败")?;
-    anyhow::ensure!(
-        saved.sheets.len() == 1 && saved.sheets[0].name == "校验结果",
-        "校验结果候选工作表结构不一致"
-    );
-    let sheet = &saved.sheets[0];
-    let headers = [
-        "工作簿名",
-        "工作表名",
-        "路由方式",
-        "使用的模板",
-        "定位单元格",
-        "错误类型",
-        "文本1",
-        "文本2",
-        "文本3",
-        "数字1",
-        "数字2",
-        "数字3",
-    ];
-    for (column, header) in headers.iter().enumerate() {
-        let address = format!("{}1", column_letters(column + 1));
-        anyhow::ensure!(
-            named_summary_value_matches(
-                &serde_json::Value::String((*header).to_owned()),
-                sheet.values.get(&address)
-            ),
-            "校验结果候选表头 {address} 回读不一致"
-        );
-    }
-    for (row_index, row) in rows.iter().enumerate() {
-        let values = [
-            &row.workbook,
-            &row.worksheet,
-            &row.route,
-            &row.template,
-            &row.address,
-            &row.error_type,
-            &row.texts[0],
-            &row.texts[1],
-            &row.texts[2],
-            &row.numbers[0],
-            &row.numbers[1],
-            &row.numbers[2],
-        ];
-        for (column, expected) in values.into_iter().enumerate() {
-            let address = format!("{}{}", column_letters(column + 1), row_index + 2);
-            anyhow::ensure!(
-                named_summary_value_matches(
-                    &serde_json::Value::String(expected.clone()),
-                    sheet.values.get(&address)
-                ),
-                "校验结果候选单元格 {address} 回读不一致"
-            );
-        }
-    }
-    Ok(())
 }
 
 fn summarize_by_named_ranges_inner(
@@ -5561,9 +5547,12 @@ fn named_region_cell_has_data(value: &serde_json::Value) -> bool {
 }
 
 fn supported(path: &Path) -> bool {
+    is_xlsx_or_xlsm(path) || (cfg!(windows) && is_legacy_xls(path))
+}
+
+fn is_legacy_xls(path: &Path) -> bool {
     path.extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|s| matches!(s.to_ascii_lowercase().as_str(), "xlsx" | "xlsm"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"))
 }
 
 fn named_range_source_supported(path: &Path) -> bool {
@@ -5575,6 +5564,10 @@ fn named_range_source_supported(path: &Path) -> bool {
                 "xls" | "xlsx" | "xlsm"
             )
         })
+}
+
+fn named_validation_source_supported(path: &Path) -> bool {
+    named_range_source_supported(path) && !(cfg!(target_os = "linux") && is_legacy_xls(path))
 }
 fn is_xlsx_or_xlsm(path: &Path) -> bool {
     path.extension()

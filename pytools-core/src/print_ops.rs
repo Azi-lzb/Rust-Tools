@@ -7,7 +7,10 @@ use excel_editor::{
     inspect_xlsx_profile, EditOperation, ExcelEditPlan, PageOrientation, PageSettings,
     PreservationRequirement, RangeStyleMode, WorkbookFormat,
 };
-use excel_reader::{read_workbook, uses_1904_date_system, SheetDump, WorkbookDump};
+use excel_reader::{
+    read_workbook, read_xls_worksheet_extents, uses_1904_date_system, SheetDump, WorkbookDump,
+    WorksheetExtent,
+};
 use rust_xlsxwriter::{Format, Workbook, Worksheet};
 use serde::Serialize;
 use std::{
@@ -74,11 +77,36 @@ struct StaticPrintMerge {
     /// 锚点单元格样式（若源单元格带样式）。
     format: Option<rust_xlsxwriter::Format>,
     error: Option<String>,
+    display_length: usize,
 }
 
 static NEXT_STATIC_PRINT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+pub(crate) const PRINT_AUTO_MIN_WIDTH: usize = 13;
+pub(crate) const PRINT_AUTO_MAX_WIDTH: usize = 60;
+pub(crate) const PRINT_AUTO_WIDTH_PADDING: usize = 3;
+pub(crate) const PRINT_DATE_DISPLAY_LENGTH: usize = 19;
+pub(crate) const PRINT_WIDE_ASCII: &str = "MWmw@%";
 
-/// Check mode 1-3 config tasks. This menu's precheck (3-4) never renders pages
+pub(crate) fn is_xls_print_source(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xls"))
+}
+
+pub(crate) fn xls_print_limitations(task: &PrintTask) -> String {
+    let dimensions = match task.mode {
+        1 => "、行高和列宽",
+        2 => "和列宽",
+        _ => "",
+    };
+    let comments = if task.mode != 3 && !task.drop_comments {
+        "；无法读取 XLS 批注，输出不保留批注"
+    } else {
+        ""
+    };
+    format!("无法完整读取 XLS 单元格格式{dimensions}，输出使用可识别的值类型及默认格式，列宽按可见内容估算{comments}")
+}
+
+/// Check mode 1-3 config tasks. This menu's precheck (3-3) never renders pages
 /// and never exports a PDF.
 pub fn precheck_print_tasks(tasks: &[PrintTask]) -> PrintPrecheck {
     let mut report = PrintPrecheck::default();
@@ -103,8 +131,9 @@ pub fn precheck_print_tasks(tasks: &[PrintTask]) -> PrintPrecheck {
                 source.display()
             ));
         }
-        if !is_xlsx(source) {
-            errors.push("Rust print edit candidate currently accepts .xlsx only".into());
+        let xls_source = is_xls_print_source(source);
+        if !is_xlsx(source) && !xls_source {
+            errors.push("print source must be .xls or .xlsx".into());
         }
         if task.source_ws.trim().is_empty() {
             errors.push("source worksheet is empty".into());
@@ -132,8 +161,14 @@ pub fn precheck_print_tasks(tasks: &[PrintTask]) -> PrintPrecheck {
                 Err(_) => {}
             }
         }
-        if !task.source_ranges.trim().is_empty() && parse_ranges(&task.source_ranges).is_err() {
-            errors.push("source range syntax is invalid".into());
+        if !task.source_ranges.trim().is_empty() {
+            if xls_source {
+                if let Err(error) = parse_xls_print_ranges(&task.source_ranges) {
+                    errors.push(error.to_string());
+                }
+            } else if parse_ranges(&task.source_ranges).is_err() {
+                errors.push("source range syntax is invalid".into());
+            }
         }
         if task.fit_wide <= 0 || task.fit_tall < 0 {
             report.warnings += 1;
@@ -161,20 +196,46 @@ pub fn precheck_print_tasks(tasks: &[PrintTask]) -> PrintPrecheck {
             continue;
         }
         match read_workbook(source) {
-            Ok(workbook)
-                if workbook
+            Ok(workbook) => {
+                let Some(sheet) = workbook
                     .sheets
                     .iter()
-                    .any(|sheet| sheet.name == task.source_ws) =>
-            {
-                report.ok += 1
-            }
-            Ok(_) => {
-                report.failed += 1;
-                report.issues.push(format!(
-                    "row {}: source worksheet {:?} not found",
-                    task.row_no, task.source_ws
-                ));
+                    .find(|sheet| sheet.name == task.source_ws)
+                else {
+                    report.failed += 1;
+                    report.issues.push(format!(
+                        "row {}: source worksheet {:?} not found",
+                        task.row_no, task.source_ws
+                    ));
+                    continue;
+                };
+                if xls_source && task.source_ranges.trim().is_empty() {
+                    match read_xls_worksheet_extents(source) {
+                        Ok(extents) if xls_print_bounds(sheet, &extents).is_some() => {}
+                        result => {
+                            report.failed += 1;
+                            let message = match result {
+                                Ok(_) => "XLS 默认打印区域为空".to_owned(),
+                                Err(error) => format!("无法读取 XLS 默认打印区域：{error:#}"),
+                            };
+                            report
+                                .issues
+                                .push(format!("第 {} 行：{message}", task.row_no));
+                            continue;
+                        }
+                    }
+                }
+                report.ok += 1;
+                if xls_source {
+                    report.warnings += 1;
+                    report.issues.push(format!(
+                        "第 {} 行：{} / {}：{}",
+                        task.row_no,
+                        source.display(),
+                        task.source_ws,
+                        xls_print_limitations(task)
+                    ));
+                }
             }
             Err(error) => {
                 report.failed += 1;
@@ -464,10 +525,7 @@ pub fn build_config_print_plan(task: &PrintTask) -> Result<PrintPlanReport> {
 /// explicit in ExcelEditPlan.
 pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanReport>> {
     // 空区域任务的样式边界读取缓存（workbook -> SourceStyles）。
-    let mut style_sources = std::collections::HashMap::<
-        PathBuf,
-        std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>,
-    >::new();
+    let mut sources = PrintSources::default();
     let mut grouped = std::collections::BTreeMap::<PathBuf, Vec<&PrintTask>>::new();
     for task in tasks.iter().filter(|task| task.enabled) {
         let target = task
@@ -519,7 +577,6 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
         let first_row = first_task.row_no;
         let output = target.clone();
         let mut operations = Vec::new();
-        let mut target_order = Vec::new();
         let mut seed_renames = Vec::new();
         let mut used_names = initial_sheets.iter().cloned().collect::<BTreeSet<_>>();
         used_names.extend(target_tasks.iter().filter_map(|task| {
@@ -543,187 +600,13 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             });
             seed_renames.push(temp);
         }
-        let mut created = BTreeSet::<String>::new();
-        let mut next_row = BTreeMap::<String, usize>::new();
-        let mut max_columns = BTreeMap::<String, usize>::new();
-        let mut range_count = 0usize;
-        let mut matching_sheets = BTreeSet::<String>::new();
-        let mut final_setup = BTreeMap::<String, PageSettings>::new();
-        for task in target_tasks {
-            let source = task
-                .source_wb
-                .as_ref()
-                .context("print source workbook is empty")?;
-            anyhow::ensure!(
-                source.is_file() && is_xlsx(source),
-                "print source must be an existing .xlsx workbook: {}",
-                source.display()
-            );
-            let source_dump = read_workbook(source)
-                .with_context(|| format!("read print source {}", source.display()))?;
-            let sheet = source_dump
-                .sheets
-                .iter()
-                .find(|sheet| sheet.name == task.source_ws)
-                .with_context(|| {
-                    format!(
-                        "source worksheet {:?} not found in {}",
-                        task.source_ws,
-                        source.display()
-                    )
-                })?;
-            let ranges = if task.source_ranges.trim().is_empty() {
-                // 空区域 = openpyxl 的 used_range（calculate_dimension）语义：
-                // 有值/公式单元格 **和空样式格**（边框/填充/数字格式）都计入
-                // 边界——真实模板里 C1 的 mm-dd-yy 空样式格决定列范围。
-                // 这里把 OOXML cell s 索引的边界并入，与 Openpyxl 引擎一致。
-                let styled_bounds = task.source_wb.as_ref().and_then(|source_workbook| {
-                    let styles = style_sources
-                        .entry(source_workbook.clone())
-                        .or_insert_with(|| {
-                            std::sync::Arc::new(
-                                crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
-                                    .unwrap_or_else(|error| {
-                                        diagnostics.push(
-                                            DiagEvent::new(
-                                                "ooxml",
-                                                DiagStage::ReadSource,
-                                                DiagOutcome::Skipped,
-                                            )
-                                            .with_file(
-                                                source_workbook.to_string_lossy().into_owned(),
-                                            )
-                                            .with_message(format!(
-                                                "样式边界读取失败，输出使用默认格式：{error:#}"
-                                            )),
-                                        );
-                                        crate::ooxml_cell_styles::SourceStyles::default()
-                                    }),
-                            )
-                        })
-                        .clone();
-                    styles
-                        .cell_style_indices(source_workbook, &task.source_ws)
-                        .ok()
-                        .and_then(|indices| {
-                            bounds_from_addresses(indices.keys().map(|address| address.as_str()))
-                        })
-                });
-                union_bounds(used_bounds(sheet), styled_bounds)
-                    .into_iter()
-                    .collect()
-            } else {
-                parse_ranges(&task.source_ranges)?
-            };
-            anyhow::ensure!(
-                !ranges.is_empty(),
-                "print source range is empty on configuration row {}",
-                task.row_no
-            );
-            // Static print consumes the stored data-only view, including blank
-            // or stale caches. It does not require or perform recalculation.
-            let target_sheet = if task.target_ws.trim().is_empty() {
-                task.source_ws.clone()
-            } else {
-                task.target_ws.trim().chars().take(31).collect::<String>()
-            };
-            let replacing_sheet = created.contains(&target_sheet);
-            if !replacing_sheet {
-                operations.push(EditOperation::CreateSheet {
-                    name: target_sheet.clone(),
-                });
-                if !target_order.contains(&target_sheet) {
-                    target_order.push(target_sheet.clone());
-                }
-                created.insert(target_sheet.clone());
-                next_row.insert(target_sheet.clone(), 1);
-                max_columns.insert(target_sheet.clone(), 1);
-            }
-            // Each configuration row replaces the target Sheet; ranges within
-            // that row still stack. Compare the resolved, normalized name.
-            if replacing_sheet {
-                operations.retain(|op| !matches!(op,
-                    EditOperation::ImportRange { target_sheet: sheet, .. } if sheet == &target_sheet));
-                operations.retain(|op| !matches!(op,
-                    EditOperation::SetRowHeight { sheet, .. } | EditOperation::SetColumnWidth { sheet, .. } if sheet == &target_sheet));
-                next_row.insert(target_sheet.clone(), 1);
-                max_columns.insert(target_sheet.clone(), 1);
-            }
-            for (r1, c1, r2, c2) in ranges.iter().copied() {
-                let start_row = *next_row.get(&target_sheet).unwrap_or(&1);
-                let source_range =
-                    format!("{}{}:{}{}", column_letters(c1), r1, column_letters(c2), r2);
-                let style_mode = if task.mode == 3 {
-                    RangeStyleMode::Basic
-                } else {
-                    RangeStyleMode::Full
-                };
-                operations.push(EditOperation::ImportRange {
-                    source_workbook: source.clone(),
-                    source_sheet: task.source_ws.clone(),
-                    source_range,
-                    target_sheet: target_sheet.clone(),
-                    target_start: format!("A{start_row}"),
-                    copy_values: true,
-                    copy_formulas: false,
-                    style_mode,
-                    copy_comments: task.mode != 3 && !task.drop_comments,
-                    copy_merges: true,
-                    copy_row_heights: task.mode == 1,
-                    copy_column_widths: task.mode == 1 || task.mode == 2,
-                    copy_row_hidden: false,
-                    copy_column_hidden: false,
-                    copy_outline_levels: false,
-                    copy_all_row_dimensions: false,
-                    copy_all_column_dimensions: false,
-                    materialize_blank_cells: false,
-                    hide_zero: task.hide_zero,
-                });
-                let rows = r2 - r1 + 1;
-                let columns = c2 - c1 + 1;
-                *next_row.entry(target_sheet.clone()).or_insert(1) = start_row + rows + 1;
-                let width_entry = max_columns.entry(target_sheet.clone()).or_insert(1);
-                *width_entry = (*width_entry).max(columns);
-                range_count += 1;
-            }
-            let orientation =
-                parse_orientation(&task.orientation).unwrap_or(PageOrientation::Portrait);
-            let fit_wide = u16::try_from(task.fit_wide.max(1))
-                .context("FitToPagesWide exceeds XLSX setting range")?;
-            let fit_tall = u16::try_from(task.fit_tall.max(0))
-                .context("FitToPagesTall exceeds XLSX setting range")?;
-            // 打印区域末行对齐 openpyxl 引擎语义（apply_setup(ws, out_row - 1, …)）：
-            // out_row/next_row 在最后一个区域后已 +1（块间空行），打印区域包含
-            // 该尾随空行，即末行 = next_row - 1。此前 Rust 侧多减 1 导致
-            // 打印区域比 Openpyxl 输出少一行（实测 8 场景对拍暴露）。
-            let final_row = next_row
-                .get(&target_sheet)
-                .copied()
-                .unwrap_or(2)
-                .saturating_sub(1)
-                .max(1);
-            let final_cols = max_columns.get(&target_sheet).copied().unwrap_or(1).max(1);
-            final_setup.insert(
-                target_sheet.clone(),
-                PageSettings {
-                    orientation: Some(orientation),
-                    fit_to_page: Some(true),
-                    fit_to_width: Some(fit_wide),
-                    fit_to_height: Some(fit_tall),
-                    clear_scale: true,
-                    paper_size: Some(9),
-                    print_area: Some(format!("A1:{}{}", column_letters(final_cols), final_row)),
-                    horizontal_centered: Some(task.center_h),
-                    vertical_centered: Some(task.center_v),
-                    footer: None,
-                },
-            );
-            matching_sheets.insert(target_sheet);
-        }
-        anyhow::ensure!(
-            !matching_sheets.is_empty(),
-            "print target has no enabled, valid tasks"
-        );
+        let setup = append_config_print_imports(
+            &target_tasks,
+            &mut sources,
+            &mut operations,
+            &mut diagnostics,
+            false,
+        )?;
         let mut seed_drop_allowed = BTreeMap::new();
         for seed in seed_renames {
             // Static print materializes a new workbook, then removes these
@@ -735,15 +618,7 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
             );
             operations.push(EditOperation::DeleteSheet { name: seed });
         }
-        let total = target_order.len();
-        for (index, sheet_name) in target_order.iter().enumerate() {
-            let mut settings = final_setup.remove(sheet_name).unwrap_or_default();
-            settings.footer = Some(format!("&C第 {} 页 / 共 {} 页", index + 1, total));
-            operations.push(EditOperation::SetPageSettings {
-                sheet: sheet_name.clone(),
-                settings,
-            });
-        }
+        operations.extend(setup.page_operations);
         let preserve = BTreeSet::from([
             PreservationRequirement::CellValuesAndTypes,
             PreservationRequirement::FormulaText,
@@ -772,8 +647,8 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
         reports.push(PrintPlanReport {
             input: input.clone(),
             output,
-            matching_sheets: matching_sheets.len(),
-            marked_ranges: range_count,
+            matching_sheets: setup.sheet_count,
+            marked_ranges: setup.range_count,
             plan: Some(plan),
             diagnostics,
         });
@@ -781,10 +656,315 @@ pub fn build_config_print_plans(tasks: &[PrintTask]) -> Result<Vec<PrintPlanRepo
     Ok(reports)
 }
 
+#[derive(Default)]
+struct PrintSources {
+    styles: HashMap<PathBuf, std::sync::Arc<crate::ooxml_cell_styles::SourceStyles>>,
+    xls_extents: HashMap<PathBuf, Vec<WorksheetExtent>>,
+    xls_layouts: HashMap<PathBuf, PathBuf>,
+}
+
+struct ConfigPrintSetup {
+    sheet_count: usize,
+    range_count: usize,
+    page_operations: Vec<EditOperation>,
+}
+
+pub(crate) fn write_xls_static_print_group(
+    target: &Path,
+    tasks: &[&PrintTask],
+) -> Result<StaticPrintExecution> {
+    write_xls_static_print_group_with_layouts(target, tasks, HashMap::new())
+}
+
+/// Layout copies are used only for metadata. Imports still read values,
+/// formulas, date system and merge coordinates from the original workbook.
+pub(crate) fn write_xls_static_print_group_with_layouts(
+    target: &Path,
+    tasks: &[&PrintTask],
+    xls_layouts: HashMap<PathBuf, PathBuf>,
+) -> Result<StaticPrintExecution> {
+    anyhow::ensure!(
+        is_xlsx(target),
+        "含 XLS 源的打印目标必须为 .xlsx：{}",
+        target.display()
+    );
+    let mut operations = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut sources = PrintSources {
+        xls_layouts,
+        ..PrintSources::default()
+    };
+    let setup =
+        append_config_print_imports(tasks, &mut sources, &mut operations, &mut diagnostics, true)?;
+    operations.extend(setup.page_operations);
+    let mut result = write_static_print_operations(target, &operations, &sources.xls_layouts)?;
+    diagnostics.append(&mut result.diagnostics);
+    result.diagnostics = diagnostics;
+    Ok(result)
+}
+
+/// Use the configured static-print semantics for new workbooks. BIFF sources
+/// never become ExcelEditPlan seeds, which are existing OOXML workbooks.
+fn append_config_print_imports(
+    target_tasks: &[&PrintTask],
+    sources: &mut PrintSources,
+    operations: &mut Vec<EditOperation>,
+    diagnostics: &mut Vec<DiagEvent>,
+    allow_xls: bool,
+) -> Result<ConfigPrintSetup> {
+    let mut target_order = Vec::new();
+    let mut created = BTreeSet::<String>::new();
+    let mut next_row = BTreeMap::<String, usize>::new();
+    let mut max_columns = BTreeMap::<String, usize>::new();
+    let mut range_count = 0usize;
+    let mut final_setup = BTreeMap::<String, PageSettings>::new();
+    for task in target_tasks {
+        if allow_xls {
+            anyhow::ensure!(
+                matches!(task.mode, 1 | 2 | 3),
+                "打印配置第 {} 行的 mode 必须为 1、2 或 3",
+                task.row_no
+            );
+        }
+        let source = task
+            .source_wb
+            .as_ref()
+            .context("print source workbook is empty")?;
+        let xls_source = allow_xls && is_xls_print_source(source);
+        let layout_available = !xls_source || sources.xls_layouts.contains_key(source);
+        anyhow::ensure!(
+            source.is_file() && (is_xlsx(source) || xls_source),
+            "print source must be an existing {} workbook: {}",
+            if allow_xls { ".xls or .xlsx" } else { ".xlsx" },
+            source.display()
+        );
+        let source_dump = read_workbook(source)
+            .with_context(|| format!("read print source {}", source.display()))?;
+        let sheet = source_dump
+            .sheets
+            .iter()
+            .find(|sheet| sheet.name == task.source_ws)
+            .with_context(|| {
+                format!(
+                    "source worksheet {:?} not found in {}",
+                    task.source_ws,
+                    source.display()
+                )
+            })?;
+        let ranges = if xls_source {
+            if task.source_ranges.trim().is_empty() {
+                if !sources.xls_extents.contains_key(source) {
+                    sources
+                        .xls_extents
+                        .insert(source.clone(), read_xls_worksheet_extents(source)?);
+                }
+                xls_print_bounds(sheet, &sources.xls_extents[source])
+                    .into_iter()
+                    .collect()
+            } else {
+                parse_xls_print_ranges(&task.source_ranges)?
+            }
+        } else if task.source_ranges.trim().is_empty() {
+            // 空区域 = openpyxl 的 used_range（calculate_dimension）语义：
+            // 有值/公式单元格 **和空样式格**（边框/填充/数字格式）都计入
+            // 边界——真实模板里 C1 的 mm-dd-yy 空样式格决定列范围。
+            // 这里把 OOXML cell s 索引的边界并入，与 Openpyxl 引擎一致。
+            let styled_bounds = task.source_wb.as_ref().and_then(|source_workbook| {
+                let styles = sources
+                    .styles
+                    .entry(source_workbook.clone())
+                    .or_insert_with(|| {
+                        std::sync::Arc::new(
+                            crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
+                                .unwrap_or_else(|error| {
+                                    diagnostics.push(
+                                        DiagEvent::new(
+                                            "ooxml",
+                                            DiagStage::ReadSource,
+                                            DiagOutcome::Skipped,
+                                        )
+                                        .with_file(source_workbook.to_string_lossy().into_owned())
+                                        .with_message(
+                                            format!(
+                                                "样式边界读取失败，输出使用默认格式：{error:#}"
+                                            ),
+                                        ),
+                                    );
+                                    crate::ooxml_cell_styles::SourceStyles::default()
+                                }),
+                        )
+                    })
+                    .clone();
+                styles
+                    .cell_style_indices(source_workbook, &task.source_ws)
+                    .ok()
+                    .and_then(|indices| {
+                        bounds_from_addresses(indices.keys().map(|address| address.as_str()))
+                    })
+            });
+            union_bounds(used_bounds(sheet), styled_bounds)
+                .into_iter()
+                .collect()
+        } else {
+            parse_ranges(&task.source_ranges)?
+        };
+        anyhow::ensure!(
+            !ranges.is_empty(),
+            "print source range is empty on configuration row {}",
+            task.row_no
+        );
+        // Static print consumes the stored data-only view, including blank
+        // or stale caches. It does not require or perform recalculation.
+        let target_sheet = if task.target_ws.trim().is_empty() {
+            task.source_ws.clone()
+        } else {
+            task.target_ws.trim().chars().take(31).collect::<String>()
+        };
+        let replacing_sheet = created.contains(&target_sheet);
+        if !replacing_sheet {
+            operations.push(EditOperation::CreateSheet {
+                name: target_sheet.clone(),
+            });
+            target_order.push(target_sheet.clone());
+            created.insert(target_sheet.clone());
+            next_row.insert(target_sheet.clone(), 1);
+            max_columns.insert(target_sheet.clone(), 1);
+        }
+        // Each configuration row replaces the target Sheet; ranges within
+        // that row still stack. Compare the resolved, normalized name.
+        if replacing_sheet {
+            operations.retain(|op| {
+                !matches!(op,
+                EditOperation::ImportRange { target_sheet: sheet, .. } if sheet == &target_sheet)
+            });
+            operations.retain(|op| !matches!(op,
+                EditOperation::SetRowHeight { sheet, .. } | EditOperation::SetColumnWidth { sheet, .. } if sheet == &target_sheet));
+            next_row.insert(target_sheet.clone(), 1);
+            max_columns.insert(target_sheet.clone(), 1);
+        }
+        for (r1, c1, r2, c2) in ranges.iter().copied() {
+            let start_row = *next_row.get(&target_sheet).unwrap_or(&1);
+            let source_range = format!("{}{}:{}{}", column_letters(c1), r1, column_letters(c2), r2);
+            let style_mode = if task.mode == 3 {
+                RangeStyleMode::Basic
+            } else {
+                RangeStyleMode::Full
+            };
+            operations.push(EditOperation::ImportRange {
+                source_workbook: source.clone(),
+                source_sheet: task.source_ws.clone(),
+                source_range,
+                target_sheet: target_sheet.clone(),
+                target_start: format!("A{start_row}"),
+                copy_values: true,
+                copy_formulas: false,
+                style_mode,
+                copy_comments: layout_available && task.mode != 3 && !task.drop_comments,
+                copy_merges: true,
+                copy_row_heights: layout_available && task.mode == 1,
+                copy_column_widths: layout_available && matches!(task.mode, 1 | 2),
+                copy_row_hidden: false,
+                copy_column_hidden: false,
+                copy_outline_levels: false,
+                copy_all_row_dimensions: false,
+                copy_all_column_dimensions: false,
+                materialize_blank_cells: false,
+                hide_zero: task.hide_zero,
+            });
+            let rows = r2 - r1 + 1;
+            let columns = c2 - c1 + 1;
+            *next_row.entry(target_sheet.clone()).or_insert(1) = start_row + rows + 1;
+            let width_entry = max_columns.entry(target_sheet.clone()).or_insert(1);
+            *width_entry = (*width_entry).max(columns);
+            range_count += 1;
+        }
+        let orientation = parse_orientation(&task.orientation).unwrap_or(PageOrientation::Portrait);
+        let fit_wide = u16::try_from(task.fit_wide.max(1))
+            .context("FitToPagesWide exceeds XLSX setting range")?;
+        let fit_tall = u16::try_from(task.fit_tall.max(0))
+            .context("FitToPagesTall exceeds XLSX setting range")?;
+        // 打印区域末行对齐 openpyxl 引擎语义（apply_setup(ws, out_row - 1, …)）：
+        // out_row/next_row 在最后一个区域后已 +1（块间空行），打印区域包含
+        // 该尾随空行，即末行 = next_row - 1。此前 Rust 侧多减 1 导致
+        // 打印区域比 Openpyxl 输出少一行（实测 8 场景对拍暴露）。
+        let final_row = next_row
+            .get(&target_sheet)
+            .copied()
+            .unwrap_or(2)
+            .saturating_sub(1)
+            .max(1);
+        let final_cols = max_columns.get(&target_sheet).copied().unwrap_or(1).max(1);
+        final_setup.insert(
+            target_sheet.clone(),
+            PageSettings {
+                orientation: Some(orientation),
+                fit_to_page: Some(true),
+                fit_to_width: Some(fit_wide),
+                fit_to_height: Some(fit_tall),
+                clear_scale: true,
+                paper_size: Some(9),
+                print_area: Some(format!("A1:{}{}", column_letters(final_cols), final_row)),
+                horizontal_centered: Some(task.center_h),
+                vertical_centered: Some(task.center_v),
+                footer: None,
+            },
+        );
+    }
+    anyhow::ensure!(
+        !target_order.is_empty(),
+        "print target has no enabled, valid tasks"
+    );
+    let total = target_order.len();
+    let page_operations = target_order
+        .into_iter()
+        .enumerate()
+        .map(|(index, sheet)| {
+            let mut settings = final_setup.remove(&sheet).unwrap_or_default();
+            settings.footer = Some(format!("&C第 {} 页 / 共 {} 页", index + 1, total));
+            EditOperation::SetPageSettings { sheet, settings }
+        })
+        .collect();
+    Ok(ConfigPrintSetup {
+        sheet_count: total,
+        range_count,
+        page_operations,
+    })
+}
+
+fn xls_print_bounds(
+    sheet: &SheetDump,
+    extents: &[WorksheetExtent],
+) -> Option<(usize, usize, usize, usize)> {
+    let biff_bounds = extents
+        .iter()
+        .find(|extent| extent.name == sheet.name && extent.min_row > 0)
+        .map(|extent| {
+            (
+                extent.min_row,
+                extent.min_column,
+                extent.max_row,
+                extent.max_column,
+            )
+        });
+    union_bounds(used_bounds(sheet), biff_bounds)
+}
+
+fn parse_xls_print_ranges(text: &str) -> Result<Vec<(usize, usize, usize, usize)>> {
+    let ranges = parse_ranges(text).context("XLS 打印区域格式无效")?;
+    anyhow::ensure!(
+        !ranges.is_empty()
+            && ranges
+                .iter()
+                .all(|(_, _, row, col)| *row <= 65_536 && *col <= 256),
+        "XLS 打印区域超出 A1:IV65536 或为空"
+    );
+    Ok(ranges)
+}
+
 /// Write configured static print workbooks as new XLSX files using Rust-owned
 /// values and the workspace's approved new-workbook writer. Source workbooks
 /// are read only; cached formula results are materialized as values, numeric
-/// zero may be hidden per the edit plan, and comments are never copied.
+/// zero may be hidden per the edit plan. Supported OOXML imports can copy comments.
 pub fn write_static_print_plans(plans: &[ExcelEditPlan]) -> Result<Vec<StaticPrintExecution>> {
     plans.iter().map(write_static_print_plan).collect()
 }
@@ -796,12 +976,20 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
         plan.format == WorkbookFormat::Xlsx && is_xlsx(&plan.output),
         "native static print writer accepts .xlsx targets only"
     );
+    write_static_print_operations(&plan.output, &plan.operations, &HashMap::new())
+}
+
+fn write_static_print_operations(
+    output: &Path,
+    operations: &[EditOperation],
+    xls_layouts: &HashMap<PathBuf, PathBuf>,
+) -> Result<StaticPrintExecution> {
     anyhow::ensure!(
-        fs::symlink_metadata(&plan.output)
+        fs::symlink_metadata(output)
             .map(|_| false)
             .unwrap_or_else(|error| error.kind() == io::ErrorKind::NotFound),
         "static print target already exists or cannot be checked: {}",
-        plan.output.display()
+        output.display()
     );
 
     let mut source_books = HashMap::<PathBuf, WorkbookDump>::new();
@@ -817,7 +1005,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let region_extract_ms = std::cell::Cell::new(0u128);
     let region_reorg_ms = std::cell::Cell::new(0u128);
     let source_load_started = std::time::Instant::now();
-    for operation in &plan.operations {
+    for operation in operations {
         if let EditOperation::ImportRange {
             source_workbook, ..
         } = operation
@@ -850,6 +1038,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     // openpyxl 引擎逐块赋值语义）。在计划自带的 Set 行高列宽操作之前应用。
     let mut layout_row_heights = BTreeMap::<String, BTreeMap<u32, f64>>::new();
     let mut layout_column_widths = BTreeMap::<String, BTreeMap<u32, f64>>::new();
+    let mut auto_width_sheets = BTreeSet::new();
     let mut source_layouts =
         HashMap::<(PathBuf, String), std::sync::Arc<crate::ooxml_cell_styles::SheetLayout>>::new();
     // 目标 sheet -> 源表 defaultRowHeight（输出表默认行高带源值）。
@@ -857,7 +1046,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     let mut formulas_materialized = 0usize;
     let mut comment_records = HashMap::new();
 
-    for operation in &plan.operations {
+    for operation in operations {
         match operation {
             EditOperation::CreateSheet { name } => {
                 anyhow::ensure!(
@@ -909,11 +1098,22 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                 })?;
                 // OOXML 窄范围样式读取：styles.xml + worksheet cell s 索引，
                 // 只覆盖本次导入涉及的源单元格。
+                let xls_source = is_xls_print_source(source_workbook);
+                let style_source = xls_layouts.get(source_workbook).unwrap_or(source_workbook);
+                let has_ooxml_layout = !is_xls_print_source(style_source);
+                if !*copy_column_widths
+                    && (xls_source || matches!(style_mode, RangeStyleMode::Basic))
+                {
+                    auto_width_sheets.insert(target_sheet.clone());
+                }
                 let source_style_map = source_styles
                     .entry(source_workbook.clone())
                     .or_insert_with(|| {
+                        if !has_ooxml_layout {
+                            return std::sync::Arc::default();
+                        }
                         let styles_started = std::time::Instant::now();
-                        let loaded = crate::ooxml_cell_styles::SourceStyles::load(source_workbook)
+                        let loaded = crate::ooxml_cell_styles::SourceStyles::load(style_source)
                             .unwrap_or_else(|error| {
                                 diagnostics.push(
                                     DiagEvent::new(
@@ -937,9 +1137,13 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     })
                     .clone();
                 let indices_started = std::time::Instant::now();
-                let cell_style_indices = source_style_map
-                    .cell_style_indices(source_workbook, source_sheet)
-                    .unwrap_or_default();
+                let cell_style_indices = if !has_ooxml_layout {
+                    BTreeMap::new()
+                } else {
+                    source_style_map
+                        .cell_style_indices(style_source, source_sheet)
+                        .unwrap_or_default()
+                };
                 ooxml_parse_ms.set(ooxml_parse_ms.get() + indices_started.elapsed().as_millis());
                 // mode 1 源行高列宽：OOXML 窄读（calamine 不暴露）。对齐
                 // openpyxl 引擎 copy_block：行高按源行→目标行平移（mode 1），
@@ -950,7 +1154,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         .or_insert_with(|| {
                             std::sync::Arc::new(
                                 source_style_map
-                                    .sheet_layout(source_workbook, source_sheet)
+                                    .sheet_layout(style_source, source_sheet)
                                     .unwrap_or_else(|error| {
                                         diagnostics.push(
                                             DiagEvent::new("ooxml", DiagStage::ReadSource, DiagOutcome::Skipped)
@@ -1052,6 +1256,14 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     // 类型（openpyxl 先写值后 merge，数值锚点保持数值），
                     // 文本/错误值写显示文本。
                     let anchor_value = source.values.get(&source_top_left);
+                    if xls_source {
+                        validate_biff_print_date(
+                            anchor_value,
+                            source_uses_1904_epoch[source_workbook],
+                            source_sheet,
+                            &source_top_left,
+                        )?;
+                    }
                     let anchor_number = anchor_value.and_then(|value| {
                         let value_type = value.get("type").and_then(serde_json::Value::as_str);
                         let number = value.get("value").and_then(serde_json::Value::as_f64);
@@ -1127,7 +1339,15 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             .filter(|v| v["type"] == "error")
                             .and_then(|v| v["value"].as_str())
                             .map(str::to_owned),
-                        format: format_of(&source_top_left, &mut format_cache),
+                        format: format_of(&source_top_left, &mut format_cache).or_else(|| {
+                            anchor_value
+                                .filter(|v| v["type"] == "datetime_serial")
+                                .and(anchor_number)
+                                .map(default_print_date_format)
+                        }),
+                        display_length: anchor_value
+                            .map(|value| static_print_display_length(value, *hide_zero))
+                            .unwrap_or_default(),
                     });
                 }
                 merges_by_sheet
@@ -1135,7 +1355,17 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                     .or_default()
                     .extend(target_merges);
                 if *copy_comments {
-                    for (address, text) in &source.comments {
+                    if !comment_records.contains_key(style_source) {
+                        comment_records.insert(
+                            style_source.clone(),
+                            excel_reader::read_ooxml_comments(style_source)?,
+                        );
+                    }
+                    for (address, note) in comment_records[style_source]
+                        .get(source_sheet)
+                        .into_iter()
+                        .flatten()
+                    {
                         let Some((row, column)) = parse_a1(address) else {
                             continue;
                         };
@@ -1153,19 +1383,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                         comments_by_sheet
                             .entry(target_sheet.clone())
                             .or_default()
-                            .push((target_address, text.clone(), {
-                                if !comment_records.contains_key(source_workbook) {
-                                    comment_records.insert(
-                                        source_workbook.clone(),
-                                        excel_reader::read_ooxml_comments(source_workbook)?,
-                                    );
-                                }
-                                comment_records
-                                    .get(source_workbook)
-                                    .and_then(|b| b.get(source_sheet))
-                                    .and_then(|s| s.get(address))
-                                    .and_then(|c| c.author.clone())
-                            }));
+                            .push((target_address, note.text.clone(), note.author.clone()));
                     }
                 }
                 let extract_started = std::time::Instant::now();
@@ -1209,6 +1427,14 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
                             .get(source_workbook)
                             .copied()
                             .unwrap_or(false);
+                        if xls_source {
+                            validate_biff_print_date(
+                                Some(value),
+                                source_uses_1904,
+                                source_sheet,
+                                &address,
+                            )?;
+                        }
                         let mut output_value = value.clone();
                         if value.get("type").and_then(serde_json::Value::as_str)
                             == Some("datetime_serial")
@@ -1374,8 +1600,31 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     }
     let target_write_ms = target_write_started.elapsed();
     let page_settings_started = std::time::Instant::now();
-    // 先应用导入的尺寸（mode 1 行高；mode 1/2 列宽），再应用计划显式
-    // Set 行高列宽。配置打印 mode 2 不再产生自适应尺寸操作。
+    // XLS and mode 3 have no imported widths. Size only the final visible
+    // content, then let explicitly configured dimensions take precedence.
+    for sheet in auto_width_sheets {
+        let widths = layout_column_widths.entry(sheet.clone()).or_default();
+        if let Some(cells) = cells_by_sheet.get(&sheet) {
+            for cell in cells {
+                fit_print_columns(
+                    widths,
+                    cell.column,
+                    cell.column,
+                    static_print_display_length(&cell.value, false),
+                );
+            }
+        }
+        if let Some(merges) = merges_by_sheet.get(&sheet) {
+            for merge in merges {
+                fit_print_columns(
+                    widths,
+                    merge.first_column,
+                    merge.last_column,
+                    merge.display_length,
+                );
+            }
+        }
+    }
     for (sheet, heights) in &layout_row_heights {
         let worksheet = workbook.worksheet_from_name(sheet)?;
         for (row, height) in heights {
@@ -1388,7 +1637,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
             set_column_width_exact(worksheet, *column, *width)?;
         }
     }
-    for operation in &plan.operations {
+    for operation in operations {
         match operation {
             EditOperation::SetRowHeight {
                 sheet,
@@ -1427,8 +1676,7 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
 
     let page_settings_ms = page_settings_started.elapsed();
     let save_started = std::time::Instant::now();
-    let output_parent = plan
-        .output
+    let output_parent = output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
@@ -1466,14 +1714,14 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     }
     save_new_workbook_without_overwrite(
         &mut workbook,
-        &plan.output,
+        output,
         &error_cells,
         &worksheet_names,
         &layout_row_heights,
         &layout_column_widths,
     )?;
     let stage_timings = serde_json::json!({
-        "output": plan.output.file_name().map(|name| name.to_string_lossy().into_owned()),
+        "output": output.file_name().map(|name| name.to_string_lossy().into_owned()),
         // 目标 §14.4 的 12 项阶段细分（按 Rust 实现的可测边界映射）。
         "source_read_ms": u64::try_from(source_read_ms.as_millis()).unwrap_or(u64::MAX),
         "ooxml_parse_ms": u64::try_from(ooxml_parse_ms.get()).unwrap_or(u64::MAX),
@@ -1489,11 +1737,11 @@ fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution>
     });
     Ok(StaticPrintExecution {
         engine: "rust_xlsxwriter",
-        output: plan.output.clone(),
+        output: output.to_path_buf(),
         worksheet_count: worksheet_names.len(),
         imported_ranges,
         formulas_materialized,
-        comments_dropped: !plan.operations.iter().any(|op| {
+        comments_dropped: !operations.iter().any(|op| {
             matches!(
                 op,
                 EditOperation::ImportRange {
@@ -1854,11 +2102,9 @@ fn write_static_print_cell(
                 .as_f64()
                 .context("static print date serial is invalid")?;
             anyhow::ensure!(number.is_finite(), "static print date serial is not finite");
-            let format = match cell_format {
-                // 源单元格自带数字格式（OOXML 读取）：保持源显示口径。
-                Some(format) => format.clone(),
-                None => Format::new().set_num_format("yyyy-mm-dd h:mm:ss"),
-            };
+            let format = cell_format
+                .cloned()
+                .unwrap_or_else(|| default_print_date_format(number));
             worksheet.write_number_with_format(row, column, number, &format)?;
         }
         "boolean" => {
@@ -1908,6 +2154,14 @@ fn write_static_print_cell(
         other => anyhow::bail!("unsupported static print cell type {other:?}"),
     }
     Ok(())
+}
+
+fn default_print_date_format(serial: f64) -> Format {
+    Format::new().set_num_format(if serial >= 1.0 && serial.fract() == 0.0 {
+        "yyyy-mm-dd"
+    } else {
+        "yyyy-mm-dd h:mm:ss"
+    })
 }
 
 /// 单元格显示文本（用于合并区锚点；数字/日期/错误值都可取到字符串）。
@@ -1999,6 +2253,25 @@ fn date_serial_for_1900_output(serial: f64, source_uses_1904_epoch: bool) -> Res
         "static print date serial is not finite"
     );
     Ok(output_serial)
+}
+
+fn validate_biff_print_date(
+    value: Option<&serde_json::Value>,
+    source_uses_1904: bool,
+    sheet: &str,
+    address: &str,
+) -> Result<()> {
+    // A BIFF date serial below one might mean a time of day or a date in
+    // the local epoch. The available type does not carry the format needed
+    // to tell which should be shifted to the 1900 epoch.
+    anyhow::ensure!(
+        !source_uses_1904
+            || !value.is_some_and(|v| {
+                v["type"] == "datetime_serial" && v["value"].as_f64().is_some_and(|n| n < 1.0)
+            }),
+        "XLS 工作表 {sheet:?} 的 {address} 无法区分 1904 日期与纯时间，未生成打印目标"
+    );
+    Ok(())
 }
 
 fn parse_a1_range(text: &str) -> Result<((usize, usize), (usize, usize))> {
@@ -2390,17 +2663,44 @@ fn value_to_text(value: &serde_json::Value) -> String {
 fn static_print_display_length(value: &serde_json::Value, hide_zero: bool) -> usize {
     let value_type = value.get("type").and_then(serde_json::Value::as_str);
     if value_type == Some("datetime_serial") {
-        return 19;
+        return PRINT_DATE_DISPLAY_LENGTH;
     }
-    let numeric_zero = matches!(value_type, Some("number" | "integer"))
-        && value
-            .get("value")
-            .and_then(serde_json::Value::as_f64)
-            .is_some_and(|number| number == 0.0);
-    if hide_zero && numeric_zero {
-        0
-    } else {
-        value_to_text(value).trim().chars().count()
+    if hide_zero && static_print_is_numeric_zero(value) {
+        return 0;
+    }
+    value_to_text(value)
+        .split('\n')
+        .map(|line| {
+            line.trim_end()
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii() && !PRINT_WIDE_ASCII.contains(ch) {
+                        1
+                    } else {
+                        2
+                    }
+                })
+                .sum()
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn fit_print_columns(
+    widths: &mut BTreeMap<u32, f64>,
+    first: usize,
+    last: usize,
+    display_length: usize,
+) {
+    if display_length == 0 {
+        return;
+    }
+    let width = (display_length + PRINT_AUTO_WIDTH_PADDING)
+        .div_ceil(last - first + 1)
+        .clamp(PRINT_AUTO_MIN_WIDTH, PRINT_AUTO_MAX_WIDTH) as f64;
+    for column in first + 1..=last + 1 {
+        let saved = widths.entry(column as u32).or_default();
+        *saved = saved.max(width);
     }
 }
 fn parse_ranges(text: &str) -> Result<Vec<(usize, usize, usize, usize)>> {
@@ -2417,13 +2717,20 @@ fn parse_ranges(text: &str) -> Result<Vec<(usize, usize, usize, usize)>> {
         .collect()
 }
 fn parse_a1(text: &str) -> Option<(usize, usize)> {
-    let text = text.trim().trim_start_matches('$');
+    let text = text.trim();
+    let text = text.strip_prefix('$').unwrap_or(text);
     let split = text.find(|c: char| c.is_ascii_digit())?;
-    let col = text[..split].bytes().try_fold(0usize, |acc, b| {
+    let (column, row) = text.split_at(split);
+    let column = column.strip_suffix('$').unwrap_or(column);
+    if column.is_empty() || !column.bytes().all(|b| b.is_ascii_alphabetic()) {
+        return None;
+    }
+    let col = column.bytes().try_fold(0usize, |acc, b| {
         acc.checked_mul(26)?
             .checked_add((b.to_ascii_uppercase() - b'A' + 1) as usize)
     })?;
-    Some((text[split..].parse().ok()?, col))
+    let row = row.parse().ok()?;
+    (row > 0).then_some((row, col))
 }
 fn column_letters(mut col: usize) -> String {
     let mut out = String::new();
@@ -2545,6 +2852,25 @@ mod tests {
         assert_eq!(static_print_display_length(&date_zero, true), 19);
         assert_eq!(date_serial_for_1900_output(0.0, true).unwrap(), 1462.0);
         assert_eq!(date_serial_for_1900_output(42.5, false).unwrap(), 42.5);
+    }
+
+    #[test]
+    fn static_print_autofit_accounts_for_wide_text_dates_and_merges() {
+        let mut widths = BTreeMap::new();
+        let wide_text = json!({"type": "string", "value": "短\nWWW表头"});
+        let date = json!({"type": "datetime_serial", "value": 46341});
+        let large_header = json!({"type": "string", "value": "表".repeat(25)});
+        assert_eq!(static_print_display_length(&wide_text, false), 10);
+        fit_print_columns(&mut widths, 0, 0, static_print_display_length(&date, false));
+        fit_print_columns(
+            &mut widths,
+            0,
+            1,
+            static_print_display_length(&large_header, false),
+        );
+        fit_print_columns(&mut widths, 0, 0, 1);
+        fit_print_columns(&mut widths, 2, 2, 0);
+        assert_eq!(widths, BTreeMap::from([(1, 27.0), (2, 27.0)]));
     }
 
     #[test]

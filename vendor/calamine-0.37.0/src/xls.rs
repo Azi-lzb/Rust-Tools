@@ -156,6 +156,7 @@ struct SheetData {
     range: Range<Data>,
     formula: Range<String>,
     merge_cells: Vec<Dimensions>,
+    dimensions: Option<Dimensions>,
 }
 
 /// A struct representing an old xls format file (CFB)
@@ -216,6 +217,35 @@ impl<RS: Read + Seek> Xls<RS> {
         debug!("xls parsed");
 
         Ok(xls)
+    }
+
+    /// Returns the inclusive used bounds, including BIFF's stored dimensions
+    /// for formatted blanks and the bounds of values, formulas, and merges.
+    pub fn worksheet_used_dimensions(&self, name: &str) -> Option<Dimensions> {
+        let sheet = self.sheets.get(name)?;
+        let values = sheet
+            .range
+            .start()
+            .zip(sheet.range.end())
+            .map(|(start, end)| Dimensions { start, end });
+        let formulas = sheet
+            .formula
+            .start()
+            .zip(sheet.formula.end())
+            .map(|(start, end)| Dimensions { start, end });
+        sheet
+            .dimensions
+            .into_iter()
+            .chain(values)
+            .chain(formulas)
+            .chain(sheet.merge_cells.iter().copied())
+            .reduce(|left, right| Dimensions {
+                start: (
+                    left.start.0.min(right.start.0),
+                    left.start.1.min(right.start.1),
+                ),
+                end: (left.end.0.max(right.end.0), left.end.1.max(right.end.1)),
+            })
     }
 
     /// Gets the worksheet merge cell dimensions
@@ -609,6 +639,7 @@ impl<RS: Read + Seek> Xls<RS> {
             let mut formulas = Vec::new();
             let mut fmla_pos = (0, 0);
             let mut merge_cells = Vec::new();
+            let mut dimensions = None;
             // Nested substreams (embedded charts) carry cell-like records; skip them.
             // The first BOF belongs to the worksheet itself.
             let mut seen_sheet_bof = false;
@@ -635,6 +666,12 @@ impl<RS: Read + Seek> Xls<RS> {
                     // 512: Dimensions
                     0x0200 => {
                         let Dimensions { start, end } = parse_dimensions(r.data)?;
+                        dimensions = Some(Dimensions { start, end }).filter(|bounds| {
+                            bounds.start.0 <= bounds.end.0
+                                && bounds.start.1 <= bounds.end.1
+                                && bounds.end.0 < 65_536
+                                && bounds.end.1 < 256
+                        });
                         let rows = (end.0 - start.0 + 1) as usize;
                         let cols = (end.1 - start.1 + 1) as usize;
                         cells.reserve(rows.saturating_mul(cols));
@@ -702,6 +739,7 @@ impl<RS: Read + Seek> Xls<RS> {
                     range,
                     formula,
                     merge_cells,
+                    dimensions,
                 },
             );
         }
