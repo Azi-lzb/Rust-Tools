@@ -300,31 +300,33 @@ fn configured_duplicate_check_marks_comment_workbook_in_place() -> Result<()> {
 }
 
 #[test]
-fn configured_duplicate_delete_refuses_formula_cache_loss() -> Result<()> {
-    // 2-2 不得让 openpyxl 保存时清空公式缓存。openpyxl 的行删除无法保证
-    // 公式缓存随行号平移，worker 在写前直接拒绝含公式的工作表
-    // （row deletion is not allowed on a worksheet that contains formulas），
-    // 源工作簿必须保持原样。
+fn configured_duplicate_delete_keeps_surviving_formulas() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_dedup_config(root.path())?;
     let source = root.path().join("source.xlsx");
     create_duplicate_source_with_formula(&source)?;
-    let source_before = fs::read(&source)?;
+    let config_before = fs::read(&config)?;
 
     let output = run_menu(&config, "2\n2\n0\n")?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("执行失败"), "{stdout}");
-    assert!(stdout.contains("row deletion is not allowed"), "{stdout}");
+    assert!(stdout.contains("删除重复行数：1"), "{stdout}");
+    assert!(!stdout.contains("执行失败"), "{stdout}");
     assert!(
         !stdout.contains("\"execution\""),
         "menu must not print JSON"
     );
-    assert_eq!(
-        fs::read(&source)?,
-        source_before,
-        "source workbook must stay unchanged when cache preservation is unsupported"
-    );
+    let updated = read_workbook(&source)?;
+    let sheet = updated
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "Commented")
+        .context("dedup result worksheet missing")?;
+    assert_eq!(sheet.values["A3"]["value"], "B");
+    assert_eq!(sheet.formulas["C2"].trim_start_matches('='), "5+5");
+    assert_eq!(sheet.formulas["C3"].trim_start_matches('='), "15+15");
+    assert!(!sheet.formulas.contains_key("C4"));
+    assert_eq!(fs::read(&config)?, config_before);
     Ok(())
 }
 

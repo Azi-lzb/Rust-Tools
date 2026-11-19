@@ -1,4 +1,4 @@
-//! 3-1 按配置新建静态打印工作簿，可选 Openpyxl 或 Rust。
+//! 3-1 按配置新建静态打印工作簿，Windows 另支持用 Excel/WPS COM 补 XLS 版式。
 //! 含 XLS 源的目标使用 Calamine 和 rust_xlsxwriter，公式只取已保存的缓存。
 
 use crate::config::PrintTask;
@@ -173,7 +173,7 @@ pub fn run_rust_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
 }
 
 pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
-    use crate::print_ops::{build_config_print_plans, write_static_print_plans};
+    use crate::print_ops::{build_config_print_plans, write_static_print_plan};
     let mut run = StaticPrintRun::default();
     let enabled: Vec<PrintTask> = tasks.iter().filter(|task| task.enabled).cloned().collect();
     if enabled.is_empty() {
@@ -182,15 +182,22 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     let (xls_groups, enabled) = partition_xls_print_tasks(&enabled);
     // 必须一次传入全部启用行：同一目标工作簿通常由多行配置拼装，
     // 逐行建计划会让后一行因“目标已存在”失败。
+    let mut rows_by_target = BTreeMap::new();
+    for task in &enabled {
+        if let Some(target) = task.target_wb.as_ref() {
+            *rows_by_target.entry(target.as_path()).or_insert(0) += 1;
+        }
+    }
     let mut plans = Vec::new();
     match build_config_print_plans(&enabled) {
         Ok(reports) => {
             for report in reports {
                 run.events.extend(report.diagnostics);
+                let rows = rows_by_target[report.output.as_path()];
                 match report.plan {
-                    Some(plan) => plans.push(plan),
+                    Some(plan) => plans.push((plan, rows)),
                     None => {
-                        run.task_skipped += 1;
+                        run.task_skipped += rows;
                         run.events.push(
                             DiagEvent::new(
                                 "rust_xlsxwriter",
@@ -222,11 +229,24 @@ pub fn run_rust_writer_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
             run.issues.push(format!("打印计划构建失败：{error:#}"));
         }
     }
-    if !plans.is_empty() {
-        let write_started = Instant::now();
-        let executions = write_static_print_plans(&plans)?;
-        for execution in executions {
-            record_rust_print_output(&mut run, execution, write_started);
+    for (plan, rows) in plans {
+        let started = Instant::now();
+        match write_static_print_plan(&plan) {
+            Ok(execution) => record_rust_print_output(&mut run, execution, rows, started),
+            Err(error) => {
+                run.task_failed += rows;
+                let message = format!("打印目标未生成：{error:#}");
+                run.events.push(
+                    DiagEvent::new(
+                        "rust_xlsxwriter",
+                        DiagStage::SaveOutput,
+                        DiagOutcome::Failed,
+                    )
+                    .with_file(plan.output.to_string_lossy().into_owned())
+                    .with_message(message.clone()),
+                );
+                run.issues.push(message);
+            }
         }
     }
     run_xls_print_groups(&mut run, xls_groups);
@@ -287,7 +307,7 @@ fn run_xls_print_groups(run: &mut StaticPrintRun, groups: XlsPrintGroups<'_>) {
                         );
                     }
                 }
-                record_rust_print_output(run, execution, started);
+                record_rust_print_output(run, execution, group.len(), started);
             }
             Err(error) => {
                 run.task_failed += group.len();
@@ -310,6 +330,7 @@ fn run_xls_print_groups(run: &mut StaticPrintRun, groups: XlsPrintGroups<'_>) {
 fn record_rust_print_output(
     run: &mut StaticPrintRun,
     execution: StaticPrintExecution,
+    task_count: usize,
     started: Instant,
 ) {
     run.events.extend(execution.diagnostics);
@@ -323,7 +344,7 @@ fn record_rust_print_output(
         .with_details(execution.stage_timings)
         .with_message("静态打印阶段耗时"),
     );
-    run.task_ok += 1;
+    run.task_ok += task_count;
     run.events.push(
         DiagEvent::new("rust_xlsxwriter", DiagStage::SaveOutput, DiagOutcome::Ok)
             .with_file(execution.output.to_string_lossy().into_owned())
@@ -332,7 +353,7 @@ fn record_rust_print_output(
     run.outputs.push(execution.output);
 }
 
-/// 历史 umya 实现，保留供旧结果定位；菜单 3-1/3-2 不再调用此函数。
+/// 历史 UMYA 实现，保留供旧结果定位，菜单 3-1 不调用此函数。
 pub fn run_umya_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
     let mut run = StaticPrintRun::default();
     let enabled: Vec<&PrintTask> = tasks.iter().filter(|task| task.enabled).collect();
@@ -1439,7 +1460,7 @@ fn run_com_print_engine(tasks: &[PrintTask]) -> Result<StaticPrintRun> {
             write_xls_static_print_group_with_layouts(target, &group, group_layouts)
         })();
         match execution {
-            Ok(execution) => record_rust_print_output(&mut run, execution, started),
+            Ok(execution) => record_rust_print_output(&mut run, execution, group.len(), started),
             Err(error) => {
                 run.task_failed += group.len();
                 let message = format!("COM 打印目标未生成：{error:#}");

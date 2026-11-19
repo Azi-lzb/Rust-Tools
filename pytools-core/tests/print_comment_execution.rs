@@ -148,7 +148,9 @@ fn style_bold(book: &excel_editor::Workbook, sheet: &str, cell: &str) -> Result<
 }
 
 #[test]
-fn comment_print_still_rejects_missing_seed_allowance_and_contradictory_width() -> Result<()> {
+fn strict_comment_print_rejects_missing_seed_allowance_and_contradictory_width() -> Result<()> {
+    use pytools_core::result_validation::{ResultValidation, ResultValidationScope};
+    let _validation = ResultValidationScope::enter(ResultValidation::Existing);
     let dir = TestDir::new();
     let source = dir.path("source.xlsx");
     make_source(&source)?;

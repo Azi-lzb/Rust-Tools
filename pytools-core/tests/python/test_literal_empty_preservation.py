@@ -84,12 +84,14 @@ class LiteralEmptyPreservation(unittest.TestCase):
                 self.restore([dict(operation=kind, sheet="Keep", cell="AC126")])
                 self.assertNotIn(("Keep", "AC126"), worker._explicit_empty_strings(self.output))
 
-    def test_unexpected_nonempty_candidate_is_rejected(self):
+    def test_unexpected_nonempty_candidate_is_logged_and_left_intact(self):
         for value in (0, False, "lost original", "=1+1"):
             with self.subTest(value=value):
                 self.save_candidate(lambda w: setattr(w["Keep"]["AC126"], "value", value))
                 before = self.output.read_bytes()
-                with self.assertRaises(worker.WorkerError): self.restore([])
+                with self.assertLogs(worker.__name__, level="WARNING") as warnings:
+                    self.restore([])
+                self.assertTrue(any("Keep!AC126" in message for message in warnings.output))
                 self.assertEqual(before, self.output.read_bytes())
 
     def test_rows_and_sheet_rename_map_coordinates(self):

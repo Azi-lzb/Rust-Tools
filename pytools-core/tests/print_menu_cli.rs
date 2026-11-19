@@ -52,7 +52,7 @@ fn interactive_print_menu_uses_openpyxl_and_precheck() -> Result<()> {
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
     let config =
-        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是", 1)?;
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
@@ -187,7 +187,7 @@ fn interactive_static_print_executes_without_confirmation() -> Result<()> {
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
     let config =
-        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是", 1)?;
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
@@ -333,7 +333,7 @@ fn rust_print_entry_writes_configured_output_without_overwriting() -> Result<()>
     let source = root.path().join("source.xlsx");
     let target = root.path().join("printed.xlsx");
     let config =
-        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是")?;
+        create_print_config_with_settings(root.path(), &source, &target, "1", "B2:D4", "是", 2)?;
     create_print_source(&source)?;
     let source_before = fs::read(&source)?;
 
@@ -350,6 +350,8 @@ fn rust_print_entry_writes_configured_output_without_overwriting() -> Result<()>
         &config,
         pytools_core::static_print_engines::StaticPrintEngine::RustWriter,
     )?;
+    assert_eq!(execution.task_ok, 2);
+    assert_eq!((execution.task_failed, execution.task_skipped), (0, 0));
     assert_eq!(execution.outputs, vec![target.clone()]);
     assert!(execution.events.iter().any(|event| event.engine == "rust_xlsxwriter"));
     assert!(target.is_file());
@@ -477,7 +479,7 @@ fn create_print_source(path: &Path) -> Result<()> {
 }
 
 fn create_print_config(root: &Path, source: &Path, target: &Path) -> Result<PathBuf> {
-    create_print_config_with_settings(root, source, target, "1", "B2:D4", "")
+    create_print_config_with_settings(root, source, target, "1", "B2:D4", "", 1)
 }
 
 fn create_print_config_with_settings(
@@ -487,6 +489,7 @@ fn create_print_config_with_settings(
     mode: &str,
     print_range: &str,
     hide_zero: &str,
+    task_count: u32,
 ) -> Result<PathBuf> {
     let config = root.join("config.xlsx");
     let mut workbook = rust_xlsxwriter::Workbook::new();
@@ -551,8 +554,10 @@ fn create_print_config_with_settings(
             hide_zero.to_owned(),
             "".to_owned(),
         ];
-        for (column, value) in values.iter().enumerate() {
-            settings.write_string(1, column as u16, value.as_str())?;
+        for row in 1..=task_count {
+            for (column, value) in values.iter().enumerate() {
+                settings.write_string(row, column as u16, value.as_str())?;
+            }
         }
     }
     workbook.save(&config)?;

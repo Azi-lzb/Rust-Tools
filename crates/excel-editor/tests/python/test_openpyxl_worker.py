@@ -588,14 +588,69 @@ class OpenpyxlWorkerTests(unittest.TestCase):
         self.assertIsNone(saved["DeleteMe"]["A1"].value)
         saved.close()
 
-    def test_delete_rows_is_rejected_when_formula_references_modified_sheet(self):
-        source = self.root / "delete-referenced-sheet.xlsx"
-        book = openpyxl.load_workbook(self.source)
-        book["Notes"]["A2"] = "=DeleteMe!A1"
-        book.save(source)
-        self._add_formula_cache(source, "xl/worksheets/sheet2.xml", "A2", "1")
+    def test_delete_rows_rewrites_formulas_and_names_in_sequential_coordinates(self):
+        from openpyxl.workbook.defined_name import DefinedName
 
-        output = self.root / "delete-referenced-sheet-output.xlsx"
+        source = self.root / "delete-with-formulas.xlsx"
+        book = openpyxl.load_workbook(self.source)
+        sheet = book["DeleteMe"]
+        sheet.append(["Header"])
+        sheet.append(["same", 10])
+        sheet.append(["remove", 20])
+        sheet.append(["same", 30])
+        sheet["C4"] = "=SUM(B2:B4)+$B$4"
+        book["Notes"]["A2"] = "=DeleteMe!$B$4"
+        book["Notes"]["A3"] = "=DeleteMe!B3"
+        book["Notes"]["A4"] = "=SUM(DeleteMe!B:B)"
+        book.defined_names.add(DefinedName("Surviving", attr_text="'DeleteMe'!$B$2:$B$4"))
+        sheet.defined_names.add(DefinedName("LocalTotal", attr_text="$B$4"))
+        sheet.print_area = "A1:C4"
+        sheet.print_title_rows = "1:4"
+        book.calculation.fullCalcOnLoad = False
+        book.calculation.forceFullCalc = False
+        book.save(source)
+        book.close()
+        self._add_formula_cache(source, "xl/worksheets/sheet2.xml", "A2", "30")
+        self._add_formula_cache(source, "xl/worksheets/sheet2.xml", "A4", "60")
+        before = digest(source)
+        output = self.root / "delete-with-formulas-output.xlsx"
+        plan = self.base_plan(output, [
+            operation("delete_rows", sheet="DeleteMe", first_row=3, count=1),
+            operation("delete_rows", sheet="DeleteMe", first_row=1, count=1),
+        ])
+        plan["input"] = str(source)
+        process, response = run_worker(plan, output)
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(response["status"], "applied", response)
+        self.assertEqual(digest(source), before)
+        saved = openpyxl.load_workbook(output)
+        self.assertEqual(saved["DeleteMe"]["B2"].value, 30)
+        self.assertEqual(saved["DeleteMe"]["C2"].value, "=SUM(B1:B2)+$B$2")
+        self.assertEqual(saved["Notes"]["A2"].value, "=DeleteMe!$B$2")
+        self.assertEqual(saved["Notes"]["A3"].value, "=DeleteMe!#REF!")
+        self.assertEqual(saved["Notes"]["A4"].value, "=SUM(DeleteMe!B:B)")
+        self.assertEqual(saved.defined_names["Surviving"].attr_text, "'DeleteMe'!$B$1:$B$2")
+        self.assertEqual(saved["DeleteMe"].defined_names["LocalTotal"].attr_text, "$B$2")
+        self.assertEqual(saved["DeleteMe"].print_area, "'DeleteMe'!$A$1:$C$2")
+        self.assertEqual(saved["DeleteMe"].print_title_rows, "$1:$2")
+        self.assertTrue(saved.calculation.fullCalcOnLoad)
+        self.assertTrue(saved.calculation.forceFullCalc)
+        saved.close()
+        values = openpyxl.load_workbook(output, data_only=True)
+        self.assertIsNone(values["Notes"]["A2"].value)
+        self.assertIsNone(values["Notes"]["A4"].value)
+        values.close()
+
+    def test_delete_rows_rejects_dynamic_reference_without_saving(self):
+        source = self.root / "delete-dynamic-reference.xlsx"
+        book = openpyxl.load_workbook(self.source)
+        book["Notes"]["A2"] = '=INDIRECT("DeleteMe!A1")'
+        book.save(source)
+        book.close()
+
+        before = digest(source)
+        output = self.root / "delete-dynamic-reference-output.xlsx"
         plan = self.base_plan(output, [operation(
             "delete_rows", sheet="DeleteMe", first_row=1, count=1
         )])
@@ -604,26 +659,28 @@ class OpenpyxlWorkerTests(unittest.TestCase):
 
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(response["status"], "unsupported_before_write", response)
-        self.assertIn("depends on a worksheet being edited", response["error"]["message"])
+        self.assertIn("dynamic", response["error"]["message"])
         self.assertFalse(output.exists())
+        self.assertEqual(digest(source), before)
 
-    def test_delete_rows_is_rejected_when_modified_sheet_contains_formula(self):
-        source = self.root / "delete-formula-sheet.xlsx"
+    def test_delete_rows_rejects_a_merge_that_would_be_relocated(self):
+        source = self.root / "delete-with-merge.xlsx"
         book = openpyxl.load_workbook(self.source)
-        book["DeleteMe"]["A2"] = "=Data!A1"
+        book["DeleteMe"].merge_cells("A3:B3")
         book.save(source)
-
-        output = self.root / "delete-formula-sheet-output.xlsx"
+        book.close()
+        before = digest(source)
+        output = self.root / "delete-with-merge-output.xlsx"
         plan = self.base_plan(output, [operation(
-            "delete_rows", sheet="DeleteMe", first_row=1, count=1
+            "delete_rows", sheet="DeleteMe", first_row=2, count=1
         )])
         plan["input"] = str(source)
         process, response = run_worker(plan, output)
-
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(response["status"], "unsupported_before_write", response)
-        self.assertIn("worksheet that contains formulas", response["error"]["message"])
+        self.assertEqual(response["error"]["kind"], "unsupported_row_delete_merge")
         self.assertFalse(output.exists())
+        self.assertEqual(digest(source), before)
 
     def test_empty_text_write_keeps_an_explicit_inline_string(self):
         output = self.root / "empty-text-output.xlsx"

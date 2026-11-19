@@ -143,7 +143,7 @@ fn fx_header_cli_command_defaults_to_plan_only() -> Result<()> {
 }
 
 #[test]
-fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() -> Result<()> {
+fn fx_header_menu_uses_openpyxl_without_capability_and_skips_xlsm() -> Result<()> {
     let root = TestDirectory::new()?;
     let config = create_config(root.path())?;
     let fixture =
@@ -151,7 +151,7 @@ fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() ->
     let target = root.path().join("target.xlsx");
     fs::copy(&fixture, &target)?;
     let original = fs::read(&target)?;
-    let unsupported = root.path().join("legacy.xls");
+    let unsupported = root.path().join("legacy.xlsm");
     fs::write(&unsupported, b"synthetic legacy workbook placeholder")?;
     let unsupported_original = fs::read(&unsupported)?;
 
@@ -172,7 +172,7 @@ fn fx_header_menu_uses_openpyxl_without_capability_and_skips_unverified_xls() ->
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("4  修改外汇工作表页眉单位"));
-    assert!(stdout.contains("PT-7-4 当前仅验收 .xlsx"));
+    assert!(stdout.contains("不修改 XLSM"));
     assert!(stdout.contains("将直接修改"));
     assert_ne!(fs::read(&target)?, original);
     assert_eq!(fs::read(&unsupported)?, unsupported_original);

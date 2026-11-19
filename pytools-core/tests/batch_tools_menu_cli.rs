@@ -64,16 +64,16 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
         .iter()
         .map(|path| Ok((path.clone(), fs::read(path)?)))
         .collect::<Result<Vec<_>>>()?;
-    let unsupported_xls = root.path().join("unsupported.xls");
-    fs::write(&unsupported_xls, b"synthetic legacy workbook placeholder")?;
-    let original_unsupported_xls = fs::read(&unsupported_xls)?;
+    let unsupported_format = root.path().join("unsupported.csv");
+    fs::write(&unsupported_format, b"not an Excel workbook")?;
+    let original_unsupported_format = fs::read(&unsupported_format)?;
     let input_list = inputs
         .iter()
         .map(|path| path.to_string_lossy())
         .collect::<Vec<_>>()
         .join(";")
         + ";"
-        + &unsupported_xls.to_string_lossy();
+        + &unsupported_format.to_string_lossy();
 
     let output = run_menu(&config, &format!("5\n5\n1\n{input_list}\n0\n"))?;
     assert!(
@@ -87,7 +87,7 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
     assert!(stdout.contains("5  专用报表处理"));
     assert!(stdout.contains("5  地区总分校验"));
     assert!(stdout.contains("已选择文件 6 个"));
-    assert!(stdout.contains("先显式转换为 .xlsx"));
+    assert!(stdout.contains("地区核对接受 XLSX/XLSM，Windows 还支持 XLS"));
     // user 视图：终端输出人类可读统一摘要，不再输出 JSON。
     assert!(
         terminal.contains("地区总分校验：部分完成")
@@ -131,7 +131,7 @@ fn interactive_batch_menu_runs_region_sum_check_through_real_cli() -> Result<()>
             path.display()
         );
     }
-    assert_eq!(fs::read(&unsupported_xls)?, original_unsupported_xls);
+    assert_eq!(fs::read(&unsupported_format)?, original_unsupported_format);
     Ok(())
 }
 
@@ -563,9 +563,9 @@ fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_histo
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
     let no_change_source = root.path().join("no-change.xlsx");
-    let unsupported = root.path().join("legacy.xls");
-    make_foreign_bank_source(&source, true)?;
-    make_foreign_bank_source(&no_change_source, false)?;
+    let unsupported = root.path().join("legacy.xlsm");
+    make_foreign_bank_source(&source, true, true)?;
+    make_foreign_bank_source(&no_change_source, false, false)?;
     fs::write(&unsupported, b"synthetic legacy workbook placeholder")?;
     let source_bytes = fs::read(&source)?;
     let no_change_bytes = fs::read(&no_change_source)?;
@@ -581,7 +581,7 @@ fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_histo
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("------ 专用报表处理 ------"));
     assert!(stdout.contains("删除分机构表中的外资行"));
-    assert!(stdout.contains("PT-7-3 当前只接受 .xlsx"));
+    assert!(stdout.contains("当前模式接受 XLSX，Windows 自动路由还支持 XLS"));
     // user 视图：stdout 只输出人类可读汇总行；明细由运行记录（app/logs）承载。
     let terminal = format!("{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
     assert!(
@@ -622,7 +622,16 @@ fn interactive_foreign_bank_menu_creates_pycode_compatible_copies_and_user_histo
     assert_eq!(branch.values["A3"]["value"], "普通乙");
     assert_eq!(branch.values["A4"]["value"], "普通丙");
     assert_eq!(branch.values["A5"]["value"], "尾行");
-    assert!(branch.formulas.is_empty());
+    assert_eq!(branch.formulas["C5"].trim_start_matches('='), "SUM(B2:B5)");
+    let non_target = updated
+        .sheets
+        .iter()
+        .find(|sheet| sheet.name == "非目标工作表")
+        .context("cross-sheet formula worksheet missing")?;
+    assert_eq!(
+        non_target.formulas["C2"].trim_start_matches('='),
+        "'甲分机构本外币'!B5"
+    );
 
     // 运行记录目录同时有统一摘要与专项历史；按 feature 前缀精确筛选，
     // 避免目录枚举顺序在不同平台导致拿到不同的文件。
@@ -655,7 +664,7 @@ fn interactive_foreign_bank_menu_off_view_has_no_events_or_history() -> Result<(
     let root = TestDirectory::new()?;
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
-    make_foreign_bank_source(&source, true)?;
+    make_foreign_bank_source(&source, true, false)?;
     let source_bytes = fs::read(&source)?;
 
     let output = run_menu_with_arguments(
@@ -709,7 +718,7 @@ fn interactive_foreign_bank_menu_uses_openpyxl_without_capability_and_preserves_
     let root = TestDirectory::new()?;
     let config = create_foreign_bank_config(root.path())?;
     let source = root.path().join("foreign.xlsx");
-    make_foreign_bank_source(&source, true)?;
+    make_foreign_bank_source(&source, true, false)?;
     let source_bytes = fs::read(&source)?;
 
     let output = run_menu_with_arguments(
@@ -806,7 +815,7 @@ fn create_foreign_bank_config(root: &Path) -> Result<PathBuf> {
     Ok(config)
 }
 
-fn make_foreign_bank_source(path: &Path, include_foreign: bool) -> Result<()> {
+fn make_foreign_bank_source(path: &Path, include_foreign: bool, with_formulas: bool) -> Result<()> {
     let mut workbook = Workbook::new();
     let branch = workbook.add_worksheet();
     branch.set_name("甲分机构本外币")?;
@@ -839,6 +848,9 @@ fn make_foreign_bank_source(path: &Path, include_foreign: bool) -> Result<()> {
         branch.write_string(row, 0, name)?;
         branch.write_number(row, 1, amount)?;
     }
+    if with_formulas {
+        branch.write_formula(6, 2, "SUM(B2:B7)")?;
+    }
     let second = workbook.add_worksheet();
     second.set_name("乙分机构人民币")?;
     second.write_string(0, 0, "机构")?;
@@ -856,6 +868,9 @@ fn make_foreign_bank_source(path: &Path, include_foreign: bool) -> Result<()> {
     non_target.set_name("非目标工作表")?;
     non_target.write_string(0, 0, "机构")?;
     non_target.write_string(1, 0, "外资甲")?;
+    if with_formulas {
+        non_target.write_formula(1, 2, "'甲分机构本外币'!B7")?;
+    }
     workbook.save(path)?;
     Ok(())
 }
@@ -1606,7 +1621,7 @@ fn institution_normalize_capability(plan: &excel_editor::ExcelEditPlan) -> Backe
 fn rural_loan_menu_input(choice: u8, current: &Path, previous: &Path) -> String {
     // PT-7-7/7-8 固定使用 openpyxl，不再提示选择编辑引擎。
     format!(
-        "5\n{choice}\n1\n{}\n{}\n0\n0\n",
+        "5\n{choice}\n{}\n{}\n0\n0\n",
         current.display(),
         previous.display()
     )

@@ -292,9 +292,9 @@ fn native_conversion_help_lists_legacy_epoch_formats() -> Result<()> {
     );
     assert!(
         help.contains(
-            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|com|pywin32]"
+            "convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|com|pywin32|aspose]"
         ),
-        "Excel conversion help must list the pywin32 Excel/WPS COM route only: {help}"
+        "Excel conversion help must list Windows COM and explicit Aspose: {help}"
     );
     assert!(
         help.contains(

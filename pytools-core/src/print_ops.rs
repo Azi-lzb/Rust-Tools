@@ -969,7 +969,7 @@ pub fn write_static_print_plans(plans: &[ExcelEditPlan]) -> Result<Vec<StaticPri
     plans.iter().map(write_static_print_plan).collect()
 }
 
-fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution> {
+pub(crate) fn write_static_print_plan(plan: &ExcelEditPlan) -> Result<StaticPrintExecution> {
     plan.validate()
         .context("validate native static print plan")?;
     anyhow::ensure!(

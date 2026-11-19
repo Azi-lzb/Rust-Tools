@@ -218,7 +218,7 @@ fn pt_3_3_rejects_existing_target_before_output_side_effects() -> Result<()> {
 }
 
 #[test]
-fn pt_3_3_rejects_formula_without_cached_value_before_output() -> Result<()> {
+fn pt_3_3_plans_print_with_uncached_formula_without_creating_target() -> Result<()> {
     let dir = TestDir::new();
     let source = dir.path("source-uncached.xlsx");
     let config = dir.path("config-uncached.xlsx");
@@ -235,13 +235,20 @@ fn pt_3_3_rejects_formula_without_cached_value_before_output() -> Result<()> {
         .args(["--output-dir"])
         .arg(&output_dir)
         .output()?;
-    assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("公式尚无计算结果"), "{stderr}");
-    assert!(!target.exists(), "uncached formula must not create output");
     assert!(
-        !output_dir.exists(),
-        "validation failure must not publish a plan directory"
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let plans: Vec<Value> = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(plans.len(), 1);
+    assert_eq!(plans[0]["execution"], "plan_only");
+    assert!(plans[0]["report"]["plan"]["operations"]
+        .as_array()
+        .is_some_and(|operations| !operations.is_empty()));
+    assert!(
+        !target.exists(),
+        "planning must not create the output workbook"
     );
     assert_eq!(fs::read(&source)?, source_before);
     assert_eq!(fs::read(&config)?, config_before);

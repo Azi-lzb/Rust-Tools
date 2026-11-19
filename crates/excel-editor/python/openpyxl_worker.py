@@ -304,24 +304,6 @@ def _formula_cache_formulas(path: Path) -> Dict[Tuple[str, str], str]:
         return values
 
 
-def _all_formula_texts(path: Path) -> Dict[Tuple[str, str], str]:
-    """Read every formula cell, including cells without a saved result."""
-    main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    with zipfile.ZipFile(str(path), "r") as package:
-        values = {}
-        for title, part in _worksheet_parts_by_title(package).items():
-            if part not in package.namelist():
-                continue
-            root = ElementTree.fromstring(package.read(part))
-            for cell in root.iter("{%s}c" % main_ns):
-                formula = cell.find("{%s}f" % main_ns)
-                address = cell.attrib.get("r")
-                if formula is None or not address:
-                    continue
-                values[(title, address.replace("$", "").upper())] = formula.text or ""
-        return values
-
-
 def _parse_formula_reference(value: str, formula_sheet: str) -> Optional[Tuple[str, int, int, int, int]]:
     """Parse one local A1 reference token into (sheet, rows, columns).
 
@@ -461,7 +443,6 @@ def _formula_cache_write_conflict(
         return None
     from openpyxl.utils.cell import coordinate_to_tuple
 
-    formulas = _formula_cache_formulas(path)
     formula_sensitive = any(
         operation.get("operation")
         in ("set_cell_value", "set_formula_text", "delete_rows", "insert_rows", "copy_range", "import_range")
@@ -470,19 +451,11 @@ def _formula_cache_write_conflict(
     if not formula_sensitive or _is_add_new_sheets_only_plan(operations):
         return None
 
-    row_delete_only = bool(operations) and all(
-        operation.get("operation") == "delete_rows" for operation in operations
-    )
-    if row_delete_only:
-        conflict = _row_delete_formula_dependency_conflict(path, operations)
-        if conflict:
-            return conflict
-        # The dependency check proves the formulas do not refer to a modified
-        # sheet. Formula caches on every other sheet retain their coordinates;
-        # the normal cache restoration path can therefore preserve them.
+    if _row_deletions_only(operations):
+        # The loaded workbook is checked and rewritten before any candidate is saved.
         return None
 
-    if not formulas:
+    if not _formula_cache_formulas(path):
         return None
 
     if any(
@@ -516,91 +489,191 @@ def _formula_cache_write_conflict(
     # 依赖这些写入的公式缓存改由 _preserve_formula_caches 跳过恢复（输出里
     # 不带旧缓存值），执行路径已设置 fullCalcOnLoad/forceFullCalc，Excel/WPS
     # 打开时统一重算；其他读取方看到的是「无缓存」而不是「过期数值」。
-    # 行/区间操作（delete_rows/insert_rows/copy_range/import_range）仍然
-    # 保持严格拒绝：坐标位移下「跳过恢复」不足以证明缓存安全。
+    # 尚不能安全重写引用的混合行/区间操作仍保留上述拒绝条件。
     return None
 
 
-def _row_delete_formula_dependency_conflict(
-    path: Path, operations: List[Dict[str, Any]]
-) -> Optional[str]:
-    """Allow row deletion only when all formula/name dependencies are provably unrelated.
+def _row_deletions_only(operations: List[Dict[str, Any]]) -> bool:
+    return bool(operations) and all(
+        operation.get("operation") == "delete_rows" for operation in operations
+    )
 
-    Openpyxl does not rewrite arbitrary formulas and defined names when rows are
-    deleted. This narrow path therefore rejects formulas on edited sheets,
-    cross-sheet references into edited sheets, dynamic/unknown references, and
-    names whose dependencies cannot be resolved. Unrelated formula caches can
-    then be restored at their original coordinates after the save.
-    """
-    modified_sheets = set()
-    for operation in operations:
-        sheet = operation.get("sheet")
-        if not isinstance(sheet, str) or not sheet:
-            return "a row deletion has no valid worksheet name"
-        modified_sheets.add(sheet.casefold())
 
-    formula_texts = _all_formula_texts(path)
-    if any(sheet.casefold() in modified_sheets for sheet, _ in formula_texts):
-        return "row deletion is not allowed on a worksheet that contains formulas"
+def _shift_deleted_rows(reference: str, first: int, count: int) -> Optional[str]:
+    """Return a shifted A1 operand, or None when this is not a supported A1 operand."""
+    from openpyxl.utils.cell import range_boundaries
 
-    class EmptyWorkbook:
-        sheetnames: List[str] = []
+    if not re.fullmatch(
+        r"(?i)(\$?[a-z]{1,3}\$?\d+(?::\$?[a-z]{1,3}\$?\d+)?"
+        r"|\$?\d+:\$?\d+|\$?[a-z]{1,3}:\$?[a-z]{1,3})",
+        reference,
+    ):
+        return None
+    columns_and_rows = range_boundaries(reference)
+    if any(column is not None and not 1 <= column <= 16384
+           for column in (columns_and_rows[0], columns_and_rows[2])):
+        return None
+    if any(row is not None and not 1 <= row <= 1048576
+           for row in (columns_and_rows[1], columns_and_rows[3])):
+        return None
+    start_row, end_row = columns_and_rows[1], columns_and_rows[3]
+    if start_row is None:
+        return reference  # Whole columns retain their text after whole-row deletion.
+    last = first + count - 1
+    endpoints = reference.split(":")
+    if len(endpoints) == 1:
+        if first <= start_row <= last:
+            return "#REF!"
+        shifted_rows = [start_row - count if start_row > last else start_row]
+    else:
+        assert end_row is not None
+        low, high = sorted((start_row, end_row))
+        if first <= low <= high <= last:
+            return "#REF!"
+        new_low = low if low < first else max(first, low - count)
+        new_high = high if high < first else max(first - 1, high - count)
+        shifted_rows = [new_low, new_high] if start_row <= end_row else [new_high, new_low]
+    return ":".join(re.sub(r"\d+$", str(row), endpoint)
+                    for endpoint, row in zip(endpoints, shifted_rows))
 
-    for (formula_sheet, address), formula in formula_texts.items():
-        upper = formula.upper()
-        if "INDIRECT(" in upper or "OFFSET(" in upper:
-            return "cannot prove row deletion is independent of a dynamic formula reference"
-        if not formula.strip():
-            return "cannot resolve a shared or empty formula while checking row-deletion dependencies"
-        dependencies = _formula_dependencies(
-            formula_sheet, address, formula, EmptyWorkbook()
+
+def _rewrite_row_delete_expression(
+    expression: str, owner: Optional[str], target: str, first: int, count: int,
+    sheet_names: Set[str], defined_names: Set[str]
+) -> Tuple[str, bool]:
+    from openpyxl.formula import Tokenizer
+    from openpyxl.formula.tokenizer import TokenizerError
+
+    def unsupported() -> WorkerError:
+        return WorkerError(
+            "unsupported_row_delete_reference",
+            "row deletion cannot safely rewrite a dynamic, external, 3-D or unrecognized reference",
+            unsupported=True,
         )
-        if dependencies is None:
-            return "cannot prove whether formula {}!{} depends on a worksheet being edited".format(
-                formula_sheet, address
-            )
-        for dependency in dependencies:
-            if dependency[0].casefold() in modified_sheets:
-                return "formula {}!{} depends on a worksheet being edited".format(
-                    formula_sheet, address
+
+    has_equals = expression.startswith("=")
+    try:
+        tokens = Tokenizer(expression if has_equals else "=" + expression).items
+    except (TokenizerError, ValueError) as error:
+        raise unsupported() from error
+    changed = False
+    depends_on_target = False
+    for token in tokens:
+        if token.type == "FUNC" and token.subtype == "OPEN":
+            function = token.value.rstrip("(").rsplit(".", 1)[-1].upper()
+            if function in ("INDIRECT", "OFFSET"):
+                raise unsupported()
+        if token.type != "OPERAND" or token.subtype != "RANGE":
+            continue
+        if token.value.upper() == "#REF!" or token.value.upper().endswith("!#REF!"):
+            continue
+        prefix, separator, reference = token.value.rpartition("!")
+        sheet = owner
+        if separator:
+            sheet = prefix
+            if sheet.startswith("'") and sheet.endswith("'"):
+                sheet = sheet[1:-1].replace("''", "'")
+            sheet = sheet.casefold()
+            if sheet not in sheet_names:
+                raise unsupported()
+        shifted = _shift_deleted_rows(reference, first, count)
+        if shifted is None:
+            if reference.casefold() in defined_names:
+                continue  # The referenced name's own expression is checked separately.
+            raise unsupported()
+        if sheet is None:
+            raise unsupported()  # An unqualified global relative name has no fixed owner.
+        if sheet != target:
+            continue
+        depends_on_target = True
+        if shifted != reference:
+            token.value = prefix + separator + shifted
+            changed = True
+    if not changed:
+        return expression, depends_on_target
+    return ("=" if has_equals else "") + "".join(token.value for token in tokens), depends_on_target
+
+
+def _prepare_openpyxl_row_deletion(workbook: Any, operation: Dict[str, Any]) -> bool:
+    """Rewrite workbook references before Openpyxl relocates the cells."""
+    worksheet = workbook[operation["sheet"]]
+    first, count = int(operation["first_row"]), int(operation["count"])
+    last = first + count - 1
+    if first < 1 or count < 1 or last > 1048576:
+        raise WorkerError("invalid_row_delete", "row deletion is outside the worksheet grid", unsupported=True)
+
+    if any(region.max_row >= first for region in worksheet.merged_cells.ranges):
+        raise WorkerError("unsupported_row_delete_merge",
+                          "row deletion may move or intersect a merged range", unsupported=True)
+    # These objects can store independent formulas and anchors that delete_rows
+    # cannot relocate. Refuse to publish until their relationships can be proven.
+    for sheet in workbook.worksheets:
+        if (sheet._charts or sheet.conditional_formatting or getattr(sheet.data_validations, "dataValidation", ())
+                or (sheet is worksheet and (sheet.tables or sheet._images or sheet.auto_filter.ref))):
+            raise WorkerError("unsupported_row_delete_objects",
+                              "row deletion cannot safely preserve worksheet object references",
+                              unsupported=True)
+
+    sheets = {sheet.title.casefold() for sheet in workbook.worksheets}
+    target = worksheet.title.casefold()
+    name_collections = [(None, workbook.defined_names)] + [
+        (sheet.title.casefold(), sheet.defined_names) for sheet in workbook.worksheets
+    ]
+    names = {name.casefold() for _, collection in name_collections for name in collection}
+    invalidate_caches = False
+    for owner, collection in name_collections:
+        for defined_name in collection.values():
+            if defined_name.attr_text:
+                defined_name.attr_text, related = _rewrite_row_delete_expression(
+                    defined_name.attr_text, owner, target, first, count, sheets, names
                 )
-
-    try:
-        import openpyxl
-        workbook = openpyxl.load_workbook(
-            str(path), read_only=True, data_only=True, keep_links=True
-        )
-    except Exception as error:
-        return "could not inspect defined names before row deletion: " + str(error)
-    try:
-        for defined_name in workbook.defined_names.values():
-            reference = getattr(defined_name, "attr_text", None)
-            if not isinstance(reference, str) or not reference.strip():
+                invalidate_caches |= related
+    has_array_or_data_table = False
+    for sheet in workbook.worksheets:
+        owner = sheet.title.casefold()
+        for cell in sheet._cells.values():
+            if cell.data_type != "f":
                 continue
-            scope_index = getattr(defined_name, "localSheetId", None)
-            if isinstance(scope_index, int) and 0 <= scope_index < len(workbook.sheetnames):
-                formula_sheet = workbook.sheetnames[scope_index]
-            elif workbook.sheetnames:
-                formula_sheet = workbook.sheetnames[0]
-            else:
-                return "cannot resolve the scope of a defined name before row deletion"
-            if "INDIRECT(" in reference.upper() or "OFFSET(" in reference.upper():
-                return "cannot prove row deletion is independent of a dynamic defined name"
-            dependencies = _formula_dependencies(
-                formula_sheet, "A1", reference.lstrip("="), EmptyWorkbook()
-            )
-            if dependencies is None:
-                return "cannot prove whether defined name {!r} depends on a worksheet being edited".format(
-                    getattr(defined_name, "name", "<unnamed>")
+            moved = owner == target and cell.row >= first
+            if not isinstance(cell.value, str):
+                # Array extents include cells other than the anchor. Preserve an
+                # unrelated array only if its sheet and formula are unaffected.
+                formula = _formula_text(cell.value)
+                has_array_or_data_table = True
+                if owner == target or not formula:
+                    raise WorkerError("unsupported_row_delete_formula",
+                                      "row deletion cannot safely adjust an array or data-table formula",
+                                      unsupported=True)
+                _, related = _rewrite_row_delete_expression(
+                    formula, owner, target, first, count, sheets, names
                 )
-            for dependency in dependencies:
-                if dependency[0].casefold() in modified_sheets:
-                    return "defined name {!r} depends on a worksheet being edited".format(
-                        getattr(defined_name, "name", "<unnamed>")
-                    )
-    finally:
-        workbook.close()
-    return None
+                if related:
+                    raise WorkerError("unsupported_row_delete_formula",
+                                      "an array or data-table formula depends on the worksheet being edited",
+                                      unsupported=True)
+                continue
+            if moved and cell.row <= last:
+                invalidate_caches = True
+                continue
+            revised, related = _rewrite_row_delete_expression(
+                cell.value, owner, target, first, count, sheets, names
+            )
+            if revised != cell.value:
+                cell.value = revised
+            invalidate_caches |= moved or related
+    if invalidate_caches and has_array_or_data_table:
+        raise WorkerError("unsupported_row_delete_formula",
+                          "row deletion cannot prove indirect array or data-table dependencies",
+                          unsupported=True)
+
+    # Openpyxl loads these reserved names as worksheet properties.
+    areas = [_shift_deleted_rows(area.coord, first, count) for area in worksheet._print_area.ranges]
+    if areas:
+        worksheet.print_area = [area for area in areas if area and area != "#REF!"]
+    if worksheet.print_title_rows:
+        titles = _shift_deleted_rows(worksheet.print_title_rows, first, count)
+        worksheet.print_title_rows = titles if titles != "#REF!" else None
+    return invalidate_caches
 
 
 def _restore_formula_cache_cell(
@@ -2911,8 +2984,12 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
             workbook.calculation.fullCalcOnLoad = True
             workbook.calculation.forceFullCalc = True
         materialized_by_sheet: Dict[int, Set[str]] = {}
+        rewrite_deleted_rows = _row_deletions_only(operations)
+        invalidate_delete_caches = False
         for operation in operations:
             try:
+                if rewrite_deleted_rows:
+                    invalidate_delete_caches |= _prepare_openpyxl_row_deletion(workbook, operation)
                 _apply_operation(workbook, cached_workbook, operation, materialized_by_sheet, import_sources)
             except WorkerError:
                 raise
@@ -2927,6 +3004,9 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
             coordinates = materialized_by_sheet.get(id(worksheet))
             if coordinates:
                 tracked_cells[worksheet.title] = coordinates
+        if invalidate_delete_caches:
+            workbook.calculation.fullCalcOnLoad = True
+            workbook.calculation.forceFullCalc = True
         try:
             workbook.save(str(output_path))
         except Exception as error:
@@ -2946,7 +3026,10 @@ def _apply(request: Dict[str, Any]) -> Dict[str, Any]:
         _preserve_significant_string_whitespace(output_path)
         _materialize_tracked_cells(output_path, tracked_cells)
         _materialize_explicit_style_attributes(output_path)
-        _preserve_formula_caches(input_path, output_path, operations)
+        # An adjusted reference may invalidate other sheets through indirect
+        # dependencies. Restore the old caches only if the whole plan is independent.
+        if not invalidate_delete_caches:
+            _preserve_formula_caches(input_path, output_path, operations)
         _restore_cell_metadata_package_parts(input_path, output_path, operations)
         _restore_unmodified_column_dimensions(input_path, output_path, operations)
         _restore_header_footer_settings(input_path, output_path, operations)

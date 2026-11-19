@@ -2485,6 +2485,19 @@ fn append_duplicate_operations(
     }
 }
 
+fn append_unique_duplicate_marks(
+    operations: &mut Vec<EditOperation>,
+    marked_rows: &mut BTreeMap<String, BTreeSet<usize>>,
+    sheet: &SheetDump,
+    mut duplicates: Vec<usize>,
+) -> usize {
+    let task_rows = duplicates.len();
+    let rows = marked_rows.entry(sheet.name.clone()).or_default();
+    duplicates.retain(|row| rows.insert(*row));
+    append_duplicate_operations(operations, sheet, duplicates, DuplicateAction::Check);
+    task_rows
+}
+
 fn duplicate_rows_for_surviving_rows(
     sheet: &SheetDump,
     key_cols: &[usize],
@@ -3673,6 +3686,7 @@ fn handle_legacy_xls_duplicate_mark(
         }
     };
     let mut operations = Vec::new();
+    let mut marked_rows = BTreeMap::new();
     let mut task_duplicate_rows = Vec::new();
     let mut task_failures = 0usize;
     for task in group {
@@ -3696,8 +3710,8 @@ fn handle_legacy_xls_duplicate_mark(
             task.key_cols.clone()
         };
         let duplicate = duplicate_rows_for_sheet(sheet, &key_cols, &DateIsoMap::new());
-        let marked = duplicate.len();
-        append_duplicate_operations(&mut operations, sheet, duplicate, DuplicateAction::Check);
+        let marked =
+            append_unique_duplicate_marks(&mut operations, &mut marked_rows, sheet, duplicate);
         task_duplicate_rows.push((task.row_no, sheet.name.clone(), marked));
     }
     let marks: Vec<(String, String)> = operations
@@ -3710,7 +3724,6 @@ fn handle_legacy_xls_duplicate_mark(
         })
         .collect();
     let mut changed = false;
-    let mut applied = 0usize;
     if !marks.is_empty() {
         let candidate = match legacy_xls_candidate_path(path) {
             Ok(candidate) => candidate,
@@ -3740,9 +3753,9 @@ fn handle_legacy_xls_duplicate_mark(
                 result["verified"].as_bool() == Some(true),
                 "Excel/WPS COM 标记未通过校验"
             );
-            applied = result["applied_count"].as_u64().unwrap_or_default() as usize;
             crate::file_commit::commit_validated_candidate(&candidate, path, &original_hash)
         })();
+        let _ = fs::remove_file(&candidate);
         match copy_result {
             Ok(commit) => {
                 changed = true;
@@ -3771,12 +3784,15 @@ fn handle_legacy_xls_duplicate_mark(
                     "{}：.xls COM 就地标记失败：{error:#}",
                     path.display()
                 ));
+                return;
             }
         }
-        let _ = fs::remove_file(&candidate);
     }
+    run.task_failed += task_failures;
     run.task_ok += task_duplicate_rows.len();
-    run.marked_rows += if changed { applied } else { 0 };
+    if changed {
+        run.marked_rows += marked_rows.values().map(BTreeSet::len).sum::<usize>();
+    }
     for (row_no, sheet, duplicate_count) in task_duplicate_rows {
         run.events.push(
             crate::engine_diag::DiagEvent::new(
@@ -4032,6 +4048,7 @@ where
         };
 
         let mut operations = Vec::new();
+        let mut marked_rows = BTreeMap::new();
         let mut task_failures = 0usize;
         let mut task_duplicate_rows = Vec::new();
         for task in group {
@@ -4067,8 +4084,8 @@ where
                 task.key_cols.clone()
             };
             let duplicate = duplicate_rows_for_sheet(sheet, &key_cols, &date_values);
-            let marked = duplicate.len();
-            append_duplicate_operations(&mut operations, sheet, duplicate, DuplicateAction::Check);
+            let marked =
+                append_unique_duplicate_marks(&mut operations, &mut marked_rows, sheet, duplicate);
             task_duplicate_rows.push((
                 task.row_no,
                 sheet.name.clone(),
@@ -4077,10 +4094,7 @@ where
             ));
         }
 
-        let marked_rows = task_duplicate_rows
-            .iter()
-            .map(|(_, _, count, _)| *count)
-            .sum::<usize>();
+        let marked_rows = marked_rows.values().map(BTreeSet::len).sum::<usize>();
         let mut changed = false;
         if !operations.is_empty() {
             let mut plan = match make_plan(

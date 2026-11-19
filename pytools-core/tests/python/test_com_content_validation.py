@@ -160,6 +160,14 @@ class RealXlsContent(unittest.TestCase):
                     for legacy in (False, True):
                         directory = root / case / ("xls" if legacy else "xlsx")
                         command, stdin, expected, readonly = helper.prepare(directory, case, False)
+                        if case == "5-1":
+                            current, previous = readonly
+                            (target,) = expected
+                            stdin = f"5\n1\n{current}\n{previous}\n1\n{target}\n0\n0\n"
+                        elif case == "5-7":
+                            (current,) = expected
+                            (previous,) = readonly
+                            stdin = f"5\n7\n{current}\n{previous}\n0\n0\n"
                         if case == "5-2":
                             source = directory / "source.xlsx"
                             b = openpyxl.load_workbook(source)

@@ -196,11 +196,13 @@ fn build_dedup_config(root: &Path, source: &Path) -> Result<PathBuf> {
         {
             tasks.write_string(0, column as u16, *header)?;
         }
-        tasks.write_string(1, 0, "是")?;
-        tasks.write_string(1, 1, "DedupXls")?;
-        tasks.write_string(1, 2, source.to_string_lossy().into_owned())?;
-        tasks.write_string(1, 3, "Commented")?;
-        tasks.write_string(1, 4, "2")?;
+        for row in 1..=2 {
+            tasks.write_string(row, 0, "是")?;
+            tasks.write_string(row, 1, format!("DedupXls{row}"))?;
+            tasks.write_string(row, 2, source.to_string_lossy().into_owned())?;
+            tasks.write_string(row, 3, "Commented")?;
+            tasks.write_string(row, 4, "2")?;
+        }
     }
     workbook.save(&config)?;
     Ok(config)
@@ -309,6 +311,11 @@ fn dedup_xls_com_routes_mark_and_delete() -> Result<()> {
         ensure!(
             !menu.contains("执行失败"),
             "2-1 menu reported failure: {menu}"
+        );
+        ensure!(
+            menu.lines()
+                .any(|line| line.trim_end().ends_with("标记重复行数：2")),
+            "2-1 must report two unique rows across two columns and two tasks: {menu}"
         );
         let after_mark = read_workbook(&source)?;
         ensure!(

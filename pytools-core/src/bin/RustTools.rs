@@ -23686,7 +23686,7 @@ fn print_usage() {
     eprintln!(
         "Usage:\n\
          pytools [menu] [--config <config.xlsx>] [--log-dir <directory>] [--log-view user|developer|off]\n\
-         no command opens the rustTools menu; available categories: 1 (data extraction and summaries 1-5), 2 (configured deduplication and append 1-4), 3 (static print and precheck 1-2), 4 (file processing 1-8), 5 (special reports 1-8), 6 (archive preview and copy), and 7 (configuration and quick actions 1-6)\n\
+         no command opens the rustTools menu; available categories: 1 (data extraction and summaries 1-7), 2 (configured deduplication and append 1-4), 3 (static print 3-1 and precheck 3-3), 4 (file processing 1-7), 5 (special reports 1-7), 6 (archive preview and copy), and 7 (configuration and quick actions 1-5)\n\
          timeline-precheck --config <workbook.xlsx>\n\
          timeline-compare --config <workbook.xlsx> --template <workbook.xlsx> [--log-dir <dir>] [--log-view user|developer|off] <source.xlsx>...\n\
          timeline-extract --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--capabilities <json> --platform <id> [--commit-target]] [<source.xlsx>...]\n\
@@ -23707,6 +23707,7 @@ fn print_usage() {
          print-comment-plan --input <workbook.xlsx> --output <candidate.xlsx> [--drop-comments true] [--hide-zero true] [--plan-output <plan.json>] [--capabilities <json> --platform <id>]\n\
          print-config-precheck --config <workbook.xlsx>\n\
          print-config-plan --config <workbook.xlsx> [--output-dir <plan-report-dir>] [--capabilities <json> --platform <id>]\n\
+         3-1 静态打印可选 Openpyxl 或 Rust；Windows 另可用 Excel/WPS COM 补 XLS 版式。公式只取已保存的缓存。\n\
          apply-edit-plan --plan <plan.json> --capabilities <json> --platform <id>\n\
          config-init --path <new-config.xlsx>\n\
          config-repair-plan --input <config.xlsx> --output <candidate.xlsx> [--plan-output <plan.json>] [--capabilities <json> --platform <id>]\n\
@@ -23732,7 +23733,7 @@ fn print_usage() {
          convert-excel --config <config.xlsx> [--to xlsx] [--engine auto|com|pywin32|aspose] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          convert-word --config <config.xlsx> [--to docx] [--engine auto|com|pywin32] [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] <file>...\n\
          convert-file --input <file> --to <extension> [--output <file>] [--engine auto|com|pywin32|native]\n\
-         Office 文件转换仅使用 Windows pywin32 + Microsoft Excel/WPS COM；Linux 不执行 LibreOffice 转换\n\
+         Office 自动转换使用 Windows pywin32 + Microsoft Excel/WPS COM；可显式选择 Aspose 执行 XLS → XLSX，Linux 不使用 LibreOffice 转换\n\
          native = 按值重建（C01，丢弃样式/公式缓存）；Excel 公式文本保留但不重算，CSV 按文本写入\n\
                    ISO 日期/时长、错误值、空文本和检测到的 1904 epoch XLS/XLSM/XLSB 会拒绝转换\n\
          pytools extract-sheets --config <workbook.xlsx> [--output-dir <dir>] [--log-dir <dir>] [--log-view user|developer|off] [--append-existing] <source.xlsx>...\n\
