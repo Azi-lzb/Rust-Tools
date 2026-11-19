@@ -89,16 +89,16 @@ fn plan_for(config: &Path, input: &Path, output: &Path) -> Result<ExcelEditPlan>
         .context("fixture should produce a non-empty sheet-rename plan")
 }
 
-fn write_legacy_sheet_mapping(path: &Path) -> Result<()> {
+fn write_legacy_sheet_mapping(path: &Path, mappings: &[(&str, &str)]) -> Result<()> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
     worksheet.set_name("重命名配置")?;
     worksheet.write_string(0, 9, "原表名")?;
     worksheet.write_string(0, 10, "新表名")?;
-    worksheet.write_string(1, 9, "人民币")?;
-    worksheet.write_string(1, 10, "1人民币")?;
-    worksheet.write_string(2, 9, "外币")?;
-    worksheet.write_string(2, 10, "2外币")?;
+    for (row, &(original, renamed)) in (1..).zip(mappings) {
+        worksheet.write_string(row, 9, original)?;
+        worksheet.write_string(row, 10, renamed)?;
+    }
     workbook.save(path)?;
     Ok(())
 }
@@ -558,9 +558,12 @@ fn recursive_directory_batch_reports_unsupported_inputs_without_touching_them() 
 fn legacy_xls_sheet_rename_requires_windows_com() -> Result<()> {
     let dir = TestDir::new("xls-convert-first")?;
     let config = dir.path("config.xlsx");
-    write_legacy_sheet_mapping(&config)?;
+    write_legacy_sheet_mapping(&config, &[("Calc", "RenamedCalc"), ("Data", "RenamedData")])?;
     let input = dir.path("input.xls");
-    fs::copy(fixture("com_input.xls"), &input)?;
+    fs::write(
+        &input,
+        include_bytes!("../../crates/excel-reader/tests/fixtures/xls_formula_refs.xls"),
+    )?;
     let original_hash = pytools_core::file_commit::sha256_file(&input)?;
 
     let output = run_cli_excel(&config, &input)?;
@@ -656,7 +659,7 @@ fn linux_sheet_rename_ambiguous_indirect_preserves_source_and_cleans_candidate()
 fn legacy_xls_sheet_rename_uses_dedicated_com_route() -> Result<()> {
     let dir = TestDir::new("xls-com-rename")?;
     let config = dir.path("config.xlsx");
-    write_legacy_sheet_mapping(&config)?;
+    write_legacy_sheet_mapping(&config, &[("人民币", "1人民币"), ("外币", "2外币")])?;
     let input = dir.path("input.xls");
     fs::copy(fixture("com_input.xls"), &input)?;
     let original_hash = pytools_core::file_commit::sha256_file(&input)?;

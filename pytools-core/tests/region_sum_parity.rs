@@ -528,6 +528,10 @@ fn region_sum_cli_throttles_large_batches_and_keeps_failures_and_names_visible()
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/region_sum");
     for total in [10usize, 50, 100] {
         let root = unique_test_dir();
+        // WSL can inherit Windows-mounted TMPDIR and XDG_STATE_HOME paths.
+        // Keep this timed test's files and per-event logs on the Linux filesystem.
+        #[cfg(target_os = "linux")]
+        let root = Path::new("/tmp").join(root.file_name().context("temporary directory name")?);
         let north = root.join("north");
         let south = root.join("south");
         let output_dir = root.join("output");
@@ -554,6 +558,8 @@ fn region_sum_cli_throttles_large_batches_and_keeps_failures_and_names_visible()
             .arg("region-sum-check")
             .arg("--output-dir")
             .arg(&output_dir)
+            .arg("--log-dir")
+            .arg(root.join("logs"))
             .args(&inputs)
             .output()
             .context("run batched region-sum CLI")?;
